@@ -765,9 +765,18 @@ class ClickHouseClient:
         """
         client = cls.get_client()
 
-        # First get the original log
+        # First get the original log - use a small window for timestamp matching
         safe_device = device_ip.replace("'", "''")
 
+        # Clean up timestamp format - handle various formats
+        clean_timestamp = log_timestamp.replace('T', ' ').replace('Z', '')
+        # Remove microseconds if present beyond 3 digits
+        if '.' in clean_timestamp:
+            parts = clean_timestamp.split('.')
+            if len(parts[1]) > 3:
+                clean_timestamp = parts[0] + '.' + parts[1][:3]
+
+        # Use a 1-second window to find the log (handles precision issues)
         query = f"""
         SELECT
             timestamp,
@@ -777,7 +786,9 @@ class ClickHouseClient:
         FROM syslogs
         WHERE
             device_ip = toIPv4('{safe_device}')
-            AND timestamp = toDateTime64('{log_timestamp}', 3)
+            AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
+            AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
+        ORDER BY timestamp ASC
         LIMIT 1
         """
 

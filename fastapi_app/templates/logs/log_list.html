@@ -1651,8 +1651,9 @@
                                 <td colspan="9">
                                     <div class="detail-panel">
                                         <!-- Multi-Firewall Flow Diagram -->
+                                        {% set ts = log.get('timestamp', '') %}
                                         <div class="multi-flow-container" id="flow-container-{{ loop.index }}"
-                                             data-timestamp="{{ log.get('timestamp', '') }}"
+                                             data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
                                              data-device="{{ log.get('device_ip', '') }}">
                                             <div class="flow-header">
                                                 <span class="flow-title">Packet Flow Across Firewalls</span>
