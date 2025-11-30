@@ -785,7 +785,7 @@ class ClickHouseClient:
             parsed_data
         FROM syslogs
         WHERE
-            device_ip = toIPv4('{safe_device}')
+            toString(device_ip) = '{safe_device}'
             AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
             AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
         ORDER BY timestamp ASC
