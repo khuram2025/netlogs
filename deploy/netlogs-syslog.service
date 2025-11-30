@@ -1,0 +1,47 @@
+[Unit]
+Description=NetLogs High-Performance Syslog Collector
+Documentation=https://github.com/your-org/netlogs
+After=network.target postgresql.service clickhouse-server.service
+Wants=postgresql.service clickhouse-server.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/net/net-logs
+Environment="PATH=/home/net/net-logs/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="DJANGO_SETTINGS_MODULE=netlogs.settings"
+
+# High-performance syslog collector with tuned parameters
+ExecStart=/home/net/net-logs/venv/bin/python manage.py run_syslog \
+    --batch-size=5000 \
+    --flush-interval=2.0 \
+    --cache-ttl=60 \
+    --workers=4
+
+# Graceful shutdown (allow time to flush buffers)
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Resource limits for high-volume log processing
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=netlogs-syslog
+
+# Security hardening (optional, comment out if issues)
+# PrivateTmp=true
+# ProtectSystem=strict
+# ReadWritePaths=/home/net/net-logs
+
+[Install]
+WantedBy=multi-user.target

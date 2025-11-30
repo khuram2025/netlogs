@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>System Overview</h2>
+    {% if error %}
+    <div class="alert alert-error">
+        Error connecting to ClickHouse: {{ error }}
+    </div>
+    {% else %}
+    <div class="grid grid-2" style="margin-bottom: 2rem;">
+        <div>
+            <h3>Log Severity Distribution (24h)</h3>
+            <canvas id="severityChart"></canvas>
+        </div>
+        <div>
+            <h3>Traffic (Last Hour)</h3>
+            <canvas id="timelineChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Recent Logs</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Device IP</th>
+                <th>Severity</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.device_ip }}</td>
+                <td>
+                    <span class="badge {% if log.severity <= 3 %}badge-critical{% elif log.severity == 4 %}badge-warning{% else %}badge-info{% endif %}">
+                        {{ severity_map.get(log.severity, 'Unknown') }}
+                    </span>
+                </td>
+                <td style="font-family: monospace; font-size: 0.9em;">{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align: center; color: #94a3b8;">No logs found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Severity Chart
+    const severityCtx = document.getElementById('severityChart');
+    if (severityCtx) {
+        new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for item in severity_data %}'{{ item.name }}',{% endfor %}],
+                datasets: [{
+                    data: [{% for item in severity_data %}{{ item.count }},{% endfor %}],
+                    backgroundColor: [
+                        '#ef4444', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#e2e8f0' } }
+                }
+            }
+        });
+    }
+
+    // Timeline Chart
+    const timelineCtx = document.getElementById('timelineChart');
+    if (timelineCtx) {
+        new Chart(timelineCtx, {
+            type: 'line',
+            data: {
+                labels: [{% for label in timeline_labels %}'{{ label }}',{% endfor %}],
+                datasets: [{
+                    label: 'Logs per Minute',
+                    data: [{% for val in timeline_data %}{{ val }},{% endfor %}],
+                    borderColor: '#3b82f6',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

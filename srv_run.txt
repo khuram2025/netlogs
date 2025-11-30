@@ -1,0 +1,23 @@
+source venv/bin/activate
+python manage.py runserver 0.0.0.0:8001 &
+python manage.py run_syslog &
+
+
+
+source venv/bin/activate
+python manage.py runserver 0.0.0.0:8002
+
+
+claude --dangerously-skip-permissions
+
+
+Running the Application
+
+  # Start FastAPI server
+  python run_fastapi.py --port 8002
+
+  # Start syslog collector (requires sudo for port 514)
+  sudo python run_syslog.py
+
+  # Run log cleanup
+  python cleanup_logs.py --execute

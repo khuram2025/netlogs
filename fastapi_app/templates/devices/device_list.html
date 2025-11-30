@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .storage-dashboard {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .retention-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: rgba(59, 130, 246, 0.1);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+    .retention-badge.forever {
+        background: rgba(34, 197, 94, 0.1);
+        color: #4ade80;
+        border-color: rgba(34, 197, 94, 0.2);
+    }
+    .retention-badge.short {
+        background: rgba(245, 158, 11, 0.1);
+        color: #fbbf24;
+        border-color: rgba(245, 158, 11, 0.2);
+    }
+    .stale-warning {
+        color: #f59e0b;
+        margin-left: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Storage Dashboard -->
+<div class="card">
+    <h3 style="margin-bottom: 1rem;">Storage Overview</h3>
+    <div class="storage-dashboard">
+        <div class="stat-card">
+            <div class="stat-label">Total Logs</div>
+            <div class="stat-value">{{ format_number(storage_stats.get('total_rows', 0)) }}</div>
+            <div class="stat-subtext">entries stored</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Compressed Size</div>
+            <div class="stat-value">{{ storage_stats.get('compressed_size', '0 B') }}</div>
+            <div class="stat-subtext">on disk</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Uncompressed Size</div>
+            <div class="stat-value">{{ storage_stats.get('uncompressed_size', '0 B') }}</div>
+            <div class="stat-subtext">raw data</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Compression Ratio</div>
+            <div class="stat-value">{{ storage_stats.get('compression_ratio', 0) }}x</div>
+            <div class="stat-subtext">space savings</div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Management -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Device Management</h2>
+        <span class="text-muted text-sm">Auto-refresh: 30s</span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Hostname</th>
+                <th>Parser</th>
+                <th>Status</th>
+                <th>Retention</th>
+                <th>Last Log</th>
+                <th>Log Count</th>
+                <th>Storage</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            {% set device_storage = device_storage_map.get(device.ip_address, {}) %}
+            <tr>
+                <td><strong>{{ device.ip_address }}</strong></td>
+                <td>{{ device.hostname or '-' }}</td>
+                <td><span class="badge" style="background-color: #6366f1; color: white;">{{ device.parser_display }}</span></td>
+                <td><span class="badge badge-{{ device.status }}">{{ device.status }}</span></td>
+                <td>
+                    {% if device.retention_days == 0 %}
+                        <span class="retention-badge forever">Forever</span>
+                    {% elif device.retention_days <= 14 %}
+                        <span class="retention-badge short">{{ device.retention_days }} days</span>
+                    {% else %}
+                        <span class="retention-badge">{{ device.retention_days }} days</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if device.last_log_received %}
+                        {{ device.last_log_received|timesince }} ago
+                        {% if device.is_stale %}
+                        <span class="stale-warning" title="No logs received in last 5 minutes">&#9888;</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">Never</span>
+                    {% endif %}
+                </td>
+                <td>{{ format_number(device.log_count) }}</td>
+                <td>
+                    {% if device_storage %}
+                        {{ format_bytes(device_storage.get('total_raw_size', 0)|int) }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary btn-sm">Edit</a>
+                    {% if device.status == 'PENDING' %}
+                    <a href="{{ url_for('approve_device', device_id=device.id) }}" class="btn btn-success btn-sm">Accept</a>
+                    <a href="{{ url_for('reject_device', device_id=device.id) }}" class="btn btn-danger btn-sm">Reject</a>
+                    {% elif device.status == 'APPROVED' %}
+                    <a href="{{ url_for('reject_device', device_id=device.id) }}" class="btn btn-danger btn-sm">Block</a>
+                    {% elif device.status == 'REJECTED' %}
+                    <a href="{{ url_for('approve_device', device_id=device.id) }}" class="btn btn-success btn-sm">Unblock</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9" style="text-align: center; color: var(--text-muted);">
+                    No devices found. Devices will appear here when they send logs to port 514.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// Auto-refresh every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}
