@@ -269,3 +269,55 @@ async def get_storage_timeline(
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/session-flow")
+async def get_session_flow(
+    timestamp: str = Query(..., description="Log timestamp in ISO format"),
+    device: str = Query(..., description="Device IP that logged the entry"),
+    window: int = Query(10, ge=1, le=60, description="Time window in seconds to search for related logs"),
+):
+    """
+    Get session flow across multiple firewalls.
+
+    This endpoint traces a network session across all firewalls that logged it,
+    showing the complete packet flow path from source to destination.
+
+    The correlation is based on:
+    - Source IP
+    - Destination IP
+    - Destination Port
+    - Protocol
+    - Time window (±N seconds)
+
+    Returns:
+    - original_log: The log entry you queried for
+    - flow: All related log entries from all firewalls, ordered by time
+    - summary: Summary including firewall count, whether all allowed, etc.
+    """
+    try:
+        result = ClickHouseClient.get_session_flow_by_log(
+            log_timestamp=timestamp,
+            device_ip=device,
+            time_window_seconds=window
+        )
+
+        if not result.get('original_log'):
+            raise HTTPException(status_code=404, detail="Log entry not found")
+
+        # Format timestamps for JSON serialization
+        def format_flow_entry(entry):
+            formatted = {**entry}
+            if 'timestamp' in formatted and hasattr(formatted['timestamp'], 'isoformat'):
+                formatted['timestamp'] = formatted['timestamp'].isoformat()
+            return formatted
+
+        return {
+            'original_log': format_flow_entry(result['original_log']) if result.get('original_log') else None,
+            'flow': [format_flow_entry(f) for f in result.get('flow', [])],
+            'summary': result.get('summary', {})
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -664,3 +664,170 @@ class ClickHouseClient:
         query = "SELECT uniq(device_ip) FROM syslogs"
         result = client.query(query).result_rows
         return result[0][0] if result else 0
+
+    @classmethod
+    def get_session_flow(
+        cls,
+        srcip: str,
+        dstip: str,
+        dstport: str,
+        proto: str,
+        timestamp: datetime,
+        time_window_seconds: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Find all firewall logs related to a session across multiple firewalls.
+
+        This correlates logs based on the 5-tuple (srcip, dstip, dstport, proto)
+        within a time window to show the packet flow across all firewalls.
+
+        Args:
+            srcip: Source IP address
+            dstip: Destination IP address
+            dstport: Destination port
+            proto: Protocol number (6=TCP, 17=UDP, 1=ICMP)
+            timestamp: Reference timestamp for the session
+            time_window_seconds: Time window to search (default ±10 seconds)
+
+        Returns:
+            List of log entries from all firewalls that handled this session,
+            ordered by timestamp to show the flow path.
+        """
+        client = cls.get_client()
+
+        # Escape values for SQL
+        safe_srcip = srcip.replace("'", "''")
+        safe_dstip = dstip.replace("'", "''")
+        safe_dstport = dstport.replace("'", "''")
+        safe_proto = proto.replace("'", "''")
+
+        # Build time range
+        ts_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+
+        query = f"""
+        SELECT
+            timestamp,
+            toString(device_ip) as device_ip,
+            severity,
+            parsed_data,
+            parsed_data['action'] as action,
+            parsed_data['srcip'] as srcip,
+            parsed_data['dstip'] as dstip,
+            parsed_data['srcport'] as srcport,
+            parsed_data['dstport'] as dstport,
+            parsed_data['proto'] as proto,
+            parsed_data['srcintf'] as srcintf,
+            parsed_data['dstintf'] as dstintf,
+            parsed_data['policyid'] as policyid,
+            parsed_data['policyname'] as policyname,
+            parsed_data['service'] as service,
+            parsed_data['duration'] as duration,
+            parsed_data['sentbyte'] as sentbyte,
+            parsed_data['rcvdbyte'] as rcvdbyte
+        FROM syslogs
+        WHERE
+            parsed_data['srcip'] = '{safe_srcip}'
+            AND parsed_data['dstip'] = '{safe_dstip}'
+            AND parsed_data['dstport'] = '{safe_dstport}'
+            AND parsed_data['proto'] = '{safe_proto}'
+            AND timestamp BETWEEN
+                toDateTime64('{ts_str}', 3) - INTERVAL {time_window_seconds} SECOND
+                AND toDateTime64('{ts_str}', 3) + INTERVAL {time_window_seconds} SECOND
+        ORDER BY timestamp ASC
+        """
+
+        result = list(client.query(query).named_results())
+        return result
+
+    @classmethod
+    def get_session_flow_by_log(
+        cls,
+        log_timestamp: str,
+        device_ip: str,
+        time_window_seconds: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Get session flow starting from a specific log entry.
+
+        First retrieves the log to get session details, then finds all related
+        logs across firewalls.
+
+        Args:
+            log_timestamp: ISO format timestamp of the log entry
+            device_ip: Device IP that logged the entry
+            time_window_seconds: Time window to search for related logs
+
+        Returns:
+            Dictionary with:
+            - original_log: The original log entry
+            - flow: List of all related logs across firewalls
+            - summary: Flow summary (total firewalls, all allowed, path)
+        """
+        client = cls.get_client()
+
+        # First get the original log
+        safe_device = device_ip.replace("'", "''")
+
+        query = f"""
+        SELECT
+            timestamp,
+            toString(device_ip) as device_ip,
+            severity,
+            parsed_data
+        FROM syslogs
+        WHERE
+            device_ip = toIPv4('{safe_device}')
+            AND timestamp = toDateTime64('{log_timestamp}', 3)
+        LIMIT 1
+        """
+
+        original = list(client.query(query).named_results())
+        if not original:
+            return {'original_log': None, 'flow': [], 'summary': {}}
+
+        original_log = original[0]
+        pd = original_log.get('parsed_data', {})
+
+        srcip = pd.get('srcip', '')
+        dstip = pd.get('dstip', '')
+        dstport = pd.get('dstport', '')
+        proto = pd.get('proto', '')
+
+        if not all([srcip, dstip, dstport, proto]):
+            return {
+                'original_log': original_log,
+                'flow': [original_log],
+                'summary': {
+                    'firewall_count': 1,
+                    'all_allowed': pd.get('action', '').lower() not in ['deny', 'drop', 'block', 'reject'],
+                    'has_deny': pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject']
+                }
+            }
+
+        # Get all related logs
+        flow = cls.get_session_flow(
+            srcip=srcip,
+            dstip=dstip,
+            dstport=dstport,
+            proto=proto,
+            timestamp=original_log['timestamp'],
+            time_window_seconds=time_window_seconds
+        )
+
+        # Build summary
+        unique_firewalls = set(log['device_ip'] for log in flow)
+        actions = [log.get('action', '').lower() for log in flow]
+        has_deny = any(a in ['deny', 'drop', 'block', 'reject'] for a in actions)
+        all_allowed = all(a not in ['deny', 'drop', 'block', 'reject'] for a in actions if a)
+
+        return {
+            'original_log': original_log,
+            'flow': flow,
+            'summary': {
+                'firewall_count': len(unique_firewalls),
+                'firewalls': list(unique_firewalls),
+                'all_allowed': all_allowed,
+                'has_deny': has_deny,
+                'total_hops': len(flow)
+            }
+        }
