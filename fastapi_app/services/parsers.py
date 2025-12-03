@@ -552,22 +552,72 @@ class PaloAltoParser(BaseParser):
         'SCTP': SCTP_FIELDS,
     }
 
-    # Field name normalization map
+    # Field name normalization map - maps Palo Alto fields to common/Fortinet-style fields
     FIELD_NORMALIZATION = {
+        # IP addresses
         'src_ip': 'srcip',
         'dst_ip': 'dstip',
         'nat_src_ip': 'nat_srcip',
         'nat_dst_ip': 'nat_dstip',
+        # Ports
         'src_port': 'srcport',
         'dst_port': 'dstport',
+        'nat_src_port': 'natsrcport',
+        'nat_dst_port': 'natdstport',
+        # Zones
         'src_zone': 'srczone',
         'dst_zone': 'dstzone',
+        # Users
         'src_user': 'srcuser',
         'dst_user': 'dstuser',
+        # Interfaces
         'inbound_if': 'srcintf',
         'outbound_if': 'dstintf',
+        # Protocol and Application
         'protocol': 'proto',
         'application': 'app',
+        # Bytes - map to Fortinet-style names
+        'bytes_sent': 'sentbyte',
+        'bytes_recv': 'rcvdbyte',
+        'bytes': 'totalbyte',
+        # Packets
+        'packets_sent': 'sentpkt',
+        'packets_recv': 'rcvdpkt',
+        'packets': 'totalpkt',
+        # Session info
+        'session_id': 'sessionid',
+        'elapsed_time': 'duration',
+        'session_end_reason': 'session_end_reason',
+        # Location
+        'src_location': 'srccountry',
+        'dst_location': 'dstcountry',
+        # Rule/Policy
+        'rule': 'policyname',
+        # Device info
+        'device_name': 'device_name',
+        'vsys_name': 'vsys_name',
+        # Time fields
+        'receive_time': 'receive_time',
+        'generated_time': 'generated_time',
+        'start_time': 'start_time',
+        # Category
+        'category': 'category',
+        # Device category/profile info (for endpoint identification)
+        'src_dvc_category': 'src_device_category',
+        'dst_dvc_category': 'dst_device_category',
+        'src_hostname': 'src_hostname',
+        'dst_hostname': 'dst_hostname',
+        'src_mac': 'srcmac',
+        'dst_mac': 'dstmac',
+        # Threat-specific
+        'threat_id': 'threat_id',
+        'severity': 'threat_severity',
+        # App classification
+        'category_of_app': 'appcat',
+        'subcategory_of_app': 'app_subcat',
+        'risk_of_app': 'apprisk',
+        'tech_of_app': 'app_tech',
+        'characteristic_of_app': 'app_characteristic',
     }
 
     def parse(self, message: str) -> Dict[str, Any]:

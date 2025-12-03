@@ -191,53 +191,71 @@
             background: var(--bg-white);
         }
 
-        /* Search Toolbar - Full Width */
+        /* Search Toolbar - Clean 3-Field Design */
         .search-toolbar {
             display: flex;
-            align-items: center;
+            align-items: flex-end;
+            justify-content: space-between;
             gap: 16px;
             padding: 16px 24px;
             background: var(--bg-white);
             border-bottom: 1px solid var(--border-light);
         }
 
-        .search-box {
+        .search-filters {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
             flex: 1;
-            position: relative;
-            max-width: none;
         }
 
-        .search-icon {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 20px;
-            color: var(--text-tertiary);
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            max-width: 280px;
         }
 
-        .search-input {
-            width: 100%;
-            height: 44px;
-            padding: 0 16px 0 48px;
-            border: 2px solid var(--border-light);
-            border-radius: 8px;
-            font-size: 15px;
-            font-family: var(--font-sans);
+        .filter-group-small {
+            max-width: 160px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-input {
+            height: 40px;
+            padding: 0 12px;
+            border: 1px solid var(--border-default);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: var(--font-mono);
+            background: var(--bg-white);
             transition: all 0.15s;
-            background: var(--bg-gray-50);
         }
 
-        .search-input:focus {
+        .filter-input:focus {
             outline: none;
             border-color: var(--accent-blue);
-            background: var(--bg-white);
             box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
         }
 
-        .search-input::placeholder {
+        .filter-input::placeholder {
             color: var(--text-tertiary);
+            font-family: var(--font-sans);
+            font-size: 13px;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
         }
 
         .toolbar-actions {
@@ -1187,6 +1205,538 @@
         }
 
         /* ============================================
+           PROFESSIONAL SEARCH - TOKEN/CHIP BASED
+        ============================================ */
+        .search-container {
+            position: relative;
+            flex: 1;
+        }
+
+        .search-tokens-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            min-height: 48px;
+            padding: 8px 12px;
+            padding-right: 80px;
+            background: var(--bg-white);
+            border: 2px solid var(--border-light);
+            border-radius: 10px;
+            transition: all 0.15s;
+            cursor: text;
+        }
+
+        .search-tokens-wrapper:focus-within {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.12);
+        }
+
+        .search-tokens-wrapper:hover:not(:focus-within) {
+            border-color: var(--border-dark);
+        }
+
+        /* Search Token/Chip */
+        .search-token {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 1px solid #90caf9;
+            border-radius: 6px;
+            font-size: 13px;
+            animation: tokenAppear 0.15s ease-out;
+        }
+
+        @keyframes tokenAppear {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .search-token.negated {
+            background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+            border-color: #ef9a9a;
+        }
+
+        .search-token-field {
+            font-weight: 600;
+            color: #1565c0;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        .search-token.negated .search-token-field {
+            color: #c62828;
+        }
+
+        .search-token-operator {
+            color: #7b1fa2;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+
+        .search-token-value {
+            color: var(--text-primary);
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .search-token-remove {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            margin-left: 2px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #5c6bc0;
+            transition: all 0.1s;
+        }
+
+        .search-token-remove:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #1a237e;
+        }
+
+        .search-token.negated .search-token-remove {
+            color: #e53935;
+        }
+
+        .search-token.negated .search-token-remove:hover {
+            color: #b71c1c;
+        }
+
+        .search-token-remove svg {
+            width: 10px;
+            height: 10px;
+        }
+
+        /* Text Token */
+        .search-token.text-token {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-color: #ffb74d;
+        }
+
+        .search-token.text-token .search-token-field {
+            color: #e65100;
+        }
+
+        /* Search Input */
+        .search-input-inline {
+            flex: 1;
+            min-width: 200px;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            font-family: var(--font-sans);
+            background: transparent;
+            padding: 4px 0;
+        }
+
+        .search-input-inline::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Search Actions */
+        .search-actions {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .search-action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .search-action-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .search-action-btn.help {
+            background: transparent;
+            color: var(--text-tertiary);
+        }
+
+        .search-action-btn.help:hover {
+            background: var(--bg-gray-100);
+            color: var(--text-secondary);
+        }
+
+        .search-action-btn.search {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .search-action-btn.search:hover {
+            background: #1565c0;
+        }
+
+        /* Autocomplete Dropdown */
+        .search-autocomplete {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-white);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-height: 420px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .search-autocomplete.visible {
+            display: block;
+            animation: dropdownAppear 0.15s ease-out;
+        }
+
+        @keyframes dropdownAppear {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .autocomplete-header {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+            border-bottom: 1px solid var(--border-light);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .autocomplete-header svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0.6;
+        }
+
+        .autocomplete-body {
+            max-height: 360px;
+            overflow-y: auto;
+        }
+
+        .autocomplete-section-title {
+            padding: 10px 16px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-tertiary);
+            background: var(--bg-gray-50);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .autocomplete-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: all 0.1s;
+            border-left: 3px solid transparent;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: linear-gradient(90deg, #e3f2fd 0%, transparent 100%);
+            border-left-color: var(--accent-blue);
+        }
+
+        .autocomplete-item-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .autocomplete-item-icon.field {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1565c0;
+        }
+
+        .autocomplete-item-icon.value {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            color: #2e7d32;
+        }
+
+        .autocomplete-item-icon.operator {
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+            color: #7b1fa2;
+        }
+
+        .autocomplete-item-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .autocomplete-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .autocomplete-item-title {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .autocomplete-item-title code {
+            background: rgba(0, 120, 212, 0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        .autocomplete-item-desc {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 3px;
+        }
+
+        .autocomplete-item-badge {
+            font-size: 9px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: var(--bg-gray-100);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 600;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        /* Operator Pills in Autocomplete */
+        .operator-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 12px 16px;
+            background: var(--bg-gray-50);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .operator-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-white);
+            border: 1px solid var(--border-default);
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .operator-pill:hover {
+            border-color: var(--accent-blue);
+            background: var(--accent-blue-light);
+        }
+
+        .operator-pill.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+
+        .operator-pill code {
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        /* Search Help Panel */
+        .search-help-panel {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            width: 480px;
+            background: var(--bg-white);
+            border: 1px solid var(--border-default);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            z-index: 1001;
+            display: none;
+            overflow: hidden;
+        }
+
+        .search-help-panel.visible {
+            display: block;
+            animation: dropdownAppear 0.15s ease-out;
+        }
+
+        .search-help-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-help-header h3 {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-help-header h3 svg {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+        }
+
+        .search-help-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: background 0.15s;
+        }
+
+        .search-help-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .search-help-close svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .search-help-body {
+            padding: 20px;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .search-help-section {
+            margin-bottom: 20px;
+        }
+
+        .search-help-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .search-help-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-tertiary);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-help-section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        .search-help-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .search-help-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: var(--bg-gray-50);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .search-help-item:hover {
+            background: var(--accent-blue-light);
+        }
+
+        .search-help-item code {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent-blue);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .search-help-item span {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .search-help-full {
+            grid-column: 1 / -1;
+        }
+
+        /* Keyboard shortcuts */
+        .keyboard-hint {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 20px;
+            padding: 0 6px;
+            background: var(--bg-gray-200);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        /* ============================================
            RIGHT SIDEBAR
         ============================================ */
         .right-sidebar {
@@ -1466,17 +2016,55 @@
         <div class="main-layout">
             <!-- Main Content -->
             <main class="main-content">
-                <!-- Search Toolbar - Full Width -->
+                <!-- Search Toolbar - Clean 3-Field Design -->
                 <div class="search-toolbar">
-                    <div class="search-box">
-                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="m21 21-4.35-4.35"/>
-                        </svg>
-                        <input type="text" name="q" class="search-input" value="{{ current_q or '' }}"
-                            placeholder="Search logs... (e.g., srcip:10.0.0.1, action:deny, dstport:443)">
+                    <div class="search-filters">
+                        <div class="filter-group">
+                            <label for="srcipInput">Source IP</label>
+                            <input type="text"
+                                   id="srcipInput"
+                                   name="srcip"
+                                   class="filter-input"
+                                   value="{{ current_srcip or '' }}"
+                                   placeholder="e.g. 192.168.1.1 or 10.0.0.0/24"
+                                   autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <label for="dstipInput">Destination IP</label>
+                            <input type="text"
+                                   id="dstipInput"
+                                   name="dstip"
+                                   class="filter-input"
+                                   value="{{ current_dstip or '' }}"
+                                   placeholder="e.g. 8.8.8.8 or 10.11.40.0/24"
+                                   autocomplete="off">
+                        </div>
+                        <div class="filter-group filter-group-small">
+                            <label for="dstportInput">Dest Port</label>
+                            <input type="text"
+                                   id="dstportInput"
+                                   name="dstport"
+                                   class="filter-input"
+                                   value="{{ current_dstport or '' }}"
+                                   placeholder="e.g. 443 or 80-443"
+                                   autocomplete="off">
+                        </div>
+                        <div class="filter-actions">
+                            <button type="submit" class="btn btn-primary" id="searchBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <path d="m21 21-4.35-4.35"/>
+                                </svg>
+                                Search
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearFilters()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 6 6 18M6 6l12 12"/>
+                                </svg>
+                                Clear
+                            </button>
+                        </div>
                     </div>
-
                     <div class="toolbar-actions">
                         <button type="button" class="btn btn-secondary" onclick="location.reload()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1486,14 +2074,6 @@
                                 <path d="M16 21h5v-5"/>
                             </svg>
                             Refresh
-                        </button>
-                        <button type="button" class="btn btn-primary">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                            Export
                         </button>
                     </div>
                 </div>
@@ -1509,8 +2089,16 @@
                     <div class="log-stats-right">
                         {% if current_start and current_end %}
                         {{ current_start }} - {{ current_end }}
-                        {% else %}
+                        {% elif current_time_range == '1h' %}
+                        Displaying Past 1 Hour
+                        {% elif current_time_range == '24h' %}
                         Displaying Past 24 Hours
+                        {% elif current_time_range == '7d' %}
+                        Displaying Past 7 Days
+                        {% elif current_time_range == '30d' %}
+                        Displaying Past 30 Days
+                        {% else %}
+                        Displaying Past 1 Hour
                         {% endif %}
                     </div>
                 </div>
@@ -1617,20 +2205,23 @@
                                     </div>
                                 </td>
                                 <td class="col-ip">
-                                    <a href="?q=srcip:{{ pd.get('srcip', '') }}">{{ pd.get('srcip', '--') }}</a>
+                                    {% set src_ip = pd.get('srcip', pd.get('src_ip', '--')) %}
+                                    <a href="?q=srcip:{{ src_ip }}">{{ src_ip }}</a>
                                 </td>
                                 <td class="col-ip">
-                                    <a href="?q=dstip:{{ pd.get('dstip', '') }}">{{ pd.get('dstip', '--') }}</a>
+                                    {% set dst_ip = pd.get('dstip', pd.get('dst_ip', '--')) %}
+                                    <a href="?q=dstip:{{ dst_ip }}">{{ dst_ip }}</a>
                                 </td>
-                                <td class="col-intf">{{ pd.get('dstintf', '--') }}</td>
+                                <td class="col-intf">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</td>
                                 <td class="col-port-proto">
-                                    {% set proto = pd.get('proto', '') %}
-                                    <span class="port-value">{{ pd.get('dstport', '--') }}</span>
-                                    <span class="proto-value">{% if proto == '6' %}TCP{% elif proto == '17' %}UDP{% elif proto == '1' %}ICMP{% else %}{{ proto or '--' }}{% endif %}</span>
+                                    {% set proto = pd.get('proto', pd.get('protocol', '')) %}
+                                    {% set dst_port = pd.get('dstport', pd.get('dst_port', '--')) %}
+                                    <span class="port-value">{{ dst_port }}</span>
+                                    <span class="proto-value">{% if proto == '6' %}TCP{% elif proto == '17' %}UDP{% elif proto == '1' %}ICMP{% elif proto == 'icmp' %}ICMP{% elif proto == 'tcp' %}TCP{% elif proto == 'udp' %}UDP{% else %}{{ proto or '--' }}{% endif %}</span>
                                 </td>
                                 <td class="col-size">
-                                    {% set sent = pd.get('sentbyte', '0') | int %}
-                                    {% set rcvd = pd.get('rcvdbyte', '0') | int %}
+                                    {% set sent = pd.get('sentbyte', pd.get('bytes_sent', '0')) | int %}
+                                    {% set rcvd = pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | int %}
                                     {% set total_bytes = sent + rcvd %}
                                     <span class="size-total">{{ total_bytes | format_bytes }}</span>
                                     <span class="size-detail">{{ sent | format_bytes }}/{{ rcvd | format_bytes }}</span>
@@ -1675,7 +2266,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="flow-label">Client</span>
-                                                    <span class="flow-sublabel">{{ pd.get('srcip', '--') }}</span>
+                                                    <span class="flow-sublabel">{{ pd.get('srcip', pd.get('src_ip', '--')) }}</span>
                                                 </div>
 
                                                 <div class="flow-arrow">
@@ -1707,7 +2298,7 @@
                                                             <path d="m9 18 6-6-6-6"/>
                                                         </svg>
                                                     </div>
-                                                    <span class="flow-arrow-label">:{{ pd.get('dstport', '--') }}</span>
+                                                    <span class="flow-arrow-label">:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</span>
                                                 </div>
 
                                                 <div class="flow-node">
@@ -1720,7 +2311,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="flow-label">Server</span>
-                                                    <span class="flow-sublabel">{{ pd.get('dstip', '--') }}</span>
+                                                    <span class="flow-sublabel">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}</span>
                                                 </div>
                                             </div>
 
@@ -1740,23 +2331,31 @@
                                         <!-- Detail Grid -->
                                         <div class="detail-grid">
                                             <div class="detail-section">
-                                                <div class="detail-section-header">Client Information</div>
+                                                <div class="detail-section-header">Source Information</div>
                                                 <div class="detail-section-body">
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Client IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('srcip', '--') }}:{{ pd.get('srcport', '--') }}</span>
+                                                        <span class="detail-key">Source IP:</span>
+                                                        <span class="detail-value mono">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Location:</span>
-                                                        <span class="detail-value"><a href="#">{{ pd.get('srccountry', 'Internal') }}</a></span>
+                                                        <span class="detail-key">Zone:</span>
+                                                        <span class="detail-value">{{ pd.get('srczone', pd.get('src_zone', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
                                                         <span class="detail-key">Interface:</span>
-                                                        <span class="detail-value">{{ pd.get('srcintf', '--') }}</span>
+                                                        <span class="detail-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
-                                                        <span class="detail-key">MAC:</span>
-                                                        <span class="detail-value mono">{{ pd.get('srcmac', pd.get('mastersrcmac', '--')) }}</span>
+                                                        <span class="detail-key">Location:</span>
+                                                        <span class="detail-value">{{ pd.get('srccountry', pd.get('src_location', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">User:</span>
+                                                        <span class="detail-value">{{ pd.get('srcuser', pd.get('src_user', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">NAT IP:</span>
+                                                        <span class="detail-value mono">{{ pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('natsrcip', '--'))) }}{% if pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport'))) %}:{{ pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport', ''))) }}{% endif %}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1770,38 +2369,125 @@
                                                     </div>
                                                     <div class="detail-item">
                                                         <span class="detail-key">Session ID:</span>
-                                                        <span class="detail-value mono">{{ pd.get('sessionid', '--') }}</span>
+                                                        <span class="detail-value mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Protocol:</span>
+                                                        <span class="detail-value">{% set proto = pd.get('proto', pd.get('protocol', '')) %}{% if proto == '6' %}TCP (6){% elif proto == '17' %}UDP (17){% elif proto == '1' %}ICMP (1){% else %}{{ proto or '--' }}{% endif %}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Application:</span>
+                                                        <span class="detail-value">{{ pd.get('app', pd.get('application', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
                                                         <span class="detail-key">Service:</span>
                                                         <span class="detail-value">{{ pd.get('service', '--') }}</span>
                                                     </div>
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Duration:</span>
-                                                        <span class="detail-value">{{ pd.get('duration', '0') }}s</span>
+                                                        <span class="detail-key">Bytes Sent:</span>
+                                                        <span class="detail-value">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Bytes Received:</span>
+                                                        <span class="detail-value">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div class="detail-section">
-                                                <div class="detail-section-header">Server Information</div>
+                                                <div class="detail-section-header">Destination Information</div>
                                                 <div class="detail-section-body">
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Server IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('dstip', '--') }}:{{ pd.get('dstport', '--') }}</span>
+                                                        <span class="detail-key">Destination IP:</span>
+                                                        <span class="detail-value mono">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Location:</span>
-                                                        <span class="detail-value"><a href="#">{{ pd.get('dstcountry', 'Internal') }}</a></span>
+                                                        <span class="detail-key">Zone:</span>
+                                                        <span class="detail-value">{{ pd.get('dstzone', pd.get('dst_zone', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
                                                         <span class="detail-key">Interface:</span>
-                                                        <span class="detail-value">{{ pd.get('dstintf', '--') }}</span>
+                                                        <span class="detail-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span>
                                                     </div>
                                                     <div class="detail-item">
-                                                        <span class="detail-key">Bytes Sent/Rcvd:</span>
-                                                        <span class="detail-value">{{ pd.get('sentbyte', '0') }} / {{ pd.get('rcvdbyte', '0') }}</span>
+                                                        <span class="detail-key">Location:</span>
+                                                        <span class="detail-value">{{ pd.get('dstcountry', pd.get('dst_location', '--')) }}</span>
                                                     </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">User:</span>
+                                                        <span class="detail-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">NAT IP:</span>
+                                                        <span class="detail-value mono">{{ pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('natdstip', '--'))) }}{% if pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport'))) %}:{{ pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport', ''))) }}{% endif %}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Policy & Device Info -->
+                                        <div class="detail-grid" style="margin-top: 16px;">
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">Policy Information</div>
+                                                <div class="detail-section-body">
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Rule/Policy:</span>
+                                                        <span class="detail-value">{{ pd.get('policyname', pd.get('rule', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Policy ID:</span>
+                                                        <span class="detail-value mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span>
+                                                    </div>
+                                                    {% if pd.get('rule_uuid') %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Rule UUID:</span>
+                                                        <span class="detail-value mono">{{ pd.get('rule_uuid') }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if pd.get('log_action') %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Log Action:</span>
+                                                        <span class="detail-value">{{ pd.get('log_action') }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">Application Details</div>
+                                                <div class="detail-section-body">
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Application:</span>
+                                                        <span class="detail-value">{{ pd.get('app', pd.get('application', '--')) }}</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Category:</span>
+                                                        <span class="detail-value">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span>
+                                                    </div>
+                                                    {% if pd.get('apprisk', pd.get('risk_of_app')) %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Risk:</span>
+                                                        <span class="detail-value">{{ pd.get('apprisk', pd.get('risk_of_app', '--')) }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if pd.get('subcategory_of_app') %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Subcategory:</span>
+                                                        <span class="detail-value">{{ pd.get('subcategory_of_app') }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if pd.get('tech_of_app') %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Technology:</span>
+                                                        <span class="detail-value">{{ pd.get('tech_of_app') }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if pd.get('characteristic_of_app') %}
+                                                    <div class="detail-item">
+                                                        <span class="detail-key">Characteristics:</span>
+                                                        <span class="detail-value">{{ pd.get('characteristic_of_app') }}</span>
+                                                    </div>
+                                                    {% endif %}
                                                 </div>
                                             </div>
                                         </div>
@@ -1891,8 +2577,8 @@
                         </div>
                         <div class="sidebar-section-content">
                             <div class="time-range-buttons">
-                                <button type="button" class="time-range-btn" data-range="1h" onclick="setTimeRange('1h')">1 Hour</button>
-                                <button type="button" class="time-range-btn active" data-range="24h" onclick="setTimeRange('24h')">24 Hours</button>
+                                <button type="button" class="time-range-btn active" data-range="1h" onclick="setTimeRange('1h')">1 Hour</button>
+                                <button type="button" class="time-range-btn" data-range="24h" onclick="setTimeRange('24h')">24 Hours</button>
                                 <button type="button" class="time-range-btn" data-range="7d" onclick="setTimeRange('7d')">7 Days</button>
                                 <button type="button" class="time-range-btn" data-range="30d" onclick="setTimeRange('30d')">30 Days</button>
                             </div>
@@ -2008,7 +2694,7 @@
     <input type="hidden" name="device" id="hiddenDevice" value="{{ current_device or '' }}">
     <input type="hidden" name="severity" id="hiddenSeverity" value="{{ current_severity or '' }}">
     <input type="hidden" name="action" id="hiddenAction" value="{{ current_action or '' }}">
-    <input type="hidden" name="time_range" id="hiddenTimeRange" value="24h">
+    <input type="hidden" name="time_range" id="hiddenTimeRange" value="{{ current_time_range or '1h' }}">
     <input type="hidden" name="per_page" value="{{ per_page }}">
     </form>
 
@@ -2159,7 +2845,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Highlight current time range
             const urlParams = new URLSearchParams(window.location.search);
-            const timeRange = urlParams.get('time_range') || '24h';
+            const timeRange = urlParams.get('time_range') || '{{ current_time_range or "1h" }}';
 
             document.querySelectorAll('.time-range-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -2372,6 +3058,32 @@
             if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
             return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
         }
+
+        // ============================================
+        // SIMPLE FILTER SEARCH
+        // ============================================
+
+        // Clear all filter inputs
+        function clearFilters() {
+            document.getElementById('srcipInput').value = '';
+            document.getElementById('dstipInput').value = '';
+            document.getElementById('dstportInput').value = '';
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Handle Enter key on filter inputs
+        document.querySelectorAll('.filter-input').forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('hiddenPageInput').value = 1;
+                    showLoading();
+                    document.getElementById('filterForm').submit();
+                }
+            });
+        });
     </script>
 </body>
 </html>

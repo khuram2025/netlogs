@@ -4,7 +4,7 @@ HTML view routes for the web UI.
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -37,8 +37,18 @@ SEVERITY_MAP = {
 }
 
 
-def format_bytes(size: int) -> str:
+def format_bytes(size) -> str:
     """Format bytes to human readable string."""
+    # Handle string input (convert to int)
+    if isinstance(size, str):
+        try:
+            size = int(size) if size else 0
+        except (ValueError, TypeError):
+            return "0 B"
+    elif size is None:
+        return "0 B"
+
+    size = int(size)
     if size < 1024:
         return f"{size} B"
     for unit in ['KB', 'MB', 'GB', 'TB']:
@@ -149,6 +159,10 @@ async def log_list(
     time_range: Optional[str] = Query(None),
     page: Optional[str] = Query("1"),
     per_page: Optional[str] = Query("100"),
+    # New direct filter parameters for simplified search
+    srcip: Optional[str] = Query(None),
+    dstip: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
 ):
     """Log list view with filtering."""
     try:
@@ -180,6 +194,33 @@ async def log_list(
         # Parse datetime strings
         start_time = None
         end_time = None
+        now = datetime.now()
+
+        # Default to 1 hour if no time range specified (for performance)
+        default_time_range = '1h'
+        effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
+
+        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d)
+        if effective_time_range.endswith('m'):
+            try:
+                minutes = int(effective_time_range[:-1])
+                start_time = now - timedelta(minutes=minutes)
+            except ValueError:
+                pass
+        elif effective_time_range.endswith('h'):
+            try:
+                hours = int(effective_time_range[:-1])
+                start_time = now - timedelta(hours=hours)
+            except ValueError:
+                pass
+        elif effective_time_range.endswith('d'):
+            try:
+                days = int(effective_time_range[:-1])
+                start_time = now - timedelta(days=days)
+            except ValueError:
+                pass
+
+        # Override with explicit start/end if provided
         if start:
             try:
                 start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -191,8 +232,33 @@ async def log_list(
             except ValueError:
                 pass
 
-        # Build search query with action filter
+        # Build search query from direct filter parameters (srcip, dstip, dstport)
+        search_parts = []
+
+        # Handle srcip parameter
+        srcip_clean = srcip.strip() if srcip and srcip.strip() else None
+        if srcip_clean:
+            search_parts.append(f"srcip:{srcip_clean}")
+
+        # Handle dstip parameter
+        dstip_clean = dstip.strip() if dstip and dstip.strip() else None
+        if dstip_clean:
+            search_parts.append(f"dstip:{dstip_clean}")
+
+        # Handle dstport parameter
+        dstport_clean = dstport.strip() if dstport and dstport.strip() else None
+        if dstport_clean:
+            search_parts.append(f"dstport:{dstport_clean}")
+
+        # Combine with existing q parameter if present
         search_query = q or ""
+        if search_parts:
+            direct_filters = " ".join(search_parts)
+            if search_query:
+                search_query = f"{search_query} {direct_filters}"
+            else:
+                search_query = direct_filters
+
         if action:
             # Map action filter to search terms
             action_terms = {
@@ -280,9 +346,21 @@ async def log_list(
             "current_action": current_action,
             "current_start": start,
             "current_end": end,
+            "current_time_range": effective_time_range,
+            # New direct filter values
+            "current_srcip": srcip_clean,
+            "current_dstip": dstip_clean,
+            "current_dstport": dstport_clean,
             "error": None,
         })
     except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in log_list view: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        print(f"ERROR in log_list: {type(e).__name__}: {e}")
+        print(traceback.format_exc())
         return templates.TemplateResponse("logs/log_list.html", {
             "request": request,
             "logs": [],
@@ -301,6 +379,9 @@ async def log_list(
             "current_action": None,
             "current_start": start if start else None,
             "current_end": end if end else None,
+            "current_srcip": srcip if srcip else None,
+            "current_dstip": dstip if dstip else None,
+            "current_dstport": dstport if dstport else None,
             "error": str(e),
         })
 

@@ -19,6 +19,180 @@ from ..schemas.logs import (
 router = APIRouter(prefix="/logs", tags=["logs"])
 
 
+# Search field definitions for autocomplete
+SEARCH_FIELDS = {
+    # Source fields
+    'srcip': {
+        'label': 'Source IP',
+        'description': 'Source IP address (supports CIDR, ranges, wildcards)',
+        'category': 'source',
+        'examples': ['192.168.1.1', '10.0.0.0/8', '192.168.1.1-192.168.1.50', '192.168.*.*'],
+    },
+    'srcport': {
+        'label': 'Source Port',
+        'description': 'Source port number or range',
+        'category': 'source',
+        'examples': ['443', '1024-65535', '80'],
+    },
+    'srcintf': {
+        'label': 'Source Interface',
+        'description': 'Source network interface',
+        'category': 'source',
+        'examples': ['port1', 'wan1', 'internal'],
+    },
+    'srczone': {
+        'label': 'Source Zone',
+        'description': 'Source security zone',
+        'category': 'source',
+        'examples': ['trust', 'untrust', 'dmz'],
+    },
+    'srcuser': {
+        'label': 'Source User',
+        'description': 'Source username',
+        'category': 'source',
+        'examples': ['admin', 'john.doe'],
+    },
+    'srccountry': {
+        'label': 'Source Country',
+        'description': 'Source country location',
+        'category': 'source',
+        'examples': ['United States', 'Germany', 'Reserved'],
+    },
+    # Destination fields
+    'dstip': {
+        'label': 'Destination IP',
+        'description': 'Destination IP address (supports CIDR, ranges, wildcards)',
+        'category': 'destination',
+        'examples': ['8.8.8.8', '10.0.0.0/24', '192.168.1.1-192.168.1.100'],
+    },
+    'dstport': {
+        'label': 'Destination Port',
+        'description': 'Destination port number or range',
+        'category': 'destination',
+        'examples': ['443', '80', '22', '80-443'],
+    },
+    'dstintf': {
+        'label': 'Destination Interface',
+        'description': 'Destination network interface',
+        'category': 'destination',
+        'examples': ['port2', 'wan2', 'external'],
+    },
+    'dstzone': {
+        'label': 'Destination Zone',
+        'description': 'Destination security zone',
+        'category': 'destination',
+        'examples': ['trust', 'untrust', 'dmz'],
+    },
+    'dstuser': {
+        'label': 'Destination User',
+        'description': 'Destination username',
+        'category': 'destination',
+        'examples': [],
+    },
+    'dstcountry': {
+        'label': 'Destination Country',
+        'description': 'Destination country location',
+        'category': 'destination',
+        'examples': ['United States', 'Germany', 'Reserved'],
+    },
+    # Session fields
+    'action': {
+        'label': 'Action',
+        'description': 'Firewall action (accept, deny, drop, close)',
+        'category': 'session',
+        'examples': ['accept', 'deny', 'drop', 'close', 'client-rst'],
+    },
+    'proto': {
+        'label': 'Protocol',
+        'description': 'IP protocol number or name',
+        'category': 'session',
+        'examples': ['6', '17', '1', 'TCP', 'UDP', 'ICMP'],
+    },
+    'service': {
+        'label': 'Service',
+        'description': 'Application service name',
+        'category': 'session',
+        'examples': ['HTTPS', 'HTTP', 'DNS', 'SSH', 'FTP'],
+    },
+    'app': {
+        'label': 'Application',
+        'description': 'Application name',
+        'category': 'session',
+        'examples': ['SSL', 'Facebook', 'YouTube', 'Google'],
+    },
+    'appcat': {
+        'label': 'App Category',
+        'description': 'Application category',
+        'category': 'session',
+        'examples': ['Social.Media', 'Video/Audio', 'Web.Client'],
+    },
+    # Policy fields
+    'policyid': {
+        'label': 'Policy ID',
+        'description': 'Firewall policy ID',
+        'category': 'policy',
+        'examples': ['1', '100', '0'],
+    },
+    'policyname': {
+        'label': 'Policy Name',
+        'description': 'Firewall policy name',
+        'category': 'policy',
+        'examples': ['allow-internet', 'block-malware'],
+    },
+    'rule': {
+        'label': 'Rule',
+        'description': 'Firewall rule name (Palo Alto)',
+        'category': 'policy',
+        'examples': [],
+    },
+    # Device fields
+    'device': {
+        'label': 'Device IP',
+        'description': 'Firewall device IP address',
+        'category': 'device',
+        'examples': ['192.168.100.1', '10.0.0.1'],
+    },
+    'device_name': {
+        'label': 'Device Name',
+        'description': 'Firewall device hostname',
+        'category': 'device',
+        'examples': ['FW-01', 'PA-500'],
+    },
+    # Log type fields
+    'type': {
+        'label': 'Log Type',
+        'description': 'Type of log entry',
+        'category': 'log',
+        'examples': ['traffic', 'utm', 'event'],
+    },
+    'subtype': {
+        'label': 'Log Subtype',
+        'description': 'Subtype of log entry',
+        'category': 'log',
+        'examples': ['forward', 'local', 'start', 'end'],
+    },
+    'severity': {
+        'label': 'Severity',
+        'description': 'Log severity level (0-7)',
+        'category': 'log',
+        'examples': ['0', '3', '4', '6'],
+    },
+    # NAT fields
+    'nat_srcip': {
+        'label': 'NAT Source IP',
+        'description': 'NAT translated source IP',
+        'category': 'nat',
+        'examples': ['203.0.113.1'],
+    },
+    'nat_dstip': {
+        'label': 'NAT Destination IP',
+        'description': 'NAT translated destination IP',
+        'category': 'nat',
+        'examples': ['10.0.0.100'],
+    },
+}
+
+
 # Severity mapping
 SEVERITY_NAMES = {
     0: 'Emergency',
@@ -321,3 +495,169 @@ async def get_session_flow(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search-fields")
+async def get_search_fields():
+    """
+    Get all available search fields for autocomplete.
+
+    Returns field definitions organized by category with labels,
+    descriptions, and example values.
+    """
+    # Group fields by category
+    categories = {}
+    for field, info in SEARCH_FIELDS.items():
+        cat = info['category']
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append({
+            'field': field,
+            **info
+        })
+
+    # Define category order and labels
+    category_order = [
+        ('source', 'Source'),
+        ('destination', 'Destination'),
+        ('session', 'Session'),
+        ('policy', 'Policy'),
+        ('device', 'Device'),
+        ('log', 'Log Type'),
+        ('nat', 'NAT'),
+    ]
+
+    return {
+        'fields': SEARCH_FIELDS,
+        'categories': categories,
+        'category_order': category_order,
+        'syntax_help': {
+            'basic': 'field:value (e.g., srcip:192.168.1.1)',
+            'negation': '-field:value (e.g., -action:deny)',
+            'cidr': 'srcip:192.168.0.0/24 or dstip:10.0.0.0/8',
+            'range': 'srcip:192.168.1.1-192.168.1.50 or dstport:80-443',
+            'wildcard': 'srcip:192.168.*.* or dstip:10.*.*.*',
+            'text': 'keyword or "phrase with spaces"',
+            'combine': 'srcip:10.0.0.1 dstport:443 action:accept',
+        }
+    }
+
+
+@router.get("/search-suggest")
+async def get_search_suggestions(
+    q: str = Query("", description="Current search query or partial input"),
+    field: Optional[str] = Query(None, description="Specific field to get values for"),
+):
+    """
+    Get search suggestions based on current input.
+
+    - If input is empty or a partial field name, returns matching field names
+    - If input is a complete field with colon (e.g., "action:"), returns common values for that field
+    - If field parameter is provided, returns recent unique values for that field from the database
+    """
+    suggestions = []
+
+    # If a specific field is requested, get values from database
+    if field and field in SEARCH_FIELDS:
+        try:
+            values = ClickHouseClient.get_field_values(field, limit=20)
+            return {
+                'type': 'values',
+                'field': field,
+                'field_info': SEARCH_FIELDS[field],
+                'values': values,
+            }
+        except Exception:
+            # Fall back to examples if database query fails
+            return {
+                'type': 'values',
+                'field': field,
+                'field_info': SEARCH_FIELDS[field],
+                'values': SEARCH_FIELDS[field].get('examples', []),
+            }
+
+    # Parse current query to understand context
+    q = q.strip()
+
+    # If empty or just started typing, suggest all fields
+    if not q:
+        for field_name, info in SEARCH_FIELDS.items():
+            suggestions.append({
+                'type': 'field',
+                'value': f'{field_name}:',
+                'label': info['label'],
+                'description': info['description'],
+                'category': info['category'],
+            })
+        return {'type': 'fields', 'suggestions': suggestions}
+
+    # Check if we're typing a field name (no colon yet)
+    if ':' not in q.split()[-1]:
+        # Get the last word being typed
+        parts = q.rsplit(None, 1)
+        prefix = parts[-1].lower() if parts else q.lower()
+
+        # Handle negation prefix
+        is_negated = prefix.startswith('-')
+        if is_negated:
+            prefix = prefix[1:]
+
+        neg_prefix = '-' if is_negated else ''
+
+        # Find matching fields
+        for field_name, info in SEARCH_FIELDS.items():
+            if field_name.startswith(prefix) or info['label'].lower().startswith(prefix):
+                suggestions.append({
+                    'type': 'field',
+                    'value': f'{neg_prefix}{field_name}:',
+                    'label': info['label'],
+                    'description': info['description'],
+                    'category': info['category'],
+                })
+
+        return {'type': 'fields', 'suggestions': suggestions[:15]}
+
+    # We have a colon, so we're typing a value
+    last_part = q.split()[-1]
+    if ':' in last_part:
+        field_part, value_part = last_part.split(':', 1)
+        field_name = field_part.lstrip('-')
+
+        if field_name in SEARCH_FIELDS:
+            field_info = SEARCH_FIELDS[field_name]
+
+            # Try to get values from database
+            try:
+                db_values = ClickHouseClient.get_field_values(field_name, limit=20)
+                if value_part:
+                    # Filter by prefix
+                    db_values = [v for v in db_values if str(v).lower().startswith(value_part.lower())]
+
+                for val in db_values[:10]:
+                    suggestions.append({
+                        'type': 'value',
+                        'value': str(val),
+                        'field': field_name,
+                    })
+            except Exception:
+                pass
+
+            # Add examples if we don't have enough suggestions
+            if len(suggestions) < 5:
+                for example in field_info.get('examples', []):
+                    if not value_part or example.lower().startswith(value_part.lower()):
+                        if not any(s['value'] == example for s in suggestions):
+                            suggestions.append({
+                                'type': 'example',
+                                'value': example,
+                                'field': field_name,
+                            })
+
+            return {
+                'type': 'values',
+                'field': field_name,
+                'field_info': field_info,
+                'suggestions': suggestions[:15],
+            }
+
+    return {'type': 'none', 'suggestions': []}
