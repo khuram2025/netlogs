@@ -645,19 +645,12 @@
         }
 
         .detail-panel {
-            padding: 20px 24px;
+            padding: 14px 20px;
         }
 
-        /* Connection Flow */
+        /* Connection Flow - Hidden by default since compact layout shows this */
         .connection-flow {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            padding: 24px;
-            background: var(--bg-white);
-            border-radius: 8px;
-            margin-bottom: 20px;
+            display: none;
         }
 
         .flow-node {
@@ -732,99 +725,228 @@
             color: var(--text-tertiary);
         }
 
-        /* Detail Grid */
-        .detail-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-bottom: 20px;
+        /* Compact Detail Layout */
+        .compact-details {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        .detail-section {
+        /* Network Flow Section - Horizontal layout */
+        .network-flow-section {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 16px;
+            align-items: stretch;
             background: var(--bg-white);
             border-radius: 8px;
-            overflow: hidden;
+            padding: 14px 18px;
+            border: 1px solid var(--border-light);
         }
 
-        .detail-section-header {
-            padding: 12px 16px;
-            background: var(--bg-gray-100);
+        .endpoint-block {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .endpoint-label {
+            font-size: 10px;
             font-weight: 600;
-            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            padding: 2px 6px;
+            background: var(--bg-gray-100);
+            border-radius: 3px;
+        }
+
+        .endpoint-label.src { background: var(--accent-blue-light); color: var(--accent-blue); }
+        .endpoint-label.dst { background: var(--accent-green-light); color: var(--accent-green); }
+
+        .endpoint-ip {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .endpoint-meta {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px 12px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        .meta-label {
+            color: var(--text-tertiary);
+            white-space: nowrap;
+        }
+
+        .meta-value {
             color: var(--text-secondary);
-            border-bottom: 1px solid var(--border-light);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .detail-section-body {
-            padding: 16px;
+        .meta-value.mono {
+            font-family: var(--font-mono);
+            font-size: 11px;
         }
 
-        .detail-item {
+        /* Flow Arrow in middle */
+        .flow-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            min-width: 100px;
+        }
+
+        .flow-connector-line {
+            display: flex;
+            align-items: center;
+            color: var(--border-dark);
+        }
+
+        .flow-connector-line .line {
+            width: 40px;
+            height: 2px;
+            background: var(--border-default);
+        }
+
+        .flow-connector-line svg {
+            width: 16px;
+            height: 16px;
+            color: var(--accent-blue);
+        }
+
+        .flow-proto {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+            padding: 2px 8px;
+            background: var(--bg-gray-100);
+            border-radius: 10px;
+        }
+
+        /* Session & Policy Section - Compact horizontal */
+        .session-policy-section {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            background: var(--bg-white);
+            border-radius: 8px;
+            padding: 12px 16px;
+            border: 1px solid var(--border-light);
+        }
+
+        .info-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 12px;
+            border-right: 1px solid var(--border-light);
+        }
+
+        .info-group:last-child {
+            border-right: none;
+            padding-right: 0;
+        }
+
+        .info-group-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            margin-bottom: 2px;
+        }
+
+        .info-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border-light);
+            align-items: center;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
-        .detail-item:last-child {
-            border-bottom: none;
+        .info-key {
+            color: var(--text-tertiary);
         }
 
-        .detail-key {
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
-
-        .detail-value {
-            font-weight: 500;
+        .info-val {
             color: var(--text-primary);
-            font-size: 13px;
+            font-weight: 500;
+            text-align: right;
         }
 
-        .detail-value.mono {
+        .info-val.mono {
             font-family: var(--font-mono);
+            font-size: 11px;
         }
 
-        .detail-value a {
-            color: var(--accent-blue);
-            text-decoration: none;
+        .info-val.action-allow {
+            color: var(--accent-green);
         }
 
-        .detail-value a:hover {
-            text-decoration: underline;
+        .info-val.action-deny {
+            color: var(--accent-red);
         }
 
-        /* Multi-Firewall Flow Container */
+        /* Legacy detail styles for compatibility */
+        .detail-grid {
+            display: none;
+        }
+
+        /* Multi-Firewall Flow Container - Compact */
         .multi-flow-container {
-            background: var(--bg-white);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            background: var(--bg-gray-50);
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-light);
         }
 
         .flow-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
         }
 
         .flow-title {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         .load-flow-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
+            gap: 5px;
+            padding: 5px 12px;
             background: var(--accent-blue);
             color: white;
             border: none;
-            border-radius: 6px;
-            font-size: 13px;
+            border-radius: 4px;
+            font-size: 11px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.15s;
@@ -840,8 +962,8 @@
         }
 
         .load-flow-btn svg {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
         }
 
         .load-flow-btn.loading svg {
@@ -1052,37 +1174,56 @@
             font-weight: 600;
         }
 
-        /* Raw Section */
+        /* Raw Section - Compact collapsible */
         .raw-section {
             background: var(--bg-white);
             border-radius: 8px;
             overflow: hidden;
+            border: 1px solid var(--border-light);
         }
 
         .raw-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
+            padding: 8px 12px;
+            background: var(--bg-gray-50);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .raw-header:hover {
             background: var(--bg-gray-100);
-            border-bottom: 1px solid var(--border-light);
         }
 
         .raw-title {
-            font-weight: 600;
-            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 12px;
             color: var(--text-secondary);
+        }
+
+        .raw-title svg {
+            width: 14px;
+            height: 14px;
+            transition: transform 0.2s;
+        }
+
+        .raw-section.expanded .raw-title svg {
+            transform: rotate(90deg);
         }
 
         .copy-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
+            gap: 4px;
+            padding: 4px 10px;
             background: var(--bg-white);
             border: 1px solid var(--border-default);
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 11px;
             cursor: pointer;
             transition: all 0.15s;
         }
@@ -1092,21 +1233,25 @@
         }
 
         .copy-btn svg {
-            width: 14px;
-            height: 14px;
+            width: 12px;
+            height: 12px;
         }
 
         .raw-body {
-            padding: 16px;
+            padding: 10px 12px;
             font-family: var(--font-mono);
-            font-size: 12px;
-            line-height: 1.8;
-            color: var(--text-primary);
+            font-size: 11px;
+            line-height: 1.6;
             word-break: break-all;
-            max-height: 200px;
+            max-height: 120px;
             overflow-y: auto;
-            background: #1e2a38;
-            color: #e2e8f0;
+            background: #1a2332;
+            color: #94a3b8;
+            display: none;
+        }
+
+        .raw-section.expanded .raw-body {
+            display: block;
         }
 
         /* Empty State */
@@ -2328,175 +2473,106 @@
                                             </div>
                                         </div>
 
-                                        <!-- Detail Grid -->
-                                        <div class="detail-grid">
-                                            <div class="detail-section">
-                                                <div class="detail-section-header">Source Information</div>
-                                                <div class="detail-section-body">
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Source IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</span>
+                                        <!-- Compact Details Layout -->
+                                        <div class="compact-details">
+                                            <!-- Section 1: Network Flow (Source → Destination) -->
+                                            {% set proto = pd.get('proto', pd.get('protocol', '')) %}
+                                            {% set proto_label = 'TCP' if proto == '6' else 'UDP' if proto == '17' else 'ICMP' if proto == '1' else proto or '--' %}
+                                            <div class="network-flow-section">
+                                                <!-- Source Endpoint -->
+                                                <div class="endpoint-block">
+                                                    <div class="endpoint-header">
+                                                        <span class="endpoint-label src">SOURCE</span>
                                                     </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Zone:</span>
-                                                        <span class="detail-value">{{ pd.get('srczone', pd.get('src_zone', '--')) }}</span>
+                                                    <div class="endpoint-ip">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</div>
+                                                    <div class="endpoint-meta">
+                                                        <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('srczone', pd.get('src_zone', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('srccountry', pd.get('src_location', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('srcuser', pd.get('src_user', '--')) }}</span></div>
+                                                        {% set nat_src = pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('natsrcip', ''))) %}
+                                                        {% if nat_src and nat_src != '--' %}
+                                                        <div class="meta-item"><span class="meta-label">NAT:</span><span class="meta-value mono">{{ nat_src }}{% if pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport'))) %}:{{ pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport', ''))) }}{% endif %}</span></div>
+                                                        {% endif %}
                                                     </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Interface:</span>
-                                                        <span class="detail-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span>
+                                                </div>
+
+                                                <!-- Flow Connector -->
+                                                <div class="flow-connector">
+                                                    <div class="flow-connector-line">
+                                                        <span class="line"></span>
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                                                     </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Location:</span>
-                                                        <span class="detail-value">{{ pd.get('srccountry', pd.get('src_location', '--')) }}</span>
+                                                    <span class="flow-proto">{{ proto_label }}</span>
+                                                </div>
+
+                                                <!-- Destination Endpoint -->
+                                                <div class="endpoint-block">
+                                                    <div class="endpoint-header">
+                                                        <span class="endpoint-label dst">DESTINATION</span>
                                                     </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">User:</span>
-                                                        <span class="detail-value">{{ pd.get('srcuser', pd.get('src_user', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">NAT IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('natsrcip', '--'))) }}{% if pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport'))) %}:{{ pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport', ''))) }}{% endif %}</span>
+                                                    <div class="endpoint-ip">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</div>
+                                                    <div class="endpoint-meta">
+                                                        <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('dstzone', pd.get('dst_zone', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('dstcountry', pd.get('dst_location', '--')) }}</span></div>
+                                                        <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span></div>
+                                                        {% set nat_dst = pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('natdstip', ''))) %}
+                                                        {% if nat_dst and nat_dst != '--' %}
+                                                        <div class="meta-item"><span class="meta-label">NAT:</span><span class="meta-value mono">{{ nat_dst }}{% if pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport'))) %}:{{ pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport', ''))) }}{% endif %}</span></div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div class="detail-section">
-                                                <div class="detail-section-header">Session Information</div>
-                                                <div class="detail-section-body">
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Action:</span>
-                                                        <span class="detail-value">{{ pd.get('action', '--') | upper }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Session ID:</span>
-                                                        <span class="detail-value mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Protocol:</span>
-                                                        <span class="detail-value">{% set proto = pd.get('proto', pd.get('protocol', '')) %}{% if proto == '6' %}TCP (6){% elif proto == '17' %}UDP (17){% elif proto == '1' %}ICMP (1){% else %}{{ proto or '--' }}{% endif %}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Application:</span>
-                                                        <span class="detail-value">{{ pd.get('app', pd.get('application', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Service:</span>
-                                                        <span class="detail-value">{{ pd.get('service', '--') }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Bytes Sent:</span>
-                                                        <span class="detail-value">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Bytes Received:</span>
-                                                        <span class="detail-value">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span>
-                                                    </div>
+                                            <!-- Section 2: Session, Traffic, Policy & Application (4-column) -->
+                                            <div class="session-policy-section">
+                                                <!-- Session Info -->
+                                                <div class="info-group">
+                                                    <div class="info-group-title">Session</div>
+                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}action-allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}action-deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Session ID</span><span class="info-val mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Service</span><span class="info-val">{{ pd.get('service', '--') }}</span></div>
                                                 </div>
-                                            </div>
 
-                                            <div class="detail-section">
-                                                <div class="detail-section-header">Destination Information</div>
-                                                <div class="detail-section-body">
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Destination IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Zone:</span>
-                                                        <span class="detail-value">{{ pd.get('dstzone', pd.get('dst_zone', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Interface:</span>
-                                                        <span class="detail-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Location:</span>
-                                                        <span class="detail-value">{{ pd.get('dstcountry', pd.get('dst_location', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">User:</span>
-                                                        <span class="detail-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">NAT IP:</span>
-                                                        <span class="detail-value mono">{{ pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('natdstip', '--'))) }}{% if pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport'))) %}:{{ pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport', ''))) }}{% endif %}</span>
-                                                    </div>
+                                                <!-- Traffic Stats -->
+                                                <div class="info-group">
+                                                    <div class="info-group-title">Traffic</div>
+                                                    <div class="info-row"><span class="info-key">Sent</span><span class="info-val">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Received</span><span class="info-val">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Duration</span><span class="info-val">{{ pd.get('duration', pd.get('elapsed_time', '--')) }}s</span></div>
                                                 </div>
-                                            </div>
-                                        </div>
 
-                                        <!-- Policy & Device Info -->
-                                        <div class="detail-grid" style="margin-top: 16px;">
-                                            <div class="detail-section">
-                                                <div class="detail-section-header">Policy Information</div>
-                                                <div class="detail-section-body">
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Rule/Policy:</span>
-                                                        <span class="detail-value">{{ pd.get('policyname', pd.get('rule', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Policy ID:</span>
-                                                        <span class="detail-value mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span>
-                                                    </div>
+                                                <!-- Policy Info -->
+                                                <div class="info-group">
+                                                    <div class="info-group-title">Policy</div>
+                                                    <div class="info-row"><span class="info-key">Rule</span><span class="info-val">{{ pd.get('policyname', pd.get('rule', '--')) }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Policy ID</span><span class="info-val mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span></div>
                                                     {% if pd.get('rule_uuid') %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Rule UUID:</span>
-                                                        <span class="detail-value mono">{{ pd.get('rule_uuid') }}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    {% if pd.get('log_action') %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Log Action:</span>
-                                                        <span class="detail-value">{{ pd.get('log_action') }}</span>
-                                                    </div>
+                                                    <div class="info-row"><span class="info-key">UUID</span><span class="info-val mono" title="{{ pd.get('rule_uuid') }}">{{ pd.get('rule_uuid')[:8] }}...</span></div>
                                                     {% endif %}
                                                 </div>
-                                            </div>
 
-                                            <div class="detail-section">
-                                                <div class="detail-section-header">Application Details</div>
-                                                <div class="detail-section-body">
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Application:</span>
-                                                        <span class="detail-value">{{ pd.get('app', pd.get('application', '--')) }}</span>
-                                                    </div>
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Category:</span>
-                                                        <span class="detail-value">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span>
-                                                    </div>
+                                                <!-- Application Info -->
+                                                <div class="info-group">
+                                                    <div class="info-group-title">Application</div>
+                                                    <div class="info-row"><span class="info-key">App</span><span class="info-val">{{ pd.get('app', pd.get('application', '--')) }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Category</span><span class="info-val">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span></div>
                                                     {% if pd.get('apprisk', pd.get('risk_of_app')) %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Risk:</span>
-                                                        <span class="detail-value">{{ pd.get('apprisk', pd.get('risk_of_app', '--')) }}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    {% if pd.get('subcategory_of_app') %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Subcategory:</span>
-                                                        <span class="detail-value">{{ pd.get('subcategory_of_app') }}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    {% if pd.get('tech_of_app') %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Technology:</span>
-                                                        <span class="detail-value">{{ pd.get('tech_of_app') }}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    {% if pd.get('characteristic_of_app') %}
-                                                    <div class="detail-item">
-                                                        <span class="detail-key">Characteristics:</span>
-                                                        <span class="detail-value">{{ pd.get('characteristic_of_app') }}</span>
-                                                    </div>
+                                                    <div class="info-row"><span class="info-key">Risk</span><span class="info-val">{{ pd.get('apprisk', pd.get('risk_of_app', '--')) }}</span></div>
                                                     {% endif %}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <!-- Raw Message -->
-                                        <div class="raw-section">
-                                            <div class="raw-header">
-                                                <span class="raw-title">Raw Log Message</span>
-                                                <button type="button" class="copy-btn" onclick="copyRaw({{ loop.index }})">
+                                        <!-- Raw Message - Collapsible -->
+                                        <div class="raw-section" id="raw-section-{{ loop.index }}">
+                                            <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
+                                                <span class="raw-title">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                                    Raw Log
+                                                </span>
+                                                <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyRaw({{ loop.index }})">
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2"/>
                                                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -2719,6 +2795,12 @@
                 expandBtn.classList.add('open');
                 logRow.classList.add('expanded');
             }
+        }
+
+        // Toggle raw section
+        function toggleRawSection(index) {
+            const section = document.getElementById(`raw-section-${index}`);
+            section.classList.toggle('expanded');
         }
 
         // Copy raw log

@@ -86,7 +86,9 @@ class ClickHouseClient:
             -- Indexes for common queries
             INDEX idx_severity severity TYPE minmax GRANULARITY 4,
             INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
-            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4
+            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
+            INDEX idx_srcip srcip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (device_ip, timestamp)
@@ -106,12 +108,15 @@ class ClickHouseClient:
 
     @classmethod
     def _migrate_table(cls) -> None:
-        """Migrate existing table to add new columns."""
+        """Migrate existing table to add new columns and indexes."""
         client = cls.get_client()
         migrations = [
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS parsed_data Map(String, String) CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_date Date MATERIALIZED toDate(timestamp)",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_hour UInt8 MATERIALIZED toHour(timestamp)",
+            # Add indexes for srcip and dstip for faster IP filtering
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_srcip srcip TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4",
         ]
         for migration in migrations:
             try:
@@ -261,6 +266,17 @@ class ClickHouseClient:
         """
         safe_value = value.replace("'", "''")
         not_prefix = "NOT " if negated else ""
+
+        # OPTIMIZATION: For simple exact IP matches on srcip/dstip, use materialized columns directly.
+        # The materialized columns already handle both Fortinet (srcip/dstip) and Palo Alto (src_ip/dst_ip)
+        # field names, and have bloom filter indexes for fast filtering.
+        ip_fields_materialized = ('srcip', 'dstip')
+        if field in ip_fields_materialized and operator == '=' and not cls._is_cidr(value) and not cls._is_ip_range(value) and not cls._is_wildcard_ip(value):
+            # Simple exact IP match - use materialized column with bloom filter index
+            if negated:
+                return f"{field} != '{safe_value}'"
+            else:
+                return f"{field} = '{safe_value}'"
 
         # Field mapping for normalized and vendor-specific fields
         # Uses COALESCE to check both normalized (Fortinet-style) and Palo Alto fields
