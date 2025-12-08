@@ -123,12 +123,12 @@
                 <td>
                     <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary btn-sm">Edit</a>
                     {% if device.status == 'PENDING' %}
-                    <a href="{{ url_for('approve_device', device_id=device.id) }}" class="btn btn-success btn-sm">Accept</a>
-                    <a href="{{ url_for('reject_device', device_id=device.id) }}" class="btn btn-danger btn-sm">Reject</a>
+                    <a href="{{ url_for('approve_device_view', device_id=device.id) }}" class="btn btn-success btn-sm">Accept</a>
+                    <a href="{{ url_for('reject_device_view', device_id=device.id) }}" class="btn btn-danger btn-sm">Reject</a>
                     {% elif device.status == 'APPROVED' %}
-                    <a href="{{ url_for('reject_device', device_id=device.id) }}" class="btn btn-danger btn-sm">Block</a>
+                    <a href="{{ url_for('reject_device_view', device_id=device.id) }}" class="btn btn-danger btn-sm">Block</a>
                     {% elif device.status == 'REJECTED' %}
-                    <a href="{{ url_for('approve_device', device_id=device.id) }}" class="btn btn-success btn-sm">Unblock</a>
+                    <a href="{{ url_for('approve_device_view', device_id=device.id) }}" class="btn btn-success btn-sm">Unblock</a>
                     {% endif %}
                 </td>
             </tr>

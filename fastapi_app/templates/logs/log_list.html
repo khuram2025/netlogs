@@ -2319,7 +2319,14 @@
                             {% for log in logs %}
                             {% set pd = log.get('parsed_data', {}) %}
                             {% set sev = log.get('severity', 6) %}
-                            {% set action = pd.get('action', '') | lower %}
+                            {# Use dedicated columns first, fall back to parsed_data for old data #}
+                            {% set log_srcip = log.get('srcip', '') or pd.get('srcip', pd.get('src_ip', '')) %}
+                            {% set log_dstip = log.get('dstip', '') or pd.get('dstip', pd.get('dst_ip', '')) %}
+                            {% set log_srcport = log.get('srcport', 0) %}
+                            {% set log_dstport = log.get('dstport', 0) %}
+                            {% set log_proto = log.get('proto', 0) %}
+                            {% set log_action = log.get('action', '') or pd.get('action', '') %}
+                            {% set action = log_action | lower %}
                             {% set duration = pd.get('duration', '0') | int %}
                             <tr class="log-row" data-index="{{ loop.index }}">
                                 <td class="col-timestamp">
@@ -2350,19 +2357,18 @@
                                     </div>
                                 </td>
                                 <td class="col-ip">
-                                    {% set src_ip = pd.get('srcip', pd.get('src_ip', '--')) %}
-                                    <a href="?q=srcip:{{ src_ip }}">{{ src_ip }}</a>
+                                    <a href="?q=srcip:{{ log_srcip or '--' }}">{{ log_srcip or '--' }}</a>
                                 </td>
                                 <td class="col-ip">
-                                    {% set dst_ip = pd.get('dstip', pd.get('dst_ip', '--')) %}
-                                    <a href="?q=dstip:{{ dst_ip }}">{{ dst_ip }}</a>
+                                    <a href="?q=dstip:{{ log_dstip or '--' }}">{{ log_dstip or '--' }}</a>
                                 </td>
                                 <td class="col-intf">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</td>
                                 <td class="col-port-proto">
-                                    {% set proto = pd.get('proto', pd.get('protocol', '')) %}
-                                    {% set dst_port = pd.get('dstport', pd.get('dst_port', '--')) %}
-                                    <span class="port-value">{{ dst_port }}</span>
-                                    <span class="proto-value">{% if proto == '6' %}TCP{% elif proto == '17' %}UDP{% elif proto == '1' %}ICMP{% elif proto == 'icmp' %}ICMP{% elif proto == 'tcp' %}TCP{% elif proto == 'udp' %}UDP{% else %}{{ proto or '--' }}{% endif %}</span>
+                                    {# Use dedicated columns, fall back to parsed_data #}
+                                    {% set display_port = log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) %}
+                                    {% set display_proto = log_proto if log_proto else pd.get('proto', pd.get('protocol', '')) %}
+                                    <span class="port-value">{{ display_port if display_port else '--' }}</span>
+                                    <span class="proto-value">{% if display_proto == 6 or display_proto == '6' %}TCP{% elif display_proto == 17 or display_proto == '17' %}UDP{% elif display_proto == 1 or display_proto == '1' %}ICMP{% elif display_proto == 'icmp' %}ICMP{% elif display_proto == 'tcp' %}TCP{% elif display_proto == 'udp' %}UDP{% else %}{{ display_proto or '--' }}{% endif %}</span>
                                 </td>
                                 <td class="col-size">
                                     {% set sent = pd.get('sentbyte', pd.get('bytes_sent', '0')) | int %}
@@ -2411,7 +2417,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="flow-label">Client</span>
-                                                    <span class="flow-sublabel">{{ pd.get('srcip', pd.get('src_ip', '--')) }}</span>
+                                                    <span class="flow-sublabel">{{ log_srcip or '--' }}</span>
                                                 </div>
 
                                                 <div class="flow-arrow">
@@ -2443,7 +2449,7 @@
                                                             <path d="m9 18 6-6-6-6"/>
                                                         </svg>
                                                     </div>
-                                                    <span class="flow-arrow-label">:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</span>
+                                                    <span class="flow-arrow-label">:{{ log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) }}</span>
                                                 </div>
 
                                                 <div class="flow-node">
@@ -2456,7 +2462,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="flow-label">Server</span>
-                                                    <span class="flow-sublabel">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}</span>
+                                                    <span class="flow-sublabel">{{ log_dstip or '--' }}</span>
                                                 </div>
                                             </div>
 

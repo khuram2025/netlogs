@@ -72,23 +72,30 @@ class ClickHouseClient:
             severity UInt8 CODEC(T64, LZ4),
             message String CODEC(ZSTD(3)),
             raw String CODEC(ZSTD(3)),
+
+            -- Dedicated columns for key parsed fields (inserted directly)
+            srcip String DEFAULT '' CODEC(ZSTD(1)),
+            dstip String DEFAULT '' CODEC(ZSTD(1)),
+            srcport UInt16 DEFAULT 0 CODEC(T64, LZ4),
+            dstport UInt16 DEFAULT 0 CODEC(T64, LZ4),
+            proto UInt8 DEFAULT 0 CODEC(T64, LZ4),
+            action LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Keep parsed_data Map for all other fields
             parsed_data Map(String, String) CODEC(ZSTD(1)),
 
             -- Materialized columns for common queries
             log_date Date MATERIALIZED toDate(timestamp),
             log_hour UInt8 MATERIALIZED toHour(timestamp),
 
-            -- Extracted fields for fast filtering (materialized from parsed_data)
-            action LowCardinality(String) MATERIALIZED mapContains(parsed_data, 'action') ? parsed_data['action'] : '',
-            srcip String MATERIALIZED mapContains(parsed_data, 'srcip') ? parsed_data['srcip'] : '',
-            dstip String MATERIALIZED mapContains(parsed_data, 'dstip') ? parsed_data['dstip'] : '',
-
             -- Indexes for common queries
             INDEX idx_severity severity TYPE minmax GRANULARITY 4,
-            INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
-            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
             INDEX idx_srcip srcip TYPE bloom_filter(0.01) GRANULARITY 4,
-            INDEX idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4
+            INDEX idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_srcport srcport TYPE minmax GRANULARITY 4,
+            INDEX idx_dstport dstport TYPE minmax GRANULARITY 4,
+            INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (device_ip, timestamp)
@@ -111,12 +118,23 @@ class ClickHouseClient:
         """Migrate existing table to add new columns and indexes."""
         client = cls.get_client()
         migrations = [
+            # Add dedicated columns for key parsed fields
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS srcip String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstip String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS srcport UInt16 DEFAULT 0 CODEC(T64, LZ4)",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstport UInt16 DEFAULT 0 CODEC(T64, LZ4)",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS proto UInt8 DEFAULT 0 CODEC(T64, LZ4)",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS action String DEFAULT '' CODEC(ZSTD(1))",
+            # Keep parsed_data for other fields
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS parsed_data Map(String, String) CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_date Date MATERIALIZED toDate(timestamp)",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_hour UInt8 MATERIALIZED toHour(timestamp)",
-            # Add indexes for srcip and dstip for faster IP filtering
+            # Add indexes
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_srcip srcip TYPE bloom_filter(0.01) GRANULARITY 4",
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_srcport srcport TYPE minmax GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dstport dstport TYPE minmax GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_action action TYPE bloom_filter(0.01) GRANULARITY 4",
         ]
         for migration in migrations:
             try:
@@ -131,20 +149,39 @@ class ClickHouseClient:
 
         Args:
             logs: List of tuples matching the schema columns
-                  (timestamp, device_ip, facility, severity, message, raw, parsed_data)
+                  (timestamp, device_ip, facility, severity, message, raw,
+                   srcip, dstip, srcport, dstport, proto, action, parsed_data)
+
+        Note: srcip and dstip are MATERIALIZED columns (auto-computed from parsed_data),
+              so we skip them in the insert. srcport, dstport, proto, action are insertable.
         """
         if not logs:
             return
         client = cls.get_client()
-        client.insert('syslogs', logs, column_names=[
-            'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw', 'parsed_data'
+
+        # Transform logs to skip srcip/dstip (they're MATERIALIZED from parsed_data)
+        # Input:  (timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data)
+        # Output: (timestamp, device_ip, facility, severity, message, raw, srcport, dstport, proto, action, parsed_data)
+        transformed_logs = [
+            (log[0], log[1], log[2], log[3], log[4], log[5],  # timestamp thru raw
+             log[8], log[9], log[10], log[11], log[12])        # srcport, dstport, proto, action, parsed_data
+            for log in logs
+        ]
+
+        client.insert('syslogs', transformed_logs, column_names=[
+            'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+            'srcport', 'dstport', 'proto', 'action', 'parsed_data'
         ])
 
     @classmethod
     def get_recent_logs(cls, limit: int = 100) -> List[Dict[str, Any]]:
         """Get most recent logs."""
         client = cls.get_client()
-        query = f"SELECT timestamp, device_ip, facility, severity, message, raw, parsed_data FROM syslogs ORDER BY timestamp DESC LIMIT {limit}"
+        query = f"""
+        SELECT timestamp, device_ip, facility, severity, message, raw,
+               srcip, dstip, srcport, dstport, proto, action, parsed_data
+        FROM syslogs ORDER BY timestamp DESC LIMIT {limit}
+        """
         result = client.query(query)
         return list(result.named_results())
 
@@ -554,7 +591,8 @@ class ClickHouseClient:
             where_sql = cls._build_where_clause(device_ips, severities, start_time, end_time, query_text, facilities)
 
         query = f"""
-        SELECT timestamp, device_ip, facility, severity, message, raw, parsed_data
+        SELECT timestamp, device_ip, facility, severity, message, raw,
+               srcip, dstip, srcport, dstport, proto, action, parsed_data
         FROM syslogs
         WHERE {where_sql}
         ORDER BY timestamp DESC
@@ -729,24 +767,46 @@ class ClickHouseClient:
         }
 
     @classmethod
-    def get_per_device_storage(cls) -> List[Dict[str, Any]]:
-        """Get storage usage breakdown per device."""
+    def get_per_device_storage(cls, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Get storage usage breakdown per device.
+
+        Uses a time window (default 24 hours) for performance with large tables.
+        Storage is estimated using overall compression ratio from system tables.
+        """
         client = cls.get_client()
 
-        query = """
+        # Get device counts and recent activity (fast with time filter)
+        query = f"""
         SELECT
             toString(device_ip) as device_ip,
             count() as log_count,
-            min(timestamp) as oldest_log,
-            max(timestamp) as newest_log,
-            avg(length(raw)) as avg_raw_size,
-            sum(length(raw)) as total_raw_size
+            max(timestamp) as newest_log
         FROM syslogs
+        WHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY device_ip
         ORDER BY log_count DESC
         """
 
-        return list(client.query(query).named_results())
+        results = list(client.query(query).named_results())
+
+        # Get overall storage stats to estimate per-device storage
+        try:
+            storage = cls.get_storage_stats()
+            total_rows = storage.get('total_rows', 1) or 1
+            total_bytes = storage.get('uncompressed_bytes', 0) or 0
+            avg_bytes_per_row = total_bytes / total_rows if total_rows > 0 else 500
+        except Exception:
+            avg_bytes_per_row = 500  # Reasonable default
+
+        # Estimate storage per device based on log count
+        for r in results:
+            count = r.get('log_count', 0) or 0
+            r['total_raw_size'] = int(avg_bytes_per_row * count)
+            r['oldest_log'] = None  # Not fetched for speed
+            r['avg_raw_size'] = avg_bytes_per_row
+
+        return results
 
     @classmethod
     def get_storage_by_time_range(cls, hours: int = 24) -> List[Dict[str, Any]]:

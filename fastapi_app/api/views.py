@@ -472,7 +472,7 @@ async def edit_device_post(
     return RedirectResponse(url="/devices/", status_code=303)
 
 
-@router.get("/devices/{device_id}/approve/", name="approve_device")
+@router.get("/devices/{device_id}/approve/", name="approve_device_view")
 async def approve_device_view(
     device_id: int,
     db: AsyncSession = Depends(get_db),
@@ -488,7 +488,7 @@ async def approve_device_view(
     return RedirectResponse(url="/devices/", status_code=303)
 
 
-@router.get("/devices/{device_id}/reject/", name="reject_device")
+@router.get("/devices/{device_id}/reject/", name="reject_device_view")
 async def reject_device_view(
     device_id: int,
     db: AsyncSession = Depends(get_db),

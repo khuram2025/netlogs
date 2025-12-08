@@ -233,7 +233,7 @@ PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     """
     Parse raw syslog message.
-    Returns: (facility, severity, message, raw, parsed_data) or None on error
+    Returns: (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data) or None on error
     """
     try:
         decoded = data.decode('utf-8', errors='replace')
@@ -252,7 +252,31 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         parser = get_parser(device_parser)
         parsed_data = parser.parse(message)
 
-        return (facility, severity, message, decoded, parsed_data)
+        # Extract key fields for dedicated columns (support both Fortinet and Palo Alto field names)
+        srcip = parsed_data.get('srcip') or parsed_data.get('src_ip', '')
+        dstip = parsed_data.get('dstip') or parsed_data.get('dst_ip', '')
+        action = parsed_data.get('action', '')
+
+        # Parse ports as integers (default to 0)
+        srcport_str = parsed_data.get('srcport') or parsed_data.get('src_port', '0')
+        dstport_str = parsed_data.get('dstport') or parsed_data.get('dst_port', '0')
+        try:
+            srcport = int(srcport_str) if srcport_str else 0
+        except (ValueError, TypeError):
+            srcport = 0
+        try:
+            dstport = int(dstport_str) if dstport_str else 0
+        except (ValueError, TypeError):
+            dstport = 0
+
+        # Parse protocol as integer (default to 0)
+        proto_str = parsed_data.get('proto') or parsed_data.get('protocol', '0')
+        try:
+            proto = int(proto_str) if proto_str else 0
+        except (ValueError, TypeError):
+            proto = 0
+
+        return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto, action, parsed_data)
     except Exception as e:
         logger.debug(f"Parse error: {e}")
         return None
@@ -398,10 +422,12 @@ class SyslogCollector:
             self.metrics.log_dropped()
             return
 
-        facility, severity, message, raw, parsed_data = parsed
+        facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data = parsed
         now = datetime.now(timezone.utc)
 
-        log_entry = (now, client_ip, facility, severity, message, raw, parsed_data)
+        # Log entry now includes dedicated columns for key fields
+        log_entry = (now, client_ip, facility, severity, message, raw,
+                     srcip, dstip, srcport, dstport, proto, action, parsed_data)
 
         if not self.log_buffer.add(log_entry, client_ip, now):
             logger.warning("Buffer full! Dropping log")
