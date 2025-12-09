@@ -6,51 +6,52 @@
     <title>NetLogs - Log Viewer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Light Professional Theme */
-            --bg-page: #f5f6f8;
-            --bg-white: #ffffff;
-            --bg-gray-50: #fafbfc;
-            --bg-gray-100: #f0f2f5;
-            --bg-gray-200: #e4e7eb;
+            /* Unified Dark Theme - Matching Devices Page */
+            --bg-void: #0f172a;
+            --bg-deep: #0f172a;
+            --bg-surface: #1e293b;
+            --bg-elevated: #1e293b;
+            --bg-hover: #334155;
+            --bg-active: #475569;
 
-            /* Text */
-            --text-primary: #1a2332;
-            --text-secondary: #5a6872;
-            --text-tertiary: #8a949e;
-            --text-link: #0078d4;
+            /* Text Hierarchy */
+            --text-bright: #ffffff;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --text-ghost: #475569;
 
-            /* Borders */
-            --border-light: #e4e7eb;
-            --border-default: #d1d5db;
-            --border-dark: #9ca3af;
+            /* Accent Spectrum - Blue Primary */
+            --accent-cyan: #3b82f6;
+            --accent-cyan-dim: rgba(59, 130, 246, 0.15);
+            --accent-green: #22c55e;
+            --accent-green-dim: rgba(34, 197, 94, 0.15);
+            --accent-red: #ef4444;
+            --accent-red-dim: rgba(239, 68, 68, 0.15);
+            --accent-amber: #f59e0b;
+            --accent-amber-dim: rgba(245, 158, 11, 0.15);
+            --accent-purple: #8b5cf6;
+            --accent-blue: #3b82f6;
 
-            /* Accent Colors */
-            --accent-blue: #0078d4;
-            --accent-blue-light: #e6f3ff;
-            --accent-green: #5cb85c;
-            --accent-green-light: #dff0df;
-            --accent-orange: #f0ad4e;
-            --accent-orange-light: #fef3e2;
-            --accent-red: #d9534f;
-            --accent-red-light: #fbeaea;
-            --accent-teal: #17a2b8;
-
-            /* Shadows */
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-            --shadow-md: 0 2px 4px rgba(0,0,0,0.08);
-            --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
-
-            /* Sizing */
-            --header-height: 56px;
-            --sidebar-width: 300px;
-            --row-height: 44px;
+            /* Borders & Dividers */
+            --border-subtle: #1e293b;
+            --border-default: #334155;
+            --border-emphasis: #475569;
 
             /* Typography */
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'Roboto Mono', 'SF Mono', monospace;
+            --font-sans: 'Inter', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+            /* Spacing & Sizing */
+            --header-height: 52px;
+            --toolbar-height: 56px;
+            --row-height: 42px;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 10px;
         }
 
         *, *::before, *::after {
@@ -66,230 +67,229 @@
 
         body {
             font-family: var(--font-sans);
-            font-size: 14px;
+            font-size: 13px;
             line-height: 1.5;
             color: var(--text-primary);
-            background: var(--bg-page);
+            background: var(--bg-void);
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Scrollbar */
+        /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: var(--bg-gray-100);
+            background: var(--bg-void);
         }
         ::-webkit-scrollbar-thumb {
-            background: var(--border-dark);
+            background: var(--border-default);
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-tertiary);
+            background: var(--border-emphasis);
+        }
+        ::-webkit-scrollbar-corner {
+            background: transparent;
         }
 
-        /* ============================================
-           LAYOUT
-        ============================================ */
-        .app-container {
+        /* ===== LAYOUT ===== */
+        .app {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            background: var(--bg-page);
+            background: linear-gradient(180deg, var(--bg-void) 0%, var(--bg-deep) 100%);
         }
 
-        /* Top Header Bar */
-        .header-bar {
+        /* ===== HEADER ===== */
+        .header {
             height: var(--header-height);
-            background: #1e2a38;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-default);
             display: flex;
             align-items: center;
-            padding: 0 24px;
-            gap: 32px;
+            padding: 0 20px;
+            gap: 24px;
             flex-shrink: 0;
         }
 
-        .header-brand {
+        .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
-            color: white;
+            gap: 10px;
             text-decoration: none;
-            font-weight: 600;
-            font-size: 16px;
+            color: var(--text-bright);
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: -0.3px;
         }
 
-        .header-brand svg {
-            width: 28px;
-            height: 28px;
-        }
-
-        .header-nav {
-            display: flex;
-            gap: 4px;
-        }
-
-        .header-nav-link {
-            padding: 10px 18px;
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
+        .logo-icon {
+            width: 26px;
+            height: 26px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
             border-radius: 6px;
-            transition: all 0.15s;
-        }
-
-        .header-nav-link:hover {
-            color: white;
-            background: rgba(255,255,255,0.1);
-        }
-
-        .header-nav-link.active {
-            color: #60a5fa;
-            background: rgba(96, 165, 250, 0.15);
-        }
-
-        .header-right {
-            margin-left: auto;
             display: flex;
             align-items: center;
-            gap: 16px;
+            justify-content: center;
+        }
+
+        .logo-icon svg {
+            width: 16px;
+            height: 16px;
+            color: var(--bg-void);
+        }
+
+        .nav {
+            display: flex;
+            gap: 2px;
+        }
+
+        .nav-link {
+            padding: 8px 14px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: var(--radius-md);
+            transition: all 0.15s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .nav-link.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+        }
+
+        .header-spacer {
+            flex: 1;
         }
 
         .header-user {
             display: flex;
             align-items: center;
-            gap: 10px;
-            color: white;
-            font-size: 13px;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 12px;
         }
 
-        .header-user-avatar {
-            width: 34px;
-            height: 34px;
-            background: #3b82f6;
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-blue) 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        /* Main Layout */
-        .main-layout {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
+        .user-avatar svg {
+            width: 14px;
+            height: 14px;
+            color: white;
         }
 
-        /* Main Content */
-        .main-content {
+        /* ===== MAIN CONTENT ===== */
+        .main {
             flex: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            background: var(--bg-white);
         }
 
-        /* Search Toolbar - Clean 3-Field Design */
-        .search-toolbar {
+        /* ===== SEARCH TOOLBAR ===== */
+        .toolbar {
+            height: var(--toolbar-height);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 0 20px;
             display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 16px 24px;
-            background: var(--bg-white);
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .search-filters {
-            display: flex;
-            align-items: flex-end;
+            align-items: center;
             gap: 12px;
-            flex: 1;
+            flex-shrink: 0;
         }
 
-        .filter-group {
+        .search-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            max-width: 900px;
+        }
+
+        .search-field {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 2px;
             flex: 1;
-            max-width: 280px;
         }
 
-        .filter-group-small {
-            max-width: 160px;
+        .search-field.narrow {
+            max-width: 140px;
         }
 
-        .filter-group label {
-            font-size: 12px;
+        .search-label {
+            font-size: 9px;
             font-weight: 600;
-            color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            padding-left: 2px;
         }
 
-        .filter-input {
-            height: 40px;
-            padding: 0 12px;
+        .search-input {
+            height: 32px;
+            padding: 0 10px;
+            background: var(--bg-deep);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-sm);
+            color: var(--text-bright);
             font-family: var(--font-mono);
-            background: var(--bg-white);
-            transition: all 0.15s;
+            font-size: 12px;
+            transition: all 0.15s ease;
         }
 
-        .filter-input:focus {
+        .search-input:focus {
             outline: none;
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
         }
 
-        .filter-input::placeholder {
-            color: var(--text-tertiary);
+        .search-input::placeholder {
+            color: var(--text-ghost);
             font-family: var(--font-sans);
-            font-size: 13px;
         }
 
-        .filter-actions {
+        .search-actions {
             display: flex;
-            gap: 8px;
-            flex-shrink: 0;
-        }
-
-        .toolbar-actions {
-            display: flex;
-            gap: 8px;
-            flex-shrink: 0;
+            gap: 6px;
+            padding-top: 14px;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
+            justify-content: center;
+            gap: 6px;
+            height: 32px;
+            padding: 0 14px;
             border: none;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-sans);
+            font-size: 12px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
 
         .btn svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .btn-secondary {
-            background: var(--bg-gray-100);
-            color: var(--text-primary);
-            border: 1px solid var(--border-default);
-        }
-
-        .btn-secondary:hover {
-            background: var(--bg-gray-200);
+            width: 14px;
+            height: 14px;
         }
 
         .btn-primary {
@@ -298,107 +298,170 @@
         }
 
         .btn-primary:hover {
-            background: #006cbd;
+            background: #2563eb;
+            transform: translateY(-1px);
         }
 
-        /* Log Stats Bar */
-        .log-stats {
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-default);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-emphasis);
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-default);
+            margin: 0 8px;
+        }
+
+        .toolbar-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ===== STATS BAR ===== */
+        .stats-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 24px;
-            background: var(--bg-gray-50);
-            border-bottom: 1px solid var(--border-light);
-            font-size: 13px;
+            padding: 10px 20px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 12px;
         }
 
-        .log-stats-left {
+        .stats-left {
             display: flex;
             align-items: center;
             gap: 20px;
         }
 
-        .log-count {
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             color: var(--text-secondary);
         }
 
-        .log-count strong {
-            color: var(--text-primary);
+        .stat-value {
+            color: var(--text-bright);
             font-weight: 600;
+            font-family: var(--font-mono);
         }
 
-        .log-throttle {
-            color: var(--text-tertiary);
-            padding-left: 20px;
-            border-left: 1px solid var(--border-light);
+        .stat-divider {
+            width: 1px;
+            height: 16px;
+            background: var(--border-default);
         }
 
-        .log-stats-right {
-            color: var(--text-tertiary);
+        .stats-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
-        /* Filter Tags */
-        .filter-tags {
+        .time-pills {
+            display: flex;
+            gap: 4px;
+            padding: 2px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-md);
+        }
+
+        .time-pill {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .time-pill:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .time-pill.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+        }
+
+        /* ===== ACTIVE FILTERS ===== */
+        .active-filters {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            padding: 12px 24px;
-            background: var(--bg-white);
-            border-bottom: 1px solid var(--border-light);
+            padding: 10px 20px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
         }
 
-        .filter-tag {
+        .filter-chip {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 12px;
-            background: var(--accent-blue-light);
-            color: var(--accent-blue);
+            padding: 5px 10px;
+            background: var(--accent-cyan-dim);
+            border: 1px solid rgba(59, 130, 246, 0.3);
             border-radius: 20px;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 500;
+            color: var(--accent-blue);
         }
 
-        .filter-tag-remove {
+        .filter-chip-remove {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             background: transparent;
             border: none;
             cursor: pointer;
             border-radius: 50%;
-            transition: background 0.15s;
+            color: var(--accent-blue);
+            transition: all 0.15s ease;
         }
 
-        .filter-tag-remove:hover {
-            background: rgba(0, 120, 212, 0.2);
+        .filter-chip-remove:hover {
+            background: rgba(59, 130, 246, 0.3);
         }
 
-        .filter-tag-remove svg {
-            width: 12px;
-            height: 12px;
+        .filter-chip-remove svg {
+            width: 10px;
+            height: 10px;
         }
 
-        /* Table Container */
-        .table-container {
+        /* ===== TABLE CONTAINER ===== */
+        .table-wrapper {
             flex: 1;
             overflow: auto;
             position: relative;
         }
 
         .loading-overlay {
-            display: none;
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.9);
+            inset: 0;
+            background: rgba(10, 14, 20, 0.9);
+            display: none;
             align-items: center;
             justify-content: center;
             z-index: 100;
+            backdrop-filter: blur(4px);
         }
 
         .loading-overlay.visible {
@@ -406,9 +469,9 @@
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border-light);
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--bg-active);
             border-top-color: var(--accent-blue);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
@@ -418,11 +481,11 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Log Table */
+        /* ===== LOG TABLE ===== */
         .log-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            table-layout: fixed;
         }
 
         .log-table thead {
@@ -432,13 +495,18 @@
         }
 
         .log-table th {
-            background: var(--bg-gray-100);
-            border-bottom: 1px solid var(--border-light);
-            padding: 12px 16px;
+            height: 36px;
+            padding: 0 12px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-default);
             text-align: left;
+            font-size: 10px;
             font-weight: 600;
-            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
             white-space: nowrap;
+            user-select: none;
         }
 
         .log-table th.sortable {
@@ -446,7 +514,7 @@
         }
 
         .log-table th.sortable:hover {
-            color: var(--text-primary);
+            color: var(--text-secondary);
         }
 
         .sort-icon {
@@ -455,150 +523,151 @@
         }
 
         .log-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-light);
+            height: var(--row-height);
+            padding: 0 12px;
+            border-bottom: 1px solid var(--border-subtle);
             vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .log-row {
+            transition: background 0.1s ease;
         }
 
         .log-row:hover {
-            background: var(--bg-gray-50);
+            background: var(--bg-hover);
         }
 
         .log-row.expanded {
-            background: var(--accent-blue-light);
+            background: var(--bg-active);
         }
 
         /* Column Widths */
-        .col-timestamp { width: 145px; }
-        .col-status { width: 85px; text-align: center; }
-        .col-ip { width: 120px; }
+        .col-time { width: 140px; }
+        .col-status { width: 100px; }
+        .col-src { width: 130px; }
+        .col-dst { width: 130px; }
         .col-intf { width: 90px; }
-        .col-port-proto { width: 80px; text-align: center; }
-        .col-size { width: 95px; text-align: right; }
-        .col-device { width: 120px; }
-        .col-expand { width: 45px; text-align: center; }
+        .col-port { width: 80px; }
+        .col-size { width: 100px; }
+        .col-device { width: 115px; }
+        .col-expand { width: 40px; }
 
-        /* Table Header Styling */
-        .log-table th {
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 0.5px;
-        }
-
-        /* Monospace columns */
-        .col-timestamp, .col-ip, .col-device {
+        /* Timestamp */
+        .timestamp {
             font-family: var(--font-mono);
-            font-size: 12px;
-        }
-
-        /* Interface column */
-        .col-intf {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
         }
 
-        /* Status Cell - centered badge + sub-label */
+        /* Status Badge */
         .status-cell {
             display: flex;
             flex-direction: column;
-            align-items: center;
             gap: 2px;
         }
 
-        .status-sub {
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
             font-size: 10px;
-            color: var(--text-tertiary);
-            text-align: center;
+            font-weight: 700;
+            letter-spacing: 0.5px;
         }
 
-        /* Port/Proto Cell - Port above, Proto below */
-        .col-port-proto {
-            line-height: 1.4;
+        .status-accept {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+        }
+
+        .status-deny {
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+        }
+
+        .status-sub {
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: lowercase;
+        }
+
+        /* IP Links */
+        .ip-link {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+
+        .ip-link:hover {
+            color: var(--accent-blue);
+        }
+
+        /* Interface */
+        .intf-cell {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* Port/Proto */
+        .port-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1px;
         }
 
         .port-value {
-            display: block;
             font-family: var(--font-mono);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--accent-blue);
         }
 
         .proto-value {
-            display: block;
-            font-size: 10px;
-            color: var(--text-tertiary);
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
         }
 
-        /* Size Cell - stacked total + detail */
-        .col-size {
-            line-height: 1.3;
+        /* Size */
+        .size-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            text-align: right;
         }
 
         .size-total {
-            display: block;
+            font-size: 12px;
             font-weight: 500;
             color: var(--text-primary);
         }
 
         .size-detail {
-            display: block;
-            font-size: 10px;
-            color: var(--text-tertiary);
-        }
-
-        /* Link styling for IP and Device columns */
-        .col-ip a, .col-device a {
-            color: var(--text-link);
-            text-decoration: none;
-        }
-
-        .col-ip a:hover, .col-device a:hover {
-            text-decoration: underline;
-        }
-
-        /* Status Badges */
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .status-accept {
-            background: var(--accent-green-light);
-            color: #3d8b3d;
-        }
-
-        .status-deny {
-            background: var(--accent-red-light);
-            color: #c9302c;
-        }
-
-        /* IP Links */
-        .col-ip a {
-            color: var(--text-primary);
-            text-decoration: none;
-        }
-
-        .col-ip a:hover {
-            color: var(--accent-blue);
-            text-decoration: underline;
-        }
-
-        /* Response Code */
-        .response-code {
+            font-size: 9px;
+            color: var(--text-muted);
             font-family: var(--font-mono);
-            font-weight: 600;
         }
 
-        .response-code.success {
-            color: var(--accent-green);
+        /* Device */
+        .device-link {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+
+        .device-link:hover {
+            color: var(--accent-blue);
         }
 
         /* Expand Button */
@@ -606,31 +675,39 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 28px;
-            height: 28px;
-            background: var(--bg-gray-100);
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
+            width: 26px;
+            height: 26px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
+            color: var(--text-muted);
         }
 
         .expand-btn:hover {
-            background: var(--bg-gray-200);
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-secondary);
+        }
+
+        .expand-btn.open {
+            background: var(--accent-cyan-dim);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
         }
 
         .expand-btn svg {
-            width: 14px;
-            height: 14px;
-            color: var(--text-secondary);
-            transition: transform 0.2s;
+            width: 12px;
+            height: 12px;
+            transition: transform 0.2s ease;
         }
 
         .expand-btn.open svg {
             transform: rotate(45deg);
         }
 
-        /* Detail Row */
+        /* ===== DETAIL ROW ===== */
         .detail-row {
             display: none;
         }
@@ -641,141 +718,63 @@
 
         .detail-row td {
             padding: 0;
-            background: var(--bg-gray-50);
+            background: var(--bg-deep);
+            border-bottom: 1px solid var(--border-default);
         }
 
         .detail-panel {
-            padding: 14px 20px;
+            padding: 16px 20px;
         }
 
-        /* Connection Flow - Hidden by default since compact layout shows this */
-        .connection-flow {
-            display: none;
-        }
-
-        .flow-node {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .flow-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .flow-icon.client {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-
-        .flow-icon.firewall {
-            background: #fff3e0;
-            color: #f57c00;
-        }
-
-        .flow-icon.server {
-            background: #e8f5e9;
-            color: #388e3c;
-        }
-
-        .flow-label {
-            font-weight: 600;
-            color: var(--text-primary);
-            font-size: 13px;
-        }
-
-        .flow-sublabel {
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        .flow-arrow {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .flow-arrow-line {
-            display: flex;
-            align-items: center;
-            color: var(--border-dark);
-        }
-
-        .flow-arrow-line span {
-            width: 60px;
-            height: 2px;
-            background: var(--border-dark);
-        }
-
-        .flow-arrow-line svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .flow-arrow-label {
-            font-size: 11px;
-            color: var(--text-tertiary);
-        }
-
-        /* Compact Detail Layout */
-        .compact-details {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* Network Flow Section - Horizontal layout */
-        .network-flow-section {
+        /* Network Flow Section */
+        .flow-section {
             display: grid;
             grid-template-columns: 1fr auto 1fr;
             gap: 16px;
             align-items: stretch;
-            background: var(--bg-white);
-            border-radius: 8px;
-            padding: 14px 18px;
-            border: 1px solid var(--border-light);
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-subtle);
         }
 
-        .endpoint-block {
+        .endpoint {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
         }
 
         .endpoint-header {
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 4px;
         }
 
-        .endpoint-label {
-            font-size: 10px;
-            font-weight: 600;
+        .endpoint-tag {
+            font-size: 9px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-tertiary);
-            padding: 2px 6px;
-            background: var(--bg-gray-100);
-            border-radius: 3px;
+            letter-spacing: 0.8px;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
         }
 
-        .endpoint-label.src { background: var(--accent-blue-light); color: var(--accent-blue); }
-        .endpoint-label.dst { background: var(--accent-green-light); color: var(--accent-green); }
+        .endpoint-tag.src {
+            background: var(--accent-cyan-dim);
+            color: var(--accent-blue);
+        }
+
+        .endpoint-tag.dst {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+        }
 
         .endpoint-ip {
             font-family: var(--font-mono);
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 600;
-            color: var(--text-primary);
+            color: var(--text-bright);
         }
 
         .endpoint-meta {
@@ -787,96 +786,91 @@
         .meta-item {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 12px;
+            gap: 6px;
+            font-size: 11px;
         }
 
         .meta-label {
-            color: var(--text-tertiary);
-            white-space: nowrap;
+            color: var(--text-muted);
         }
 
         .meta-value {
             color: var(--text-secondary);
             font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .meta-value.mono {
             font-family: var(--font-mono);
-            font-size: 11px;
+            font-size: 10px;
         }
 
-        /* Flow Arrow in middle */
-        .flow-connector {
+        /* Flow Arrow */
+        .flow-arrow {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 0 8px;
-            min-width: 100px;
+            min-width: 80px;
         }
 
-        .flow-connector-line {
+        .flow-arrow-line {
             display: flex;
             align-items: center;
-            color: var(--border-dark);
-        }
-
-        .flow-connector-line .line {
-            width: 40px;
-            height: 2px;
-            background: var(--border-default);
-        }
-
-        .flow-connector-line svg {
-            width: 16px;
-            height: 16px;
             color: var(--accent-blue);
         }
 
-        .flow-proto {
+        .flow-arrow-line span {
+            width: 40px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--border-emphasis), var(--accent-blue));
+        }
+
+        .flow-arrow-line svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .flow-proto-tag {
+            margin-top: 6px;
             font-size: 10px;
             font-weight: 600;
-            color: var(--text-tertiary);
-            margin-top: 4px;
-            padding: 2px 8px;
-            background: var(--bg-gray-100);
+            color: var(--text-muted);
+            padding: 2px 10px;
+            background: var(--bg-elevated);
             border-radius: 10px;
         }
 
-        /* Session & Policy Section - Compact horizontal */
-        .session-policy-section {
+        /* Info Grid */
+        .info-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 12px;
-            background: var(--bg-white);
-            border-radius: 8px;
-            padding: 12px 16px;
-            border: 1px solid var(--border-light);
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-subtle);
         }
 
-        .info-group {
+        .info-block {
             display: flex;
             flex-direction: column;
             gap: 6px;
             padding-right: 12px;
-            border-right: 1px solid var(--border-light);
+            border-right: 1px solid var(--border-subtle);
         }
 
-        .info-group:last-child {
+        .info-block:last-child {
             border-right: none;
             padding-right: 0;
         }
 
-        .info-group-title {
-            font-size: 10px;
-            font-weight: 600;
+        .info-title {
+            font-size: 9px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-tertiary);
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
             margin-bottom: 2px;
         }
 
@@ -884,60 +878,54 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 11px;
         }
 
         .info-key {
-            color: var(--text-tertiary);
+            color: var(--text-muted);
         }
 
         .info-val {
-            color: var(--text-primary);
+            color: var(--text-secondary);
             font-weight: 500;
-            text-align: right;
         }
 
         .info-val.mono {
             font-family: var(--font-mono);
-            font-size: 11px;
+            font-size: 10px;
         }
 
-        .info-val.action-allow {
+        .info-val.allow {
             color: var(--accent-green);
         }
 
-        .info-val.action-deny {
+        .info-val.deny {
             color: var(--accent-red);
         }
 
-        /* Legacy detail styles for compatibility */
-        .detail-grid {
-            display: none;
-        }
-
-        /* Multi-Firewall Flow Container - Compact */
-        .multi-flow-container {
-            background: var(--bg-gray-50);
-            border-radius: 6px;
-            padding: 10px 14px;
+        /* Multi-Firewall Flow */
+        .multiflow-container {
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            padding: 12px 16px;
             margin-bottom: 12px;
-            border: 1px solid var(--border-light);
+            border: 1px solid var(--border-subtle);
         }
 
-        .flow-header {
+        .multiflow-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 8px;
         }
 
-        .flow-title {
-            font-weight: 500;
-            font-size: 12px;
+        .multiflow-title {
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-secondary);
         }
 
-        .load-flow-btn {
+        .trace-btn {
             display: flex;
             align-items: center;
             gap: 5px;
@@ -945,39 +933,35 @@
             background: var(--accent-blue);
             color: white;
             border: none;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
+            border-radius: var(--radius-sm);
+            font-size: 10px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
 
-        .load-flow-btn:hover {
-            background: #1a73e8;
+        .trace-btn:hover {
+            background: #2563eb;
         }
 
-        .load-flow-btn:disabled {
+        .trace-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
 
-        .load-flow-btn svg {
-            width: 14px;
-            height: 14px;
+        .trace-btn svg {
+            width: 12px;
+            height: 12px;
         }
 
-        .load-flow-btn.loading svg {
+        .trace-btn.loading svg {
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
         /* Dynamic Flow */
-        .dynamic-flow-container {
-            padding: 20px 0;
+        .dynamic-flow {
+            display: none;
+            padding: 16px 0;
         }
 
         .flow-loading {
@@ -985,115 +969,97 @@
             align-items: center;
             justify-content: center;
             gap: 12px;
-            padding: 40px;
+            padding: 32px;
             color: var(--text-secondary);
         }
 
-        .spinner {
-            width: 24px;
-            height: 24px;
-            border: 3px solid var(--border-light);
-            border-top-color: var(--accent-blue);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        /* Multi-Firewall Flow */
         .multi-firewall-flow {
             display: flex;
             align-items: center;
-            justify-content: flex-start;
             gap: 0;
-            padding: 20px 0;
             overflow-x: auto;
+            padding: 16px 0;
         }
 
         .fw-node {
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 120px;
+            min-width: 100px;
             flex-shrink: 0;
         }
 
         .fw-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 8px;
-        }
-
-        .fw-icon.client {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            color: #1976d2;
-        }
-
-        .fw-icon.firewall {
-            background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%);
-            color: #f57c00;
-        }
-
-        .fw-icon.firewall.allow {
-            background: linear-gradient(135deg, #e8f5e9 0%, #a5d6a7 100%);
-            color: #388e3c;
-        }
-
-        .fw-icon.firewall.deny {
-            background: linear-gradient(135deg, #ffebee 0%, #ef9a9a 100%);
-            color: #d32f2f;
-        }
-
-        .fw-icon.server {
-            background: linear-gradient(135deg, #f3e5f5 0%, #ce93d8 100%);
-            color: #7b1fa2;
+            margin-bottom: 6px;
         }
 
         .fw-icon svg {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
+        }
+
+        .fw-icon.client {
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.2) 0%, rgba(88, 166, 255, 0.1) 100%);
+            color: var(--accent-blue);
+        }
+
+        .fw-icon.firewall.allow {
+            background: linear-gradient(135deg, rgba(63, 185, 80, 0.2) 0%, rgba(63, 185, 80, 0.1) 100%);
+            color: var(--accent-green);
+        }
+
+        .fw-icon.firewall.deny {
+            background: linear-gradient(135deg, rgba(248, 81, 73, 0.2) 0%, rgba(248, 81, 73, 0.1) 100%);
+            color: var(--accent-red);
+        }
+
+        .fw-icon.server {
+            background: linear-gradient(135deg, rgba(163, 113, 247, 0.2) 0%, rgba(163, 113, 247, 0.1) 100%);
+            color: var(--accent-purple);
         }
 
         .fw-label {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 2px;
         }
 
         .fw-sublabel {
-            font-size: 11px;
+            font-size: 10px;
             font-family: var(--font-mono);
-            color: var(--text-secondary);
+            color: var(--text-muted);
         }
 
         .fw-action {
-            margin-top: 6px;
-            padding: 3px 10px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
+            margin-top: 4px;
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 9px;
+            font-weight: 700;
             text-transform: uppercase;
         }
 
         .fw-action.allow {
-            background: var(--accent-green-light);
-            color: #388e3c;
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
         }
 
         .fw-action.deny {
-            background: var(--accent-red-light);
-            color: #d32f2f;
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
         }
 
         .fw-connector {
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 60px;
-            flex-shrink: 0;
+            min-width: 50px;
         }
 
         .fw-connector-line {
@@ -1105,30 +1071,29 @@
         .fw-connector-line span {
             flex: 1;
             height: 2px;
-            background: linear-gradient(90deg, var(--border-default), var(--accent-blue), var(--border-default));
+            background: linear-gradient(90deg, var(--border-emphasis), var(--accent-blue), var(--border-emphasis));
         }
 
         .fw-connector-line svg {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             color: var(--accent-blue);
             flex-shrink: 0;
         }
 
         .fw-connector-label {
             margin-top: 4px;
-            font-size: 10px;
-            color: var(--text-tertiary);
+            font-size: 9px;
+            color: var(--text-muted);
         }
 
-        /* Flow Summary */
         .flow-summary {
-            display: flex;
+            display: none;
             gap: 24px;
-            padding: 16px 20px;
-            background: var(--bg-gray-100);
-            border-radius: 8px;
-            margin-top: 16px;
+            padding: 12px 16px;
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            margin-top: 12px;
         }
 
         .flow-summary-item {
@@ -1137,78 +1102,62 @@
         }
 
         .flow-summary-label {
-            font-size: 11px;
-            color: var(--text-tertiary);
+            font-size: 10px;
+            color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .flow-summary-value {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: var(--text-primary);
         }
 
         .flow-summary-value.success {
-            color: #388e3c;
+            color: var(--accent-green);
         }
 
         .flow-summary-value.error {
-            color: #d32f2f;
+            color: var(--accent-red);
         }
 
-        /* Flow arrow label colors */
-        .flow-arrow-label.allow {
-            color: #388e3c;
-            background: var(--accent-green-light);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        .flow-arrow-label.deny {
-            color: #d32f2f;
-            background: var(--accent-red-light);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        /* Raw Section - Compact collapsible */
+        /* Raw Log Section */
         .raw-section {
-            background: var(--bg-white);
-            border-radius: 8px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
             overflow: hidden;
-            border: 1px solid var(--border-light);
+            border: 1px solid var(--border-subtle);
         }
 
         .raw-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 12px;
-            background: var(--bg-gray-50);
+            padding: 10px 14px;
+            background: var(--bg-elevated);
             cursor: pointer;
             user-select: none;
+            transition: background 0.15s ease;
         }
 
         .raw-header:hover {
-            background: var(--bg-gray-100);
+            background: var(--bg-hover);
         }
 
         .raw-title {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-weight: 500;
-            font-size: 12px;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-secondary);
         }
 
         .raw-title svg {
-            width: 14px;
-            height: 14px;
-            transition: transform 0.2s;
+            width: 12px;
+            height: 12px;
+            transition: transform 0.2s ease;
         }
 
         .raw-section.expanded .raw-title svg {
@@ -1218,81 +1167,59 @@
         .copy-btn {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
             padding: 4px 10px;
-            background: var(--bg-white);
+            background: transparent;
             border: 1px solid var(--border-default);
-            border-radius: 4px;
-            font-size: 11px;
+            border-radius: var(--radius-sm);
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
 
         .copy-btn:hover {
-            background: var(--bg-gray-100);
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
         }
 
         .copy-btn svg {
-            width: 12px;
-            height: 12px;
+            width: 11px;
+            height: 11px;
         }
 
         .raw-body {
-            padding: 10px 12px;
+            display: none;
+            padding: 14px;
+            background: var(--bg-deep);
             font-family: var(--font-mono);
             font-size: 11px;
             line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
             word-break: break-all;
-            max-height: 120px;
+            max-height: 200px;
             overflow-y: auto;
-            background: #1a2332;
-            color: #94a3b8;
-            display: none;
         }
 
         .raw-section.expanded .raw-body {
             display: block;
         }
 
-        /* Empty State */
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 80px 20px;
-            text-align: center;
-        }
-
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            color: var(--text-tertiary);
-            margin-bottom: 20px;
-        }
-
-        .empty-state h3 {
-            font-size: 18px;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-        }
-
-        .empty-state p {
-            color: var(--text-secondary);
-        }
-
-        /* Pagination */
+        /* ===== PAGINATION ===== */
         .pagination-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 16px 24px;
-            background: var(--bg-white);
-            border-top: 1px solid var(--border-light);
+            padding: 12px 20px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border-default);
+            flex-shrink: 0;
         }
 
         .pagination-info {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-secondary);
         }
 
@@ -1306,1189 +1233,737 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-elevated);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
-            background: var(--bg-white);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
 
         .page-btn:hover:not(:disabled) {
-            background: var(--bg-gray-100);
-            border-color: var(--border-dark);
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-primary);
         }
 
         .page-btn:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
         }
 
         .page-btn svg {
-            width: 18px;
-            height: 18px;
-            color: var(--text-secondary);
-        }
-
-        .page-input-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            padding: 0 12px;
+            width: 14px;
+            height: 14px;
         }
 
         .page-input {
             width: 60px;
-            height: 36px;
-            border: 1px solid var(--border-default);
-            border-radius: 6px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        /* ============================================
-           PROFESSIONAL SEARCH - TOKEN/CHIP BASED
-        ============================================ */
-        .search-container {
-            position: relative;
-            flex: 1;
-        }
-
-        .search-tokens-wrapper {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 6px;
-            min-height: 48px;
-            padding: 8px 12px;
-            padding-right: 80px;
-            background: var(--bg-white);
-            border: 2px solid var(--border-light);
-            border-radius: 10px;
-            transition: all 0.15s;
-            cursor: text;
-        }
-
-        .search-tokens-wrapper:focus-within {
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.12);
-        }
-
-        .search-tokens-wrapper:hover:not(:focus-within) {
-            border-color: var(--border-dark);
-        }
-
-        /* Search Token/Chip */
-        .search-token {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border: 1px solid #90caf9;
-            border-radius: 6px;
-            font-size: 13px;
-            animation: tokenAppear 0.15s ease-out;
-        }
-
-        @keyframes tokenAppear {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        .search-token.negated {
-            background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
-            border-color: #ef9a9a;
-        }
-
-        .search-token-field {
-            font-weight: 600;
-            color: #1565c0;
-            font-family: var(--font-mono);
-            font-size: 12px;
-        }
-
-        .search-token.negated .search-token-field {
-            color: #c62828;
-        }
-
-        .search-token-operator {
-            color: #7b1fa2;
-            font-weight: 600;
-            font-family: var(--font-mono);
-            font-size: 11px;
-        }
-
-        .search-token-value {
-            color: var(--text-primary);
-            max-width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .search-token-remove {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 16px;
-            height: 16px;
-            margin-left: 2px;
-            background: transparent;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            color: #5c6bc0;
-            transition: all 0.1s;
-        }
-
-        .search-token-remove:hover {
-            background: rgba(0, 0, 0, 0.1);
-            color: #1a237e;
-        }
-
-        .search-token.negated .search-token-remove {
-            color: #e53935;
-        }
-
-        .search-token.negated .search-token-remove:hover {
-            color: #b71c1c;
-        }
-
-        .search-token-remove svg {
-            width: 10px;
-            height: 10px;
-        }
-
-        /* Text Token */
-        .search-token.text-token {
-            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-            border-color: #ffb74d;
-        }
-
-        .search-token.text-token .search-token-field {
-            color: #e65100;
-        }
-
-        /* Search Input */
-        .search-input-inline {
-            flex: 1;
-            min-width: 200px;
-            border: none;
-            outline: none;
-            font-size: 14px;
-            font-family: var(--font-sans);
-            background: transparent;
-            padding: 4px 0;
-        }
-
-        .search-input-inline::placeholder {
-            color: var(--text-tertiary);
-        }
-
-        /* Search Actions */
-        .search-actions {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .search-action-btn {
-            width: 32px;
             height: 32px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
-        }
-
-        .search-action-btn svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        .search-action-btn.help {
-            background: transparent;
-            color: var(--text-tertiary);
-        }
-
-        .search-action-btn.help:hover {
-            background: var(--bg-gray-100);
-            color: var(--text-secondary);
-        }
-
-        .search-action-btn.search {
-            background: var(--accent-blue);
-            color: white;
-        }
-
-        .search-action-btn.search:hover {
-            background: #1565c0;
-        }
-
-        /* Autocomplete Dropdown */
-        .search-autocomplete {
-            position: absolute;
-            top: calc(100% + 4px);
-            left: 0;
-            right: 0;
-            background: var(--bg-white);
+            padding: 0 8px;
+            background: var(--bg-deep);
             border: 1px solid var(--border-default);
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
-            max-height: 420px;
-            overflow: hidden;
-            display: none;
-        }
-
-        .search-autocomplete.visible {
-            display: block;
-            animation: dropdownAppear 0.15s ease-out;
-        }
-
-        @keyframes dropdownAppear {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .autocomplete-header {
-            padding: 12px 16px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
-            border-bottom: 1px solid var(--border-light);
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .autocomplete-header svg {
-            width: 14px;
-            height: 14px;
-            opacity: 0.6;
-        }
-
-        .autocomplete-body {
-            max-height: 360px;
-            overflow-y: auto;
-        }
-
-        .autocomplete-section-title {
-            padding: 10px 16px 6px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--text-tertiary);
-            background: var(--bg-gray-50);
-            position: sticky;
-            top: 0;
-            z-index: 1;
-        }
-
-        .autocomplete-item {
-            display: flex;
-            align-items: center;
-            padding: 10px 16px;
-            cursor: pointer;
-            transition: all 0.1s;
-            border-left: 3px solid transparent;
-        }
-
-        .autocomplete-item:hover,
-        .autocomplete-item.selected {
-            background: linear-gradient(90deg, #e3f2fd 0%, transparent 100%);
-            border-left-color: var(--accent-blue);
-        }
-
-        .autocomplete-item-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-
-        .autocomplete-item-icon.field {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            color: #1565c0;
-        }
-
-        .autocomplete-item-icon.value {
-            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-            color: #2e7d32;
-        }
-
-        .autocomplete-item-icon.operator {
-            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
-            color: #7b1fa2;
-        }
-
-        .autocomplete-item-icon svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .autocomplete-item-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .autocomplete-item-title {
-            font-weight: 500;
-            color: var(--text-primary);
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .autocomplete-item-title code {
-            background: rgba(0, 120, 212, 0.1);
-            padding: 3px 8px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
+            color: var(--text-bright);
             font-family: var(--font-mono);
             font-size: 12px;
-            color: var(--accent-blue);
-            font-weight: 600;
+            text-align: center;
         }
 
-        .autocomplete-item-desc {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            margin-top: 3px;
-        }
-
-        .autocomplete-item-badge {
-            font-size: 9px;
-            padding: 3px 8px;
-            border-radius: 10px;
-            background: var(--bg-gray-100);
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            font-weight: 600;
-            margin-left: auto;
-            flex-shrink: 0;
-        }
-
-        /* Operator Pills in Autocomplete */
-        .operator-pills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            padding: 12px 16px;
-            background: var(--bg-gray-50);
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .operator-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--bg-white);
-            border: 1px solid var(--border-default);
-            border-radius: 20px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .operator-pill:hover {
+        .page-input:focus {
+            outline: none;
             border-color: var(--accent-blue);
-            background: var(--accent-blue-light);
         }
 
-        .operator-pill.active {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
-            color: white;
+        .page-total {
+            font-size: 12px;
+            color: var(--text-muted);
         }
 
-        .operator-pill code {
-            font-family: var(--font-mono);
-            font-weight: 600;
-        }
-
-        /* Search Help Panel */
-        .search-help-panel {
-            position: absolute;
-            top: calc(100% + 4px);
-            right: 0;
-            width: 480px;
-            background: var(--bg-white);
-            border: 1px solid var(--border-default);
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-            z-index: 1001;
-            display: none;
-            overflow: hidden;
-        }
-
-        .search-help-panel.visible {
-            display: block;
-            animation: dropdownAppear 0.15s ease-out;
-        }
-
-        .search-help-header {
-            padding: 16px 20px;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-            color: white;
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .search-help-header h3 {
-            font-size: 15px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .search-help-header h3 svg {
-            width: 20px;
-            height: 20px;
-            opacity: 0.8;
-        }
-
-        .search-help-close {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            cursor: pointer;
-            display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: white;
-            transition: background 0.15s;
+            padding: 80px 40px;
+            text-align: center;
         }
 
-        .search-help-close:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .search-help-close svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        .search-help-body {
-            padding: 20px;
-            max-height: 450px;
-            overflow-y: auto;
-        }
-
-        .search-help-section {
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            color: var(--text-ghost);
             margin-bottom: 20px;
         }
 
-        .search-help-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .search-help-section-title {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-tertiary);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .search-help-section-title::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border-light);
-        }
-
-        .search-help-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-
-        .search-help-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            background: var(--bg-gray-50);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .search-help-item:hover {
-            background: var(--accent-blue-light);
-        }
-
-        .search-help-item code {
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--accent-blue);
+        .empty-state h3 {
+            font-size: 16px;
             font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            max-width: 400px;
+        }
+
+        /* ===== SIDEBAR (Right Panel) ===== */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-surface);
+            border-left: 1px solid var(--border-subtle);
             flex-shrink: 0;
-        }
-
-        .search-help-item span {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .search-help-full {
-            grid-column: 1 / -1;
-        }
-
-        /* Keyboard shortcuts */
-        .keyboard-hint {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 22px;
-            height: 20px;
-            padding: 0 6px;
-            background: var(--bg-gray-200);
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-family: var(--font-mono);
-        }
-
-        /* ============================================
-           RIGHT SIDEBAR
-        ============================================ */
-        .right-sidebar {
-            width: var(--sidebar-width);
-            background: var(--bg-white);
-            border-left: 1px solid var(--border-light);
             display: flex;
             flex-direction: column;
-            flex-shrink: 0;
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         .sidebar-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-light);
+            align-items: center;
         }
 
         .sidebar-title {
+            font-size: 12px;
             font-weight: 600;
-            font-size: 15px;
             color: var(--text-primary);
         }
 
         .sidebar-close {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             background: transparent;
             border: none;
             cursor: pointer;
-            border-radius: 4px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
         }
 
         .sidebar-close:hover {
-            background: var(--bg-gray-100);
+            background: var(--bg-hover);
+            color: var(--text-secondary);
         }
 
         .sidebar-close svg {
-            width: 18px;
-            height: 18px;
-            color: var(--text-tertiary);
-        }
-
-        .sidebar-body {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px 0;
+            width: 14px;
+            height: 14px;
         }
 
         .sidebar-section {
-            margin-bottom: 8px;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .sidebar-section.collapsed .sidebar-section-content {
             display: none;
         }
 
+        .sidebar-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .sidebar-section-header:hover {
+            background: var(--bg-hover);
+        }
+
+        .sidebar-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .sidebar-section-icon {
+            width: 14px;
+            height: 14px;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+        }
+
         .sidebar-section.collapsed .sidebar-section-icon {
             transform: rotate(-90deg);
         }
 
-        .sidebar-section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 20px;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-
-        .sidebar-section-header:hover {
-            background: var(--bg-gray-50);
-        }
-
-        .sidebar-section-title {
-            font-weight: 600;
-            font-size: 13px;
-            color: var(--text-primary);
-        }
-
-        .sidebar-section-icon {
-            width: 18px;
-            height: 18px;
-            color: var(--text-tertiary);
-            transition: transform 0.2s;
-        }
-
         .sidebar-section-content {
-            padding: 8px 20px 16px;
+            padding: 4px 8px 12px;
         }
 
         .sidebar-item {
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 10px 12px;
-            border-radius: 6px;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: background 0.15s;
-            font-size: 13px;
-            color: var(--text-primary);
+            font-size: 12px;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
         }
 
         .sidebar-item:hover {
-            background: var(--bg-gray-100);
+            background: var(--bg-hover);
+            color: var(--text-primary);
         }
 
         .sidebar-item-count {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            font-weight: 500;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
         }
 
-        .sidebar-select {
+        /* Time Range Inputs in Sidebar */
+        .time-inputs {
+            padding: 8px 12px;
+        }
+
+        .time-input-group {
+            margin-bottom: 10px;
+        }
+
+        .time-input-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .time-input {
             width: 100%;
-            height: 40px;
-            padding: 0 12px;
+            height: 30px;
+            padding: 0 8px;
+            background: var(--bg-deep);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
-            font-size: 14px;
-            background: var(--bg-white);
-            cursor: pointer;
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 11px;
         }
 
-        .sidebar-select:focus {
+        .time-input:focus {
             outline: none;
             border-color: var(--accent-blue);
         }
 
-        /* Time Range Section - Special Styling */
-        .time-range-section {
-            background: var(--bg-gray-50);
-            border-top: 1px solid var(--border-light);
-            border-bottom: 1px solid var(--border-light);
-            margin: 8px 0;
-        }
-
-        .time-range-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .time-range-btn {
-            padding: 10px 12px;
-            border: 1px solid var(--border-default);
-            border-radius: 6px;
-            background: var(--bg-white);
-            font-size: 13px;
+        .apply-time-btn {
+            width: 100%;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.15s;
-            text-align: center;
+            transition: all 0.15s ease;
+            margin-top: 4px;
         }
 
-        .time-range-btn:hover {
+        .apply-time-btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .apply-time-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Static section header (non-collapsible) */
+        .sidebar-section-header-static {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        /* Time Range Redesign */
+        .time-range-redesign {
+            padding: 8px 12px;
+        }
+
+        .calendar-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .calendar-input-wrapper:hover {
+            border-color: var(--border-emphasis);
+        }
+
+        .calendar-input-wrapper:focus-within {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+        }
+
+        .calendar-icon {
+            position: absolute;
+            left: 10px;
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .calendar-input {
+            width: 100%;
+            height: 36px;
+            padding: 0 10px 0 34px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+        }
+
+        .calendar-input:focus {
+            outline: none;
+        }
+
+        .calendar-input::-webkit-calendar-picker-indicator {
+            filter: invert(0.7);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .calendar-input::-webkit-calendar-picker-indicator:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Device Dropdown */
+        .filter-dropdown-wrapper {
+            position: relative;
+            padding: 0 12px;
+        }
+
+        .filter-dropdown {
+            width: 100%;
+            height: 38px;
+            padding: 0 32px 0 12px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            transition: all 0.15s ease;
+        }
+
+        .filter-dropdown:hover {
+            border-color: var(--border-emphasis);
+        }
+
+        .filter-dropdown:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+        }
+
+        .filter-dropdown option {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            padding: 8px;
+        }
+
+        .dropdown-arrow {
+            position: absolute;
+            right: 22px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* Action Filter Buttons */
+        .action-filter-group {
+            display: flex;
+            gap: 6px;
+            padding: 0 12px;
+        }
+
+        .action-filter-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            height: 34px;
+            padding: 0 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .action-filter-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-primary);
+        }
+
+        .action-filter-btn.active {
+            background: var(--accent-cyan-dim);
             border-color: var(--accent-blue);
             color: var(--accent-blue);
         }
 
-        .time-range-btn.active {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
-            color: white;
+        .action-filter-btn.accept.active {
+            background: var(--accent-green-dim);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
         }
 
-        /* Custom Date Range */
-        .custom-range-section {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border-light);
+        .action-filter-btn.deny.active {
+            background: var(--accent-red-dim);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
         }
 
-        .custom-range-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            display: block;
+        .action-filter-btn svg {
+            flex-shrink: 0;
         }
 
-        .datetime-input-group {
-            margin-bottom: 12px;
+        /* Layout wrapper */
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
         }
 
-        .datetime-input-label {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            margin-bottom: 4px;
-            display: block;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .datetime-input {
-            width: 100%;
-            height: 40px;
-            padding: 0 12px;
-            border: 1px solid var(--border-default);
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: var(--font-sans);
-            cursor: pointer;
-            background: var(--bg-white);
-        }
-
-        .datetime-input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
-        }
-
-        .apply-range-btn {
-            width: 100%;
-            padding: 12px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s;
-            margin-top: 8px;
-        }
-
-        .apply-range-btn:hover {
-            background: #006cbd;
-        }
-
-        .apply-range-btn:disabled {
-            background: var(--border-default);
-            cursor: not-allowed;
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-    <form id="filterForm" method="get" action="{{ request.url_for('log_list') }}">
-    <div class="app-container">
-        <!-- Header Bar -->
-        <header class="header-bar">
-            <a href="/" class="header-brand">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="7" height="7" rx="1"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
+    <form id="filterForm" method="GET" action="">
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
                 NetLogs
             </a>
-
-            <nav class="header-nav">
-                <a href="{{ request.url_for('dashboard') }}" class="header-nav-link">Dashboard</a>
-                <a href="{{ request.url_for('log_list') }}" class="header-nav-link active">Logs</a>
-                <a href="{{ request.url_for('device_list') }}" class="header-nav-link">Devices</a>
+            <nav class="nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('log_list') }}" class="nav-link active">Logs</a>
+                <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
             </nav>
-
-            <div class="header-right">
-                <div class="header-user">
-                    <div class="header-user-avatar">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="8" r="4"/>
-                            <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
-                        </svg>
-                    </div>
-                    admin
+            <div class="header-spacer"></div>
+            <div class="header-user">
+                <div class="user-avatar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
                 </div>
+                admin
             </div>
         </header>
 
-        <!-- Main Layout -->
-        <div class="main-layout">
-            <!-- Main Content -->
-            <main class="main-content">
-                <!-- Search Toolbar - Clean 3-Field Design -->
-                <div class="search-toolbar">
-                    <div class="search-filters">
-                        <div class="filter-group">
-                            <label for="srcipInput">Source IP</label>
-                            <input type="text"
-                                   id="srcipInput"
-                                   name="srcip"
-                                   class="filter-input"
-                                   value="{{ current_srcip or '' }}"
-                                   placeholder="e.g. 192.168.1.1 or 10.0.0.0/24"
-                                   autocomplete="off">
-                        </div>
-                        <div class="filter-group">
-                            <label for="dstipInput">Destination IP</label>
-                            <input type="text"
-                                   id="dstipInput"
-                                   name="dstip"
-                                   class="filter-input"
-                                   value="{{ current_dstip or '' }}"
-                                   placeholder="e.g. 8.8.8.8 or 10.11.40.0/24"
-                                   autocomplete="off">
-                        </div>
-                        <div class="filter-group filter-group-small">
-                            <label for="dstportInput">Dest Port</label>
-                            <input type="text"
-                                   id="dstportInput"
-                                   name="dstport"
-                                   class="filter-input"
-                                   value="{{ current_dstport or '' }}"
-                                   placeholder="e.g. 443 or 80-443"
-                                   autocomplete="off">
-                        </div>
-                        <div class="filter-actions">
-                            <button type="submit" class="btn btn-primary" id="searchBtn">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"/>
-                                    <path d="m21 21-4.35-4.35"/>
-                                </svg>
-                                Search
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="clearFilters()">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M18 6 6 18M6 6l12 12"/>
-                                </svg>
-                                Clear
-                            </button>
-                        </div>
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Search Toolbar -->
+            <div class="toolbar">
+                <div class="search-group">
+                    <div class="search-field">
+                        <span class="search-label">Source IP</span>
+                        <input type="text" name="srcip" class="search-input" placeholder="e.g. 192.168.1.1 or 10.0.0.0/24" value="{{ current_srcip or '' }}">
                     </div>
-                    <div class="toolbar-actions">
-                        <button type="button" class="btn btn-secondary" onclick="location.reload()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
-                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                                <path d="M16 21h5v-5"/>
+                    <div class="search-field">
+                        <span class="search-label">Destination IP</span>
+                        <input type="text" name="dstip" class="search-input" placeholder="e.g. 8.8.8.8 or 10.11.40.0/24" value="{{ current_dstip or '' }}">
+                    </div>
+                    <div class="search-field narrow">
+                        <span class="search-label">Dest Port</span>
+                        <input type="text" name="dstport" class="search-input" placeholder="e.g. 443" value="{{ current_dstport or '' }}">
+                    </div>
+                    <div class="search-actions">
+                        <button type="submit" class="btn btn-primary" onclick="showLoading()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="m21 21-4.35-4.35"/>
                             </svg>
-                            Refresh
+                            Search
+                        </button>
+                        <button type="button" class="btn btn-ghost" onclick="clearFilters()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"/>
+                            </svg>
+                            Clear
                         </button>
                     </div>
                 </div>
+                <div class="toolbar-divider"></div>
+                <div class="toolbar-right">
+                    <button type="button" class="btn btn-ghost" onclick="location.reload()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
+                            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                            <path d="M16 21h5v-5"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
 
-                <!-- Log Stats -->
-                <div class="log-stats">
-                    <div class="log-stats-left">
-                        <span class="log-count">Total <strong>{{ total | format_number }}</strong> Logs</span>
-                        {% if stats %}
-                        <span class="log-throttle">{{ stats.get('unique_devices', devices | length) }} Devices Active</span>
-                        {% endif %}
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stats-left">
+                    <div class="stat-item">
+                        <span>Total</span>
+                        <span class="stat-value">{{ total | format_number }}</span>
+                        <span>logs</span>
                     </div>
-                    <div class="log-stats-right">
-                        {% if current_start and current_end %}
-                        {{ current_start }} - {{ current_end }}
-                        {% elif current_time_range == '1h' %}
-                        Displaying Past 1 Hour
-                        {% elif current_time_range == '24h' %}
-                        Displaying Past 24 Hours
-                        {% elif current_time_range == '7d' %}
-                        Displaying Past 7 Days
-                        {% elif current_time_range == '30d' %}
-                        Displaying Past 30 Days
-                        {% else %}
-                        Displaying Past 1 Hour
-                        {% endif %}
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span>
+                        <span>Devices Active</span>
                     </div>
                 </div>
+                <div class="stats-right">
+                    <div class="time-pills">
+                        <button type="button" class="time-pill {% if current_time_range == '1h' %}active{% endif %}" data-range="1h" onclick="setTimeRange('1h')">1H</button>
+                        <button type="button" class="time-pill {% if current_time_range == '24h' %}active{% endif %}" data-range="24h" onclick="setTimeRange('24h')">24H</button>
+                        <button type="button" class="time-pill {% if current_time_range == '7d' %}active{% endif %}" data-range="7d" onclick="setTimeRange('7d')">7D</button>
+                        <button type="button" class="time-pill {% if current_time_range == '30d' %}active{% endif %}" data-range="30d" onclick="setTimeRange('30d')">30D</button>
+                    </div>
+                </div>
+            </div>
 
-                <!-- Active Filters -->
-                {% if current_device or current_severity is not none or current_action or current_q %}
-                <div class="filter-tags">
-                    {% if current_device %}
-                    <span class="filter-tag">
-                        Device: {{ current_device }}
-                        <button type="button" class="filter-tag-remove" onclick="removeFilter('device')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </span>
-                    {% endif %}
-                    {% if current_severity is not none %}
-                    <span class="filter-tag">
-                        Severity: {{ severity_map.get(current_severity, current_severity) }}
-                        <button type="button" class="filter-tag-remove" onclick="removeFilter('severity')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </span>
-                    {% endif %}
-                    {% if current_action %}
-                    <span class="filter-tag">
-                        Action: {{ current_action }}
-                        <button type="button" class="filter-tag-remove" onclick="removeFilter('action')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </span>
-                    {% endif %}
-                    {% if current_q %}
-                    <span class="filter-tag">
-                        Search: "{{ current_q }}"
-                        <button type="button" class="filter-tag-remove" onclick="removeFilter('q')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </span>
-                    {% endif %}
-                </div>
+            <!-- Active Filters -->
+            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_dstport %}
+            <div class="active-filters">
+                {% if current_srcip %}
+                <span class="filter-chip">
+                    Src: {{ current_srcip }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('srcip')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
                 {% endif %}
+                {% if current_dstip %}
+                <span class="filter-chip">
+                    Dst: {{ current_dstip }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('dstip')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_dstport %}
+                <span class="filter-chip">
+                    Port: {{ current_dstport }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('dstport')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_device %}
+                <span class="filter-chip">
+                    Device: {{ current_device }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('device')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_severity is not none %}
+                <span class="filter-chip">
+                    Severity: {{ severity_map.get(current_severity, current_severity) }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('severity')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_action %}
+                <span class="filter-chip">
+                    Action: {{ current_action }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('action')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_q %}
+                <span class="filter-chip">
+                    Search: "{{ current_q }}"
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('q')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
 
-                <!-- Log Table -->
-                <div class="table-container">
-                    <div class="loading-overlay" id="loadingOverlay">
-                        <div class="spinner"></div>
-                    </div>
+            <!-- Content Wrapper -->
+            <div class="content-wrapper">
+                <div class="main-panel">
+                    <!-- Table -->
+                    <div class="table-wrapper">
+                        <div class="loading-overlay" id="loadingOverlay">
+                            <div class="spinner"></div>
+                        </div>
 
-                    {% if logs %}
-                    <table class="log-table">
-                        <thead>
-                            <tr>
-                                <th class="col-timestamp sortable">Timestamp <span class="sort-icon">▼</span></th>
-                                <th class="col-status">Status</th>
-                                <th class="col-ip sortable">Source IP</th>
-                                <th class="col-ip sortable">Dest IP</th>
-                                <th class="col-intf">Dest Intf</th>
-                                <th class="col-port-proto">Port/Proto</th>
-                                <th class="col-size">Size</th>
-                                <th class="col-device">Device</th>
-                                <th class="col-expand"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="logTableBody">
-                            {% for log in logs %}
-                            {% set pd = log.get('parsed_data', {}) %}
-                            {% set sev = log.get('severity', 6) %}
-                            {# Use dedicated columns first, fall back to parsed_data for old data #}
-                            {% set log_srcip = log.get('srcip', '') or pd.get('srcip', pd.get('src_ip', '')) %}
-                            {% set log_dstip = log.get('dstip', '') or pd.get('dstip', pd.get('dst_ip', '')) %}
-                            {% set log_srcport = log.get('srcport', 0) %}
-                            {% set log_dstport = log.get('dstport', 0) %}
-                            {% set log_proto = log.get('proto', 0) %}
-                            {% set log_action = log.get('action', '') or pd.get('action', '') %}
-                            {% set action = log_action | lower %}
-                            {% set duration = pd.get('duration', '0') | int %}
-                            <tr class="log-row" data-index="{{ loop.index }}">
-                                <td class="col-timestamp">
-                                    {% if pd.get('log_datetime') %}
-                                    {{ pd.get('log_datetime') }}
-                                    {% elif pd.get('date') and pd.get('time') %}
-                                    {{ pd.get('date') }} {{ pd.get('time') }}
-                                    {% elif pd.get('receive_time') %}
-                                    {{ pd.get('receive_time') }}
-                                    {% elif pd.get('generated_time') %}
-                                    {{ pd.get('generated_time') }}
-                                    {% elif log.get('timestamp') %}
-                                    {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
-                                    {% else %}
-                                    --
-                                    {% endif %}
-                                </td>
-                                <td class="col-status">
-                                    <div class="status-cell">
-                                        {% if action in ['deny', 'drop', 'block', 'reject'] %}
-                                        <span class="status-badge status-deny">DENY</span>
-                                        {% else %}
-                                        <span class="status-badge status-accept">ACCEPT</span>
-                                        {% endif %}
-                                        {% if action and action not in ['accept', 'allow', 'pass', 'deny', 'drop', 'block', 'reject'] %}
-                                        <span class="status-sub">{{ action }}</span>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td class="col-ip">
-                                    <a href="?q=srcip:{{ log_srcip or '--' }}">{{ log_srcip or '--' }}</a>
-                                </td>
-                                <td class="col-ip">
-                                    <a href="?q=dstip:{{ log_dstip or '--' }}">{{ log_dstip or '--' }}</a>
-                                </td>
-                                <td class="col-intf">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</td>
-                                <td class="col-port-proto">
-                                    {# Use dedicated columns, fall back to parsed_data #}
-                                    {% set display_port = log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) %}
-                                    {% set display_proto = log_proto if log_proto else pd.get('proto', pd.get('protocol', '')) %}
-                                    <span class="port-value">{{ display_port if display_port else '--' }}</span>
-                                    <span class="proto-value">{% if display_proto == 6 or display_proto == '6' %}TCP{% elif display_proto == 17 or display_proto == '17' %}UDP{% elif display_proto == 1 or display_proto == '1' %}ICMP{% elif display_proto == 'icmp' %}ICMP{% elif display_proto == 'tcp' %}TCP{% elif display_proto == 'udp' %}UDP{% else %}{{ display_proto or '--' }}{% endif %}</span>
-                                </td>
-                                <td class="col-size">
-                                    {% set sent = pd.get('sentbyte', pd.get('bytes_sent', '0')) | int %}
-                                    {% set rcvd = pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | int %}
-                                    {% set total_bytes = sent + rcvd %}
-                                    <span class="size-total">{{ total_bytes | format_bytes }}</span>
-                                    <span class="size-detail">{{ sent | format_bytes }}/{{ rcvd | format_bytes }}</span>
-                                </td>
-                                <td class="col-device">
-                                    <a href="?device={{ log.get('device_ip', '') }}">{{ log.get('device_ip', '--') }}</a>
-                                </td>
-                                <td class="col-expand">
-                                    <button type="button" class="expand-btn" onclick="toggleRow({{ loop.index }})">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="12" y1="5" x2="12" y2="19"/>
-                                            <line x1="5" y1="12" x2="19" y2="12"/>
-                                        </svg>
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr class="detail-row" id="detail-{{ loop.index }}">
-                                <td colspan="9">
-                                    <div class="detail-panel">
-                                        <!-- Multi-Firewall Flow Diagram -->
-                                        {% set ts = log.get('timestamp', '') %}
-                                        <div class="multi-flow-container" id="flow-container-{{ loop.index }}"
-                                             data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
-                                             data-device="{{ log.get('device_ip', '') }}">
-                                            <div class="flow-header">
-                                                <span class="flow-title">Packet Flow Across Firewalls</span>
-                                                <button type="button" class="load-flow-btn" onclick="loadSessionFlow({{ loop.index }})">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                                    </svg>
-                                                    Trace Flow
-                                                </button>
-                                            </div>
-
-                                            <!-- Default single firewall view -->
-                                            <div class="connection-flow" id="static-flow-{{ loop.index }}">
-                                                <div class="flow-node">
-                                                    <div class="flow-icon client">
-                                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                                            <path d="M8 21h8M12 17v4"/>
-                                                        </svg>
-                                                    </div>
-                                                    <span class="flow-label">Client</span>
-                                                    <span class="flow-sublabel">{{ log_srcip or '--' }}</span>
-                                                </div>
-
-                                                <div class="flow-arrow">
-                                                    <div class="flow-arrow-line">
-                                                        <span></span>
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="m9 18 6-6-6-6"/>
-                                                        </svg>
-                                                    </div>
-                                                    <span class="flow-arrow-label {% if action in ['deny', 'drop', 'block', 'reject'] %}deny{% else %}allow{% endif %}">
-                                                        {{ action | upper if action else 'ALLOW' }}
-                                                    </span>
-                                                </div>
-
-                                                <div class="flow-node">
-                                                    <div class="flow-icon firewall">
-                                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                                        </svg>
-                                                    </div>
-                                                    <span class="flow-label">Firewall</span>
-                                                    <span class="flow-sublabel">{{ log.get('device_ip', '--') }}</span>
-                                                </div>
-
-                                                <div class="flow-arrow">
-                                                    <div class="flow-arrow-line">
-                                                        <span></span>
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="m9 18 6-6-6-6"/>
-                                                        </svg>
-                                                    </div>
-                                                    <span class="flow-arrow-label">:{{ log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) }}</span>
-                                                </div>
-
-                                                <div class="flow-node">
-                                                    <div class="flow-icon server">
-                                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="2" y="2" width="20" height="8" rx="2"/>
-                                                            <rect x="2" y="14" width="20" height="8" rx="2"/>
-                                                            <line x1="6" y1="6" x2="6.01" y2="6"/>
-                                                            <line x1="6" y1="18" x2="6.01" y2="18"/>
-                                                        </svg>
-                                                    </div>
-                                                    <span class="flow-label">Server</span>
-                                                    <span class="flow-sublabel">{{ log_dstip or '--' }}</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Dynamic multi-firewall flow (loaded via AJAX) -->
-                                            <div class="dynamic-flow-container" id="dynamic-flow-{{ loop.index }}" style="display: none;">
-                                                <div class="flow-loading">
-                                                    <div class="spinner"></div>
-                                                    <span>Tracing packet flow...</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Flow summary -->
-                                            <div class="flow-summary" id="flow-summary-{{ loop.index }}" style="display: none;">
-                                            </div>
+                        {% if logs %}
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-time sortable">Timestamp <span class="sort-icon">▼</span></th>
+                                    <th class="col-status">Status</th>
+                                    <th class="col-src sortable">Source IP</th>
+                                    <th class="col-dst sortable">Dest IP</th>
+                                    <th class="col-intf">Interface</th>
+                                    <th class="col-port">Port</th>
+                                    <th class="col-size">Size</th>
+                                    <th class="col-device">Device</th>
+                                    <th class="col-expand"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTableBody">
+                                {% for log in logs %}
+                                {% set pd = log.get('parsed_data', {}) %}
+                                {% set log_srcip = log.get('srcip', '') or pd.get('srcip', pd.get('src_ip', '')) %}
+                                {% set log_dstip = log.get('dstip', '') or pd.get('dstip', pd.get('dst_ip', '')) %}
+                                {% set log_srcport = log.get('srcport', 0) %}
+                                {% set log_dstport = log.get('dstport', 0) %}
+                                {% set log_proto = log.get('proto', 0) %}
+                                {% set log_action = log.get('action', '') or pd.get('action', '') %}
+                                {% set action = log_action | lower %}
+                                <tr class="log-row" data-index="{{ loop.index }}">
+                                    <td class="col-time">
+                                        <span class="timestamp">
+                                            {% if pd.get('log_datetime') %}{{ pd.get('log_datetime') }}{% elif pd.get('date') and pd.get('time') %}{{ pd.get('date') }} {{ pd.get('time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="col-status">
+                                        <div class="status-cell">
+                                            {% if action in ['deny', 'drop', 'block', 'reject'] %}
+                                            <span class="status-badge status-deny">DENY</span>
+                                            {% else %}
+                                            <span class="status-badge status-accept">ACCEPT</span>
+                                            {% endif %}
+                                            {% if action and action not in ['accept', 'allow', 'pass', 'deny', 'drop', 'block', 'reject'] %}
+                                            <span class="status-sub">{{ action }}</span>
+                                            {% endif %}
                                         </div>
+                                    </td>
+                                    <td class="col-src">
+                                        <a href="?srcip={{ log_srcip or '' }}" class="ip-link">{{ log_srcip or '--' }}</a>
+                                    </td>
+                                    <td class="col-dst">
+                                        <a href="?dstip={{ log_dstip or '' }}" class="ip-link">{{ log_dstip or '--' }}</a>
+                                    </td>
+                                    <td class="col-intf">
+                                        <span class="intf-cell">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span>
+                                    </td>
+                                    <td class="col-port">
+                                        {% set display_port = log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) %}
+                                        {% set display_proto = log_proto if log_proto else pd.get('proto', pd.get('protocol', '')) %}
+                                        <div class="port-cell">
+                                            <span class="port-value">{{ display_port if display_port else '--' }}</span>
+                                            <span class="proto-value">{% if display_proto == 6 or display_proto == '6' %}TCP{% elif display_proto == 17 or display_proto == '17' %}UDP{% elif display_proto == 1 or display_proto == '1' %}ICMP{% elif display_proto == 'icmp' %}ICMP{% elif display_proto == 'tcp' %}TCP{% elif display_proto == 'udp' %}UDP{% else %}{{ display_proto or '--' }}{% endif %}</span>
+                                        </div>
+                                    </td>
+                                    <td class="col-size">
+                                        {% set sent = pd.get('sentbyte', pd.get('bytes_sent', '0')) | int %}
+                                        {% set rcvd = pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | int %}
+                                        {% set total_bytes = sent + rcvd %}
+                                        <div class="size-cell">
+                                            <span class="size-total">{{ total_bytes | format_bytes }}</span>
+                                            <span class="size-detail">{{ sent | format_bytes }}/{{ rcvd | format_bytes }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="col-device">
+                                        <a href="?device={{ log.get('device_ip', '') }}" class="device-link">{{ log.get('device_ip', '--') }}</a>
+                                    </td>
+                                    <td class="col-expand">
+                                        <button type="button" class="expand-btn" onclick="toggleRow({{ loop.index }})">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                                <line x1="5" y1="12" x2="19" y2="12"/>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="detail-row" id="detail-{{ loop.index }}">
+                                    <td colspan="9">
+                                        <div class="detail-panel">
+                                            <!-- Multi-Firewall Trace -->
+                                            {% set ts = log.get('timestamp', '') %}
+                                            <div class="multiflow-container" id="flow-container-{{ loop.index }}"
+                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
+                                                 data-device="{{ log.get('device_ip', '') }}">
+                                                <div class="multiflow-header">
+                                                    <span class="multiflow-title">Multi-Firewall Packet Trace</span>
+                                                    <button type="button" class="trace-btn" onclick="loadSessionFlow({{ loop.index }})">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                                        </svg>
+                                                        Trace Flow
+                                                    </button>
+                                                </div>
+                                                <div class="dynamic-flow" id="dynamic-flow-{{ loop.index }}">
+                                                    <div class="flow-loading">
+                                                        <div class="spinner"></div>
+                                                        <span>Tracing packet flow...</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flow-summary" id="flow-summary-{{ loop.index }}"></div>
+                                            </div>
 
-                                        <!-- Compact Details Layout -->
-                                        <div class="compact-details">
-                                            <!-- Section 1: Network Flow (Source → Destination) -->
+                                            <!-- Network Flow -->
                                             {% set proto = pd.get('proto', pd.get('protocol', '')) %}
                                             {% set proto_label = 'TCP' if proto == '6' else 'UDP' if proto == '17' else 'ICMP' if proto == '1' else proto or '--' %}
-                                            <div class="network-flow-section">
-                                                <!-- Source Endpoint -->
-                                                <div class="endpoint-block">
+                                            <div class="flow-section">
+                                                <div class="endpoint">
                                                     <div class="endpoint-header">
-                                                        <span class="endpoint-label src">SOURCE</span>
+                                                        <span class="endpoint-tag src">Source</span>
                                                     </div>
                                                     <div class="endpoint-ip">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</div>
                                                     <div class="endpoint-meta">
@@ -2496,26 +1971,18 @@
                                                         <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span></div>
                                                         <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('srccountry', pd.get('src_location', '--')) }}</span></div>
                                                         <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('srcuser', pd.get('src_user', '--')) }}</span></div>
-                                                        {% set nat_src = pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('natsrcip', ''))) %}
-                                                        {% if nat_src and nat_src != '--' %}
-                                                        <div class="meta-item"><span class="meta-label">NAT:</span><span class="meta-value mono">{{ nat_src }}{% if pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport'))) %}:{{ pd.get('natsrcport', pd.get('nat_src_port', pd.get('nat_srcport', ''))) }}{% endif %}</span></div>
-                                                        {% endif %}
                                                     </div>
                                                 </div>
-
-                                                <!-- Flow Connector -->
-                                                <div class="flow-connector">
-                                                    <div class="flow-connector-line">
-                                                        <span class="line"></span>
+                                                <div class="flow-arrow">
+                                                    <div class="flow-arrow-line">
+                                                        <span></span>
                                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                                                     </div>
-                                                    <span class="flow-proto">{{ proto_label }}</span>
+                                                    <span class="flow-proto-tag">{{ proto_label }}</span>
                                                 </div>
-
-                                                <!-- Destination Endpoint -->
-                                                <div class="endpoint-block">
+                                                <div class="endpoint">
                                                     <div class="endpoint-header">
-                                                        <span class="endpoint-label dst">DESTINATION</span>
+                                                        <span class="endpoint-tag dst">Destination</span>
                                                     </div>
                                                     <div class="endpoint-ip">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</div>
                                                     <div class="endpoint-meta">
@@ -2523,255 +1990,200 @@
                                                         <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span></div>
                                                         <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('dstcountry', pd.get('dst_location', '--')) }}</span></div>
                                                         <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span></div>
-                                                        {% set nat_dst = pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('natdstip', ''))) %}
-                                                        {% if nat_dst and nat_dst != '--' %}
-                                                        <div class="meta-item"><span class="meta-label">NAT:</span><span class="meta-value mono">{{ nat_dst }}{% if pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport'))) %}:{{ pd.get('natdstport', pd.get('nat_dst_port', pd.get('nat_dstport', ''))) }}{% endif %}</span></div>
-                                                        {% endif %}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <!-- Section 2: Session, Traffic, Policy & Application (4-column) -->
-                                            <div class="session-policy-section">
-                                                <!-- Session Info -->
-                                                <div class="info-group">
-                                                    <div class="info-group-title">Session</div>
-                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}action-allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}action-deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
+                                            <!-- Info Grid -->
+                                            <div class="info-grid">
+                                                <div class="info-block">
+                                                    <div class="info-title">Session</div>
+                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
                                                     <div class="info-row"><span class="info-key">Session ID</span><span class="info-val mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span></div>
                                                     <div class="info-row"><span class="info-key">Service</span><span class="info-val">{{ pd.get('service', '--') }}</span></div>
                                                 </div>
-
-                                                <!-- Traffic Stats -->
-                                                <div class="info-group">
-                                                    <div class="info-group-title">Traffic</div>
+                                                <div class="info-block">
+                                                    <div class="info-title">Traffic</div>
                                                     <div class="info-row"><span class="info-key">Sent</span><span class="info-val">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span></div>
                                                     <div class="info-row"><span class="info-key">Received</span><span class="info-val">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span></div>
                                                     <div class="info-row"><span class="info-key">Duration</span><span class="info-val">{{ pd.get('duration', pd.get('elapsed_time', '--')) }}s</span></div>
                                                 </div>
-
-                                                <!-- Policy Info -->
-                                                <div class="info-group">
-                                                    <div class="info-group-title">Policy</div>
+                                                <div class="info-block">
+                                                    <div class="info-title">Policy</div>
                                                     <div class="info-row"><span class="info-key">Rule</span><span class="info-val">{{ pd.get('policyname', pd.get('rule', '--')) }}</span></div>
                                                     <div class="info-row"><span class="info-key">Policy ID</span><span class="info-val mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span></div>
-                                                    {% if pd.get('rule_uuid') %}
-                                                    <div class="info-row"><span class="info-key">UUID</span><span class="info-val mono" title="{{ pd.get('rule_uuid') }}">{{ pd.get('rule_uuid')[:8] }}...</span></div>
-                                                    {% endif %}
                                                 </div>
-
-                                                <!-- Application Info -->
-                                                <div class="info-group">
-                                                    <div class="info-group-title">Application</div>
+                                                <div class="info-block">
+                                                    <div class="info-title">Application</div>
                                                     <div class="info-row"><span class="info-key">App</span><span class="info-val">{{ pd.get('app', pd.get('application', '--')) }}</span></div>
                                                     <div class="info-row"><span class="info-key">Category</span><span class="info-val">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span></div>
-                                                    {% if pd.get('apprisk', pd.get('risk_of_app')) %}
-                                                    <div class="info-row"><span class="info-key">Risk</span><span class="info-val">{{ pd.get('apprisk', pd.get('risk_of_app', '--')) }}</span></div>
-                                                    {% endif %}
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <!-- Raw Message - Collapsible -->
-                                        <div class="raw-section" id="raw-section-{{ loop.index }}">
-                                            <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
-                                                <span class="raw-title">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                                    Raw Log
-                                                </span>
-                                                <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyRaw({{ loop.index }})">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <rect x="9" y="9" width="13" height="13" rx="2"/>
-                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                                    </svg>
-                                                    Copy
-                                                </button>
+                                            <!-- Raw Log -->
+                                            <div class="raw-section" id="raw-section-{{ loop.index }}">
+                                                <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
+                                                    <span class="raw-title">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                                        Raw Log
+                                                    </span>
+                                                    <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyRaw({{ loop.index }})">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                                        </svg>
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                                <div class="raw-body" id="raw-{{ loop.index }}">{{ log.get('raw', '') | e }}</div>
                                             </div>
-                                            <div class="raw-body" id="raw-{{ loop.index }}">{{ log.get('raw', '') | e }}</div>
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="empty-state">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"/>
-                        </svg>
-                        <h3>No logs found</h3>
-                        <p>Try adjusting your filters or search query</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                <path d="M9 12h6M9 16h6"/>
+                            </svg>
+                            <h3>No logs found</h3>
+                            <p>Try adjusting your filters or time range to find logs.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if logs %}
+                    <div class="pagination-bar">
+                        <div class="pagination-info">
+                            Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total | format_number }}
+                        </div>
+                        <div class="pagination-controls">
+                            <button type="button" class="page-btn" onclick="goToPage(1)" {% if page <= 1 %}disabled{% endif %}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/></svg>
+                            </button>
+                            <button type="button" class="page-btn" onclick="goToPage({{ page - 1 }})" {% if page <= 1 %}disabled{% endif %}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                            </button>
+                            <input type="text" id="pageInput" class="page-input" value="{{ page }}">
+                            <span class="page-total">of {{ total_pages }}</span>
+                            <button type="button" class="page-btn" onclick="goToPage({{ page + 1 }})" {% if page >= total_pages %}disabled{% endif %}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                            <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if page >= total_pages %}disabled{% endif %}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 17 5-5-5-5M13 17l5-5-5-5"/></svg>
+                            </button>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
 
-                <!-- Pagination -->
-                {% if logs %}
-                <div class="pagination-bar">
-                    <div class="pagination-info">
-                        Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total | format_number }} logs
-                    </div>
-                    <div class="pagination-controls">
-                        <button type="button" class="page-btn" onclick="goToPage(1)" {% if not has_prev %}disabled{% endif %} title="First">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/>
-                            </svg>
-                        </button>
-                        <button type="button" class="page-btn" onclick="goToPage({{ page - 1 }})" {% if not has_prev %}disabled{% endif %} title="Previous">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m15 18-6-6 6-6"/>
-                            </svg>
-                        </button>
-                        <div class="page-input-group">
-                            Page <input type="number" class="page-input" id="pageInput" value="{{ page }}" min="1" max="{{ total_pages }}"> of {{ total_pages | format_number }}
-                        </div>
-                        <button type="button" class="page-btn" onclick="goToPage({{ page + 1 }})" {% if not has_next %}disabled{% endif %} title="Next">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m9 18 6-6-6-6"/>
-                            </svg>
-                        </button>
-                        <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if not has_next %}disabled{% endif %} title="Last">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>
-                            </svg>
+                <!-- Right Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Filters</span>
+                        <button type="button" class="sidebar-close" onclick="toggleSidebar()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                     </div>
-                </div>
-                {% endif %}
-            </main>
 
-            <!-- Right Sidebar - Filters -->
-            <aside class="right-sidebar">
-                <div class="sidebar-header">
-                    <span class="sidebar-title">Filters</span>
-                    <button type="button" class="sidebar-close" onclick="toggleSidebar()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 6 6 18M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <div class="sidebar-body">
-                    <!-- Time Range Section -->
-                    <div class="sidebar-section time-range-section">
-                        <div class="sidebar-section-header">
+                    <!-- Time Range -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-header-static">
                             <span class="sidebar-section-title">Time Range</span>
                         </div>
                         <div class="sidebar-section-content">
-                            <div class="time-range-buttons">
-                                <button type="button" class="time-range-btn active" data-range="1h" onclick="setTimeRange('1h')">1 Hour</button>
-                                <button type="button" class="time-range-btn" data-range="24h" onclick="setTimeRange('24h')">24 Hours</button>
-                                <button type="button" class="time-range-btn" data-range="7d" onclick="setTimeRange('7d')">7 Days</button>
-                                <button type="button" class="time-range-btn" data-range="30d" onclick="setTimeRange('30d')">30 Days</button>
-                            </div>
-
-                            <div class="custom-range-section">
-                                <span class="custom-range-label">Custom Range</span>
-                                <div class="datetime-input-group">
-                                    <label class="datetime-input-label">From</label>
-                                    <input type="datetime-local" class="datetime-input" id="startDateTime" name="start"
-                                           value="{{ current_start or '' }}" onchange="updateCustomRange()">
+                            <div class="time-range-redesign">
+                                <div class="time-input-group">
+                                    <label class="time-input-label">Start Date & Time</label>
+                                    <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
+                                        <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                        <input type="datetime-local" id="startDateTime" name="start" class="calendar-input" value="{{ current_start or '' }}" onchange="updateCustomRange()">
+                                    </div>
                                 </div>
-                                <div class="datetime-input-group">
-                                    <label class="datetime-input-label">To</label>
-                                    <input type="datetime-local" class="datetime-input" id="endDateTime" name="end"
-                                           value="{{ current_end or '' }}" onchange="updateCustomRange()">
+                                <div class="time-input-group">
+                                    <label class="time-input-label">End Date & Time</label>
+                                    <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
+                                        <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                        <input type="datetime-local" id="endDateTime" name="end" class="calendar-input" value="{{ current_end or '' }}" onchange="updateCustomRange()">
+                                    </div>
                                 </div>
-                                <button type="button" class="apply-range-btn" id="applyRangeBtn" onclick="applyCustomRange()" disabled>
-                                    Apply Custom Range
+                                <button type="button" id="applyRangeBtn" class="apply-time-btn" onclick="applyCustomRange()" disabled>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                    Apply Range
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Device Filter -->
+                    <!-- Device Filter - Dropdown -->
                     <div class="sidebar-section">
-                        <div class="sidebar-section-header">
+                        <div class="sidebar-section-header-static">
                             <span class="sidebar-section-title">Device</span>
                         </div>
                         <div class="sidebar-section-content">
-                            <select class="sidebar-select" id="deviceSelect" onchange="filterByDevice(this.value)">
-                                <option value="">All Devices</option>
-                                {% for device in devices %}
-                                <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Severity Analytics -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header" onclick="toggleSection(this)">
-                            <span class="sidebar-section-title">Severity</span>
-                            <svg class="sidebar-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m6 9 6 6 6-6"/>
-                            </svg>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-item" onclick="setFilter('severity', '2')">
-                                <span>Critical</span>
-                                <span class="sidebar-item-count">{{ stats.get('critical_count', 0) if stats else 0 }}</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('severity', '4')">
-                                <span>Warning</span>
-                                <span class="sidebar-item-count">{{ stats.get('warning_count', 0) if stats else 0 }}</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('severity', '5')">
-                                <span>Notice / Info</span>
-                                <span class="sidebar-item-count">{{ stats.get('info_count', 0) if stats else 0 }}</span>
+                            <div class="filter-dropdown-wrapper">
+                                <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
+                                    <option value="" {% if not current_device %}selected{% endif %}>All Devices</option>
+                                    {% for device in devices %}
+                                    <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
+                                    {% endfor %}
+                                </select>
+                                <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Action Filter -->
+                    <!-- Action Filter - Simplified -->
                     <div class="sidebar-section">
-                        <div class="sidebar-section-header" onclick="toggleSection(this)">
+                        <div class="sidebar-section-header-static">
                             <span class="sidebar-section-title">Action</span>
-                            <svg class="sidebar-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m6 9 6 6 6-6"/>
-                            </svg>
                         </div>
                         <div class="sidebar-section-content">
-                            <div class="sidebar-item" onclick="setFilter('action', 'accept')">
-                                <span>Accept / Allow</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('action', 'deny')">
-                                <span>Deny / Block</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('action', 'close')">
-                                <span>Close / Reset</span>
+                            <div class="action-filter-group">
+                                <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">
+                                    All
+                                </button>
+                                <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                    Accept
+                                </button>
+                                <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                    Deny
+                                </button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Service Filter -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header" onclick="toggleSection(this)">
-                            <span class="sidebar-section-title">Service</span>
-                            <svg class="sidebar-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m6 9 6 6 6-6"/>
-                            </svg>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-item" onclick="setFilter('q', 'service:HTTPS')">
-                                <span>HTTPS</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('q', 'service:HTTP')">
-                                <span>HTTP</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('q', 'service:DNS')">
-                                <span>DNS</span>
-                            </div>
-                            <div class="sidebar-item" onclick="setFilter('q', 'service:SSH')">
-                                <span>SSH</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-        </div>
+                </aside>
+            </div>
+        </main>
     </div>
 
+    <!-- Hidden Inputs -->
     <input type="hidden" name="page" id="hiddenPageInput" value="{{ page }}">
     <input type="hidden" name="device" id="hiddenDevice" value="{{ current_device or '' }}">
     <input type="hidden" name="severity" id="hiddenSeverity" value="{{ current_severity or '' }}">
@@ -2792,7 +2204,6 @@
                 expandBtn.classList.remove('open');
                 logRow.classList.remove('expanded');
             } else {
-                // Close others
                 document.querySelectorAll('.detail-row.visible').forEach(row => row.classList.remove('visible'));
                 document.querySelectorAll('.expand-btn.open').forEach(btn => btn.classList.remove('open'));
                 document.querySelectorAll('.log-row.expanded').forEach(row => row.classList.remove('expanded'));
@@ -2833,8 +2244,6 @@
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
             if (hiddenInput) {
                 hiddenInput.value = value;
-            } else if (name === 'q') {
-                document.querySelector('input[name="q"]').value = value;
             }
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
@@ -2842,18 +2251,26 @@
         }
 
         function removeFilter(name) {
+            const input = document.querySelector(`input[name="${name}"]`);
+            if (input) input.value = '';
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
-            if (hiddenInput) {
-                hiddenInput.value = '';
-            } else if (name === 'q') {
-                document.querySelector('input[name="q"]').value = '';
-            }
+            if (hiddenInput) hiddenInput.value = '';
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
         }
 
-        // Device filter dropdown
+        function clearFilters() {
+            document.querySelectorAll('.search-input').forEach(input => input.value = '');
+            document.getElementById('hiddenDevice').value = '';
+            document.getElementById('hiddenSeverity').value = '';
+            document.getElementById('hiddenAction').value = '';
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Device filter
         function filterByDevice(deviceValue) {
             document.getElementById('hiddenDevice').value = deviceValue;
             document.getElementById('hiddenPageInput').value = 1;
@@ -2861,20 +2278,14 @@
             document.getElementById('filterForm').submit();
         }
 
-        // Time Range functions
+        // Time Range
         function setTimeRange(range) {
-            // Update button states
-            document.querySelectorAll('.time-range-btn').forEach(btn => {
+            document.querySelectorAll('.time-pill').forEach(btn => {
                 btn.classList.remove('active');
-                if (btn.dataset.range === range) {
-                    btn.classList.add('active');
-                }
+                if (btn.dataset.range === range) btn.classList.add('active');
             });
-
-            // Clear custom range inputs
             document.getElementById('startDateTime').value = '';
             document.getElementById('endDateTime').value = '';
-
             document.getElementById('hiddenTimeRange').value = range;
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
@@ -2885,20 +2296,15 @@
             const startVal = document.getElementById('startDateTime').value;
             const endVal = document.getElementById('endDateTime').value;
             const applyBtn = document.getElementById('applyRangeBtn');
-
+            applyBtn.disabled = !(startVal && endVal);
             if (startVal && endVal) {
-                applyBtn.disabled = false;
-                // Deselect preset buttons
-                document.querySelectorAll('.time-range-btn').forEach(btn => btn.classList.remove('active'));
-            } else {
-                applyBtn.disabled = true;
+                document.querySelectorAll('.time-pill').forEach(btn => btn.classList.remove('active'));
             }
         }
 
         function applyCustomRange() {
             const startVal = document.getElementById('startDateTime').value;
             const endVal = document.getElementById('endDateTime').value;
-
             if (startVal && endVal) {
                 document.getElementById('hiddenTimeRange').value = 'custom';
                 document.getElementById('hiddenPageInput').value = 1;
@@ -2907,13 +2313,13 @@
             }
         }
 
-        // Sidebar section toggle
+        // Sidebar
         function toggleSection(header) {
             header.closest('.sidebar-section').classList.toggle('collapsed');
         }
 
         function toggleSidebar() {
-            document.querySelector('.right-sidebar').style.display = 'none';
+            document.querySelector('.sidebar').style.display = 'none';
         }
 
         // Loading
@@ -2922,81 +2328,52 @@
         }
 
         // Page input
-        document.getElementById('pageInput').addEventListener('keypress', (e) => {
+        document.getElementById('pageInput')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 goToPage(parseInt(e.target.value));
             }
         });
 
-        // Initialize datetime inputs with current time if empty
-        document.addEventListener('DOMContentLoaded', function() {
-            // Highlight current time range
-            const urlParams = new URLSearchParams(window.location.search);
-            const timeRange = urlParams.get('time_range') || '{{ current_time_range or "1h" }}';
-
-            document.querySelectorAll('.time-range-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.range === timeRange) {
-                    btn.classList.add('active');
-                }
-            });
-        });
-
-        // Load session flow across multiple firewalls
+        // Multi-firewall flow loading
         async function loadSessionFlow(index) {
             const container = document.getElementById(`flow-container-${index}`);
-            const staticFlow = document.getElementById(`static-flow-${index}`);
             const dynamicFlow = document.getElementById(`dynamic-flow-${index}`);
             const flowSummary = document.getElementById(`flow-summary-${index}`);
-            const loadBtn = container.querySelector('.load-flow-btn');
+            const loadBtn = container.querySelector('.trace-btn');
 
-            // Get log data
             const timestamp = container.dataset.timestamp;
             const device = container.dataset.device;
 
-            if (!timestamp || !device) {
-                console.error('Missing timestamp or device data');
-                return;
-            }
+            if (!timestamp || !device) return;
 
-            // Show loading state
             loadBtn.classList.add('loading');
             loadBtn.disabled = true;
             loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Tracing...';
-
-            staticFlow.style.display = 'none';
             dynamicFlow.style.display = 'block';
 
             try {
                 const response = await fetch(`/api/logs/session-flow?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}&window=10`);
                 const data = await response.json();
 
-                if (!response.ok) {
-                    throw new Error(data.detail || 'Failed to load flow');
-                }
+                if (!response.ok) throw new Error(data.detail || 'Failed to load flow');
 
-                // Render the multi-firewall flow
                 renderMultiFirewallFlow(dynamicFlow, data);
 
-                // Show summary
                 if (data.summary) {
                     renderFlowSummary(flowSummary, data.summary, data.flow);
                     flowSummary.style.display = 'flex';
                 }
 
-                // Update button
-                loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Flow Loaded';
+                loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Traced';
                 loadBtn.classList.remove('loading');
 
             } catch (error) {
-                console.error('Error loading flow:', error);
-                dynamicFlow.innerHTML = `<div class="flow-loading" style="color: #d32f2f;">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="m15 9-6 6M9 9l6 6"/>
+                dynamicFlow.innerHTML = `<div class="flow-loading" style="color: var(--accent-red);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
                     </svg>
-                    <span>Failed to trace flow: ${error.message}</span>
+                    <span>Failed: ${error.message}</span>
                 </div>`;
                 loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Retry';
                 loadBtn.classList.remove('loading');
@@ -3010,166 +2387,47 @@
             const dstip = flow[0]?.dstip || '--';
             const dstport = flow[0]?.dstport || '--';
 
-            // Group by firewall (device_ip)
             const firewallMap = new Map();
             flow.forEach(log => {
-                const key = log.device_ip;
-                if (!firewallMap.has(key)) {
-                    firewallMap.set(key, log);
-                }
+                if (!firewallMap.has(log.device_ip)) firewallMap.set(log.device_ip, log);
             });
 
             const firewalls = Array.from(firewallMap.values());
-
             let html = '<div class="multi-firewall-flow">';
 
-            // Client node
-            html += `
-                <div class="fw-node">
-                    <div class="fw-icon client">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                            <path d="M8 21h8M12 17v4"/>
-                        </svg>
-                    </div>
-                    <span class="fw-label">Client</span>
-                    <span class="fw-sublabel">${srcip}</span>
-                </div>
-            `;
+            html += `<div class="fw-node"><div class="fw-icon client"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="fw-label">Client</span><span class="fw-sublabel">${srcip}</span></div>`;
 
-            // Render each firewall
             firewalls.forEach((fw, idx) => {
                 const action = (fw.action || '').toLowerCase();
                 const isDeny = ['deny', 'drop', 'block', 'reject'].includes(action);
                 const actionClass = isDeny ? 'deny' : 'allow';
                 const actionLabel = isDeny ? 'DENY' : 'ALLOW';
 
-                // Connector before firewall
-                html += `
-                    <div class="fw-connector">
-                        <div class="fw-connector-line">
-                            <span></span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m9 18 6-6-6-6"/>
-                            </svg>
-                        </div>
-                    </div>
-                `;
-
-                // Firewall node
-                html += `
-                    <div class="fw-node">
-                        <div class="fw-icon firewall ${actionClass}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                            </svg>
-                        </div>
-                        <span class="fw-label">Firewall ${idx + 1}</span>
-                        <span class="fw-sublabel">${fw.device_ip}</span>
-                        <span class="fw-action ${actionClass}">${actionLabel}</span>
-                    </div>
-                `;
+                html += `<div class="fw-connector"><div class="fw-connector-line"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div></div>`;
+                html += `<div class="fw-node"><div class="fw-icon firewall ${actionClass}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><span class="fw-label">Firewall ${idx + 1}</span><span class="fw-sublabel">${fw.device_ip}</span><span class="fw-action ${actionClass}">${actionLabel}</span></div>`;
             });
 
-            // Connector to server
-            html += `
-                <div class="fw-connector">
-                    <div class="fw-connector-line">
-                        <span></span>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="m9 18 6-6-6-6"/>
-                        </svg>
-                    </div>
-                    <span class="fw-connector-label">:${dstport}</span>
-                </div>
-            `;
-
-            // Server node
-            html += `
-                <div class="fw-node">
-                    <div class="fw-icon server">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="2" width="20" height="8" rx="2"/>
-                            <rect x="2" y="14" width="20" height="8" rx="2"/>
-                            <line x1="6" y1="6" x2="6.01" y2="6"/>
-                            <line x1="6" y1="18" x2="6.01" y2="18"/>
-                        </svg>
-                    </div>
-                    <span class="fw-label">Server</span>
-                    <span class="fw-sublabel">${dstip}</span>
-                </div>
-            `;
+            html += `<div class="fw-connector"><div class="fw-connector-line"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div><span class="fw-connector-label">:${dstport}</span></div>`;
+            html += `<div class="fw-node"><div class="fw-icon server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div><span class="fw-label">Server</span><span class="fw-sublabel">${dstip}</span></div>`;
 
             html += '</div>';
             container.innerHTML = html;
         }
 
         function renderFlowSummary(container, summary, flow) {
-            const allAllowed = summary.all_allowed;
-            const hasDeny = summary.has_deny;
-            const fwCount = summary.firewall_count || 1;
-            const totalHops = summary.total_hops || 1;
-
-            let resultClass = allAllowed ? 'success' : 'error';
-            let resultText = allAllowed ? 'PASSED' : 'BLOCKED';
-
-            // Calculate total bytes
-            let totalSent = 0, totalRcvd = 0;
-            flow.forEach(f => {
-                totalSent += parseInt(f.sentbyte || 0);
-                totalRcvd += parseInt(f.rcvdbyte || 0);
-            });
-
             container.innerHTML = `
-                <div class="flow-summary-item">
-                    <span class="flow-summary-label">Result</span>
-                    <span class="flow-summary-value ${resultClass}">${resultText}</span>
-                </div>
-                <div class="flow-summary-item">
-                    <span class="flow-summary-label">Firewalls</span>
-                    <span class="flow-summary-value">${fwCount}</span>
-                </div>
-                <div class="flow-summary-item">
-                    <span class="flow-summary-label">Log Entries</span>
-                    <span class="flow-summary-value">${totalHops}</span>
-                </div>
-                <div class="flow-summary-item">
-                    <span class="flow-summary-label">Total Bytes</span>
-                    <span class="flow-summary-value">${formatBytes(totalSent + totalRcvd)}</span>
-                </div>
+                <div class="flow-summary-item"><span class="flow-summary-label">Firewalls</span><span class="flow-summary-value">${summary.firewall_count}</span></div>
+                <div class="flow-summary-item"><span class="flow-summary-label">Total Hops</span><span class="flow-summary-value">${summary.total_hops}</span></div>
+                <div class="flow-summary-item"><span class="flow-summary-label">Status</span><span class="flow-summary-value ${summary.all_allowed ? 'success' : 'error'}">${summary.all_allowed ? 'All Allowed' : 'Blocked'}</span></div>
             `;
         }
 
-        function formatBytes(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-        }
-
-        // ============================================
-        // SIMPLE FILTER SEARCH
-        // ============================================
-
-        // Clear all filter inputs
-        function clearFilters() {
-            document.getElementById('srcipInput').value = '';
-            document.getElementById('dstipInput').value = '';
-            document.getElementById('dstportInput').value = '';
-            document.getElementById('hiddenPageInput').value = 1;
-            showLoading();
-            document.getElementById('filterForm').submit();
-        }
-
-        // Handle Enter key on filter inputs
-        document.querySelectorAll('.filter-input').forEach(input => {
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    document.getElementById('hiddenPageInput').value = 1;
-                    showLoading();
-                    document.getElementById('filterForm').submit();
-                }
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const timeRange = '{{ current_time_range or "1h" }}';
+            document.querySelectorAll('.time-pill').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.range === timeRange) btn.classList.add('active');
             });
         });
     </script>

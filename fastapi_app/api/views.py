@@ -260,16 +260,16 @@ async def log_list(
                 search_query = direct_filters
 
         if action:
-            # Map action filter to search terms
+            # Map action filter to search terms using pipe for OR logic
             action_terms = {
-                'accept': 'action:accept OR action:allow OR action:pass',
-                'deny': 'action:deny OR action:drop OR action:block OR action:reject',
-                'close': 'action:close OR action:client-rst OR action:server-rst',
+                'accept': 'action:accept|allow|pass|close|client-rst|server-rst',
+                'deny': 'action:deny|drop|block|reject',
+                'close': 'action:close|client-rst|server-rst',
                 'timeout': 'action:timeout',
             }
             if action in action_terms:
                 if search_query:
-                    search_query = f"({search_query}) AND ({action_terms[action]})"
+                    search_query = f"{search_query} {action_terms[action]}"
                 else:
                     search_query = action_terms[action]
 

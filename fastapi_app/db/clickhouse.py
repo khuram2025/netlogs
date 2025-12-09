@@ -231,6 +231,9 @@ class ClickHouseClient:
         - srcip:192.168.0.0/24        (CIDR subnet match)
         - srcip:192.168.1.1-192.168.1.50  (IP range)
         - srcip:192.168.*.*           (wildcard)
+        - srcip:10.1.1.1,8.8.8.8      (multiple comma-separated IPs)
+        - dstip:192.168.0.0/24,10.0.0.1  (mixed: CIDR + IP)
+        - srcip:10.1.1.1,192.168.1.0/24,8.8.8.8  (multiple mixed formats)
         - message:~error              (contains/like)
         - message:~*timeout*          (wildcard contains)
         - action:accept|allow|close   (OR multiple values)
@@ -274,6 +277,11 @@ class ClickHouseClient:
         return terms
 
     @classmethod
+    def _is_multi_ip(cls, value: str) -> bool:
+        """Check if value contains multiple comma-separated IPs or ranges."""
+        return ',' in value
+
+    @classmethod
     def _is_cidr(cls, value: str) -> bool:
         """Check if value is CIDR notation."""
         return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}$', value))
@@ -308,7 +316,7 @@ class ClickHouseClient:
         # The materialized columns already handle both Fortinet (srcip/dstip) and Palo Alto (src_ip/dst_ip)
         # field names, and have bloom filter indexes for fast filtering.
         ip_fields_materialized = ('srcip', 'dstip')
-        if field in ip_fields_materialized and operator == '=' and not cls._is_cidr(value) and not cls._is_ip_range(value) and not cls._is_wildcard_ip(value):
+        if field in ip_fields_materialized and operator == '=' and not cls._is_cidr(value) and not cls._is_ip_range(value) and not cls._is_wildcard_ip(value) and not cls._is_multi_ip(value):
             # Simple exact IP match - use materialized column with bloom filter index
             if negated:
                 return f"{field} != '{safe_value}'"
@@ -434,6 +442,48 @@ class ClickHouseClient:
             if negated:
                 return f"{col_expr} NOT LIKE '{prefix}%'"
             return f"{col_expr} LIKE '{prefix}%'"
+
+        # Handle multiple comma-separated IPs/ranges/CIDR (e.g., 10.11.50.30,8.8.8.8 or 192.168.1.0/24,10.0.0.1)
+        if field in ip_fields and cls._is_multi_ip(value):
+            parts = [p.strip() for p in value.split(',') if p.strip()]
+            conditions = []
+            for part in parts:
+                safe_part = part.replace("'", "''")
+                if cls._is_cidr(part):
+                    # Handle CIDR notation
+                    ip_part, mask = part.rsplit('/', 1)
+                    mask_int = int(mask)
+                    octets = ip_part.split('.')
+                    if mask_int == 8:
+                        prefix = f"{octets[0]}."
+                        conditions.append(f"startsWith({col_expr}, '{prefix}')")
+                    elif mask_int == 16:
+                        prefix = f"{octets[0]}.{octets[1]}."
+                        conditions.append(f"startsWith({col_expr}, '{prefix}')")
+                    elif mask_int == 24:
+                        prefix = f"{octets[0]}.{octets[1]}.{octets[2]}."
+                        conditions.append(f"startsWith({col_expr}, '{prefix}')")
+                    else:
+                        conditions.append(f"({col_expr} != '' AND isIPAddressInRange({col_expr}, '{safe_part}'))")
+                elif cls._is_ip_range(part):
+                    # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
+                    start_ip, end_ip = part.split('-')
+                    safe_start = start_ip.replace("'", "''")
+                    safe_end = end_ip.replace("'", "''")
+                    conditions.append(f"multiIf({col_expr} = '', 0, isNull(IPv4StringToNumOrNull({col_expr})), 0, IPv4StringToNumOrNull({col_expr}) >= IPv4StringToNumOrNull('{safe_start}') AND IPv4StringToNumOrNull({col_expr}) <= IPv4StringToNumOrNull('{safe_end}'), 1, 0) = 1")
+                elif cls._is_wildcard_ip(part):
+                    # Handle wildcard IP
+                    prefix = part.split('*')[0]
+                    conditions.append(f"{col_expr} LIKE '{prefix}%'")
+                else:
+                    # Exact IP match
+                    conditions.append(f"{col_expr} = '{safe_part}'")
+
+            if conditions:
+                combined = f"({' OR '.join(conditions)})"
+                if negated:
+                    return f"NOT {combined}"
+                return combined
 
         # Handle severity as integer
         if field == 'severity':
