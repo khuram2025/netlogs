@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NetLogs - Log Viewer</title>
+    <title>NetLogs - Policy Builder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -162,8 +162,8 @@
         }
 
         .nav-link.active {
-            color: var(--accent-blue);
-            background: var(--accent-cyan-dim);
+            color: var(--accent-red);
+            background: var(--accent-red-dim);
         }
 
         .header-spacer {
@@ -200,6 +200,63 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+        }
+
+        /* ===== PAGE TITLE BANNER ===== */
+        .page-banner {
+            background: linear-gradient(135deg, var(--accent-red-dim) 0%, rgba(239, 68, 68, 0.05) 100%);
+            border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .banner-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-red-dim);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-red);
+        }
+
+        .banner-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .banner-content {
+            flex: 1;
+        }
+
+        .banner-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-bright);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .banner-badge {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 3px 8px;
+            background: var(--accent-red);
+            color: white;
+            border-radius: var(--radius-sm);
+        }
+
+        .banner-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
         }
 
         /* ===== SEARCH TOOLBAR ===== */
@@ -256,8 +313,8 @@
 
         .search-input:focus {
             outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
         }
 
         .search-input::placeholder {
@@ -293,12 +350,12 @@
         }
 
         .btn-primary {
-            background: var(--accent-blue);
+            background: var(--accent-red);
             color: white;
         }
 
         .btn-primary:hover {
-            background: #2563eb;
+            background: #dc2626;
             transform: translateY(-1px);
         }
 
@@ -353,7 +410,7 @@
         }
 
         .stat-value {
-            color: var(--text-bright);
+            color: var(--accent-red);
             font-weight: 600;
             font-family: var(--font-mono);
         }
@@ -396,8 +453,8 @@
         }
 
         .time-pill.active {
-            color: var(--accent-blue);
-            background: var(--accent-cyan-dim);
+            color: var(--accent-red);
+            background: var(--accent-red-dim);
         }
 
         /* ===== ACTIVE FILTERS ===== */
@@ -415,12 +472,12 @@
             align-items: center;
             gap: 6px;
             padding: 5px 10px;
-            background: var(--accent-cyan-dim);
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            background: var(--accent-red-dim);
+            border: 1px solid rgba(239, 68, 68, 0.3);
             border-radius: 20px;
             font-size: 11px;
             font-weight: 500;
-            color: var(--accent-blue);
+            color: var(--accent-red);
         }
 
         .filter-chip-remove {
@@ -433,12 +490,12 @@
             border: none;
             cursor: pointer;
             border-radius: 50%;
-            color: var(--accent-blue);
+            color: var(--accent-red);
             transition: all 0.15s ease;
         }
 
         .filter-chip-remove:hover {
-            background: rgba(59, 130, 246, 0.3);
+            background: rgba(239, 68, 68, 0.3);
         }
 
         .filter-chip-remove svg {
@@ -472,7 +529,7 @@
             width: 32px;
             height: 32px;
             border: 2px solid var(--bg-active);
-            border-top-color: var(--accent-blue);
+            border-top-color: var(--accent-red);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
@@ -534,6 +591,7 @@
 
         .log-row {
             transition: background 0.1s ease;
+            border-left: 3px solid transparent;
         }
 
         .log-row:hover {
@@ -542,6 +600,11 @@
 
         .log-row.expanded {
             background: var(--bg-active);
+        }
+
+        /* Deny row indicator */
+        .log-row.deny-row {
+            border-left-color: var(--accent-red);
         }
 
         /* Column Widths */
@@ -579,11 +642,6 @@
             letter-spacing: 0.5px;
         }
 
-        .status-accept {
-            background: var(--accent-green-dim);
-            color: var(--accent-green);
-        }
-
         .status-deny {
             background: var(--accent-red-dim);
             color: var(--accent-red);
@@ -605,7 +663,7 @@
         }
 
         .ip-link:hover {
-            color: var(--accent-blue);
+            color: var(--accent-red);
         }
 
         /* Interface */
@@ -626,7 +684,7 @@
             font-family: var(--font-mono);
             font-size: 12px;
             font-weight: 600;
-            color: var(--accent-blue);
+            color: var(--accent-red);
         }
 
         .proto-value {
@@ -667,7 +725,7 @@
         }
 
         .device-link:hover {
-            color: var(--accent-blue);
+            color: var(--accent-red);
         }
 
         /* Expand Button */
@@ -692,9 +750,9 @@
         }
 
         .expand-btn.open {
-            background: var(--accent-cyan-dim);
-            border-color: var(--accent-blue);
-            color: var(--accent-blue);
+            background: var(--accent-red-dim);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
         }
 
         .expand-btn svg {
@@ -766,8 +824,8 @@
         }
 
         .endpoint-tag.dst {
-            background: var(--accent-green-dim);
-            color: var(--accent-green);
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
         }
 
         .endpoint-ip {
@@ -816,13 +874,13 @@
         .flow-arrow-line {
             display: flex;
             align-items: center;
-            color: var(--accent-blue);
+            color: var(--accent-red);
         }
 
         .flow-arrow-line span {
             width: 40px;
             height: 2px;
-            background: linear-gradient(90deg, var(--border-emphasis), var(--accent-blue));
+            background: linear-gradient(90deg, var(--border-emphasis), var(--accent-red));
         }
 
         .flow-arrow-line svg {
@@ -895,231 +953,44 @@
             font-size: 10px;
         }
 
-        .info-val.allow {
-            color: var(--accent-green);
-        }
-
         .info-val.deny {
             color: var(--accent-red);
         }
 
-        /* Multi-Firewall Flow */
-        .multiflow-container {
-            background: var(--bg-surface);
+        /* Policy Suggestion Box */
+        .policy-suggestion {
+            background: linear-gradient(135deg, var(--accent-amber-dim) 0%, rgba(245, 158, 11, 0.05) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.3);
             border-radius: var(--radius-lg);
-            padding: 12px 16px;
+            padding: 14px 16px;
             margin-bottom: 12px;
-            border: 1px solid var(--border-subtle);
         }
 
-        .multiflow-header {
+        .policy-suggestion-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            gap: 8px;
+            margin-bottom: 10px;
         }
 
-        .multiflow-title {
-            font-size: 11px;
+        .policy-suggestion-icon {
+            color: var(--accent-amber);
+        }
+
+        .policy-suggestion-title {
+            font-size: 12px;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--accent-amber);
         }
 
-        .trace-btn {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 12px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .trace-btn:hover {
-            background: #2563eb;
-        }
-
-        .trace-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .trace-btn svg {
-            width: 12px;
-            height: 12px;
-        }
-
-        .trace-btn.loading svg {
-            animation: spin 1s linear infinite;
-        }
-
-        /* Dynamic Flow */
-        .dynamic-flow {
-            display: none;
-            padding: 16px 0;
-        }
-
-        .flow-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 32px;
-            color: var(--text-secondary);
-        }
-
-        .multi-firewall-flow {
-            display: flex;
-            align-items: center;
-            gap: 0;
-            overflow-x: auto;
-            padding: 16px 0;
-        }
-
-        .fw-node {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-width: 100px;
-            flex-shrink: 0;
-        }
-
-        .fw-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 6px;
-        }
-
-        .fw-icon svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        .fw-icon.client {
-            background: linear-gradient(135deg, rgba(88, 166, 255, 0.2) 0%, rgba(88, 166, 255, 0.1) 100%);
-            color: var(--accent-blue);
-        }
-
-        .fw-icon.firewall.allow {
-            background: linear-gradient(135deg, rgba(63, 185, 80, 0.2) 0%, rgba(63, 185, 80, 0.1) 100%);
-            color: var(--accent-green);
-        }
-
-        .fw-icon.firewall.deny {
-            background: linear-gradient(135deg, rgba(248, 81, 73, 0.2) 0%, rgba(248, 81, 73, 0.1) 100%);
-            color: var(--accent-red);
-        }
-
-        .fw-icon.server {
-            background: linear-gradient(135deg, rgba(163, 113, 247, 0.2) 0%, rgba(163, 113, 247, 0.1) 100%);
-            color: var(--accent-purple);
-        }
-
-        .fw-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .fw-sublabel {
-            font-size: 10px;
+        .policy-suggestion-content {
             font-family: var(--font-mono);
-            color: var(--text-muted);
-        }
-
-        .fw-action {
-            margin-top: 4px;
-            padding: 2px 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--bg-deep);
+            padding: 10px 12px;
             border-radius: var(--radius-sm);
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .fw-action.allow {
-            background: var(--accent-green-dim);
-            color: var(--accent-green);
-        }
-
-        .fw-action.deny {
-            background: var(--accent-red-dim);
-            color: var(--accent-red);
-        }
-
-        .fw-connector {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-width: 50px;
-        }
-
-        .fw-connector-line {
-            display: flex;
-            align-items: center;
-            width: 100%;
-        }
-
-        .fw-connector-line span {
-            flex: 1;
-            height: 2px;
-            background: linear-gradient(90deg, var(--border-emphasis), var(--accent-blue), var(--border-emphasis));
-        }
-
-        .fw-connector-line svg {
-            width: 14px;
-            height: 14px;
-            color: var(--accent-blue);
-            flex-shrink: 0;
-        }
-
-        .fw-connector-label {
-            margin-top: 4px;
-            font-size: 9px;
-            color: var(--text-muted);
-        }
-
-        .flow-summary {
-            display: none;
-            gap: 24px;
-            padding: 12px 16px;
-            background: var(--bg-elevated);
-            border-radius: var(--radius-md);
-            margin-top: 12px;
-        }
-
-        .flow-summary-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .flow-summary-label {
-            font-size: 10px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .flow-summary-value {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .flow-summary-value.success {
-            color: var(--accent-green);
-        }
-
-        .flow-summary-value.error {
-            color: var(--accent-red);
+            white-space: pre-wrap;
         }
 
         /* Raw Log Section */
@@ -1274,7 +1145,7 @@
 
         .page-input:focus {
             outline: none;
-            border-color: var(--accent-blue);
+            border-color: var(--accent-red);
         }
 
         .page-total {
@@ -1295,7 +1166,7 @@
         .empty-state svg {
             width: 64px;
             height: 64px;
-            color: var(--text-ghost);
+            color: var(--accent-green);
             margin-bottom: 20px;
         }
 
@@ -1364,21 +1235,12 @@
             border-bottom: 1px solid var(--border-subtle);
         }
 
-        .sidebar-section.collapsed .sidebar-section-content {
-            display: none;
-        }
-
-        .sidebar-section-header {
+        .sidebar-section-header-static {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 12px 16px;
-            cursor: pointer;
-            transition: background 0.15s ease;
-        }
-
-        .sidebar-section-header:hover {
-            background: var(--bg-hover);
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .sidebar-section-title {
@@ -1389,49 +1251,12 @@
             color: var(--text-secondary);
         }
 
-        .sidebar-section-icon {
-            width: 14px;
-            height: 14px;
-            color: var(--text-muted);
-            transition: transform 0.2s ease;
-        }
-
-        .sidebar-section.collapsed .sidebar-section-icon {
-            transform: rotate(-90deg);
-        }
-
         .sidebar-section-content {
             padding: 4px 8px 12px;
         }
 
-        .sidebar-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--text-secondary);
-            transition: all 0.15s ease;
-        }
-
-        .sidebar-item:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .sidebar-item-count {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            color: var(--text-muted);
-            background: var(--bg-elevated);
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-        }
-
-        /* Time Range Inputs in Sidebar */
-        .time-inputs {
+        /* Time Range */
+        .time-range-redesign {
             padding: 8px 12px;
         }
 
@@ -1445,63 +1270,6 @@
             color: var(--text-muted);
             margin-bottom: 4px;
             display: block;
-        }
-
-        .time-input {
-            width: 100%;
-            height: 30px;
-            padding: 0 8px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 11px;
-        }
-
-        .time-input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-        }
-
-        .apply-time-btn {
-            width: 100%;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            margin-top: 4px;
-        }
-
-        .apply-time-btn:hover:not(:disabled) {
-            background: #2563eb;
-        }
-
-        .apply-time-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Static section header (non-collapsible) */
-        .sidebar-section-header-static {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-
-        /* Time Range Redesign */
-        .time-range-redesign {
-            padding: 8px 12px;
         }
 
         .calendar-input-wrapper {
@@ -1520,8 +1288,8 @@
         }
 
         .calendar-input-wrapper:focus-within {
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
         }
 
         .calendar-icon {
@@ -1560,6 +1328,33 @@
             background: var(--bg-hover);
         }
 
+        .apply-time-btn {
+            width: 100%;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-top: 4px;
+        }
+
+        .apply-time-btn:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .apply-time-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Device Dropdown */
         .filter-dropdown-wrapper {
             position: relative;
@@ -1578,8 +1373,6 @@
             font-family: var(--font-sans);
             cursor: pointer;
             appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
             transition: all 0.15s ease;
         }
 
@@ -1589,8 +1382,8 @@
 
         .filter-dropdown:focus {
             outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
         }
 
         .filter-dropdown option {
@@ -1608,59 +1401,6 @@
             height: 14px;
             color: var(--text-muted);
             pointer-events: none;
-        }
-
-        /* Action Filter Buttons */
-        .action-filter-group {
-            display: flex;
-            gap: 6px;
-            padding: 0 12px;
-        }
-
-        .action-filter-btn {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            height: 34px;
-            padding: 0 10px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-secondary);
-            font-size: 11px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .action-filter-btn:hover {
-            background: var(--bg-hover);
-            border-color: var(--border-emphasis);
-            color: var(--text-primary);
-        }
-
-        .action-filter-btn.active {
-            background: var(--accent-cyan-dim);
-            border-color: var(--accent-blue);
-            color: var(--accent-blue);
-        }
-
-        .action-filter-btn.accept.active {
-            background: var(--accent-green-dim);
-            border-color: var(--accent-green);
-            color: var(--accent-green);
-        }
-
-        .action-filter-btn.deny.active {
-            background: var(--accent-red-dim);
-            border-color: var(--accent-red);
-            color: var(--accent-red);
-        }
-
-        .action-filter-btn svg {
-            flex-shrink: 0;
         }
 
         /* Layout wrapper */
@@ -1693,8 +1433,8 @@
             </a>
             <nav class="nav">
                 <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('log_list') }}" class="nav-link active">Logs</a>
-                <a href="{{ url_for('policy_builder') }}" class="nav-link">Policy Builder</a>
+                <a href="{{ url_for('log_list') }}" class="nav-link">Logs</a>
+                <a href="{{ url_for('policy_builder') }}" class="nav-link active">Policy Builder</a>
                 <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
             </nav>
             <div class="header-spacer"></div>
@@ -1711,6 +1451,24 @@
 
         <!-- Main Content -->
         <main class="main">
+            <!-- Page Banner -->
+            <div class="page-banner">
+                <div class="banner-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+                <div class="banner-content">
+                    <div class="banner-title">
+                        Policy Builder
+                        <span class="banner-badge">Denied Traffic Only</span>
+                    </div>
+                    <div class="banner-desc">Analyze blocked traffic to identify potential policy gaps and create new firewall rules</div>
+                </div>
+            </div>
+
             <!-- Search Toolbar -->
             <div class="toolbar">
                 <div class="search-group">
@@ -1760,7 +1518,7 @@
             <div class="stats-bar">
                 <div class="stats-left">
                     <div class="stat-item">
-                        <span>Total</span>
+                        <span>Total Denied</span>
                         <span class="stat-value">{{ total | format_number }}</span>
                         <span>logs</span>
                     </div>
@@ -1781,7 +1539,7 @@
             </div>
 
             <!-- Active Filters -->
-            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_dstport %}
+            {% if current_device or current_severity is not none or current_q or current_srcip or current_dstip or current_dstport %}
             <div class="active-filters">
                 {% if current_srcip %}
                 <span class="filter-chip">
@@ -1815,22 +1573,6 @@
                     </button>
                 </span>
                 {% endif %}
-                {% if current_severity is not none %}
-                <span class="filter-chip">
-                    Severity: {{ severity_map.get(current_severity, current_severity) }}
-                    <button type="button" class="filter-chip-remove" onclick="removeFilter('severity')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                    </button>
-                </span>
-                {% endif %}
-                {% if current_action %}
-                <span class="filter-chip">
-                    Action: {{ current_action }}
-                    <button type="button" class="filter-chip-remove" onclick="removeFilter('action')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                    </button>
-                </span>
-                {% endif %}
                 {% if current_q %}
                 <span class="filter-chip">
                     Search: "{{ current_q }}"
@@ -1855,7 +1597,7 @@
                         <table class="log-table">
                             <thead>
                                 <tr>
-                                    <th class="col-time sortable">Timestamp <span class="sort-icon">▼</span></th>
+                                    <th class="col-time sortable">Timestamp <span class="sort-icon">&#9660;</span></th>
                                     <th class="col-status">Status</th>
                                     <th class="col-src sortable">Source IP</th>
                                     <th class="col-dst sortable">Dest IP</th>
@@ -1876,7 +1618,7 @@
                                 {% set log_proto = log.get('proto', 0) %}
                                 {% set log_action = log.get('action', '') or pd.get('action', '') %}
                                 {% set action = log_action | lower %}
-                                <tr class="log-row" data-index="{{ loop.index }}">
+                                <tr class="log-row deny-row" data-index="{{ loop.index }}">
                                     <td class="col-time">
                                         <span class="timestamp">
                                             {% if pd.get('log_datetime') %}{{ pd.get('log_datetime') }}{% elif pd.get('date') and pd.get('time') %}{{ pd.get('date') }} {{ pd.get('time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
@@ -1884,12 +1626,8 @@
                                     </td>
                                     <td class="col-status">
                                         <div class="status-cell">
-                                            {% if action in ['deny', 'drop', 'block', 'reject'] %}
                                             <span class="status-badge status-deny">DENY</span>
-                                            {% else %}
-                                            <span class="status-badge status-accept">ACCEPT</span>
-                                            {% endif %}
-                                            {% if action and action not in ['accept', 'allow', 'pass', 'deny', 'drop', 'block', 'reject'] %}
+                                            {% if action and action not in ['deny', 'drop', 'block', 'reject'] %}
                                             <span class="status-sub">{{ action }}</span>
                                             {% endif %}
                                         </div>
@@ -1935,27 +1673,20 @@
                                 <tr class="detail-row" id="detail-{{ loop.index }}">
                                     <td colspan="9">
                                         <div class="detail-panel">
-                                            <!-- Multi-Firewall Trace -->
-                                            {% set ts = log.get('timestamp', '') %}
-                                            <div class="multiflow-container" id="flow-container-{{ loop.index }}"
-                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
-                                                 data-device="{{ log.get('device_ip', '') }}">
-                                                <div class="multiflow-header">
-                                                    <span class="multiflow-title">Multi-Firewall Packet Trace</span>
-                                                    <button type="button" class="trace-btn" onclick="loadSessionFlow({{ loop.index }})">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                                        </svg>
-                                                        Trace Flow
-                                                    </button>
+                                            <!-- Policy Suggestion -->
+                                            <div class="policy-suggestion">
+                                                <div class="policy-suggestion-header">
+                                                    <svg class="policy-suggestion-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                                    </svg>
+                                                    <span class="policy-suggestion-title">Suggested Policy Rule</span>
                                                 </div>
-                                                <div class="dynamic-flow" id="dynamic-flow-{{ loop.index }}">
-                                                    <div class="flow-loading">
-                                                        <div class="spinner"></div>
-                                                        <span>Tracing packet flow...</span>
-                                                    </div>
-                                                </div>
-                                                <div class="flow-summary" id="flow-summary-{{ loop.index }}"></div>
+                                                <div class="policy-suggestion-content">{% set proto = pd.get('proto', pd.get('protocol', '')) %}{% set proto_name = 'tcp' if proto == '6' else 'udp' if proto == '17' else 'icmp' if proto == '1' else proto or 'any' %}Source: {{ pd.get('srcip', pd.get('src_ip', 'any')) }}
+Destination: {{ pd.get('dstip', pd.get('dst_ip', 'any')) }}
+Service: {{ proto_name }}/{{ pd.get('dstport', pd.get('dst_port', 'any')) }}
+Action: ALLOW</div>
                                             </div>
 
                                             <!-- Network Flow -->
@@ -1999,7 +1730,7 @@
                                             <div class="info-grid">
                                                 <div class="info-block">
                                                     <div class="info-title">Session</div>
-                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
+                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val deny">{{ pd.get('action', '--') | upper }}</span></div>
                                                     <div class="info-row"><span class="info-key">Session ID</span><span class="info-val mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span></div>
                                                     <div class="info-row"><span class="info-key">Service</span><span class="info-val">{{ pd.get('service', '--') }}</span></div>
                                                 </div>
@@ -2047,12 +1778,11 @@
                         {% else %}
                         <div class="empty-state">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                                <rect x="9" y="3" width="6" height="4" rx="1"/>
-                                <path d="M9 12h6M9 16h6"/>
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <polyline points="9 12 12 15 22 5"/>
                             </svg>
-                            <h3>No logs found</h3>
-                            <p>Try adjusting your filters or time range to find logs.</p>
+                            <h3>No denied traffic found</h3>
+                            <p>Great news! No blocked traffic matching your filters in the selected time range. Your firewall policies appear to be well-configured.</p>
                         </div>
                         {% endif %}
                     </div>
@@ -2133,7 +1863,7 @@
                         </div>
                     </div>
 
-                    <!-- Device Filter - Dropdown -->
+                    <!-- Device Filter -->
                     <div class="sidebar-section">
                         <div class="sidebar-section-header-static">
                             <span class="sidebar-section-title">Device</span>
@@ -2152,33 +1882,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Action Filter - Simplified -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <span class="sidebar-section-title">Action</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="action-filter-group">
-                                <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">
-                                    All
-                                </button>
-                                <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                    Accept
-                                </button>
-                                <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
-                                        <line x1="18" y1="6" x2="6" y2="18"/>
-                                        <line x1="6" y1="6" x2="18" y2="18"/>
-                                    </svg>
-                                    Deny
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </aside>
             </div>
         </main>
@@ -2188,7 +1891,6 @@
     <input type="hidden" name="page" id="hiddenPageInput" value="{{ page }}">
     <input type="hidden" name="device" id="hiddenDevice" value="{{ current_device or '' }}">
     <input type="hidden" name="severity" id="hiddenSeverity" value="{{ current_severity or '' }}">
-    <input type="hidden" name="action" id="hiddenAction" value="{{ current_action or '' }}">
     <input type="hidden" name="time_range" id="hiddenTimeRange" value="{{ current_time_range or '1h' }}">
     <input type="hidden" name="per_page" value="{{ per_page }}">
     </form>
@@ -2265,7 +1967,6 @@
             document.querySelectorAll('.search-input').forEach(input => input.value = '');
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
-            document.getElementById('hiddenAction').value = '';
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
@@ -2315,10 +2016,6 @@
         }
 
         // Sidebar
-        function toggleSection(header) {
-            header.closest('.sidebar-section').classList.toggle('collapsed');
-        }
-
         function toggleSidebar() {
             document.querySelector('.sidebar').style.display = 'none';
         }
@@ -2335,93 +2032,6 @@
                 goToPage(parseInt(e.target.value));
             }
         });
-
-        // Multi-firewall flow loading
-        async function loadSessionFlow(index) {
-            const container = document.getElementById(`flow-container-${index}`);
-            const dynamicFlow = document.getElementById(`dynamic-flow-${index}`);
-            const flowSummary = document.getElementById(`flow-summary-${index}`);
-            const loadBtn = container.querySelector('.trace-btn');
-
-            const timestamp = container.dataset.timestamp;
-            const device = container.dataset.device;
-
-            if (!timestamp || !device) return;
-
-            loadBtn.classList.add('loading');
-            loadBtn.disabled = true;
-            loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Tracing...';
-            dynamicFlow.style.display = 'block';
-
-            try {
-                const response = await fetch(`/api/logs/session-flow?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}&window=10`);
-                const data = await response.json();
-
-                if (!response.ok) throw new Error(data.detail || 'Failed to load flow');
-
-                renderMultiFirewallFlow(dynamicFlow, data);
-
-                if (data.summary) {
-                    renderFlowSummary(flowSummary, data.summary, data.flow);
-                    flowSummary.style.display = 'flex';
-                }
-
-                loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Traced';
-                loadBtn.classList.remove('loading');
-
-            } catch (error) {
-                dynamicFlow.innerHTML = `<div class="flow-loading" style="color: var(--accent-red);">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
-                    </svg>
-                    <span>Failed: ${error.message}</span>
-                </div>`;
-                loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Retry';
-                loadBtn.classList.remove('loading');
-                loadBtn.disabled = false;
-            }
-        }
-
-        function renderMultiFirewallFlow(container, data) {
-            const flow = data.flow || [];
-            const srcip = flow[0]?.srcip || '--';
-            const dstip = flow[0]?.dstip || '--';
-            const dstport = flow[0]?.dstport || '--';
-
-            const firewallMap = new Map();
-            flow.forEach(log => {
-                if (!firewallMap.has(log.device_ip)) firewallMap.set(log.device_ip, log);
-            });
-
-            const firewalls = Array.from(firewallMap.values());
-            let html = '<div class="multi-firewall-flow">';
-
-            html += `<div class="fw-node"><div class="fw-icon client"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="fw-label">Client</span><span class="fw-sublabel">${srcip}</span></div>`;
-
-            firewalls.forEach((fw, idx) => {
-                const action = (fw.action || '').toLowerCase();
-                const isDeny = ['deny', 'drop', 'block', 'reject'].includes(action);
-                const actionClass = isDeny ? 'deny' : 'allow';
-                const actionLabel = isDeny ? 'DENY' : 'ALLOW';
-
-                html += `<div class="fw-connector"><div class="fw-connector-line"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div></div>`;
-                html += `<div class="fw-node"><div class="fw-icon firewall ${actionClass}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><span class="fw-label">Firewall ${idx + 1}</span><span class="fw-sublabel">${fw.device_ip}</span><span class="fw-action ${actionClass}">${actionLabel}</span></div>`;
-            });
-
-            html += `<div class="fw-connector"><div class="fw-connector-line"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></div><span class="fw-connector-label">:${dstport}</span></div>`;
-            html += `<div class="fw-node"><div class="fw-icon server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div><span class="fw-label">Server</span><span class="fw-sublabel">${dstip}</span></div>`;
-
-            html += '</div>';
-            container.innerHTML = html;
-        }
-
-        function renderFlowSummary(container, summary, flow) {
-            container.innerHTML = `
-                <div class="flow-summary-item"><span class="flow-summary-label">Firewalls</span><span class="flow-summary-value">${summary.firewall_count}</span></div>
-                <div class="flow-summary-item"><span class="flow-summary-label">Total Hops</span><span class="flow-summary-value">${summary.total_hops}</span></div>
-                <div class="flow-summary-item"><span class="flow-summary-label">Status</span><span class="flow-summary-value ${summary.all_allowed ? 'success' : 'error'}">${summary.all_allowed ? 'All Allowed' : 'Blocked'}</span></div>
-            `;
-        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {

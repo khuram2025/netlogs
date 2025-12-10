@@ -386,6 +386,231 @@ async def log_list(
         })
 
 
+@router.get("/policy-builder/", response_class=HTMLResponse, name="policy_builder")
+async def policy_builder(
+    request: Request,
+    device: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
+    time_range: Optional[str] = Query(None),
+    page: Optional[str] = Query("1"),
+    per_page: Optional[str] = Query("100"),
+    srcip: Optional[str] = Query(None),
+    dstip: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
+):
+    """Policy Builder view - shows only denied traffic for policy analysis."""
+    try:
+        # Parse page and per_page with defaults
+        try:
+            page_num = int(page) if page and page.strip() else 1
+            page_num = max(1, page_num)
+        except (ValueError, TypeError):
+            page_num = 1
+
+        try:
+            per_page_num = int(per_page) if per_page and per_page.strip() else 100
+            per_page_num = max(10, min(200, per_page_num))
+        except (ValueError, TypeError):
+            per_page_num = 100
+
+        offset = (page_num - 1) * per_page_num
+
+        # Handle empty strings and convert severity to int
+        device_ips = [device] if device and device.strip() else None
+        severity_int = None
+        if severity and severity.strip():
+            try:
+                severity_int = int(severity)
+            except ValueError:
+                severity_int = None
+        severities = [severity_int] if severity_int is not None else None
+
+        # Parse datetime strings
+        start_time = None
+        end_time = None
+        now = datetime.now()
+
+        # Default to 1 hour for policy builder (faster initial load)
+        default_time_range = '1h'
+        effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
+
+        # Handle time_range parameter
+        if effective_time_range.endswith('m'):
+            try:
+                minutes = int(effective_time_range[:-1])
+                start_time = now - timedelta(minutes=minutes)
+            except ValueError:
+                pass
+        elif effective_time_range.endswith('h'):
+            try:
+                hours = int(effective_time_range[:-1])
+                start_time = now - timedelta(hours=hours)
+            except ValueError:
+                pass
+        elif effective_time_range.endswith('d'):
+            try:
+                days = int(effective_time_range[:-1])
+                start_time = now - timedelta(days=days)
+            except ValueError:
+                pass
+
+        # Override with explicit start/end if provided
+        if start:
+            try:
+                start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        if end:
+            try:
+                end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        # Build search query - ALWAYS include deny filter for Policy Builder
+        search_parts = []
+
+        # Handle srcip parameter
+        srcip_clean = srcip.strip() if srcip and srcip.strip() else None
+        if srcip_clean:
+            search_parts.append(f"srcip:{srcip_clean}")
+
+        # Handle dstip parameter
+        dstip_clean = dstip.strip() if dstip and dstip.strip() else None
+        if dstip_clean:
+            search_parts.append(f"dstip:{dstip_clean}")
+
+        # Handle dstport parameter
+        dstport_clean = dstport.strip() if dstport and dstport.strip() else None
+        if dstport_clean:
+            search_parts.append(f"dstport:{dstport_clean}")
+
+        # Combine with existing q parameter if present
+        search_query = q or ""
+        if search_parts:
+            direct_filters = " ".join(search_parts)
+            if search_query:
+                search_query = f"{search_query} {direct_filters}"
+            else:
+                search_query = direct_filters
+
+        # ALWAYS add deny filter for Policy Builder page
+        deny_filter = 'action:deny|drop|block|reject'
+        if search_query:
+            search_query = f"{search_query} {deny_filter}"
+        else:
+            search_query = deny_filter
+
+        # Run all ClickHouse queries in parallel
+        loop = asyncio.get_event_loop()
+
+        logs_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.search_logs(
+                limit=per_page_num,
+                offset=offset,
+                device_ips=device_ips,
+                severities=severities,
+                start_time=start_time,
+                end_time=end_time,
+                query_text=search_query,
+            )
+        )
+
+        total_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.count_logs(
+                device_ips=device_ips,
+                severities=severities,
+                start_time=start_time,
+                end_time=end_time,
+                query_text=search_query,
+            )
+        )
+
+        stats_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.get_log_stats_summary(
+                device_ips=device_ips,
+                start_time=start_time,
+                end_time=end_time,
+                query_text=search_query,
+            )
+        )
+
+        devices_future = loop.run_in_executor(
+            _executor,
+            ClickHouseClient.get_distinct_devices
+        )
+
+        # Wait for all queries to complete
+        logs, total, stats, devices = await asyncio.gather(
+            logs_future, total_future, stats_future, devices_future
+        )
+
+        total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
+
+        # Clean up filter values for template
+        current_device = device if device and device.strip() else None
+        current_q = q if q and q.strip() else None
+
+        return templates.TemplateResponse("logs/policy_builder.html", {
+            "request": request,
+            "logs": logs,
+            "severity_map": SEVERITY_MAP,
+            "devices": devices,
+            "total": total,
+            "stats": stats,
+            "page": page_num,
+            "per_page": per_page_num,
+            "total_pages": total_pages,
+            "has_prev": page_num > 1,
+            "has_next": page_num < total_pages,
+            # Current filters
+            "current_device": current_device,
+            "current_severity": severity_int,
+            "current_q": current_q,
+            "current_start": start,
+            "current_end": end,
+            "current_time_range": effective_time_range,
+            # New direct filter values
+            "current_srcip": srcip_clean,
+            "current_dstip": dstip_clean,
+            "current_dstport": dstport_clean,
+            "error": None,
+        })
+    except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in policy_builder view: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        return templates.TemplateResponse("logs/policy_builder.html", {
+            "request": request,
+            "logs": [],
+            "severity_map": SEVERITY_MAP,
+            "devices": [],
+            "total": 0,
+            "stats": {},
+            "page": 1,
+            "per_page": 100,
+            "total_pages": 1,
+            "has_prev": False,
+            "has_next": False,
+            "current_device": None,
+            "current_severity": None,
+            "current_q": None,
+            "current_start": start if start else None,
+            "current_end": end if end else None,
+            "current_srcip": srcip if srcip else None,
+            "current_dstip": dstip if dstip else None,
+            "current_dstport": dstport if dstport else None,
+            "error": str(e),
+        })
+
+
 @router.get("/devices/", response_class=HTMLResponse, name="device_list")
 async def device_list(
     request: Request,
