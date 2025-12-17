@@ -1,0 +1,75 @@
+http://10.12.50.77:8002/devices/2/
+
+we have the devices(forintett and paloalto) we need to fetch their routing table peridicilly(1 hour) and on demand also 
+
+for the fortiget we have below commands where we need to do ssh and then get the routing table 
+
+
+
+Fortigate routing table with vdom  where vdom is Campus 
+
+
+FortiGate-601F # config vdom
+
+FortiGate-601F (vdom) # edit Campus
+current vf=Campus:1
+
+FortiGate-601F (Campus) # get router info routing-table all 
+Codes: K - kernel, C - connected, S - static, R - RIP, B - BGP
+       O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       V - BGP VPNv4
+       * - candidate default
+
+Routing table for VRF=0
+S*      0.0.0.0/0 [10/0] via 192.168.47.1, WAN-CAM1, [1/0]
+C       10.10.101.0/24 is directly connected, VLAN101
+C       10.10.102.0/24 is directly connected, AP_MGMT_102
+C       10.10.103.0/24 is directly connected, VLAN103
+C       10.10.104.0/24 is directly connected, VLAN104
+C       10.10.105.0/24 is directly connected, VLAN105
+C       10.10.106.0/24 is directly connected, VLAN106
+C       10.10.112.0/24 is directly connected, VLAN112
+C       10.10.112.1/32 is directly connected, VLAN112
+C       10.10.120.0/24 is directly connected, VLAN120
+C       10.10.121.0/24 is directly connected, VLAN121
+
+
+
+
+Fortigate routing table without vdom 
+
+
+FGT-FW01 # get router info routing-table all 
+Codes: K - kernel, C - connected, S - static, R - RIP, B - BGP
+       O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       V - BGP VPNv4
+       * - candidate default
+
+Routing table for VRF=0
+S*      0.0.0.0/0 [10/0] via 192.168.100.1, port1, [1/0]
+S       10.5.0.0/16 [10/0] via 192.168.200.65, port2, [1/0]
+S       10.5.10.0/24 [10/0] via 192.168.200.65, port2, [1/0]
+S       10.5.30.0/24 [10/0] via 192.168.200.65, port2, [1/0]
+B       10.10.0.0/16 [200/0] via 10.100.1.3 (recursive via DeemJeddah tunnel 10.100.1.3), 02w0d21h, [1/0]
+                     [200/0] via 10.100.2.12 (recursive is directly connected, OverMPLS), 02w0d21h, [1/0]
+S       10.10.100.0/24 [10/0] via 172.16.201.1, port3, [1/0]
+S       10.10.106.0/24 [10/0] via 172.16.201.1, port3, [1/0]
+S       10.10.107.0/24 [10/0] via 172.16.201.1, port3, [1/0]
+S       10.10.108.0/24 [10/0] via 172.16.201.1, port3, [1/0]
+
+
+
+now we need to correct our exiting machnism to fetch the routing table for the fortinet devices using ssh  for the VDOM and non VDOM whatever the configuration 
+
+http://10.12.50.77:8002/devices/2/edit/ herre we can mention if the devices have vdom and need to fetch the routing from vdom so we can confire vdom and then fetch routing from this vdom 
+
+else default forinet devices witout vdom 
+
+
+fix all this issue/logc and then check and use playwright for the navigation if required 

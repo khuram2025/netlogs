@@ -1,0 +1,1120 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h1 {
+        margin: 0;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .device-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .info-item {
+        padding: 1rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+    }
+
+    .info-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1rem;
+    }
+
+    .tab {
+        padding: 0.75rem 1.25rem;
+        cursor: pointer;
+        color: var(--text-muted);
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        transition: all 0.2s;
+    }
+
+    .tab:hover {
+        color: white;
+    }
+
+    .tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .route-table {
+        font-size: 0.875rem;
+    }
+
+    .route-table th {
+        position: sticky;
+        top: 0;
+        background: var(--card-bg);
+        z-index: 10;
+    }
+
+    .route-type {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 24px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 0.75rem;
+    }
+
+    .route-type.static { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .route-type.connected { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .route-type.bgp { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+    .route-type.ospf { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .route-type.kernel { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .network-cell {
+        font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    .default-route {
+        background: rgba(245, 158, 11, 0.1);
+    }
+
+    .recursive-badge {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
+        border-radius: 9999px;
+        margin-left: 0.5rem;
+    }
+
+    .change-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .change-badge.added {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ade80;
+    }
+
+    .change-badge.removed {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+
+    .change-badge.modified {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+    }
+
+    .snapshot-card {
+        padding: 1rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+        margin-bottom: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .snapshot-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .snapshot-time {
+        font-weight: 600;
+        color: white;
+    }
+
+    .snapshot-meta {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .snapshot-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .snapshot-status.success { color: var(--success); }
+    .snapshot-status.failed { color: var(--danger); }
+
+    .route-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+    }
+
+    .route-stat {
+        text-align: center;
+    }
+
+    .route-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .route-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .search-box {
+        margin-bottom: 1rem;
+    }
+
+    .search-box input {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .no-data {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+    }
+
+    .no-data-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .credential-alert {
+        padding: 1rem;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 0.5rem;
+        color: #fbbf24;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .vdom-selector {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+    }
+
+    .vdom-selector label {
+        font-weight: 500;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .vdom-tabs {
+        display: flex;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+    }
+
+    .vdom-tab {
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .vdom-tab:hover {
+        background: var(--border);
+        color: white;
+    }
+
+    .vdom-tab.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .vdom-info {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-left: auto;
+    }
+
+    /* Zone Table Styles */
+    .zone-table {
+        font-size: 0.875rem;
+    }
+
+    .zone-table th {
+        position: sticky;
+        top: 0;
+        background: var(--card-bg);
+        z-index: 10;
+    }
+
+    .zone-name-cell {
+        font-weight: 600;
+        color: var(--primary);
+    }
+
+    .zone-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .zone-badge.no-zone {
+        background: rgba(107, 114, 128, 0.15);
+        color: #9ca3af;
+        border-color: rgba(107, 114, 128, 0.3);
+    }
+
+    .interface-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        font-family: 'Consolas', 'Monaco', monospace;
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .subnet-cell {
+        font-family: 'Consolas', 'Monaco', monospace;
+        color: #fbbf24;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.375rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .status-badge.up {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ade80;
+    }
+
+    .status-badge.down {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+
+    .intrazone-badge {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 9999px;
+    }
+
+    .intrazone-badge.allow {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+    }
+
+    .intrazone-badge.deny {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+
+    .type-badge {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        background: rgba(168, 85, 247, 0.15);
+        color: #c084fc;
+        text-transform: uppercase;
+    }
+
+    .zone-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+    }
+
+    .zone-stat {
+        text-align: center;
+    }
+
+    .zone-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .zone-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .zone-search-box {
+        margin-bottom: 1rem;
+    }
+
+    .zone-search-box input {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    /* Global VDOM Selector Styles */
+    .global-vdom-selector {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+        background: linear-gradient(135deg, var(--card-bg) 0%, rgba(59, 130, 246, 0.05) 100%);
+        border-radius: 0.75rem;
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .global-vdom-selector.inactive {
+        opacity: 0.7;
+    }
+
+    .vdom-selector-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .vdom-label {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .vdom-pills {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .vdom-pill {
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--input-bg);
+        color: var(--text-muted);
+        border: 2px solid var(--border);
+        transition: all 0.2s ease;
+    }
+
+    .vdom-pill:hover:not(.disabled) {
+        background: var(--border);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .vdom-pill.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .vdom-pill.disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .vdom-current {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .vdom-current strong {
+        color: var(--primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ device.hostname or device.ip_address }}</h1>
+        <p class="text-muted text-sm" style="margin: 0.25rem 0 0 0;">
+            {{ device.ip_address }} &bull; {{ device.parser_display }}
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary">
+            Manage Credentials
+        </a>
+        {% if has_credentials %}
+        <button onclick="fetchRoutes()" class="btn btn-success" id="fetch-btn">
+            Fetch Routes
+        </button>
+        <button onclick="fetchZones()" class="btn btn-success" id="fetch-zones-btn">
+            Fetch Zones
+        </button>
+        {% endif %}
+        <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary">
+            Edit Device
+        </a>
+        <a href="{{ url_for('device_list') }}" class="btn" style="background: var(--border);">
+            Back to Devices
+        </a>
+    </div>
+</div>
+
+<!-- Device Info Grid -->
+<div class="device-info-grid">
+    <div class="info-item">
+        <div class="info-label">Status</div>
+        <div class="info-value">
+            <span class="badge badge-{{ device.status }}">{{ device.status }}</span>
+        </div>
+    </div>
+    <div class="info-item">
+        <div class="info-label">Parser Type</div>
+        <div class="info-value">{{ device.parser_display }}</div>
+    </div>
+    <div class="info-item">
+        <div class="info-label">Log Count</div>
+        <div class="info-value">{{ device.log_count|format_number }}</div>
+    </div>
+    <div class="info-item">
+        <div class="info-label">Last Log</div>
+        <div class="info-value">
+            {% if device.last_log_received %}
+                {{ device.last_log_received|timesince }} ago
+            {% else %}
+                Never
+            {% endif %}
+        </div>
+    </div>
+    <div class="info-item">
+        <div class="info-label">Retention</div>
+        <div class="info-value">{{ device.retention_display }}</div>
+    </div>
+    <div class="info-item">
+        <div class="info-label">Credentials</div>
+        <div class="info-value">
+            {% if credentials_count > 0 %}
+                {{ credentials_count }} configured
+            {% else %}
+                <span style="color: var(--warning);">None</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if not has_credentials %}
+<div class="credential-alert">
+    <div>
+        <strong>No SSH credentials configured.</strong>
+        Add credentials to enable routing table collection.
+    </div>
+    <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary btn-sm">
+        Add Credentials
+    </a>
+</div>
+{% endif %}
+
+<!-- Global VDOM Selector - Outside tabs, applies to all data views -->
+{% if available_vdoms and available_vdoms|length > 0 %}
+<div class="global-vdom-selector">
+    <div class="vdom-selector-header">
+        <span class="vdom-label">Virtual Domain:</span>
+        <div class="vdom-pills">
+            {% for vdom_name in available_vdoms %}
+            <button type="button"
+                    class="vdom-pill {% if selected_vdom == vdom_name %}active{% endif %}"
+                    data-vdom="{{ vdom_name }}"
+                    onclick="selectVdom('{{ vdom_name }}')">
+                {{ vdom_name }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% if selected_vdom %}
+    <span class="vdom-current">Currently viewing: <strong>{{ selected_vdom }}</strong></span>
+    {% endif %}
+</div>
+{% elif configured_vdoms and configured_vdoms|length > 0 %}
+<div class="global-vdom-selector inactive">
+    <div class="vdom-selector-header">
+        <span class="vdom-label">Configured VDOMs:</span>
+        <div class="vdom-pills">
+            {% for vdom in configured_vdoms %}
+            <span class="vdom-pill disabled">{{ vdom.vdom_name }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    <span class="vdom-current">Fetch data to enable VDOM filtering</span>
+</div>
+{% endif %}
+
+<!-- Tabs -->
+<div class="card">
+    <div class="tabs">
+        <div class="tab {% if current_tab == 'routes' %}active{% endif %}" data-tab="routes">Routing Table</div>
+        <div class="tab {% if current_tab == 'zones' %}active{% endif %}" data-tab="zones">Zone / Interface / Subnet</div>
+        <div class="tab {% if current_tab == 'changes' %}active{% endif %}" data-tab="changes">Route Changes</div>
+        <div class="tab {% if current_tab == 'snapshots' %}active{% endif %}" data-tab="snapshots">Fetch History</div>
+    </div>
+
+    <!-- Routes Tab -->
+    <div class="tab-content {% if current_tab == 'routes' %}active{% endif %}" id="tab-routes">
+        {% if snapshot %}
+        <div class="route-stats">
+            <div class="route-stat">
+                <div class="route-stat-value">{{ routes|length }}</div>
+                <div class="route-stat-label">Total Routes</div>
+            </div>
+            <div class="route-stat">
+                <div class="route-stat-value">{{ route_stats.get('by_type', {}).get('S', 0) }}</div>
+                <div class="route-stat-label">Static</div>
+            </div>
+            <div class="route-stat">
+                <div class="route-stat-value">{{ route_stats.get('by_type', {}).get('C', 0) }}</div>
+                <div class="route-stat-label">Connected</div>
+            </div>
+            <div class="route-stat">
+                <div class="route-stat-value">{{ route_stats.get('by_type', {}).get('B', 0) }}</div>
+                <div class="route-stat-label">BGP</div>
+            </div>
+            <div class="route-stat">
+                <div class="route-stat-value">{{ route_stats.get('by_type', {}).get('O', 0) }}</div>
+                <div class="route-stat-label">OSPF</div>
+            </div>
+            <div class="route-stat">
+                <div class="route-stat-value">{{ route_stats.get('default_routes', 0) }}</div>
+                <div class="route-stat-label">Default</div>
+            </div>
+        </div>
+
+        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+            Last fetched: {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            (took {{ snapshot.fetch_duration_ms }}ms)
+        </p>
+
+        <div class="search-box">
+            <input type="text" id="route-search" placeholder="Filter routes (e.g., 10.0.0.0, port1, BGP)..."
+                   onkeyup="filterRoutes()">
+        </div>
+
+        <div style="max-height: 600px; overflow-y: auto;">
+            <table class="route-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Type</th>
+                        <th>Network</th>
+                        <th>Next Hop</th>
+                        <th>Interface</th>
+                        <th>AD/Metric</th>
+                        <th>Age</th>
+                    </tr>
+                </thead>
+                <tbody id="routes-tbody">
+                    {% for route in routes %}
+                    <tr class="route-row {% if route.is_default %}default-route{% endif %}"
+                        data-network="{{ route.network }}"
+                        data-nexthop="{{ route.next_hop or '' }}"
+                        data-interface="{{ route.interface or '' }}"
+                        data-type="{{ route.route_type }}">
+                        <td>
+                            <span class="route-type {% if route.route_type == 'S' %}static{% elif route.route_type == 'C' %}connected{% elif route.route_type == 'B' %}bgp{% elif route.route_type in ['O', 'IA', 'E1', 'E2'] %}ospf{% elif route.route_type == 'K' %}kernel{% endif %}">
+                                {{ route.route_type }}{% if route.is_default %}*{% endif %}
+                            </span>
+                        </td>
+                        <td class="network-cell">
+                            {{ route.network }}
+                            {% if route.is_recursive %}
+                            <span class="recursive-badge">recursive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if route.next_hop %}
+                                {{ route.next_hop }}
+                                {% if route.tunnel_name %}
+                                <br><span class="text-muted text-sm">via {{ route.tunnel_name }}</span>
+                                {% endif %}
+                            {% elif route.route_type == 'C' %}
+                                <span class="text-muted">directly connected</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ route.interface or '-' }}</td>
+                        <td>
+                            {% if route.admin_distance is not none %}
+                                {{ route.admin_distance }}/{{ route.metric or 0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ route.age or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="no-data">No routes found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">📡</div>
+            <h3>No Routing Data</h3>
+            <p>No routing table has been fetched for this device yet.</p>
+            {% if has_credentials %}
+            <button onclick="fetchRoutes()" class="btn btn-primary" style="margin-top: 1rem;">
+                Fetch Routing Table Now
+            </button>
+            {% else %}
+            <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary" style="margin-top: 1rem;">
+                Add Credentials First
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Zones Tab -->
+    <div class="tab-content {% if current_tab == 'zones' %}active{% endif %}" id="tab-zones">
+        {% if zone_table_data %}
+        <!-- Zone Stats -->
+        <div class="zone-stats">
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ zone_table_data|selectattr('zone_name')|map(attribute='zone_name')|unique|list|length }}</div>
+                <div class="zone-stat-label">Zones</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ zone_table_data|length }}</div>
+                <div class="zone-stat-label">Interfaces</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ zone_table_data|selectattr('subnet_cidr')|list|length }}</div>
+                <div class="zone-stat-label">Subnets</div>
+            </div>
+        </div>
+
+        {% if zone_snapshot %}
+        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+            Last fetched: {{ zone_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            (took {{ zone_snapshot.fetch_duration_ms }}ms)
+        </p>
+        {% endif %}
+
+        <div class="zone-search-box">
+            <input type="text" id="zone-search" placeholder="Filter zones/interfaces (e.g., VLAN, SRV_MGMT, 10.10...)..."
+                   onkeyup="filterZones()">
+        </div>
+
+        <div style="max-height: 600px; overflow-y: auto;">
+            <table class="zone-table">
+                <thead>
+                    <tr>
+                        <th>Zone</th>
+                        <th>Interface</th>
+                        <th>Subnet (CIDR)</th>
+                        <th>IP Address</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="zones-tbody">
+                    {% for row in zone_table_data %}
+                    <tr class="zone-row"
+                        data-zone="{{ row.zone_name or '' }}"
+                        data-interface="{{ row.interface_name }}"
+                        data-subnet="{{ row.subnet_cidr or '' }}"
+                        data-ip="{{ row.ip_address or '' }}">
+                        <td>
+                            {% if row.zone_name %}
+                            <span class="zone-badge">{{ row.zone_name }}</span>
+                            {% if row.intrazone %}
+                            <span class="intrazone-badge {{ row.intrazone }}">{{ row.intrazone }}</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="zone-badge no-zone">No Zone</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="interface-badge">{{ row.interface_name }}</span>
+                        </td>
+                        <td class="subnet-cell">{{ row.subnet_cidr or '-' }}</td>
+                        <td>{{ row.ip_address or '-' }}</td>
+                        <td>
+                            {% if row.interface_type %}
+                            <span class="type-badge">{{ row.interface_type }}</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge {{ row.status }}">{{ row.status }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="no-data">No zone/interface data found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">🔲</div>
+            <h3>No Zone Data</h3>
+            <p>No zone/interface data has been fetched for this device yet.</p>
+            {% if has_credentials %}
+            <button onclick="fetchZones()" class="btn btn-primary" style="margin-top: 1rem;">
+                Fetch Zone Data Now
+            </button>
+            {% else %}
+            <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary" style="margin-top: 1rem;">
+                Add Credentials First
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Changes Tab -->
+    <div class="tab-content {% if current_tab == 'changes' %}active{% endif %}" id="tab-changes">
+        {% if changes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Change</th>
+                    <th>Network</th>
+                    <th>Old Value</th>
+                    <th>New Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for change in changes %}
+                <tr>
+                    <td>{{ change.detected_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <span class="change-badge {{ change.change_type|lower }}">
+                            {{ change.change_type }}
+                        </span>
+                    </td>
+                    <td class="network-cell">{{ change.network }}</td>
+                    <td>
+                        {% if change.old_next_hop %}
+                            {{ change.old_route_type }} via {{ change.old_next_hop }}
+                            {% if change.old_interface %} ({{ change.old_interface }}){% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if change.new_next_hop %}
+                            {{ change.new_route_type }} via {{ change.new_next_hop }}
+                            {% if change.new_interface %} ({{ change.new_interface }}){% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">📋</div>
+            <h3>No Changes Detected</h3>
+            <p>Route changes will appear here after multiple routing table fetches.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Snapshots Tab -->
+    <div class="tab-content {% if current_tab == 'snapshots' %}active{% endif %}" id="tab-snapshots">
+        {% if snapshots %}
+        {% for snap in snapshots %}
+        <div class="snapshot-card">
+            <div class="snapshot-info">
+                <div class="snapshot-time">{{ snap.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</div>
+                <div class="snapshot-meta">
+                    {% if snap.success %}
+                        {{ snap.route_count }} routes &bull; {{ snap.fetch_duration_ms }}ms
+                    {% else %}
+                        Failed: {{ snap.error_message[:50] }}...
+                    {% endif %}
+                </div>
+            </div>
+            <div class="snapshot-status {% if snap.success %}success{% else %}failed{% endif %}">
+                {% if snap.success %}
+                    &#10003; Success
+                {% else %}
+                    &#10007; Failed
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">📜</div>
+            <h3>No Fetch History</h3>
+            <p>History will appear here after fetching the routing table.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// URL Parameter Helpers
+function getUrlParams() {
+    return new URLSearchParams(window.location.search);
+}
+
+function updateUrlParams(params) {
+    const url = new URL(window.location);
+    Object.keys(params).forEach(key => {
+        if (params[key]) {
+            url.searchParams.set(key, params[key]);
+        } else {
+            url.searchParams.delete(key);
+        }
+    });
+    window.history.pushState({}, '', url);
+}
+
+// VDOM Selection - preserves current tab
+function selectVdom(vdomName) {
+    const params = getUrlParams();
+    const currentTab = params.get('tab') || 'routes';
+    // Navigate with both vdom and tab preserved
+    window.location.href = `?vdom=${encodeURIComponent(vdomName)}&tab=${encodeURIComponent(currentTab)}`;
+}
+
+// Tab switching - preserves VDOM in URL without page reload
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        const tabName = this.dataset.tab;
+
+        // Remove active from all tabs and contents
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        // Add active to clicked tab and its content
+        this.classList.add('active');
+        document.getElementById('tab-' + tabName).classList.add('active');
+
+        // Update URL without reload (preserves VDOM)
+        updateUrlParams({ tab: tabName });
+    });
+});
+
+// Restore tab from URL on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const params = getUrlParams();
+    const tabFromUrl = params.get('tab');
+    if (tabFromUrl) {
+        const tabEl = document.querySelector(`.tab[data-tab="${tabFromUrl}"]`);
+        if (tabEl) {
+            // Remove active from all
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            // Activate the correct tab
+            tabEl.classList.add('active');
+            const contentEl = document.getElementById('tab-' + tabFromUrl);
+            if (contentEl) contentEl.classList.add('active');
+        }
+    }
+});
+
+// Route filtering
+function filterRoutes() {
+    const filter = document.getElementById('route-search').value.toLowerCase();
+    const rows = document.querySelectorAll('.route-row');
+
+    rows.forEach(row => {
+        const network = row.dataset.network.toLowerCase();
+        const nexthop = row.dataset.nexthop.toLowerCase();
+        const iface = row.dataset.interface.toLowerCase();
+        const type = row.dataset.type.toLowerCase();
+
+        if (network.includes(filter) || nexthop.includes(filter) ||
+            iface.includes(filter) || type.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Zone filtering
+function filterZones() {
+    const filter = document.getElementById('zone-search').value.toLowerCase();
+    const rows = document.querySelectorAll('.zone-row');
+
+    rows.forEach(row => {
+        const zone = row.dataset.zone.toLowerCase();
+        const iface = row.dataset.interface.toLowerCase();
+        const subnet = row.dataset.subnet.toLowerCase();
+        const ip = row.dataset.ip.toLowerCase();
+
+        if (zone.includes(filter) || iface.includes(filter) ||
+            subnet.includes(filter) || ip.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Fetch routing table
+async function fetchRoutes() {
+    const btn = document.getElementById('fetch-btn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Fetching...';
+
+    try {
+        const response = await fetch('{{ url_for("fetch_routing_table", device_id=device.id) }}', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        const vdomLines = (data.vdom_results || []).map(r => {
+            const status = r.success ? 'OK' : 'FAIL';
+            const routes = (r.route_count ?? 0) + ' routes';
+            const msg = r.message ? (' - ' + r.message) : '';
+            return `${r.vdom}: ${status} (${routes})${msg}`;
+        });
+        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+
+        if (data.success) {
+            alert(`Routing fetch completed.\n${data.message}\nTotal routes: ${data.route_count ?? 0}${details}`);
+            location.reload();
+        } else {
+            alert(`Routing fetch failed.\n${data.message}${details}`);
+            btn.disabled = false;
+            btn.textContent = 'Fetch Routing Table';
+        }
+    } catch (error) {
+        alert('Error fetching routing table: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Fetch Routing Table';
+    }
+}
+
+// Fetch zone data
+async function fetchZones() {
+    const btn = document.getElementById('fetch-zones-btn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Fetching...';
+
+    try {
+        const response = await fetch('{{ url_for("fetch_zone_data", device_id=device.id) }}', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        const vdomLines = (data.vdom_results || []).map(r => {
+            const status = r.success ? 'OK' : 'FAIL';
+            const zones = (r.zone_count ?? 0) + ' zones';
+            const intfs = (r.interface_count ?? 0) + ' interfaces';
+            const msg = r.message ? (' - ' + r.message) : '';
+            return `${r.vdom}: ${status} (${zones}, ${intfs})${msg}`;
+        });
+        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+
+        if (data.success) {
+            alert(`Zone fetch completed.\n${data.message}\nTotal: ${data.zone_count ?? 0} zones, ${data.interface_count ?? 0} interfaces${details}`);
+            location.reload();
+        } else {
+            alert(`Zone fetch failed.\n${data.message}${details}`);
+            btn.disabled = false;
+            btn.textContent = 'Fetch Zones';
+        }
+    } catch (error) {
+        alert('Error fetching zone data: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Fetch Zones';
+    }
+}
+</script>
+{% endblock %}

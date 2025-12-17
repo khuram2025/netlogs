@@ -12,6 +12,14 @@
             </div>
 
             <div>
+                <label for="ssh_host">SSH Host (optional)</label>
+                <input type="text" id="ssh_host" name="ssh_host" value="{{ ssh_host or '' }}" placeholder="e.g., 10.12.50.10">
+                <small class="text-muted" style="display: block; margin-top: 0.25rem;">
+                    If SSH management is on a different IP than the syslog source, set it here. Leave blank to use {{ device.ip_address }}.
+                </small>
+            </div>
+
+            <div>
                 <label for="parser">Parser Type</label>
                 <select id="parser" name="parser">
                     {% for value, label in parser_choices %}
@@ -28,6 +36,29 @@
                     {% endfor %}
                 </select>
             </div>
+
+            {% if device.parser == 'FORTINET' %}
+            <div style="padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--input-bg);">
+                <div style="margin-bottom: 0.75rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                        <input type="checkbox" id="use_vdom" name="use_vdom" {% if current_vdom %}checked{% endif %}>
+                        Fetch routing table from VDOM
+                    </label>
+                    <small class="text-muted" style="display: block; margin-top: 0.25rem;">
+                        Enable this only if the FortiGate is running in multi-VDOM mode and you need a specific VDOM (e.g., Campus).
+                    </small>
+                </div>
+
+                <div>
+                    <label for="vdom_name">VDOM Name</label>
+                    <input type="text" id="vdom_name" name="vdom_name" value="{{ current_vdom or '' }}" placeholder="e.g., Campus">
+                    <small class="text-muted" style="display: block; margin-top: 0.25rem;">
+                        Leave disabled/blank to fetch from global context. For multiple VDOMs, use
+                        <a href="{{ url_for('device_credentials', device_id=device.id) }}" style="color: var(--primary); text-decoration: none;">Manage Credentials</a>.
+                    </small>
+                </div>
+            </div>
+            {% endif %}
 
             <div style="display: flex; gap: 1rem;">
                 <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -66,4 +97,19 @@
         </tr>
     </table>
 </div>
+
+<script>
+// Fortinet VDOM toggle (edit page)
+const useVdomEl = document.getElementById('use_vdom');
+const vdomNameEl = document.getElementById('vdom_name');
+if (useVdomEl && vdomNameEl) {
+    const syncVdomState = () => {
+        const enabled = useVdomEl.checked;
+        vdomNameEl.disabled = !enabled;
+        if (!enabled) vdomNameEl.value = '';
+    };
+    useVdomEl.addEventListener('change', syncVdomState);
+    syncVdomState();
+}
+</script>
 {% endblock %}

@@ -17,6 +17,7 @@ from .db.clickhouse import ClickHouseClient
 from .api.devices import router as devices_api_router
 from .api.logs import router as logs_api_router
 from .api.views import router as views_router
+from .services.scheduler import start_scheduler, stop_scheduler
 
 
 # Setup logging
@@ -44,12 +45,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"ClickHouse setup warning: {e}")
 
+    # Start background scheduler for routing table collection
+    try:
+        start_scheduler()
+        logger.info("Background scheduler started")
+    except Exception as e:
+        logger.warning(f"Scheduler setup warning: {e}")
+
     logger.info(f"Application ready on {settings.host}:{settings.port}")
 
     yield
 
     # Shutdown
     logger.info("Shutting down NetLogs...")
+    stop_scheduler()
     await close_db()
     logger.info("Database connections closed")
 

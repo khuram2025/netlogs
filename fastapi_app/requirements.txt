@@ -32,3 +32,13 @@ httpx>=0.25.0
 
 # Production Server
 gunicorn>=21.2.0
+
+# SSH for device management
+paramiko>=3.4.0
+asyncssh>=2.14.0
+
+# Encryption for credentials
+cryptography>=41.0.0
+
+# Background tasks / scheduling
+apscheduler>=3.10.0

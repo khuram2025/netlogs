@@ -331,7 +331,7 @@ class ClickHouseClient:
             'dstip': "if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])",
             'srcport': "if(parsed_data['srcport'] != '', parsed_data['srcport'], parsed_data['src_port'])",
             'dstport': "if(parsed_data['dstport'] != '', parsed_data['dstport'], parsed_data['dst_port'])",
-            'action': "parsed_data['action']",
+            'action': "if(action != '', action, parsed_data['action'])",
             'proto': "if(parsed_data['proto'] != '', parsed_data['proto'], parsed_data['protocol'])",
             'app': "if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application'])",
             'srcintf': "if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if'])",
@@ -965,7 +965,7 @@ class ClickHouseClient:
             'dstip': "if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])",
             'srcport': "if(parsed_data['srcport'] != '', parsed_data['srcport'], parsed_data['src_port'])",
             'dstport': "if(parsed_data['dstport'] != '', parsed_data['dstport'], parsed_data['dst_port'])",
-            'action': "parsed_data['action']",
+            'action': "if(action != '', action, parsed_data['action'])",
             'proto': "if(parsed_data['proto'] != '', parsed_data['proto'], parsed_data['protocol'])",
             'app': "if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application'])",
             'srcintf': "if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if'])",
@@ -1080,6 +1080,168 @@ class ClickHouseClient:
 
         result = list(client.query(query).named_results())
         return result
+
+    # Dashboard cache for performance
+    _dashboard_cache: Dict[str, Any] = {}
+    _dashboard_cache_time: float = 0
+    _DASHBOARD_CACHE_TTL: int = 30  # Cache for 30 seconds
+
+    @classmethod
+    def get_dashboard_stats(cls) -> Dict[str, Any]:
+        """
+        Get comprehensive dashboard statistics for SIEM dashboard.
+        Uses caching and optimized queries for fast performance.
+        """
+        import time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Check cache first
+        now = time.time()
+        if cls._dashboard_cache and (now - cls._dashboard_cache_time) < cls._DASHBOARD_CACHE_TTL:
+            return cls._dashboard_cache
+
+        # Define all queries - optimized for performance
+        queries = {
+            'totals': """
+                SELECT
+                    count() as total_24h,
+                    count() / (24 * 3600) as avg_eps,
+                    countIf(timestamp > now() - INTERVAL 1 HOUR) as total_1h,
+                    countIf(timestamp > now() - INTERVAL 1 HOUR) / 3600 as current_eps
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR
+            """,
+            'severity': """
+                SELECT severity, count() as count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR
+                GROUP BY severity ORDER BY severity
+            """,
+            'actions': """
+                SELECT lower(action) as action_type, count() as count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR AND action != ''
+                GROUP BY action_type ORDER BY count DESC LIMIT 10
+            """,
+            'top_sources': """
+                SELECT srcip as ip, count() as count, 0 as denied_count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR AND srcip != ''
+                GROUP BY srcip ORDER BY count DESC LIMIT 10
+            """,
+            'top_destinations': """
+                SELECT dstip as ip, count() as count, 0 as denied_count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR AND dstip != ''
+                GROUP BY dstip ORDER BY count DESC LIMIT 10
+            """,
+            'threats': """
+                SELECT srcip as ip, count() as denied_count, uniq(dstip) as unique_targets, uniq(dstport) as unique_ports
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR
+                  AND lower(action) IN ('deny', 'drop', 'block', 'reject') AND srcip != ''
+                GROUP BY srcip ORDER BY denied_count DESC LIMIT 10
+            """,
+            'ports': """
+                SELECT dstport as port, count() as count, 0 as denied_count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR AND dstport > 0
+                GROUP BY dstport ORDER BY count DESC LIMIT 10
+            """,
+            'devices': """
+                SELECT toString(device_ip) as device, count() as log_count, max(timestamp) as last_seen,
+                    countIf(severity <= 3) as critical_count, 0 as denied_count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR
+                GROUP BY device_ip ORDER BY log_count DESC
+            """,
+            'timeline': """
+                SELECT toStartOfHour(timestamp) as hour, count() as total,
+                    countIf(severity <= 3) as critical,
+                    countIf(lower(action) IN ('deny', 'drop', 'block', 'reject')) as denied
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR
+                GROUP BY hour ORDER BY hour
+            """,
+            'realtime': """
+                SELECT toStartOfMinute(timestamp) as minute, count() as count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 1 HOUR
+                GROUP BY minute ORDER BY minute
+            """,
+            'protocol': """
+                SELECT multiIf(proto = 6, 'TCP', proto = 17, 'UDP', proto = 1, 'ICMP', proto = 0, 'Unknown', toString(proto)) as protocol,
+                    count() as count
+                FROM syslogs
+                WHERE timestamp > now() - INTERVAL 24 HOUR AND proto > 0
+                GROUP BY proto ORDER BY count DESC LIMIT 5
+            """,
+        }
+
+        def run_query(name: str, query: str) -> tuple:
+            """Execute a single query and return results."""
+            try:
+                client = cls.get_client()
+                result = list(client.query(query).named_results())
+                return (name, result)
+            except Exception as e:
+                logger.error(f"Dashboard query '{name}' failed: {e}")
+                return (name, [])
+
+        # Execute all queries in parallel using ThreadPoolExecutor
+        results = {}
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(run_query, name, query): name for name, query in queries.items()}
+            for future in as_completed(futures):
+                name, result = future.result()
+                results[name] = result
+
+        # Build stats dictionary from results
+        stats = {}
+
+        # Process totals
+        if results.get('totals'):
+            r = results['totals'][0]
+            stats['total_logs_24h'] = r.get('total_24h', 0)
+            stats['avg_eps'] = round(r.get('avg_eps', 0), 1)
+            stats['total_logs_1h'] = r.get('total_1h', 0)
+            stats['current_eps'] = round(r.get('current_eps', 0), 1)
+
+        # Process severity
+        severity_result = results.get('severity', [])
+        stats['severity_breakdown'] = severity_result
+        stats['critical_count'] = sum(r['count'] for r in severity_result if r['severity'] <= 3)
+        stats['warning_count'] = sum(r['count'] for r in severity_result if r['severity'] == 4)
+        stats['info_count'] = sum(r['count'] for r in severity_result if r['severity'] >= 5)
+
+        # Process actions
+        action_result = results.get('actions', [])
+        stats['action_breakdown'] = action_result
+        allow_actions = ['accept', 'allow', 'pass', 'close', 'client-rst', 'server-rst']
+        deny_actions = ['deny', 'drop', 'block', 'reject']
+        stats['allowed_count'] = sum(r['count'] for r in action_result if r.get('action_type') in allow_actions)
+        stats['denied_count'] = sum(r['count'] for r in action_result if r.get('action_type') in deny_actions)
+
+        # Direct assignments
+        stats['top_sources'] = results.get('top_sources', [])
+        stats['top_destinations'] = results.get('top_destinations', [])
+        stats['potential_threats'] = results.get('threats', [])
+        stats['top_ports'] = results.get('ports', [])
+        stats['device_activity'] = results.get('devices', [])
+        stats['active_devices'] = len(stats['device_activity'])
+        stats['traffic_timeline'] = results.get('timeline', [])
+        stats['realtime_traffic'] = results.get('realtime', [])
+        stats['protocol_distribution'] = results.get('protocol', [])
+
+        # Skip geo query for now - it's too slow (access parsed_data Map)
+        # Can be added back with a dedicated materialized column later
+        stats['geo_sources'] = []
+
+        # Update cache
+        cls._dashboard_cache = stats
+        cls._dashboard_cache_time = now
+
+        return stats
 
     @classmethod
     def get_session_flow_by_log(

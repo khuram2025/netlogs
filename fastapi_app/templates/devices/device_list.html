@@ -89,7 +89,7 @@
             {% for device in devices %}
             {% set device_storage = device_storage_map.get(device.ip_address, {}) %}
             <tr>
-                <td><strong>{{ device.ip_address }}</strong></td>
+                <td><a href="{{ url_for('device_detail', device_id=device.id) }}" style="color: var(--primary); font-weight: bold; text-decoration: none;">{{ device.ip_address }}</a></td>
                 <td>{{ device.hostname or '-' }}</td>
                 <td><span class="badge" style="background-color: #6366f1; color: white;">{{ device.parser_display }}</span></td>
                 <td><span class="badge badge-{{ device.status }}">{{ device.status }}</span></td>

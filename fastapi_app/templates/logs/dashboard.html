@@ -1,111 +1,985 @@
 {% extends 'base.html' %}
 
+{% block extra_css %}
+<style>
+    .dashboard-grid {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .grid-kpi {
+        grid-template-columns: repeat(6, 1fr);
+    }
+
+    .grid-charts {
+        grid-template-columns: 2fr 1fr;
+    }
+
+    .grid-tables {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    @media (max-width: 1400px) {
+        .grid-kpi { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 900px) {
+        .grid-kpi { grid-template-columns: repeat(2, 1fr); }
+        .grid-charts, .grid-tables, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* KPI Cards */
+    .kpi-card {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+    }
+
+    .kpi-card.primary::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .kpi-card.success::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .kpi-card.warning::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .kpi-card.danger::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .kpi-card.purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .kpi-card.cyan::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+
+    .kpi-icon {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 40px;
+        height: 40px;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        opacity: 0.9;
+    }
+
+    .kpi-card.primary .kpi-icon { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .kpi-card.success .kpi-icon { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .kpi-card.warning .kpi-icon { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .kpi-card.danger .kpi-icon { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .kpi-card.purple .kpi-icon { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+    .kpi-card.cyan .kpi-icon { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+
+    .kpi-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+        font-weight: 600;
+    }
+
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: white;
+        line-height: 1.2;
+    }
+
+    .kpi-subtext {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .kpi-trend {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        margin-left: 0.5rem;
+    }
+
+    .kpi-trend.up { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .kpi-trend.down { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    /* Chart Cards */
+    .chart-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+    }
+
+    .chart-card h3 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: white;
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .chart-card h3 .icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 0.375rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 250px;
+    }
+
+    .chart-container.small {
+        height: 180px;
+    }
+
+    /* Data Tables */
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+
+    .data-table th {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .data-table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+        color: var(--text-color);
+    }
+
+    .data-table tr:hover td {
+        background: rgba(59, 130, 246, 0.05);
+    }
+
+    .data-table .ip {
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 0.75rem;
+        color: #60a5fa;
+    }
+
+    .data-table .count {
+        font-weight: 600;
+        color: white;
+    }
+
+    .data-table .danger-text {
+        color: #f87171;
+    }
+
+    .data-table .warning-text {
+        color: #fbbf24;
+    }
+
+    .data-table .success-text {
+        color: #4ade80;
+    }
+
+    /* Mini bar chart in tables */
+    .mini-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .mini-bar-bg {
+        flex: 1;
+        height: 6px;
+        background: rgba(51, 65, 85, 0.5);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .mini-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+
+    .mini-bar-fill.primary { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .mini-bar-fill.danger { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .mini-bar-fill.success { background: linear-gradient(90deg, #22c55e, #4ade80); }
+
+    /* Status indicators */
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+
+    .status-dot.online { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+    .status-dot.warning { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+    .status-dot.offline { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+
+    /* Section headers */
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Badge improvements */
+    .badge-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .badge-pill.critical { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-pill.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-pill.info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .badge-pill.success { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+    /* Port/Service labels */
+    .port-label {
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 0.75rem;
+    }
+
+    .service-label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        margin-left: 0.25rem;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    /* Scrollable table container */
+    .table-scroll {
+        max-height: 280px;
+        overflow-y: auto;
+    }
+
+    /* Recent logs section */
+    .log-message {
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .log-timestamp {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    /* Refresh indicator */
+    .refresh-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .refresh-indicator .dot {
+        width: 6px;
+        height: 6px;
+        background: #22c55e;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* Alert banner */
+    .alert-banner {
+        background: linear-gradient(90deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .alert-banner.warning {
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .alert-banner .icon {
+        font-size: 1.25rem;
+    }
+
+    .alert-banner .text {
+        flex: 1;
+        font-size: 0.85rem;
+    }
+
+    .alert-banner .action {
+        font-size: 0.75rem;
+        color: var(--primary);
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <h2>System Overview</h2>
-    {% if error %}
-    <div class="alert alert-error">
-        Error connecting to ClickHouse: {{ error }}
+{% if error %}
+<div class="alert alert-error">
+    Error loading dashboard: {{ error }}
+</div>
+{% else %}
+
+<!-- Dashboard Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+        <h2 style="margin: 0; font-size: 1.5rem;">Security Dashboard</h2>
+        <p style="margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.85rem;">Real-time network security monitoring</p>
     </div>
-    {% else %}
-    <div class="grid grid-2" style="margin-bottom: 2rem;">
-        <div>
-            <h3>Log Severity Distribution (24h)</h3>
-            <canvas id="severityChart"></canvas>
-        </div>
-        <div>
-            <h3>Traffic (Last Hour)</h3>
-            <canvas id="timelineChart"></canvas>
-        </div>
+    <div class="refresh-indicator">
+        <span class="dot"></span>
+        <span>Live</span>
+        <span style="margin-left: 0.5rem; color: #475569;">|</span>
+        <span style="margin-left: 0.5rem;">Last 24 hours</span>
     </div>
-    {% endif %}
 </div>
 
-<div class="card">
-    <h3>Recent Logs</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Device IP</th>
-                <th>Severity</th>
-                <th>Message</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr>
-                <td>{{ log.timestamp }}</td>
-                <td>{{ log.device_ip }}</td>
-                <td>
-                    <span class="badge {% if log.severity <= 3 %}badge-critical{% elif log.severity == 4 %}badge-warning{% else %}badge-info{% endif %}">
-                        {{ severity_map.get(log.severity, 'Unknown') }}
-                    </span>
-                </td>
-                <td style="font-family: monospace; font-size: 0.9em;">{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="4" style="text-align: center; color: #94a3b8;">No logs found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Alert Banner (show if there are critical events or high denied traffic) -->
+{% if stats.get('critical_count', 0) > 100 %}
+<div class="alert-banner">
+    <span class="icon">&#9888;</span>
+    <span class="text"><strong>{{ stats.critical_count | format_number }}</strong> critical events detected in the last 24 hours</span>
+    <a href="{{ url_for('log_list') }}?severity=2" class="action">Investigate &rarr;</a>
 </div>
+{% endif %}
+
+{% if stats.get('denied_count', 0) > 1000 %}
+<div class="alert-banner warning">
+    <span class="icon">&#128737;</span>
+    <span class="text"><strong>{{ stats.denied_count | format_number }}</strong> blocked connections - Review potential threats</span>
+    <a href="{{ url_for('policy_builder') }}" class="action">View Denied &rarr;</a>
+</div>
+{% endif %}
+
+<!-- KPI Cards Row -->
+<div class="dashboard-grid grid-kpi">
+    <div class="kpi-card primary">
+        <div class="kpi-icon">&#128202;</div>
+        <div class="kpi-label">Total Events (24h)</div>
+        <div class="kpi-value">{{ stats.get('total_logs_24h', 0) | format_number }}</div>
+        <div class="kpi-subtext">{{ stats.get('avg_eps', 0) }} avg EPS</div>
+    </div>
+
+    <div class="kpi-card cyan">
+        <div class="kpi-icon">&#9889;</div>
+        <div class="kpi-label">Current EPS</div>
+        <div class="kpi-value">{{ stats.get('current_eps', 0) }}</div>
+        <div class="kpi-subtext">Events per second</div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-icon">&#10003;</div>
+        <div class="kpi-label">Allowed</div>
+        <div class="kpi-value">{{ stats.get('allowed_count', 0) | format_number }}</div>
+        <div class="kpi-subtext">Permitted connections</div>
+    </div>
+
+    <div class="kpi-card danger">
+        <div class="kpi-icon">&#128683;</div>
+        <div class="kpi-label">Blocked</div>
+        <div class="kpi-value">{{ stats.get('denied_count', 0) | format_number }}</div>
+        <div class="kpi-subtext">Denied connections</div>
+    </div>
+
+    <div class="kpi-card warning">
+        <div class="kpi-icon">&#9888;</div>
+        <div class="kpi-label">Critical Events</div>
+        <div class="kpi-value">{{ stats.get('critical_count', 0) | format_number }}</div>
+        <div class="kpi-subtext">Severity 0-3</div>
+    </div>
+
+    <div class="kpi-card purple">
+        <div class="kpi-icon">&#128421;</div>
+        <div class="kpi-label">Active Devices</div>
+        <div class="kpi-value">{{ stats.get('active_devices', 0) }}</div>
+        <div class="kpi-subtext">Sending logs</div>
+    </div>
+</div>
+
+<!-- Main Charts Row -->
+<div class="dashboard-grid grid-charts">
+    <!-- Traffic Timeline -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">&#128200;</span>
+            Traffic Timeline (24 Hours)
+        </h3>
+        <div class="chart-container">
+            <canvas id="trafficChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Severity Distribution -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">&#128202;</span>
+            Event Severity
+        </h3>
+        <div class="chart-container">
+            <canvas id="severityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Second Charts Row -->
+<div class="dashboard-grid grid-3">
+    <!-- Real-time Traffic -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">&#9889;</span>
+            Real-time Traffic (1 Hour)
+        </h3>
+        <div class="chart-container small">
+            <canvas id="realtimeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Action Distribution -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">&#128736;</span>
+            Firewall Actions
+        </h3>
+        <div class="chart-container small">
+            <canvas id="actionChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Protocol Distribution -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">&#128279;</span>
+            Protocol Distribution
+        </h3>
+        <div class="chart-container small">
+            <canvas id="protocolChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tables Row -->
+<div class="dashboard-grid grid-tables">
+    <!-- Top Sources -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">&#127760;</span>
+            Top Source IPs
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source IP</th>
+                        <th>Events</th>
+                        <th>Denied</th>
+                        <th>Activity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for src in stats.get('top_sources', [])[:8] %}
+                    {% set max_count = stats.get('top_sources', [{}])[0].get('count', 1) %}
+                    <tr>
+                        <td><span class="ip">{{ src.ip }}</span></td>
+                        <td class="count">{{ src.count | format_number }}</td>
+                        <td class="{% if src.denied_count > 0 %}danger-text{% endif %}">{{ src.denied_count | format_number }}</td>
+                        <td>
+                            <div class="mini-bar">
+                                <div class="mini-bar-bg">
+                                    <div class="mini-bar-fill primary" style="width: {{ (src.count / max_count * 100) | int }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="empty-state">No source data available</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Potential Threats -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">&#128737;</span>
+            Potential Threats (Denied Sources)
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source IP</th>
+                        <th>Denied</th>
+                        <th>Targets</th>
+                        <th>Ports</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for threat in stats.get('potential_threats', [])[:8] %}
+                    <tr>
+                        <td><span class="ip">{{ threat.ip }}</span></td>
+                        <td class="count danger-text">{{ threat.denied_count | format_number }}</td>
+                        <td>{{ threat.unique_targets }}</td>
+                        <td>{{ threat.unique_ports }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="empty-state">No threats detected</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Second Tables Row -->
+<div class="dashboard-grid grid-tables">
+    <!-- Top Ports -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">&#128268;</span>
+            Top Destination Ports
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>Service</th>
+                        <th>Events</th>
+                        <th>Denied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for port in stats.get('top_ports', [])[:8] %}
+                    <tr>
+                        <td><span class="port-label">{{ port.port }}</span></td>
+                        <td><span class="service-label">{{ port_services.get(port.port, '-') }}</span></td>
+                        <td class="count">{{ port.count | format_number }}</td>
+                        <td class="{% if port.denied_count > 0 %}danger-text{% endif %}">{{ port.denied_count | format_number }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="empty-state">No port data available</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Device Activity -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">&#128421;</span>
+            Device Activity
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Events</th>
+                        <th>Critical</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in stats.get('device_activity', [])[:8] %}
+                    <tr>
+                        <td><span class="ip">{{ device.device }}</span></td>
+                        <td class="count">{{ device.log_count | format_number }}</td>
+                        <td class="{% if device.critical_count > 0 %}warning-text{% endif %}">{{ device.critical_count | format_number }}</td>
+                        <td>
+                            {% set last_seen = device.last_seen %}
+                            {% if last_seen %}
+                            <span class="status-dot online"></span>
+                            <span style="font-size: 0.7rem;">Active</span>
+                            {% else %}
+                            <span class="status-dot offline"></span>
+                            <span style="font-size: 0.7rem;">Unknown</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="empty-state">No devices reporting</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Geographic Sources (if available) -->
+{% if stats.get('geo_sources') %}
+<div class="dashboard-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">&#127758;</span>
+            Top Source Countries
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Events</th>
+                        <th>Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set total_geo = stats.get('geo_sources', [{}])[0].get('count', 1) if stats.get('geo_sources') else 1 %}
+                    {% for geo in stats.get('geo_sources', [])[:8] %}
+                    <tr>
+                        <td>{{ geo.country }}</td>
+                        <td class="count">{{ geo.count | format_number }}</td>
+                        <td>
+                            <div class="mini-bar">
+                                <div class="mini-bar-bg">
+                                    <div class="mini-bar-fill primary" style="width: {{ (geo.count / total_geo * 100) | int }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Top Destinations -->
+    <div class="chart-card">
+        <h3>
+            <span class="icon" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">&#127919;</span>
+            Top Destination IPs
+        </h3>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Destination IP</th>
+                        <th>Events</th>
+                        <th>Denied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dst in stats.get('top_destinations', [])[:8] %}
+                    <tr>
+                        <td><span class="ip">{{ dst.ip }}</span></td>
+                        <td class="count">{{ dst.count | format_number }}</td>
+                        <td class="{% if dst.denied_count > 0 %}danger-text{% endif %}">{{ dst.denied_count | format_number }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="empty-state">No destination data available</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Logs -->
+<div class="chart-card" style="margin-top: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">
+            <span class="icon" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8;">&#128196;</span>
+            Recent Events
+        </h3>
+        <a href="{{ url_for('log_list') }}" class="btn btn-sm btn-primary">View All Logs &rarr;</a>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Device</th>
+                    <th>Severity</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs[:15] %}
+                <tr>
+                    <td class="log-timestamp">{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp else '-' }}</td>
+                    <td><span class="ip">{{ log.device_ip }}</span></td>
+                    <td>
+                        {% if log.severity <= 3 %}
+                        <span class="badge-pill critical">{{ severity_map.get(log.severity, 'Unknown') }}</span>
+                        {% elif log.severity == 4 %}
+                        <span class="badge-pill warning">{{ severity_map.get(log.severity, 'Unknown') }}</span>
+                        {% else %}
+                        <span class="badge-pill info">{{ severity_map.get(log.severity, 'Unknown') }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="log-message" title="{{ log.message }}">{{ log.message[:120] }}{% if log.message|length > 120 %}...{% endif %}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="empty-state">No recent logs</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = 'rgba(51, 65, 85, 0.5)';
+
+    // Traffic Timeline Chart (24h)
+    const trafficCtx = document.getElementById('trafficChart');
+    if (trafficCtx) {
+        new Chart(trafficCtx, {
+            type: 'line',
+            data: {
+                labels: [{% for label in timeline_labels %}'{{ label }}',{% endfor %}],
+                datasets: [{
+                    label: 'Total Events',
+                    data: [{% for val in timeline_data %}{{ val }},{% endfor %}],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }, {
+                    label: 'Denied',
+                    data: [{% for val in timeline_denied %}{{ val }},{% endfor %}],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }, {
+                    label: 'Critical',
+                    data: [{% for val in timeline_critical %}{{ val }},{% endfor %}],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 5]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: { boxWidth: 12, padding: 15 }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                        ticks: { callback: function(value) { return value.toLocaleString(); } }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
     // Severity Chart
     const severityCtx = document.getElementById('severityChart');
     if (severityCtx) {
+        const severityColors = {
+            0: '#dc2626', 1: '#ef4444', 2: '#f87171', 3: '#fb923c',
+            4: '#fbbf24', 5: '#22c55e', 6: '#3b82f6', 7: '#8b5cf6'
+        };
         new Chart(severityCtx, {
             type: 'doughnut',
             data: {
                 labels: [{% for item in severity_data %}'{{ item.name }}',{% endfor %}],
                 datasets: [{
                     data: [{% for item in severity_data %}{{ item.count }},{% endfor %}],
-                    backgroundColor: [
-                        '#ef4444', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'
-                    ],
-                    borderWidth: 0
+                    backgroundColor: [{% for item in severity_data %}'{{ {0: "#dc2626", 1: "#ef4444", 2: "#f87171", 3: "#fb923c", 4: "#fbbf24", 5: "#22c55e", 6: "#3b82f6", 7: "#8b5cf6"}.get(item.severity, "#64748b") }}',{% endfor %}],
+                    borderWidth: 0,
+                    hoverOffset: 4
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
                 plugins: {
-                    legend: { position: 'right', labels: { color: '#e2e8f0' } }
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                    }
                 }
             }
         });
     }
 
-    // Timeline Chart
-    const timelineCtx = document.getElementById('timelineChart');
-    if (timelineCtx) {
-        new Chart(timelineCtx, {
+    // Real-time Traffic Chart
+    const realtimeCtx = document.getElementById('realtimeChart');
+    if (realtimeCtx) {
+        new Chart(realtimeCtx, {
             type: 'line',
             data: {
-                labels: [{% for label in timeline_labels %}'{{ label }}',{% endfor %}],
+                labels: [{% for label in realtime_labels %}'{{ label }}',{% endfor %}],
                 datasets: [{
-                    label: 'Logs per Minute',
-                    data: [{% for val in timeline_data %}{{ val }},{% endfor %}],
-                    borderColor: '#3b82f6',
+                    data: [{% for val in realtime_data %}{{ val }},{% endfor %}],
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6, 182, 212, 0.1)',
                     tension: 0.4,
                     fill: true,
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                    pointRadius: 0,
+                    borderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
-                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
-                },
-                plugins: {
-                    legend: { display: false }
+                    y: { beginAtZero: true, grid: { color: 'rgba(51, 65, 85, 0.3)' } },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } }
                 }
             }
         });
     }
+
+    // Action Chart
+    const actionCtx = document.getElementById('actionChart');
+    if (actionCtx) {
+        const actionColors = {
+            'accept': '#22c55e', 'allow': '#22c55e', 'pass': '#22c55e',
+            'close': '#3b82f6', 'client-rst': '#3b82f6', 'server-rst': '#3b82f6',
+            'deny': '#ef4444', 'drop': '#ef4444', 'block': '#ef4444', 'reject': '#ef4444',
+            'timeout': '#f59e0b'
+        };
+        new Chart(actionCtx, {
+            type: 'bar',
+            data: {
+                labels: [{% for item in action_data %}'{{ item.action }}',{% endfor %}],
+                datasets: [{
+                    data: [{% for item in action_data %}{{ item.count }},{% endfor %}],
+                    backgroundColor: [{% for item in action_data %}'{{ {"accept": "#22c55e", "allow": "#22c55e", "pass": "#22c55e", "close": "#3b82f6", "client-rst": "#3b82f6", "server-rst": "#3b82f6", "deny": "#ef4444", "drop": "#ef4444", "block": "#ef4444", "reject": "#ef4444", "timeout": "#f59e0b"}.get(item.action, "#64748b") }}',{% endfor %}],
+                    borderRadius: 4,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(51, 65, 85, 0.3)' } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Protocol Chart
+    const protocolCtx = document.getElementById('protocolChart');
+    if (protocolCtx) {
+        new Chart(protocolCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for item in protocol_data %}'{{ item.protocol }}',{% endfor %}],
+                datasets: [{
+                    data: [{% for item in protocol_data %}{{ item.count }},{% endfor %}],
+                    backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+
+    // Auto-refresh every 60 seconds
+    setTimeout(function() {
+        window.location.reload();
+    }, 60000);
 </script>
 {% endblock %}

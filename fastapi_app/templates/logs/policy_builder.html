@@ -981,6 +981,37 @@
             font-size: 12px;
             font-weight: 600;
             color: var(--accent-amber);
+            flex: 1;
+        }
+
+        .build-policy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .build-policy-btn:hover {
+            background: #16a34a;
+            transform: translateY(-1px);
+        }
+
+        .build-policy-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .build-policy-btn.loading {
+            opacity: 0.7;
+            cursor: wait;
         }
 
         .policy-suggestion-content {
@@ -991,6 +1022,114 @@
             padding: 10px 12px;
             border-radius: var(--radius-sm);
             white-space: pre-wrap;
+        }
+
+        /* Enhanced Policy Details Grid */
+        .policy-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed rgba(245, 158, 11, 0.3);
+        }
+
+        .policy-detail-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .policy-detail-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .policy-detail-title svg {
+            color: var(--accent-amber);
+            opacity: 0.8;
+        }
+
+        .policy-detail-flow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .policy-detail-flow svg {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .zone-tag {
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        .zone-tag.src {
+            background: var(--accent-cyan-dim);
+            color: var(--accent-blue);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .zone-tag.dst {
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .intf-tag {
+            padding: 4px 10px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        .policy-detail-value {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .app-tag {
+            padding: 4px 10px;
+            background: var(--accent-purple);
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-purple);
+        }
+
+        .app-cat {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .blocking-rule {
+            padding: 4px 10px;
+            background: var(--accent-red-dim);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            font-family: var(--font-mono);
+            color: var(--accent-red);
         }
 
         /* Raw Log Section */
@@ -1416,6 +1555,211 @@
             flex-direction: column;
             overflow: hidden;
         }
+
+        /* ===== POLICY CLI MODAL ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-default);
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .modal-title svg {
+            width: 20px;
+            height: 20px;
+            color: var(--accent-green);
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-primary);
+        }
+
+        .modal-close svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal-section {
+            margin-bottom: 20px;
+        }
+
+        .modal-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .modal-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .modal-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .cli-output {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .cli-output .cli-comment {
+            color: var(--text-muted);
+        }
+
+        .cli-output .cli-command {
+            color: var(--accent-cyan);
+        }
+
+        .cli-output .cli-value {
+            color: var(--accent-green);
+        }
+
+        .modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-default);
+            background: var(--bg-elevated);
+        }
+
+        .modal-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .modal-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .modal-meta-value {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 36px;
+            padding: 0 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .modal-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .modal-btn-primary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            background: #16a34a;
+        }
+
+        .modal-btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border-default);
+        }
+
+        .modal-btn-secondary:hover {
+            background: var(--bg-active);
+            border-color: var(--border-emphasis);
+        }
     </style>
 </head>
 <body>
@@ -1674,7 +2018,16 @@
                                     <td colspan="9">
                                         <div class="detail-panel">
                                             <!-- Policy Suggestion -->
-                                            <div class="policy-suggestion">
+                                            {% set proto = pd.get('proto', pd.get('protocol', '')) %}
+                                            {% set proto_name = 'tcp' if proto == '6' else 'udp' if proto == '17' else 'icmp' if proto == '1' else proto or 'any' %}
+                                            {% set src_zone = pd.get('srczone', pd.get('src_zone', '')) %}
+                                            {% set dst_zone = pd.get('dstzone', pd.get('dst_zone', '')) %}
+                                            {% set src_intf = pd.get('srcintf', pd.get('inbound_if', '')) %}
+                                            {% set dst_intf = pd.get('dstintf', pd.get('outbound_if', '')) %}
+                                            {% set app_name = pd.get('app', pd.get('application', '')) %}
+                                            {% set app_cat = pd.get('appcat', pd.get('category_of_app', pd.get('category', ''))) %}
+                                            {% set blocking_rule = pd.get('policyname', pd.get('rule', '')) %}
+                                            <div class="policy-suggestion" data-log-index="{{ loop.index }}">
                                                 <div class="policy-suggestion-header">
                                                     <svg class="policy-suggestion-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                                                         <circle cx="12" cy="12" r="10"/>
@@ -1682,11 +2035,72 @@
                                                         <line x1="12" y1="17" x2="12.01" y2="17"/>
                                                     </svg>
                                                     <span class="policy-suggestion-title">Suggested Policy Rule</span>
+                                                    <button type="button" class="build-policy-btn" onclick="buildPolicy({{ loop.index }}, event)" data-log='{{ log | tojson | e }}' data-device="{{ log.get('device_ip', '') }}">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                                            <polyline points="14 2 14 8 20 8"/>
+                                                            <line x1="16" y1="13" x2="8" y2="13"/>
+                                                            <line x1="16" y1="17" x2="8" y2="17"/>
+                                                            <polyline points="10 9 9 9 8 9"/>
+                                                        </svg>
+                                                        Build CLI
+                                                    </button>
                                                 </div>
-                                                <div class="policy-suggestion-content">{% set proto = pd.get('proto', pd.get('protocol', '')) %}{% set proto_name = 'tcp' if proto == '6' else 'udp' if proto == '17' else 'icmp' if proto == '1' else proto or 'any' %}Source: {{ pd.get('srcip', pd.get('src_ip', 'any')) }}
+                                                <div class="policy-suggestion-content">Source: {{ pd.get('srcip', pd.get('src_ip', 'any')) }}
 Destination: {{ pd.get('dstip', pd.get('dst_ip', 'any')) }}
 Service: {{ proto_name }}/{{ pd.get('dstport', pd.get('dst_port', 'any')) }}
 Action: ALLOW</div>
+
+                                                <!-- Enhanced Policy Details Grid -->
+                                                <div class="policy-details-grid">
+                                                    <div class="policy-detail-section">
+                                                        <div class="policy-detail-title">
+                                                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                                            Zone Flow
+                                                        </div>
+                                                        <div class="policy-detail-flow">
+                                                            <span class="zone-tag src">{{ src_zone or 'any' }}</span>
+                                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                                            <span class="zone-tag dst">{{ dst_zone or 'any' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="policy-detail-section">
+                                                        <div class="policy-detail-title">
+                                                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                                                            Interfaces
+                                                        </div>
+                                                        <div class="policy-detail-flow">
+                                                            <span class="intf-tag">{{ src_intf or 'any' }}</span>
+                                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                                            <span class="intf-tag">{{ dst_intf or 'any' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    {% if app_name and app_name != 'not-applicable' %}
+                                                    <div class="policy-detail-section">
+                                                        <div class="policy-detail-title">
+                                                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                                                            Application
+                                                        </div>
+                                                        <div class="policy-detail-value">
+                                                            <span class="app-tag">{{ app_name }}</span>
+                                                            {% if app_cat and app_cat != 'unknown' %}
+                                                            <span class="app-cat">({{ app_cat }})</span>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if blocking_rule %}
+                                                    <div class="policy-detail-section">
+                                                        <div class="policy-detail-title">
+                                                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                                                            Blocked By
+                                                        </div>
+                                                        <div class="policy-detail-value">
+                                                            <span class="blocking-rule">{{ blocking_rule }}</span>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
                                             </div>
 
                                             <!-- Network Flow -->
@@ -1895,6 +2309,66 @@ Action: ALLOW</div>
     <input type="hidden" name="per_page" value="{{ per_page }}">
     </form>
 
+    <!-- Policy CLI Modal -->
+    <div class="modal-overlay" id="policyModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    FortiGate Policy CLI Commands
+                </div>
+                <button type="button" class="modal-close" onclick="closeModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <div class="modal-section-header">
+                        <span class="modal-section-title">Complete CLI Configuration</span>
+                    </div>
+                    <div class="cli-output" id="cliOutput">
+                        <!-- CLI output will be inserted here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="modal-meta">
+                    <div class="modal-meta-item">
+                        <span>Source Zone:</span>
+                        <span class="modal-meta-value" id="metaSrcZone">--</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span>Dest Zone:</span>
+                        <span class="modal-meta-value" id="metaDstZone">--</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span>Service:</span>
+                        <span class="modal-meta-value" id="metaService">--</span>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn modal-btn-secondary" onclick="closeModal()">
+                        Close
+                    </button>
+                    <button type="button" class="modal-btn modal-btn-primary" onclick="copyCliToClipboard()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        Copy CLI
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Toggle row expansion
         function toggleRow(index) {
@@ -2041,6 +2515,163 @@ Action: ALLOW</div>
                 if (btn.dataset.range === timeRange) btn.classList.add('active');
             });
         });
+
+        // ===== Policy Builder Functions =====
+        let currentCliOutput = '';
+
+        // Build policy CLI from log data
+        async function buildPolicy(index, event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const btn = event.target.closest('.build-policy-btn');
+            if (!btn || btn.classList.contains('loading')) return;
+
+            // Get log data from button's data attribute
+            let logData;
+            try {
+                logData = JSON.parse(btn.dataset.log);
+            } catch (e) {
+                console.error('Failed to parse log data:', e);
+                alert('Error: Could not parse log data');
+                return;
+            }
+
+            const deviceIp = btn.dataset.device;
+
+            // Set loading state
+            btn.classList.add('loading');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="spinning"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Building...';
+
+            try {
+                const response = await fetch('/api/build-policy/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        log_data: logData,
+                        device_ip: deviceIp
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Store CLI for copy function
+                    currentCliOutput = result.cli;
+
+                    // Update modal content
+                    document.getElementById('cliOutput').textContent = result.cli;
+
+                    // Update metadata
+                    const meta = result.metadata || {};
+                    document.getElementById('metaSrcZone').textContent = meta.srczone || 'any';
+                    document.getElementById('metaDstZone').textContent = meta.dstzone || 'any';
+                    document.getElementById('metaService').textContent = meta.service_name || '--';
+
+                    // Show modal
+                    openModal();
+                } else {
+                    alert('Error building policy: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error building policy:', error);
+                alert('Error building policy: ' + error.message);
+            } finally {
+                // Reset button state
+                btn.classList.remove('loading');
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        // Open modal
+        function openModal() {
+            document.getElementById('policyModal').classList.add('visible');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('policyModal').classList.remove('visible');
+            document.body.style.overflow = '';
+        }
+
+        // Copy CLI to clipboard
+        async function copyCliToClipboard() {
+            if (!currentCliOutput) return;
+
+            const showSuccess = () => {
+                // Update button to show success
+                const btn = document.querySelector('.modal-btn-primary');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Copied!';
+
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                }, 2000);
+            };
+
+            // Use fallback method that works in all contexts
+            const fallbackCopy = () => {
+                const textarea = document.createElement('textarea');
+                textarea.value = currentCliOutput;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showSuccess();
+                } catch (e) {
+                    console.error('Fallback copy failed:', e);
+                    alert('Copy failed. Please select the text manually.');
+                }
+                document.body.removeChild(textarea);
+            };
+
+            // Try modern clipboard API first (requires HTTPS or localhost)
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try {
+                    await navigator.clipboard.writeText(currentCliOutput);
+                    showSuccess();
+                } catch (error) {
+                    console.log('Clipboard API failed, using fallback:', error);
+                    fallbackCopy();
+                }
+            } else {
+                // Use fallback for non-secure contexts
+                fallbackCopy();
+            }
+        }
+
+        // Close modal on overlay click
+        document.getElementById('policyModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Add spinning animation CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            .spinning {
+                animation: spin 1s linear infinite;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
