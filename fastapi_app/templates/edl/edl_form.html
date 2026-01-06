@@ -86,7 +86,7 @@
 
     .type-options {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 0.75rem;
     }
 
@@ -215,7 +215,7 @@
             <label>List Type *</label>
             <div class="type-options">
                 <label class="type-option">
-                    <input type="radio" name="list_type" value="ip" checked>
+                    <input type="radio" name="list_type" value="IP" checked>
                     <div class="type-card">
                         <div class="icon">🌐</div>
                         <div class="name">IP Address</div>
@@ -223,7 +223,7 @@
                     </div>
                 </label>
                 <label class="type-option">
-                    <input type="radio" name="list_type" value="domain">
+                    <input type="radio" name="list_type" value="DOMAIN">
                     <div class="type-card">
                         <div class="icon">🔗</div>
                         <div class="name">Domain</div>
@@ -231,11 +231,19 @@
                     </div>
                 </label>
                 <label class="type-option">
-                    <input type="radio" name="list_type" value="url">
+                    <input type="radio" name="list_type" value="URL">
                     <div class="type-card">
                         <div class="icon">📄</div>
                         <div class="name">URL</div>
                         <div class="desc">Full URLs, paths</div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="list_type" value="HASH">
+                    <div class="type-card">
+                        <div class="icon">🔐</div>
+                        <div class="name">File Hash</div>
+                        <div class="desc">MD5, SHA1, SHA256</div>
                     </div>
                 </label>
             </div>

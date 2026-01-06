@@ -9,9 +9,10 @@ from enum import Enum
 
 class EDLType(str, Enum):
     """Type of entries allowed in the list."""
-    IP = "ip"
-    DOMAIN = "domain"
-    URL = "url"
+    IP = "IP"
+    DOMAIN = "DOMAIN"
+    URL = "URL"
+    HASH = "HASH"
 
 
 # --- EDL List Schemas ---
@@ -224,11 +225,39 @@ def validate_url_entry(value: str) -> tuple[bool, str]:
     return False, f"Invalid URL format: {value}"
 
 
+def validate_hash_entry(value: str) -> tuple[bool, str]:
+    """Validate file hash entry (MD5, SHA1, SHA256, SHA512)."""
+    value = value.strip().lower()
+
+    # Skip comments
+    if value.startswith('#') or not value:
+        return False, "Empty or comment line"
+
+    # MD5 - 32 hex characters
+    if re.match(r'^[a-f0-9]{32}$', value):
+        return True, ""
+
+    # SHA1 - 40 hex characters
+    if re.match(r'^[a-f0-9]{40}$', value):
+        return True, ""
+
+    # SHA256 - 64 hex characters
+    if re.match(r'^[a-f0-9]{64}$', value):
+        return True, ""
+
+    # SHA512 - 128 hex characters
+    if re.match(r'^[a-f0-9]{128}$', value):
+        return True, ""
+
+    return False, f"Invalid hash format: {value} (expected MD5, SHA1, SHA256, or SHA512)"
+
+
 def validate_entry_for_type(value: str, list_type: EDLType) -> tuple[bool, str]:
     """Validate entry value based on list type."""
     validators = {
         EDLType.IP: validate_ip_entry,
         EDLType.DOMAIN: validate_domain_entry,
         EDLType.URL: validate_url_entry,
+        EDLType.HASH: validate_hash_entry,
     }
     return validators.get(list_type, lambda v: (True, ""))(value)

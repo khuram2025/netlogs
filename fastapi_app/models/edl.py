@@ -8,9 +8,10 @@ from fastapi_app.db.database import Base
 
 class EDLType(str, Enum):
     """Type of entries allowed in the list."""
-    IP = "ip"
-    DOMAIN = "domain"
-    URL = "url"
+    IP = "IP"
+    DOMAIN = "DOMAIN"
+    URL = "URL"
+    HASH = "HASH"
 
 
 class EDLList(Base):
@@ -49,7 +50,8 @@ class EDLList(Base):
         return {
             EDLType.IP: "IP Address",
             EDLType.DOMAIN: "Domain",
-            EDLType.URL: "URL"
+            EDLType.URL: "URL",
+            EDLType.HASH: "File Hash"
         }.get(self.list_type, self.list_type)
 
     @property
@@ -58,7 +60,8 @@ class EDLList(Base):
         return {
             EDLType.IP: "🌐",
             EDLType.DOMAIN: "🔗",
-            EDLType.URL: "📄"
+            EDLType.URL: "📄",
+            EDLType.HASH: "🔐"
         }.get(self.list_type, "📋")
 
 

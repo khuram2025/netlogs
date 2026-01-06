@@ -201,7 +201,7 @@ async def edl_detail_page(
     base_url = str(request.base_url).rstrip('/')
 
     # Generic feed URL (aggregated by type) - RECOMMENDED
-    generic_feed_url = f"{base_url}/edl/feed/{edl.list_type.value}/"
+    generic_feed_url = f"{base_url}/edl/feed/{edl.list_type.value.lower()}/"
 
     # Specific list feed URL - OVERRIDE
     feed_url = f"{base_url}/edl/{edl_id}/feed/"
@@ -658,6 +658,12 @@ malware.example.com
 # URL examples:
 http://malicious.site/path
 https://phishing.example.com/login
+
+# File Hash examples (MD5, SHA1, SHA256, SHA512):
+d41d8cd98f00b204e9800998ecf8427e
+da39a3ee5e6b4b0d3255bfef95601890afd80709
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
 """
     return PlainTextResponse(
         content,
@@ -833,6 +839,46 @@ async def edl_feed_all_url(
     )
 
 
+@router.get("/edl/feed/hash/", name="edl_feed_all_hash")
+async def edl_feed_all_hash(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Aggregated feed of ALL file hashes from ALL active Hash lists.
+    Returns one entry per line, suitable for Palo Alto WildFire/threat intelligence.
+    Supports MD5, SHA1, SHA256, and SHA512 hashes.
+    """
+    result = await db.execute(
+        select(EDLList)
+        .options(selectinload(EDLList.entries))
+        .where(EDLList.list_type == EDLType.HASH)
+        .where(EDLList.is_active == True)
+    )
+    lists = result.scalars().all()
+
+    # Collect all active, non-expired entries from all Hash lists
+    all_entries = set()
+    list_names = []
+    for edl in lists:
+        list_names.append(edl.name)
+        for entry in edl.entries:
+            if entry.is_effective:
+                all_entries.add(entry.value.lower())  # Normalize to lowercase
+
+    content = "\n".join(sorted(all_entries))
+
+    return PlainTextResponse(
+        content,
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-EDL-Type": "hash",
+            "X-EDL-Count": str(len(all_entries)),
+            "X-EDL-Lists": ", ".join(list_names),
+        }
+    )
+
+
 @router.get("/edl/feed/all/", name="edl_feed_all")
 async def edl_feed_all(
     db: AsyncSession = Depends(get_db),
@@ -850,7 +896,7 @@ async def edl_feed_all(
 
     # Collect all active, non-expired entries
     all_entries = set()
-    stats = {"ip": 0, "domain": 0, "url": 0}
+    stats = {"ip": 0, "domain": 0, "url": 0, "hash": 0}
     for edl in lists:
         for entry in edl.entries:
             if entry.is_effective:
@@ -869,6 +915,7 @@ async def edl_feed_all(
             "X-EDL-IP-Count": str(stats["ip"]),
             "X-EDL-Domain-Count": str(stats["domain"]),
             "X-EDL-URL-Count": str(stats["url"]),
+            "X-EDL-Hash-Count": str(stats["hash"]),
         }
     )
 
