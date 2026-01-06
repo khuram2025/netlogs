@@ -1,0 +1,741 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --noc-bg: #0a0e14;
+        --noc-surface: #0f1419;
+        --noc-surface-2: #151b23;
+        --noc-surface-3: #1a222d;
+        --noc-border: #252d38;
+        --noc-border-light: #2d3848;
+        --noc-text: #e6edf3;
+        --noc-text-dim: #8b949e;
+        --noc-text-muted: #5c6370;
+        --noc-cyan: #00d4ff;
+        --noc-cyan-dim: rgba(0, 212, 255, 0.15);
+        --noc-green: #10b981;
+        --noc-green-dim: rgba(16, 185, 129, 0.12);
+        --noc-amber: #f59e0b;
+        --noc-amber-dim: rgba(245, 158, 11, 0.12);
+        --noc-red: #ef4444;
+        --noc-red-dim: rgba(239, 68, 68, 0.12);
+        --noc-purple: #a78bfa;
+        --font-mono: 'JetBrains Mono', 'Monaco', 'Consolas', monospace;
+        --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+    }
+
+    .container { max-width: 100% !important; padding: 0 !important; }
+
+    /* Page Layout */
+    .noc-page {
+        min-height: calc(100vh - 60px);
+        background: var(--noc-bg);
+        font-family: var(--font-sans);
+    }
+
+    /* Header */
+    .noc-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.5rem;
+        background: var(--noc-surface);
+        border-bottom: 1px solid var(--noc-border);
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .noc-page-title {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+
+    .noc-page-title h1 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--noc-text);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .noc-page-title h1 svg {
+        width: 20px;
+        height: 20px;
+        color: var(--noc-cyan);
+    }
+
+    .noc-page-title p {
+        font-size: 0.75rem;
+        color: var(--noc-text-muted);
+        margin: 0;
+    }
+
+    .noc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.15s;
+    }
+
+    .noc-btn svg { width: 14px; height: 14px; }
+
+    .noc-btn-primary {
+        background: var(--noc-cyan);
+        color: var(--noc-bg);
+        border-color: var(--noc-cyan);
+    }
+
+    .noc-btn-primary:hover {
+        background: #00b8e6;
+        border-color: #00b8e6;
+    }
+
+    .noc-btn-ghost {
+        background: transparent;
+        color: var(--noc-text-dim);
+        border-color: var(--noc-border);
+    }
+
+    .noc-btn-ghost:hover {
+        background: var(--noc-surface-2);
+        color: var(--noc-text);
+        border-color: var(--noc-border-light);
+    }
+
+    /* Stats Bar */
+    .noc-stats-bar {
+        display: flex;
+        align-items: stretch;
+        background: var(--noc-surface-2);
+        border-bottom: 1px solid var(--noc-border);
+    }
+
+    .noc-stat-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.875rem 1.25rem;
+        border-right: 1px solid var(--noc-border);
+        min-width: 160px;
+    }
+
+    .noc-stat-item:last-child { border-right: none; }
+
+    .noc-stat-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        flex-shrink: 0;
+    }
+
+    .noc-stat-icon svg { width: 18px; height: 18px; }
+
+    .noc-stat-icon.total { background: rgba(59, 130, 246, 0.12); color: #60a5fa; }
+    .noc-stat-icon.active { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-stat-icon.inactive { background: var(--noc-amber-dim); color: var(--noc-amber); }
+    .noc-stat-icon.entries { background: var(--noc-cyan-dim); color: var(--noc-cyan); }
+
+    .noc-stat-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .noc-stat-value {
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--noc-text);
+        line-height: 1;
+    }
+
+    .noc-stat-label {
+        font-size: 0.65rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--noc-text-muted);
+        margin-top: 0.125rem;
+    }
+
+    @media (max-width: 900px) {
+        .noc-stats-bar {
+            flex-wrap: wrap;
+        }
+        .noc-stat-item {
+            flex: 1;
+            min-width: 140px;
+        }
+    }
+
+    /* Filter Bar */
+    .noc-filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1.5rem;
+        background: var(--noc-surface);
+        border-bottom: 1px solid var(--noc-border);
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .noc-filter-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .noc-search {
+        position: relative;
+    }
+
+    .noc-search svg {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-search input {
+        padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        color: var(--noc-text);
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        width: 280px;
+        transition: all 0.15s;
+    }
+
+    .noc-search input:focus {
+        outline: none;
+        border-color: var(--noc-cyan);
+        background: var(--noc-surface-3);
+    }
+
+    .noc-search input::placeholder { color: var(--noc-text-muted); }
+
+    .noc-select {
+        padding: 0.5rem 2rem 0.5rem 0.75rem;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        color: var(--noc-text);
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235c6370' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.625rem center;
+    }
+
+    .noc-select:focus {
+        outline: none;
+        border-color: var(--noc-cyan);
+    }
+
+    .noc-filter-right {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .noc-count {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-count span { color: var(--noc-cyan); }
+
+    /* Content Area */
+    .noc-content {
+        padding: 1.5rem;
+    }
+
+    /* Project Table */
+    .noc-table-container {
+        background: var(--noc-surface);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .noc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+
+    .noc-table thead {
+        background: var(--noc-surface-2);
+    }
+
+    .noc-table th {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-family: var(--font-sans);
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--noc-text-muted);
+        white-space: nowrap;
+        border-bottom: 2px solid var(--noc-border);
+    }
+
+    .noc-table th.center { text-align: center; }
+
+    .noc-table td {
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid var(--noc-border);
+        color: var(--noc-text);
+        vertical-align: middle;
+    }
+
+    .noc-table tbody tr {
+        transition: background 0.1s;
+    }
+
+    .noc-table tbody tr:hover {
+        background: rgba(0, 212, 255, 0.03);
+    }
+
+    .noc-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Project Name Cell */
+    .noc-project-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .noc-project-name {
+        font-weight: 600;
+        color: var(--noc-text);
+        text-decoration: none;
+        transition: color 0.15s;
+    }
+
+    .noc-project-name:hover {
+        color: var(--noc-cyan);
+    }
+
+    .noc-project-owner {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-project-owner svg { width: 12px; height: 12px; }
+
+    /* Status Badge */
+    .noc-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 3px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .noc-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+
+    .noc-status.active { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-status.active .noc-status-dot { background: var(--noc-green); box-shadow: 0 0 6px var(--noc-green); }
+    .noc-status.inactive { background: var(--noc-amber-dim); color: var(--noc-amber); }
+    .noc-status.inactive .noc-status-dot { background: var(--noc-amber); }
+    .noc-status.archived { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+    .noc-status.archived .noc-status-dot { background: #94a3b8; }
+    .noc-status.other { background: var(--noc-cyan-dim); color: var(--noc-cyan); }
+    .noc-status.other .noc-status-dot { background: var(--noc-cyan); }
+
+    /* Description */
+    .noc-desc {
+        max-width: 300px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--noc-text-dim);
+        font-size: 0.8rem;
+    }
+
+    /* Location */
+    .noc-location {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8rem;
+        color: var(--noc-text-dim);
+    }
+
+    .noc-location svg { width: 14px; height: 14px; color: var(--noc-text-muted); }
+
+    /* Date */
+    .noc-date {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--noc-text-dim);
+    }
+
+    /* Entry Count */
+    .noc-entry-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        background: var(--noc-cyan-dim);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 4px;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--noc-cyan);
+    }
+
+    /* Row Actions */
+    .noc-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        opacity: 0.5;
+        transition: opacity 0.15s;
+    }
+
+    .noc-table tbody tr:hover .noc-row-actions {
+        opacity: 1;
+    }
+
+    .noc-row-btn {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        border: none;
+        background: transparent;
+        color: var(--noc-text-muted);
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+
+    .noc-row-btn:hover {
+        background: var(--noc-surface-3);
+        color: var(--noc-text);
+    }
+
+    .noc-row-btn.primary:hover { background: var(--noc-cyan-dim); color: var(--noc-cyan); }
+    .noc-row-btn.success:hover { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-row-btn.danger:hover { background: var(--noc-red-dim); color: var(--noc-red); }
+
+    .noc-row-btn svg { width: 14px; height: 14px; }
+
+    /* Empty State */
+    .noc-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        background: var(--noc-surface);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+    }
+
+    .noc-empty-icon {
+        width: 56px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 8px;
+        color: var(--noc-text-muted);
+        margin-bottom: 1rem;
+    }
+
+    .noc-empty-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--noc-text);
+        margin-bottom: 0.25rem;
+    }
+
+    .noc-empty-text {
+        font-size: 0.85rem;
+        color: var(--noc-text-muted);
+        margin-bottom: 1.25rem;
+        max-width: 400px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1100px) {
+        .noc-table .hide-md { display: none; }
+    }
+
+    @media (max-width: 768px) {
+        .noc-filter-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .noc-filter-left {
+            flex-wrap: wrap;
+        }
+        .noc-search input {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="noc-page">
+    <!-- Page Header -->
+    <header class="noc-page-header">
+        <div class="noc-page-title">
+            <h1>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                Projects
+            </h1>
+            <p>Firewall communication matrix management</p>
+        </div>
+        <a href="{{ url_for('project_new') }}" class="noc-btn noc-btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            New Project
+        </a>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="noc-stats-bar">
+        <div class="noc-stat-item">
+            <div class="noc-stat-icon total">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+            </div>
+            <div class="noc-stat-content">
+                <div class="noc-stat-value">{{ stats.total }}</div>
+                <div class="noc-stat-label">Total Projects</div>
+            </div>
+        </div>
+        <div class="noc-stat-item">
+            <div class="noc-stat-icon active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <div class="noc-stat-content">
+                <div class="noc-stat-value">{{ stats.active }}</div>
+                <div class="noc-stat-label">Active</div>
+            </div>
+        </div>
+        <div class="noc-stat-item">
+            <div class="noc-stat-icon inactive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+            </div>
+            <div class="noc-stat-content">
+                <div class="noc-stat-value">{{ stats.inactive }}</div>
+                <div class="noc-stat-label">Inactive</div>
+            </div>
+        </div>
+        <div class="noc-stat-item">
+            <div class="noc-stat-icon entries">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+            </div>
+            <div class="noc-stat-content">
+                <div class="noc-stat-value">{{ stats.total_entries }}</div>
+                <div class="noc-stat-label">Total Rules</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <form class="noc-filter-bar" method="get" action="{{ url_for('project_list') }}">
+        <div class="noc-filter-left">
+            <div class="noc-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" name="search" placeholder="Search projects..." value="{{ search or '' }}">
+            </div>
+            <select name="status" class="noc-select" onchange="this.form.submit()">
+                <option value="">All Status</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            {% if search or status_filter %}
+            <a href="{{ url_for('project_list') }}" class="noc-btn noc-btn-ghost">Clear</a>
+            {% endif %}
+        </div>
+        <div class="noc-filter-right">
+            <span class="noc-count">Showing <span>{{ projects|length }}</span> projects</span>
+        </div>
+    </form>
+
+    <!-- Content -->
+    <div class="noc-content">
+        {% if projects %}
+        <div class="noc-table-container">
+            <table class="noc-table">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th class="hide-md">Description</th>
+                        <th>Location</th>
+                        <th>Created</th>
+                        <th style="text-align: center;">Rules</th>
+                        <th style="width: 120px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                    <tr>
+                        <td>
+                            <div class="noc-project-cell">
+                                <a href="{{ url_for('project_detail', project_id=project.id) }}" class="noc-project-name">{{ project.name }}</a>
+                                <div class="noc-project-owner">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    {{ project.owner }}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="noc-status {{ project.status|lower }}">
+                                <span class="noc-status-dot"></span>
+                                {{ project.status_display }}
+                            </span>
+                        </td>
+                        <td class="hide-md">
+                            <span class="noc-desc" title="{{ project.description or '' }}">{{ project.description or '-' }}</span>
+                        </td>
+                        <td>
+                            {% if project.location %}
+                            <span class="noc-location">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                </svg>
+                                {{ project.location }}
+                            </span>
+                            {% else %}
+                            <span class="noc-location" style="color: var(--noc-text-muted);">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="noc-date">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span class="noc-entry-count">{{ project.entry_count }}</span>
+                        </td>
+                        <td>
+                            <div class="noc-row-actions">
+                                <a href="{{ url_for('project_detail', project_id=project.id) }}" class="noc-row-btn primary" title="View Project">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </a>
+                                <a href="{{ url_for('project_policy_view', project_id=project.id) }}" class="noc-row-btn success" title="Build Policy">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="4 17 10 11 4 5"></polyline>
+                                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                                    </svg>
+                                </a>
+                                <a href="{{ url_for('project_edit', project_id=project.id) }}" class="noc-row-btn" title="Edit Project">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="noc-empty">
+            <div class="noc-empty-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+            </div>
+            <div class="noc-empty-title">No projects found</div>
+            <p class="noc-empty-text">
+                {% if search or status_filter %}
+                No projects match your current filters. Try adjusting your search criteria.
+                {% else %}
+                Get started by creating your first project to manage firewall communication matrices.
+                {% endif %}
+            </p>
+            <a href="{{ url_for('project_new') }}" class="noc-btn noc-btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create Project
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

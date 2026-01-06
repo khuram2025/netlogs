@@ -385,6 +385,14 @@ async def log_list(
             logs_future, total_future, stats_future, devices_future
         )
 
+        # Handle approximate count (-1 means 100,000+)
+        is_approximate = total == -1
+        if is_approximate:
+            total = 100000  # Use 100,000 for pagination calculation
+            total_display = "100,000+"
+        else:
+            total_display = f"{total:,}"
+
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
 
         # Clean up filter values for template (handle empty strings)
@@ -398,6 +406,8 @@ async def log_list(
             "severity_map": SEVERITY_MAP,
             "devices": devices,
             "total": total,
+            "total_display": total_display,
+            "is_approximate": is_approximate,
             "stats": stats,
             "page": page_num,
             "per_page": per_page_num,
@@ -432,6 +442,8 @@ async def log_list(
             "severity_map": SEVERITY_MAP,
             "devices": [],
             "total": 0,
+            "total_display": "0",
+            "is_approximate": False,
             "stats": {},
             "page": 1,
             "per_page": 100,
@@ -444,6 +456,7 @@ async def log_list(
             "current_action": None,
             "current_start": start if start else None,
             "current_end": end if end else None,
+            "current_time_range": time_range if time_range else '1h',
             "current_srcip": srcip if srcip else None,
             "current_dstip": dstip if dstip else None,
             "current_dstport": dstport if dstport else None,
@@ -1478,13 +1491,15 @@ async def build_policy(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Build FortiGate CLI commands from log data.
+    Build firewall CLI commands from log data.
+    Supports both Fortinet (FortiGate) and Palo Alto Networks firewalls.
 
     Accepts JSON body with:
     - log_data: Dict containing srcip, dstip, dstport, protocol, zones, interfaces
     - device_ip: Optional device IP to fetch zone table for IP-to-zone matching
     - vdom: Optional VDOM name
     - policy_name: Optional custom policy name
+    - vendor: Firewall vendor - 'fortinet' (default) or 'paloalto'
     """
     from ..services.policy_builder_service import PolicyBuilderService
     from ..services.zone_service import ZoneService
@@ -1501,6 +1516,7 @@ async def build_policy(
     device_ip = body.get('device_ip')
     vdom = body.get('vdom')
     policy_name = body.get('policy_name')
+    vendor = body.get('vendor', 'fortinet')  # Default to Fortinet
 
     if not log_data:
         return JSONResponse(
@@ -1534,7 +1550,8 @@ async def build_policy(
             log_data=log_data,
             zone_table=zone_table,
             vdom=vdom,
-            custom_name=policy_name
+            custom_name=policy_name,
+            vendor=vendor
         )
 
         return JSONResponse({

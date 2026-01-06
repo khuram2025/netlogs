@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h1 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .page-header .breadcrumb {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .page-header .breadcrumb a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .form-card {
+        max-width: 600px;
+    }
+
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--text-color);
+    }
+
+    .form-group .hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .form-group input[type="text"],
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        background-color: var(--input-bg);
+        border: 1px solid var(--border);
+        color: white;
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        font-size: 0.875rem;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+    }
+
+    .checkbox-group label {
+        margin: 0;
+        font-weight: normal;
+    }
+
+    .type-options {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+
+    .type-option {
+        position: relative;
+    }
+
+    .type-option input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        z-index: 1;
+    }
+
+    .type-option .type-card {
+        background: var(--input-bg);
+        border: 2px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+        transition: all 0.2s;
+    }
+
+    .type-option input:checked + .type-card {
+        border-color: var(--primary);
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .type-option .type-card:hover {
+        border-color: var(--primary);
+    }
+
+    .type-option .icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .type-option .name {
+        font-weight: 600;
+        color: white;
+        font-size: 0.9rem;
+    }
+
+    .type-option .desc {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .error-alert {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .token-display {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: var(--success);
+        word-break: break-all;
+        margin-top: 0.5rem;
+    }
+
+    .section-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="breadcrumb">
+        <a href="{{ url_for('edl_list') }}">EDL</a> /
+        {% if is_edit %}Edit{% else %}Create{% endif %}
+    </div>
+    <h1>{% if is_edit %}Edit EDL List{% else %}Create New EDL List{% endif %}</h1>
+</div>
+
+<div class="card form-card">
+    {% if error %}
+    <div class="error-alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{% if is_edit %}{{ url_for('edl_update', edl_id=edl.id) }}{% else %}{{ url_for('edl_create') }}{% endif %}">
+        <div class="section-title">Basic Information</div>
+
+        <div class="form-group">
+            <label for="name">List Name *</label>
+            <input type="text" id="name" name="name" value="{{ edl.name if edl else '' }}" required
+                   placeholder="e.g., malicious-ips, blocked-domains">
+            <div class="hint">Use only letters, numbers, hyphens, and underscores. This will be part of the feed URL.</div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="Describe the purpose of this list...">{{ edl.description if edl else '' }}</textarea>
+        </div>
+
+        {% if not is_edit %}
+        <div class="form-group">
+            <label>List Type *</label>
+            <div class="type-options">
+                <label class="type-option">
+                    <input type="radio" name="list_type" value="ip" checked>
+                    <div class="type-card">
+                        <div class="icon">🌐</div>
+                        <div class="name">IP Address</div>
+                        <div class="desc">IPv4, IPv6, CIDR</div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="list_type" value="domain">
+                    <div class="type-card">
+                        <div class="icon">🔗</div>
+                        <div class="name">Domain</div>
+                        <div class="desc">DNS names, wildcards</div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="list_type" value="url">
+                    <div class="type-card">
+                        <div class="icon">📄</div>
+                        <div class="name">URL</div>
+                        <div class="desc">Full URLs, paths</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        {% else %}
+        <div class="form-group">
+            <label>List Type</label>
+            <input type="text" value="{{ edl.type_display }}" disabled style="opacity: 0.7;">
+            <div class="hint">List type cannot be changed after creation.</div>
+        </div>
+        {% endif %}
+
+        <div class="section-title" style="margin-top: 1.5rem;">Settings</div>
+
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="is_active" name="is_active" value="true"
+                       {% if not edl or edl.is_active %}checked{% endif %}>
+                <label for="is_active">List is active (feed endpoint will return entries)</label>
+            </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 1.5rem;">Access Control</div>
+
+        {% if is_edit and edl.access_token %}
+        <div class="form-group">
+            <label>Current Access Token</label>
+            <div class="token-display">{{ edl.access_token }}</div>
+            <div class="hint">Include this token as ?token=... in the feed URL for protected access.</div>
+        </div>
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="regenerate_token" name="regenerate_token" value="true">
+                <label for="regenerate_token">Generate new access token</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="remove_token" name="remove_token" value="true">
+                <label for="remove_token">Remove access token (make public)</label>
+            </div>
+        </div>
+        {% else %}
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="generate_token" name="generate_token" value="true">
+                <label for="generate_token">Generate access token (protect feed with token authentication)</label>
+            </div>
+            <div class="hint">If enabled, firewalls must include the token in requests to access this feed.</div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if is_edit %}Save Changes{% else %}Create List{% endif %}
+            </button>
+            <a href="{% if is_edit %}{{ url_for('edl_detail', edl_id=edl.id) }}{% else %}{{ url_for('edl_list') }}{% endif %}"
+               class="btn" style="background: var(--border);">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

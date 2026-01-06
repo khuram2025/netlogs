@@ -1,0 +1,961 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .page-header .title-section h1 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .page-header .breadcrumb {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .page-header .breadcrumb a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .type-badge.ip { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .type-badge.domain { background: rgba(139, 92, 246, 0.15); color: #a855f7; }
+    .type-badge.url { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .status-badge.active { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+    .status-badge.inactive { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+    .info-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .info-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .info-card .label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-card .value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .info-card .value.mono {
+        font-family: monospace;
+        font-size: 0.85rem;
+        word-break: break-all;
+        color: var(--success);
+    }
+
+    .feed-url-box {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .feed-url-box .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .feed-url-box .url-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .feed-url-box input {
+        flex: 1;
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
+
+    .feed-url-box .btn {
+        white-space: nowrap;
+    }
+
+    .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .toolbar-left {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .toolbar-right {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .search-box {
+        position: relative;
+    }
+
+    .search-box input {
+        width: 250px;
+        padding-right: 2rem;
+    }
+
+    .checkbox-filter {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .checkbox-filter input {
+        accent-color: var(--primary);
+    }
+
+    .entries-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .entries-table th {
+        position: sticky;
+        top: 0;
+        background: var(--card-bg);
+        z-index: 1;
+    }
+
+    .entries-table th.checkbox-col,
+    .entries-table td.checkbox-col {
+        width: 40px;
+        text-align: center;
+    }
+
+    .entries-table th.checkbox-col input,
+    .entries-table td.checkbox-col input {
+        accent-color: var(--primary);
+    }
+
+    .entries-table td {
+        vertical-align: middle;
+    }
+
+    .entries-table .value-cell {
+        font-family: monospace;
+        font-size: 0.9rem;
+        color: white;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .entries-table .desc-cell {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .entries-table .status-cell {
+        text-align: center;
+    }
+
+    .entries-table .date-cell {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .entries-table .actions-cell {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .entries-table .actions-cell .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .status-dot.active { background: var(--success); }
+    .status-dot.inactive { background: var(--text-muted); }
+    .status-dot.expired { background: var(--danger); }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .pagination .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .pagination .page-info {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        padding: 0 1rem;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        width: 90%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow: auto;
+    }
+
+    .modal-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .modal-close:hover {
+        color: white;
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.375rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        background-color: var(--input-bg);
+        border: 1px solid var(--border);
+        color: white;
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        font-family: inherit;
+        font-size: 0.875rem;
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .form-group .hint {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .import-options {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .import-option {
+        flex: 1;
+        text-align: center;
+    }
+
+    .import-option input[type="radio"] {
+        display: none;
+    }
+
+    .import-option label {
+        display: block;
+        padding: 0.75rem;
+        background: var(--input-bg);
+        border: 2px solid var(--border);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .import-option input:checked + label {
+        border-color: var(--primary);
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .bulk-actions {
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .bulk-actions.active {
+        display: flex;
+    }
+
+    .bulk-actions .selected-count {
+        font-size: 0.85rem;
+        color: var(--primary);
+        font-weight: 500;
+    }
+
+    .bulk-actions .spacer {
+        flex: 1;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state h3 {
+        color: white;
+        margin-bottom: 0.5rem;
+    }
+
+    .dropdown {
+        position: relative;
+        display: inline-block;
+    }
+
+    .dropdown-menu {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        min-width: 150px;
+        z-index: 10;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .dropdown:hover .dropdown-menu {
+        display: block;
+    }
+
+    .dropdown-menu a {
+        display: block;
+        padding: 0.5rem 1rem;
+        color: var(--text-color);
+        text-decoration: none;
+        font-size: 0.85rem;
+    }
+
+    .dropdown-menu a:hover {
+        background: var(--input-bg);
+    }
+
+    .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 200;
+        display: none;
+    }
+
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="title-section">
+        <div class="breadcrumb">
+            <a href="{{ url_for('edl_list') }}">EDL</a> / {{ edl.name }}
+        </div>
+        <h1>
+            {{ edl.name }}
+            <span class="type-badge {{ edl.list_type.value }}">{{ edl.list_type.value|upper }}</span>
+            <span class="status-badge {% if edl.is_active %}active{% else %}inactive{% endif %}">
+                {% if edl.is_active %}Active{% else %}Inactive{% endif %}
+            </span>
+        </h1>
+        {% if edl.description %}
+        <p style="color: var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.9rem;">{{ edl.description }}</p>
+        {% endif %}
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('edl_edit_page', edl_id=edl.id) }}" class="btn" style="background: var(--border);">Edit List</a>
+        <div class="dropdown">
+            <button class="btn" style="background: var(--border);">Export</button>
+            <div class="dropdown-menu">
+                <a href="/edl/{{ edl.id }}/export/?format=txt">Plain Text (.txt)</a>
+                <a href="/edl/{{ edl.id }}/export/?format=csv">CSV (.csv)</a>
+                <a href="/edl/{{ edl.id }}/export/?format=json">JSON (.json)</a>
+            </div>
+        </div>
+        <form action="{{ url_for('edl_delete', edl_id=edl.id) }}" method="post" style="display: inline;"
+              onsubmit="return confirm('Delete this list and all entries? This cannot be undone.');">
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+
+<div class="info-cards">
+    <div class="info-card">
+        <div class="label">Total Entries</div>
+        <div class="value">{{ edl.entry_count }}</div>
+    </div>
+    <div class="info-card">
+        <div class="label">Active Entries</div>
+        <div class="value">{{ edl.active_entry_count }}</div>
+    </div>
+    <div class="info-card">
+        <div class="label">Created</div>
+        <div class="value">{{ edl.created_at.strftime('%Y-%m-%d') }}</div>
+    </div>
+    <div class="info-card">
+        <div class="label">Last Updated</div>
+        <div class="value">{{ edl.updated_at|timesince }}</div>
+    </div>
+</div>
+
+<div class="feed-url-box">
+    <div class="label">Feed URL (for firewall configuration)</div>
+
+    <div style="margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem;">
+            <span style="background: var(--success); color: white; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600;">RECOMMENDED</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">All {{ edl.list_type.value|upper }}s (aggregated from all lists)</span>
+        </div>
+        <div class="url-row">
+            <input type="text" id="feedUrlGeneric" value="{{ generic_feed_url }}" readonly>
+            <button class="btn btn-primary" onclick="copyFeedUrl('feedUrlGeneric')">Copy</button>
+            <a href="{{ generic_feed_url }}" target="_blank" class="btn" style="background: var(--border);">Open</a>
+        </div>
+    </div>
+
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem;">
+            <span style="background: var(--border); color: var(--text-muted); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600;">OVERRIDE</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">This list only ({{ edl.name }})</span>
+        </div>
+        <div class="url-row">
+            <input type="text" id="feedUrlSpecific" value="{{ feed_url }}" readonly>
+            <button class="btn" style="background: var(--border);" onclick="copyFeedUrl('feedUrlSpecific')">Copy</button>
+            <a href="{{ feed_url }}" target="_blank" class="btn" style="background: var(--border);">Open</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <form method="get" style="display: flex; gap: 0.75rem; align-items: center;">
+                <div class="search-box">
+                    <input type="text" name="search" placeholder="Search entries..." value="{{ search }}">
+                </div>
+                <label class="checkbox-filter">
+                    <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %}
+                           onchange="this.form.submit()">
+                    Show inactive
+                </label>
+            </form>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-primary" onclick="openAddModal()">+ Add Entry</button>
+            <button class="btn" style="background: var(--border);" onclick="openImportModal()">Import</button>
+        </div>
+    </div>
+
+    <div class="bulk-actions" id="bulkActions">
+        <span class="selected-count"><span id="selectedCount">0</span> selected</span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" style="background: var(--success);" onclick="bulkToggle(true)">Enable</button>
+        <button class="btn btn-sm" style="background: var(--border);" onclick="bulkToggle(false)">Disable</button>
+        <button class="btn btn-sm btn-danger" onclick="bulkDelete()">Delete</button>
+    </div>
+
+    {% if entries %}
+    <div style="overflow-x: auto;">
+        <table class="entries-table">
+            <thead>
+                <tr>
+                    <th class="checkbox-col">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                    </th>
+                    <th>Value</th>
+                    <th>Description</th>
+                    <th style="width: 80px; text-align: center;">Status</th>
+                    <th style="width: 100px;">Expires</th>
+                    <th style="width: 100px;">Created</th>
+                    <th style="width: 120px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr data-entry-id="{{ entry.id }}">
+                    <td class="checkbox-col">
+                        <input type="checkbox" class="entry-checkbox" value="{{ entry.id }}" onchange="updateBulkActions()">
+                    </td>
+                    <td class="value-cell" title="{{ entry.value }}">{{ entry.value }}</td>
+                    <td class="desc-cell" title="{{ entry.description or '' }}">{{ entry.description or '-' }}</td>
+                    <td class="status-cell">
+                        {% if entry.is_expired %}
+                        <span class="status-dot expired" title="Expired"></span>
+                        {% elif entry.is_active %}
+                        <span class="status-dot active" title="Active"></span>
+                        {% else %}
+                        <span class="status-dot inactive" title="Inactive"></span>
+                        {% endif %}
+                    </td>
+                    <td class="date-cell">{{ entry.expires_at.strftime('%Y-%m-%d') if entry.expires_at else '-' }}</td>
+                    <td class="date-cell">{{ entry.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td class="actions-cell">
+                        <button class="btn btn-sm" style="background: var(--border);"
+                                onclick="openEditModal({{ entry.id }}, '{{ entry.value|e }}', '{{ (entry.description or '')|e }}', {{ 'true' if entry.is_active else 'false' }}, '{{ entry.expires_at.strftime('%Y-%m-%dT%H:%M') if entry.expires_at else '' }}')">
+                            Edit
+                        </button>
+                        <form action="{{ url_for('edl_entry_delete', edl_id=edl.id, entry_id=entry.id) }}"
+                              method="post" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Delete this entry?');">Del</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&search={{ search }}&show_inactive={{ show_inactive }}" class="btn" style="background: var(--border);">Prev</a>
+        {% endif %}
+        <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total_entries }} entries)</span>
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}&search={{ search }}&show_inactive={{ show_inactive }}" class="btn" style="background: var(--border);">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <h3>No Entries Found</h3>
+        <p>{% if search %}No entries match your search.{% else %}Add your first entry to this list.{% endif %}</p>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Entry</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Entry Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Entry</h3>
+            <button class="modal-close" onclick="closeModal('addModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('edl_entry_add', edl_id=edl.id) }}" method="post">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Value *</label>
+                    <input type="text" name="value" required
+                           placeholder="{% if edl.list_type.value == 'ip' %}e.g., 192.168.1.1 or 10.0.0.0/8{% elif edl.list_type.value == 'domain' %}e.g., malware.example.com{% else %}e.g., http://bad.site/path{% endif %}">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" placeholder="Optional description">
+                </div>
+                <div class="form-group">
+                    <label>Expires At</label>
+                    <input type="datetime-local" name="expires_at">
+                    <div class="hint">Leave empty for no expiration</div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="is_active" value="true" checked style="width: auto;">
+                        Entry is active
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" style="background: var(--border);" onclick="closeModal('addModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Entry</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Entry Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Edit Entry</h3>
+            <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <form id="editForm" method="post">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Value *</label>
+                    <input type="text" name="value" id="editValue" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" id="editDescription" placeholder="Optional description">
+                </div>
+                <div class="form-group">
+                    <label>Expires At</label>
+                    <input type="datetime-local" name="expires_at" id="editExpires">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="is_active" id="editActive" value="true" style="width: auto;">
+                        Entry is active
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" style="background: var(--border);" onclick="closeModal('editModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>Import Entries</h3>
+            <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('edl_import', edl_id=edl.id) }}" method="post" enctype="multipart/form-data" id="importForm">
+            <div class="modal-body">
+                <div class="import-options">
+                    <div class="import-option">
+                        <input type="radio" name="import_type" id="importFile" value="file" checked>
+                        <label for="importFile">Upload File</label>
+                    </div>
+                    <div class="import-option">
+                        <input type="radio" name="import_type" id="importText" value="text">
+                        <label for="importText">Paste Text</label>
+                    </div>
+                </div>
+
+                <div id="fileInput">
+                    <div class="form-group">
+                        <label>Select File</label>
+                        <input type="file" name="file" accept=".txt,.csv">
+                        <div class="hint">One entry per line. CSV format: value,description</div>
+                    </div>
+                </div>
+
+                <div id="textInput" style="display: none;">
+                    <div class="form-group">
+                        <label>Paste Entries</label>
+                        <textarea name="text_input" placeholder="One entry per line&#10;192.168.1.1&#10;10.0.0.0/8,Internal network&#10;# Comments start with #"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Default Description</label>
+                    <input type="text" name="default_description" placeholder="Applied to entries without description">
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="overwrite" value="true" style="width: auto;">
+                        Replace all existing entries
+                    </label>
+                    <div class="hint">If checked, all current entries will be deleted before import</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ url_for('edl_template') }}" class="btn" style="background: var(--border); margin-right: auto;">Download Template</a>
+                <button type="button" class="btn" style="background: var(--border);" onclick="closeModal('importModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Import</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+    // Modal functions
+    function openAddModal() {
+        document.getElementById('addModal').classList.add('active');
+    }
+
+    function openEditModal(id, value, description, isActive, expires) {
+        document.getElementById('editForm').action = '/edl/{{ edl.id }}/entries/' + id + '/update/';
+        document.getElementById('editValue').value = value;
+        document.getElementById('editDescription').value = description;
+        document.getElementById('editActive').checked = isActive;
+        document.getElementById('editExpires').value = expires;
+        document.getElementById('editModal').classList.add('active');
+    }
+
+    function openImportModal() {
+        document.getElementById('importModal').classList.add('active');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.remove('active');
+            }
+        });
+    });
+
+    // Import type toggle
+    document.querySelectorAll('input[name="import_type"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            document.getElementById('fileInput').style.display =
+                document.getElementById('importFile').checked ? 'block' : 'none';
+            document.getElementById('textInput').style.display =
+                document.getElementById('importText').checked ? 'block' : 'none';
+        });
+    });
+
+    // Copy feed URL
+    function copyFeedUrl(inputId = 'feedUrlGeneric') {
+        const input = document.getElementById(inputId);
+        input.select();
+        document.execCommand('copy');
+        showToast('Feed URL copied to clipboard!', 'success');
+    }
+
+    // Bulk selection
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        document.querySelectorAll('.entry-checkbox').forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+        updateBulkActions();
+    }
+
+    function updateBulkActions() {
+        const checked = document.querySelectorAll('.entry-checkbox:checked');
+        const bulkActions = document.getElementById('bulkActions');
+        const selectedCount = document.getElementById('selectedCount');
+
+        if (checked.length > 0) {
+            bulkActions.classList.add('active');
+            selectedCount.textContent = checked.length;
+        } else {
+            bulkActions.classList.remove('active');
+        }
+    }
+
+    function getSelectedIds() {
+        return Array.from(document.querySelectorAll('.entry-checkbox:checked')).map(cb => cb.value);
+    }
+
+    async function bulkToggle(isActive) {
+        const ids = getSelectedIds();
+        if (ids.length === 0) return;
+
+        const formData = new FormData();
+        ids.forEach(id => formData.append('entry_ids', id));
+        formData.append('is_active', isActive);
+
+        const response = await fetch('/edl/{{ edl.id }}/entries/bulk-toggle/', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            showToast('Failed to update entries', 'error');
+        }
+    }
+
+    async function bulkDelete() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) return;
+        if (!confirm(`Delete ${ids.length} entries?`)) return;
+
+        const formData = new FormData();
+        ids.forEach(id => formData.append('entry_ids', id));
+
+        const response = await fetch('/edl/{{ edl.id }}/entries/bulk-delete/', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            showToast('Failed to delete entries', 'error');
+        }
+    }
+
+    // Handle import form with AJAX
+    document.getElementById('importForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        try {
+            const response = await fetch(e.target.action, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(`Imported ${result.imported} entries (${result.skipped} skipped)`, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Import failed', 'error');
+            }
+        } catch (err) {
+            showToast('Import failed', 'error');
+        }
+    });
+
+    // Toast notification
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'toast ' + type;
+        toast.style.display = 'block';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
+    }
+</script>
+{% endblock %}

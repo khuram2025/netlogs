@@ -1,0 +1,378 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h1 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .stats-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .stat-box {
+        background: linear-gradient(135deg, var(--card-bg) 0%, rgba(15, 23, 42, 0.8) 100%);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .stat-box .value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .stat-box .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .stat-box.primary .value { color: var(--primary); }
+    .stat-box.success .value { color: var(--success); }
+    .stat-box.warning .value { color: var(--warning); }
+
+    .filters-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filters-bar .search-box {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .filters-bar select {
+        width: auto;
+        min-width: 150px;
+    }
+
+    .edl-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1rem;
+    }
+
+    .edl-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        transition: all 0.2s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .edl-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .edl-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--primary);
+    }
+
+    .edl-card.type-ip::before { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+    .edl-card.type-domain::before { background: linear-gradient(90deg, #8b5cf6, #a855f7); }
+    .edl-card.type-url::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
+
+    .edl-card.inactive {
+        opacity: 0.6;
+    }
+
+    .edl-card .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+
+    .edl-card .name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+        text-decoration: none;
+        display: block;
+    }
+
+    .edl-card .name:hover {
+        color: var(--primary);
+    }
+
+    .edl-card .type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .type-badge.ip {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .type-badge.domain {
+        background: rgba(139, 92, 246, 0.1);
+        color: #a855f7;
+        border: 1px solid rgba(139, 92, 246, 0.2);
+    }
+
+    .type-badge.url {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .edl-card .description {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .edl-card .stats {
+        display: flex;
+        gap: 1.5rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .edl-card .stat {
+        text-align: center;
+    }
+
+    .edl-card .stat .num {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .edl-card .stat .lbl {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .edl-card .actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .edl-card .actions .btn {
+        flex: 1;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.25rem;
+    }
+
+    .status-indicator.active {
+        background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+    }
+
+    .status-indicator.inactive {
+        background: var(--text-muted);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state h3 {
+        margin-bottom: 0.5rem;
+        color: white;
+    }
+
+    .empty-state p {
+        margin-bottom: 1.5rem;
+    }
+
+    .info-box {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 0.5rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .info-box .icon {
+        font-size: 1.25rem;
+    }
+
+    .info-box .content {
+        flex: 1;
+    }
+
+    .info-box .title {
+        font-weight: 600;
+        color: white;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-box .text {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>External Dynamic Lists (EDL)</h1>
+    <a href="{{ url_for('edl_create_page') }}" class="btn btn-primary">
+        + Create New List
+    </a>
+</div>
+
+<div class="info-box">
+    <span class="icon">i</span>
+    <div class="content">
+        <div class="title">External Dynamic Lists for Firewall Integration</div>
+        <div class="text">
+            Create and manage lists of IPs, domains, or URLs that your firewalls can consume via HTTP.
+            Configure your FortiGate or Palo Alto firewall to fetch these lists for threat feed policies.
+        </div>
+    </div>
+</div>
+
+<div class="stats-row">
+    <div class="stat-box">
+        <div class="value">{{ lists|length }}</div>
+        <div class="label">Total Lists</div>
+    </div>
+    <div class="stat-box primary">
+        <div class="value">{{ active_lists }}</div>
+        <div class="label">Active Lists</div>
+    </div>
+    <div class="stat-box success">
+        <div class="value">{{ total_entries|format_number }}</div>
+        <div class="label">Total Entries</div>
+    </div>
+    <div class="stat-box warning">
+        <div class="value">{{ lists|selectattr('list_type.value', 'equalto', 'ip')|list|length }}</div>
+        <div class="label">IP Lists</div>
+    </div>
+</div>
+
+<form method="get" class="filters-bar">
+    <div class="search-box">
+        <input type="text" name="search" placeholder="Search lists..." value="{{ search }}">
+    </div>
+    <select name="list_type" onchange="this.form.submit()">
+        <option value="">All Types</option>
+        {% for type in edl_types %}
+        <option value="{{ type }}" {% if list_type_filter == type %}selected{% endif %}>
+            {{ type|upper }} Lists
+        </option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if search or list_type_filter %}
+    <a href="{{ url_for('edl_list') }}" class="btn" style="background: var(--border);">Clear</a>
+    {% endif %}
+</form>
+
+{% if lists %}
+<div class="edl-grid">
+    {% for edl in lists %}
+    <div class="edl-card type-{{ edl.list_type.value }} {% if not edl.is_active %}inactive{% endif %}">
+        <div class="header">
+            <div>
+                <a href="{{ url_for('edl_detail', edl_id=edl.id) }}" class="name">
+                    <span class="status-indicator {% if edl.is_active %}active{% else %}inactive{% endif %}"></span>
+                    {{ edl.name }}
+                </a>
+            </div>
+            <span class="type-badge {{ edl.list_type.value }}">{{ edl.list_type.value|upper }}</span>
+        </div>
+
+        <div class="description">
+            {{ edl.description or 'No description provided' }}
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="num">{{ edl.entry_count }}</div>
+                <div class="lbl">Total</div>
+            </div>
+            <div class="stat">
+                <div class="num">{{ edl.active_entry_count }}</div>
+                <div class="lbl">Active</div>
+            </div>
+            <div class="stat">
+                <div class="num">{{ (edl.updated_at|timesince) if edl.updated_at else 'N/A' }}</div>
+                <div class="lbl">Updated</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <a href="{{ url_for('edl_detail', edl_id=edl.id) }}" class="btn btn-primary">View</a>
+            <a href="{{ url_for('edl_edit_page', edl_id=edl.id) }}" class="btn" style="background: var(--border);">Edit</a>
+            <a href="{{ url_for('edl_feed', edl_id=edl.id) }}" class="btn" style="background: rgba(34, 197, 94, 0.2); color: var(--success);" target="_blank">Feed</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <h3>No EDL Lists Found</h3>
+        <p>{% if search or list_type_filter %}No lists match your filters.{% else %}Create your first External Dynamic List to get started.{% endif %}</p>
+        <a href="{{ url_for('edl_create_page') }}" class="btn btn-primary">Create New List</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

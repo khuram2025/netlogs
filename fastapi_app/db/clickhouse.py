@@ -143,6 +143,58 @@ class ClickHouseClient:
                 logger.debug(f"Migration skipped: {e}")
 
     @classmethod
+    def backfill_ip_columns(cls) -> Dict[str, Any]:
+        """
+        Backfill srcip and dstip columns from parsed_data for existing records.
+
+        This is a one-time migration to populate the indexed IP columns
+        for records that were inserted before the optimization.
+
+        Returns status dict with rows_updated count.
+        """
+        client = cls.get_client()
+
+        # Check how many rows need updating
+        check_query = """
+        SELECT count() as empty_srcip
+        FROM syslogs
+        WHERE srcip = '' AND (parsed_data['srcip'] != '' OR parsed_data['src_ip'] != '')
+        """
+        result = client.query(check_query).result_rows
+        empty_count = result[0][0] if result else 0
+
+        if empty_count == 0:
+            return {'status': 'complete', 'rows_updated': 0, 'message': 'No rows need backfilling'}
+
+        # Backfill srcip column
+        srcip_query = """
+        ALTER TABLE syslogs
+        UPDATE srcip = if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip'])
+        WHERE srcip = '' AND (parsed_data['srcip'] != '' OR parsed_data['src_ip'] != '')
+        """
+
+        # Backfill dstip column
+        dstip_query = """
+        ALTER TABLE syslogs
+        UPDATE dstip = if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])
+        WHERE dstip = '' AND (parsed_data['dstip'] != '' OR parsed_data['dst_ip'] != '')
+        """
+
+        try:
+            logger.info(f"Starting backfill for approximately {empty_count:,} rows...")
+            client.command(srcip_query)
+            client.command(dstip_query)
+            logger.info("Backfill mutations scheduled. Run 'SELECT * FROM system.mutations WHERE is_done = 0' to check status.")
+            return {
+                'status': 'scheduled',
+                'rows_to_update': empty_count,
+                'message': 'Backfill mutations scheduled. ClickHouse will process them asynchronously.'
+            }
+        except Exception as e:
+            logger.error(f"Backfill failed: {e}")
+            return {'status': 'error', 'message': str(e)}
+
+    @classmethod
     def insert_logs(cls, logs: List[Tuple]) -> None:
         """
         Insert logs in batch.
@@ -152,25 +204,19 @@ class ClickHouseClient:
                   (timestamp, device_ip, facility, severity, message, raw,
                    srcip, dstip, srcport, dstport, proto, action, parsed_data)
 
-        Note: srcip and dstip are MATERIALIZED columns (auto-computed from parsed_data),
-              so we skip them in the insert. srcport, dstport, proto, action are insertable.
+        Note: srcip and dstip are now populated for fast indexed queries.
+              They have bloom filter indexes for efficient filtering.
         """
         if not logs:
             return
         client = cls.get_client()
 
-        # Transform logs to skip srcip/dstip (they're MATERIALIZED from parsed_data)
+        # Include srcip and dstip for indexed queries (bloom filter)
         # Input:  (timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data)
-        # Output: (timestamp, device_ip, facility, severity, message, raw, srcport, dstport, proto, action, parsed_data)
-        transformed_logs = [
-            (log[0], log[1], log[2], log[3], log[4], log[5],  # timestamp thru raw
-             log[8], log[9], log[10], log[11], log[12])        # srcport, dstport, proto, action, parsed_data
-            for log in logs
-        ]
-
-        client.insert('syslogs', transformed_logs, column_names=[
+        # Output: (timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data)
+        client.insert('syslogs', logs, column_names=[
             'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
-            'srcport', 'dstport', 'proto', 'action', 'parsed_data'
+            'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'parsed_data'
         ])
 
     @classmethod
@@ -312,16 +358,96 @@ class ClickHouseClient:
         safe_value = value.replace("'", "''")
         not_prefix = "NOT " if negated else ""
 
-        # OPTIMIZATION: For simple exact IP matches on srcip/dstip, use materialized columns directly.
-        # The materialized columns already handle both Fortinet (srcip/dstip) and Palo Alto (src_ip/dst_ip)
-        # field names, and have bloom filter indexes for fast filtering.
-        ip_fields_materialized = ('srcip', 'dstip')
-        if field in ip_fields_materialized and operator == '=' and not cls._is_cidr(value) and not cls._is_ip_range(value) and not cls._is_wildcard_ip(value) and not cls._is_multi_ip(value):
-            # Simple exact IP match - use materialized column with bloom filter index
+        # OPTIMIZATION: Use indexed srcip/dstip columns directly for ALL IP operations
+        # These columns have bloom filter indexes for fast filtering
+        ip_fields_indexed = ('srcip', 'dstip')
+
+        if field in ip_fields_indexed and operator == '=':
+            # Use the indexed column directly for all IP operations
+            col = field  # Direct column access (srcip or dstip)
+
+            # Handle CIDR notation (e.g., 192.168.0.0/24)
+            if cls._is_cidr(value):
+                ip_part, mask = value.rsplit('/', 1)
+                mask_int = int(mask)
+                octets = ip_part.split('.')
+
+                # For /8, /16, /24 use fast LIKE prefix matching
+                if mask_int == 8 and len(octets) >= 1:
+                    prefix = f"{octets[0]}."
+                    if negated:
+                        return f"NOT startsWith({col}, '{prefix}')"
+                    return f"startsWith({col}, '{prefix}')"
+                elif mask_int == 16 and len(octets) >= 2:
+                    prefix = f"{octets[0]}.{octets[1]}."
+                    if negated:
+                        return f"NOT startsWith({col}, '{prefix}')"
+                    return f"startsWith({col}, '{prefix}')"
+                elif mask_int == 24 and len(octets) >= 3:
+                    prefix = f"{octets[0]}.{octets[1]}.{octets[2]}."
+                    if negated:
+                        return f"NOT startsWith({col}, '{prefix}')"
+                    return f"startsWith({col}, '{prefix}')"
+                else:
+                    # For other masks, use IPv4 range comparison
+                    if negated:
+                        return f"({col} = '' OR NOT isIPAddressInRange({col}, '{safe_value}'))"
+                    return f"({col} != '' AND isIPAddressInRange({col}, '{safe_value}'))"
+
+            # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
+            if cls._is_ip_range(value):
+                start_ip, end_ip = value.split('-')
+                safe_start = start_ip.replace("'", "''")
+                safe_end = end_ip.replace("'", "''")
+                condition = f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{safe_start}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{safe_end}'))"
+                if negated:
+                    return f"NOT ({condition})"
+                return condition
+
+            # Handle wildcard IP (e.g., 192.168.1.*)
+            if cls._is_wildcard_ip(value):
+                prefix = value.split('*')[0]
+                if negated:
+                    return f"{col} NOT LIKE '{prefix}%'"
+                return f"{col} LIKE '{prefix}%'"
+
+            # Handle multiple comma-separated IPs/ranges/CIDR
+            if cls._is_multi_ip(value):
+                parts = [p.strip() for p in value.split(',') if p.strip()]
+                conditions = []
+                for part in parts:
+                    safe_part = part.replace("'", "''")
+                    if cls._is_cidr(part):
+                        ip_part, mask = part.rsplit('/', 1)
+                        mask_int = int(mask)
+                        octets = ip_part.split('.')
+                        if mask_int == 8:
+                            conditions.append(f"startsWith({col}, '{octets[0]}.')")
+                        elif mask_int == 16:
+                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.')")
+                        elif mask_int == 24:
+                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.{octets[2]}.')")
+                        else:
+                            conditions.append(f"({col} != '' AND isIPAddressInRange({col}, '{safe_part}'))")
+                    elif cls._is_ip_range(part):
+                        start_ip, end_ip = part.split('-')
+                        conditions.append(f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{start_ip}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{end_ip}'))")
+                    elif cls._is_wildcard_ip(part):
+                        prefix = part.split('*')[0]
+                        conditions.append(f"{col} LIKE '{prefix}%'")
+                    else:
+                        conditions.append(f"{col} = '{safe_part}'")
+
+                if conditions:
+                    combined = f"({' OR '.join(conditions)})"
+                    if negated:
+                        return f"NOT {combined}"
+                    return combined
+
+            # Simple exact IP match
             if negated:
-                return f"{field} != '{safe_value}'"
-            else:
-                return f"{field} = '{safe_value}'"
+                return f"{col} != '{safe_value}'"
+            return f"{col} = '{safe_value}'"
 
         # Field mapping for normalized and vendor-specific fields
         # Uses COALESCE to check both normalized (Fortinet-style) and Palo Alto fields
@@ -626,24 +752,33 @@ class ClickHouseClient:
         facilities: Optional[List[int]] = None,
         default_hours: int = 1
     ) -> List[Dict[str, Any]]:
-        """Search logs with advanced filtering. Defaults to last 24 hours for performance."""
+        """Search logs with advanced filtering. Defaults to last 1 hour for performance."""
         client = cls.get_client()
 
-        # Apply default time filter if no time range specified
+        # Build time filter separately for PREWHERE optimization
+        prewhere_parts = []
+
         if start_time is None and end_time is None:
-            where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
-            time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
-            if where_sql != "1=1":
-                where_sql = f"{time_filter} AND {where_sql}"
-            else:
-                where_sql = time_filter
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
         else:
-            where_sql = cls._build_where_clause(device_ips, severities, start_time, end_time, query_text, facilities)
+            if start_time:
+                start_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp >= '{start_str}'")
+            if end_time:
+                end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp <= '{end_str}'")
+
+        # Build additional WHERE conditions (without time filters)
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+
+        # Use PREWHERE for time filter (allows skipping data blocks early)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         query = f"""
         SELECT timestamp, device_ip, facility, severity, message, raw,
                srcip, dstip, srcport, dstport, proto, action, parsed_data
         FROM syslogs
+        PREWHERE {prewhere_clause}
         WHERE {where_sql}
         ORDER BY timestamp DESC
         LIMIT {limit} OFFSET {offset}
@@ -661,30 +796,56 @@ class ClickHouseClient:
         end_time: Optional[datetime] = None,
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
-        default_hours: int = 1
+        default_hours: int = 1,
+        max_count: int = 100000
     ) -> int:
-        """Count logs matching filters. Defaults to last 24 hours for performance."""
+        """
+        Count logs matching filters with performance optimizations.
+
+        For large datasets, uses LIMIT to cap counting at max_count for speed.
+        Returns -1 if count exceeds max_count (indicates "100,000+" logs).
+        """
         client = cls.get_client()
 
-        # Apply default time filter if no time range specified
-        if start_time is None and end_time is None:
-            where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
-            time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
-            if where_sql != "1=1":
-                where_sql = f"{time_filter} AND {where_sql}"
-            else:
-                where_sql = time_filter
-        else:
-            where_sql = cls._build_where_clause(device_ips, severities, start_time, end_time, query_text, facilities)
+        # Build time filter separately for PREWHERE optimization
+        prewhere_parts = []
 
+        if start_time is None and end_time is None:
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
+        else:
+            if start_time:
+                start_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp >= '{start_str}'")
+            if end_time:
+                end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp <= '{end_str}'")
+
+        # Build additional WHERE conditions (without time filters)
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+
+        # Use PREWHERE for time filter
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+
+        # Use LIMIT to cap counting for performance (avoids counting millions of rows)
+        # We check if there are more than max_count results
         query = f"""
         SELECT count() as total
-        FROM syslogs
-        WHERE {where_sql}
+        FROM (
+            SELECT 1
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            LIMIT {max_count + 1}
+        )
         """
 
         result = client.query(query).result_rows
-        return result[0][0] if result else 0
+        count = result[0][0] if result else 0
+
+        # Return -1 to indicate "100,000+" logs
+        if count > max_count:
+            return -1
+        return count
 
     @classmethod
     def get_log_stats_summary(
@@ -698,16 +859,24 @@ class ClickHouseClient:
         """Get summary statistics for logs matching the current filters."""
         client = cls.get_client()
 
-        # If no time filter specified, default to last 24 hours for performance
+        # Build time filter separately for PREWHERE optimization
+        prewhere_parts = []
+
         if start_time is None and end_time is None:
-            where_sql = cls._build_where_clause(device_ips, None, None, None, query_text, None)
-            time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
-            if where_sql != "1=1":
-                where_sql = f"{time_filter} AND {where_sql}"
-            else:
-                where_sql = time_filter
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
         else:
-            where_sql = cls._build_where_clause(device_ips, None, start_time, end_time, query_text, None)
+            if start_time:
+                start_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp >= '{start_str}'")
+            if end_time:
+                end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+                prewhere_parts.append(f"timestamp <= '{end_str}'")
+
+        # Build additional WHERE conditions (without time filters)
+        where_sql = cls._build_where_clause(device_ips, None, None, None, query_text, None)
+
+        # Use PREWHERE for time filter
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         query = f"""
         SELECT
@@ -717,6 +886,7 @@ class ClickHouseClient:
             countIf(severity = 4) as warning_count,
             countIf(severity >= 5) as info_count
         FROM syslogs
+        PREWHERE {prewhere_clause}
         WHERE {where_sql}
         """
 

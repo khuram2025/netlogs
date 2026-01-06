@@ -68,6 +68,8 @@ async def init_db() -> None:
     from ..models import routing  # noqa: F401
     from ..models import device_ssh_settings  # noqa: F401
     from ..models import zone  # noqa: F401
+    from ..models import project  # noqa: F401
+    from ..models import edl  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

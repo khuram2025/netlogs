@@ -1,0 +1,2173 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --noc-bg: #0a0e14;
+        --noc-surface: #0f1419;
+        --noc-surface-2: #151b23;
+        --noc-surface-3: #1a222d;
+        --noc-border: #252d38;
+        --noc-border-light: #2d3848;
+        --noc-text: #e6edf3;
+        --noc-text-dim: #8b949e;
+        --noc-text-muted: #5c6370;
+        --noc-cyan: #00d4ff;
+        --noc-cyan-dim: rgba(0, 212, 255, 0.15);
+        --noc-green: #10b981;
+        --noc-green-dim: rgba(16, 185, 129, 0.12);
+        --noc-amber: #f59e0b;
+        --noc-amber-dim: rgba(245, 158, 11, 0.12);
+        --noc-red: #ef4444;
+        --noc-red-dim: rgba(239, 68, 68, 0.12);
+        --noc-purple: #a78bfa;
+        --font-mono: 'JetBrains Mono', 'Monaco', 'Consolas', monospace;
+        --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+    }
+
+    /* Override base styles */
+    .container { max-width: 100% !important; padding: 0 !important; }
+
+    /* Page Layout */
+    .noc-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        grid-template-rows: auto 1fr;
+        min-height: calc(100vh - 60px);
+        background: var(--noc-bg);
+        font-family: var(--font-sans);
+    }
+
+    @media (max-width: 1024px) {
+        .noc-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Compact Header Bar */
+    .noc-header {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.625rem 1rem;
+        background: var(--noc-surface);
+        border-bottom: 1px solid var(--noc-border);
+        gap: 1rem;
+    }
+
+    .noc-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .noc-back {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: var(--noc-text-dim);
+        text-decoration: none;
+        transition: all 0.15s;
+        flex-shrink: 0;
+    }
+
+    .noc-back:hover {
+        background: var(--noc-surface-2);
+        color: var(--noc-cyan);
+    }
+
+    .noc-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .noc-project-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--noc-text);
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .noc-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 3px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+    }
+
+    .noc-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+
+    .noc-status.active { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-status.active .noc-status-dot { background: var(--noc-green); box-shadow: 0 0 6px var(--noc-green); }
+    .noc-status.inactive { background: var(--noc-amber-dim); color: var(--noc-amber); }
+    .noc-status.inactive .noc-status-dot { background: var(--noc-amber); }
+    .noc-status.archived { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+    .noc-status.archived .noc-status-dot { background: #94a3b8; }
+    .noc-status.other { background: var(--noc-cyan-dim); color: var(--noc-cyan); }
+    .noc-status.other .noc-status-dot { background: var(--noc-cyan); }
+
+    .noc-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    /* Dropdown */
+    .noc-dropdown {
+        position: relative;
+    }
+
+    .noc-dropdown-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .noc-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 0.25rem;
+        min-width: 180px;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        z-index: 100;
+        display: none;
+        overflow: hidden;
+    }
+
+    .noc-dropdown.open .noc-dropdown-menu {
+        display: block;
+    }
+
+    .noc-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        color: var(--noc-text);
+        background: transparent;
+        border: none;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-align: left;
+    }
+
+    .noc-dropdown-item:hover {
+        background: var(--noc-surface-3);
+    }
+
+    .noc-dropdown-item svg {
+        color: var(--noc-text-dim);
+    }
+
+    .noc-dropdown-divider {
+        height: 1px;
+        background: var(--noc-border);
+        margin: 0.25rem 0;
+    }
+
+    .noc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 4px;
+        font-family: var(--font-sans);
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.15s;
+    }
+
+    .noc-btn-primary {
+        background: var(--noc-cyan);
+        color: var(--noc-bg);
+        border-color: var(--noc-cyan);
+    }
+
+    .noc-btn-primary:hover {
+        background: #00b8e6;
+        border-color: #00b8e6;
+    }
+
+    .noc-btn-success {
+        background: var(--noc-green);
+        color: white;
+    }
+
+    .noc-btn-success:hover {
+        background: #0ea572;
+    }
+
+    .noc-btn-ghost {
+        background: transparent;
+        color: var(--noc-text-dim);
+        border-color: var(--noc-border);
+    }
+
+    .noc-btn-ghost:hover {
+        background: var(--noc-surface-2);
+        color: var(--noc-text);
+        border-color: var(--noc-border-light);
+    }
+
+    .noc-btn-danger {
+        background: transparent;
+        color: var(--noc-red);
+        border-color: var(--noc-red);
+    }
+
+    .noc-btn-danger:hover {
+        background: var(--noc-red);
+        color: white;
+    }
+
+    .noc-btn svg { width: 14px; height: 14px; }
+
+    /* Sidebar */
+    .noc-sidebar {
+        background: var(--noc-surface);
+        border-right: 1px solid var(--noc-border);
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        overflow-y: auto;
+    }
+
+    @media (max-width: 1024px) {
+        .noc-sidebar {
+            border-right: none;
+            border-bottom: 1px solid var(--noc-border);
+        }
+    }
+
+    .noc-panel {
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .noc-panel-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 0.75rem;
+        background: var(--noc-surface-3);
+        border-bottom: 1px solid var(--noc-border);
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-panel-header svg {
+        width: 12px;
+        height: 12px;
+        color: var(--noc-cyan);
+    }
+
+    .noc-panel-body {
+        padding: 0.75rem;
+    }
+
+    /* Meta Info */
+    .noc-meta-grid {
+        display: grid;
+        gap: 0.625rem;
+    }
+
+    .noc-meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+
+    .noc-meta-label {
+        font-size: 0.625rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-meta-value {
+        font-size: 0.8rem;
+        color: var(--noc-text);
+        line-height: 1.4;
+    }
+
+    .noc-meta-value.mono {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+    }
+
+    /* Stats Grid */
+    .noc-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+
+    .noc-stat {
+        background: var(--noc-surface-3);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        padding: 0.625rem;
+        text-align: center;
+    }
+
+    .noc-stat-value {
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--noc-text);
+        line-height: 1;
+    }
+
+    .noc-stat-label {
+        font-size: 0.6rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--noc-text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .noc-stat.permanent .noc-stat-value { color: var(--noc-green); }
+    .noc-stat.temporary .noc-stat-value { color: var(--noc-amber); }
+    .noc-stat.active .noc-stat-value { color: var(--noc-cyan); }
+
+    /* Quick Actions */
+    .noc-actions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .noc-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.625rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--noc-text-dim);
+        text-decoration: none;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.15s;
+        width: 100%;
+        text-align: left;
+    }
+
+    .noc-action-btn:hover {
+        background: var(--noc-surface-3);
+        color: var(--noc-text);
+    }
+
+    .noc-action-btn.primary { color: var(--noc-cyan); }
+    .noc-action-btn.primary:hover { background: var(--noc-cyan-dim); }
+    .noc-action-btn.success { color: var(--noc-green); }
+    .noc-action-btn.success:hover { background: var(--noc-green-dim); }
+    .noc-action-btn.danger { color: var(--noc-red); }
+    .noc-action-btn.danger:hover { background: var(--noc-red-dim); }
+
+    .noc-action-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Resources Tags */
+    .noc-resources {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .noc-resource-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        background: var(--noc-surface-3);
+        border: 1px solid var(--noc-border);
+        border-radius: 3px;
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        color: var(--noc-text-dim);
+    }
+
+    /* Main Content */
+    .noc-main {
+        background: var(--noc-bg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* Filter Bar */
+    .noc-filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.625rem 1rem;
+        background: var(--noc-surface);
+        border-bottom: 1px solid var(--noc-border);
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .noc-filter-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .noc-search {
+        position: relative;
+    }
+
+    .noc-search svg {
+        position: absolute;
+        left: 0.625rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-search input {
+        padding: 0.4rem 0.625rem 0.4rem 2rem;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        color: var(--noc-text);
+        font-family: var(--font-sans);
+        font-size: 0.75rem;
+        width: 200px;
+        transition: all 0.15s;
+    }
+
+    .noc-search input:focus {
+        outline: none;
+        border-color: var(--noc-cyan);
+        background: var(--noc-surface-3);
+    }
+
+    .noc-search input::placeholder { color: var(--noc-text-muted); }
+
+    .noc-select {
+        padding: 0.4rem 1.75rem 0.4rem 0.625rem;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        color: var(--noc-text);
+        font-family: var(--font-sans);
+        font-size: 0.75rem;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235c6370' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.5rem center;
+    }
+
+    .noc-select:focus {
+        outline: none;
+        border-color: var(--noc-cyan);
+    }
+
+    .noc-filter-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .noc-count {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-count span { color: var(--noc-cyan); }
+
+    /* Matrix Table */
+    .noc-table-wrapper {
+        flex: 1;
+        overflow: auto;
+        position: relative;
+    }
+
+    .noc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+    }
+
+    .noc-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .noc-table th {
+        padding: 0.625rem 0.75rem;
+        background: var(--noc-surface-2);
+        border-bottom: 2px solid var(--noc-border);
+        text-align: left;
+        font-family: var(--font-sans);
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--noc-text-muted);
+        white-space: nowrap;
+    }
+
+    .noc-table th.center { text-align: center; }
+
+    .noc-table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--noc-border);
+        color: var(--noc-text);
+        vertical-align: middle;
+    }
+
+    .noc-table tbody tr {
+        transition: background 0.1s;
+    }
+
+    .noc-table tbody tr:hover {
+        background: rgba(0, 212, 255, 0.03);
+    }
+
+    .noc-table tbody tr.inactive {
+        opacity: 0.4;
+    }
+
+    .noc-table tbody tr.inactive:hover {
+        opacity: 0.7;
+    }
+
+    /* Row type indicators */
+    .noc-table tbody tr.type-permanent {
+        border-left: 2px solid var(--noc-green);
+    }
+
+    .noc-table tbody tr.type-temporary {
+        border-left: 2px solid var(--noc-amber);
+    }
+
+    /* Checkbox column */
+    .noc-checkbox {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--noc-cyan);
+        cursor: pointer;
+    }
+
+    /* Status cell */
+    .noc-rule-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .noc-status-light {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--noc-text-muted);
+    }
+
+    .noc-status-light.on {
+        background: var(--noc-green);
+        box-shadow: 0 0 8px var(--noc-green);
+    }
+
+    /* IP cells */
+    .noc-ip {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--noc-text);
+    }
+
+    .noc-ip.source { color: #7dd3fc; }
+    .noc-ip.dest { color: #fca5a5; }
+
+    .noc-hostname {
+        font-size: 0.65rem;
+        color: var(--noc-text-muted);
+        margin-top: 0.125rem;
+    }
+
+    /* Flow Arrow */
+    .noc-flow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--noc-cyan);
+    }
+
+    .noc-flow svg { width: 18px; height: 18px; }
+
+    /* Port badge */
+    .noc-port {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.5rem;
+        background: rgba(6, 182, 212, 0.12);
+        border: 1px solid rgba(6, 182, 212, 0.25);
+        border-radius: 3px;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: #06b6d4;
+    }
+
+    /* Protocol badge */
+    .noc-proto {
+        display: inline-flex;
+        padding: 0.15rem 0.4rem;
+        border-radius: 3px;
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        font-weight: 600;
+    }
+
+    .noc-proto.tcp { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .noc-proto.udp { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .noc-proto.icmp { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .noc-proto.any { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+
+    /* Type badge */
+    .noc-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .noc-type.permanent { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-type.temporary { background: var(--noc-amber-dim); color: var(--noc-amber); }
+
+    /* Description */
+    .noc-desc {
+        max-width: 180px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--noc-text-dim);
+        font-size: 0.75rem;
+    }
+
+    /* Row Actions */
+    .noc-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        opacity: 0.5;
+        transition: opacity 0.15s;
+    }
+
+    .noc-table tbody tr:hover .noc-row-actions {
+        opacity: 1;
+    }
+
+    .noc-row-btn {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 3px;
+        border: none;
+        background: transparent;
+        color: var(--noc-text-muted);
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .noc-row-btn:hover {
+        background: var(--noc-surface-3);
+        color: var(--noc-text);
+    }
+
+    .noc-row-btn.success:hover { background: var(--noc-green-dim); color: var(--noc-green); }
+    .noc-row-btn.warning:hover { background: var(--noc-amber-dim); color: var(--noc-amber); }
+    .noc-row-btn.danger:hover { background: var(--noc-red-dim); color: var(--noc-red); }
+
+    .noc-row-btn svg { width: 13px; height: 13px; }
+
+    /* Empty State */
+    .noc-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+
+    .noc-empty-icon {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--noc-surface-2);
+        border: 1px solid var(--noc-border);
+        border-radius: 8px;
+        color: var(--noc-text-muted);
+        margin-bottom: 1rem;
+    }
+
+    .noc-empty-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--noc-text);
+        margin-bottom: 0.25rem;
+    }
+
+    .noc-empty-text {
+        font-size: 0.8rem;
+        color: var(--noc-text-muted);
+        margin-bottom: 1rem;
+    }
+
+    /* Modals */
+    .noc-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .noc-modal-overlay.active { display: flex; }
+
+    .noc-modal {
+        background: var(--noc-surface);
+        border: 1px solid var(--noc-border);
+        border-radius: 8px;
+        width: 100%;
+        max-width: 560px;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    }
+
+    .noc-modal.wide { max-width: 720px; }
+
+    .noc-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.875rem 1rem;
+        background: var(--noc-surface-2);
+        border-bottom: 1px solid var(--noc-border);
+    }
+
+    .noc-modal-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--noc-text);
+        margin: 0;
+    }
+
+    .noc-modal-title svg {
+        width: 16px;
+        height: 16px;
+        color: var(--noc-cyan);
+    }
+
+    .noc-modal-close {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--noc-text-muted);
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.15s;
+    }
+
+    .noc-modal-close:hover {
+        background: var(--noc-red-dim);
+        color: var(--noc-red);
+    }
+
+    .noc-modal-body {
+        padding: 1rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .noc-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--noc-surface-2);
+        border-top: 1px solid var(--noc-border);
+    }
+
+    /* Form Styles */
+    .noc-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.875rem;
+    }
+
+    @media (max-width: 640px) {
+        .noc-form-grid { grid-template-columns: 1fr; }
+    }
+
+    .noc-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .noc-form-group.full { grid-column: span 2; }
+    @media (max-width: 640px) {
+        .noc-form-group.full { grid-column: span 1; }
+    }
+
+    .noc-form-label {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--noc-text-dim);
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .noc-form-label .req { color: var(--noc-red); }
+    .noc-form-label .opt { color: var(--noc-text-muted); font-weight: 400; }
+
+    .noc-form-input,
+    .noc-form-select {
+        padding: 0.5rem 0.625rem;
+        background: var(--noc-surface-3);
+        border: 1px solid var(--noc-border);
+        border-radius: 4px;
+        color: var(--noc-text);
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        transition: all 0.15s;
+    }
+
+    .noc-form-input:focus,
+    .noc-form-select:focus {
+        outline: none;
+        border-color: var(--noc-cyan);
+        background: var(--noc-surface-2);
+    }
+
+    .noc-form-input.mono {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+    }
+
+    .noc-form-hint {
+        font-size: 0.625rem;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-form-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--noc-text);
+        cursor: pointer;
+    }
+
+    .noc-form-check input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--noc-cyan);
+    }
+
+    /* View Details Panel */
+    .noc-detail-flow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: var(--noc-surface-3);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-family: var(--font-mono);
+        font-size: 0.9rem;
+    }
+
+    .noc-detail-flow .src { color: #7dd3fc; }
+    .noc-detail-flow .arrow { color: var(--noc-cyan); }
+    .noc-detail-flow .dst { color: #fca5a5; }
+    .noc-detail-flow .port { color: #06b6d4; }
+
+    .noc-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .noc-detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+
+    .noc-detail-item.full { grid-column: span 2; }
+
+    .noc-detail-label {
+        font-size: 0.6rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-detail-value {
+        font-size: 0.8rem;
+        color: var(--noc-text);
+    }
+
+    /* Policy CLI Display */
+    .noc-cli-wrapper {
+        background: #0d1117;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .noc-cli-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.75rem;
+        background: #161b22;
+        border-bottom: 1px solid #30363d;
+    }
+
+    .noc-cli-title {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: #8b949e;
+    }
+
+    .noc-cli-copy {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.5rem;
+        background: #21262d;
+        border: 1px solid #30363d;
+        border-radius: 4px;
+        color: #c9d1d9;
+        font-family: var(--font-sans);
+        font-size: 0.65rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .noc-cli-copy:hover {
+        background: #30363d;
+        border-color: #484f58;
+    }
+
+    /* Vendor Tabs */
+    .noc-vendor-tabs {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--noc-surface-2);
+        border-bottom: 1px solid var(--noc-border);
+    }
+
+    .noc-vendor-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--noc-text-dim);
+        background: var(--noc-surface);
+        border: 1px solid var(--noc-border);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .noc-vendor-tab:hover {
+        background: var(--noc-surface-3);
+        color: var(--noc-text);
+    }
+
+    .noc-vendor-tab.active {
+        background: var(--noc-cyan);
+        color: white;
+        border-color: var(--noc-cyan);
+    }
+
+    .noc-vendor-tab svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .noc-vendor-loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        color: var(--noc-cyan);
+        margin-left: auto;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .spinning {
+        animation: spin 1s linear infinite;
+    }
+
+    .noc-cli-content {
+        padding: 1rem;
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        line-height: 1.6;
+        color: #c9d1d9;
+        overflow-x: auto;
+        white-space: pre;
+        max-height: 360px;
+    }
+
+    /* Toast */
+    .noc-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1rem;
+        background: var(--noc-green);
+        color: white;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        animation: toastIn 0.3s ease;
+    }
+
+    @keyframes toastIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes toastOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+
+    /* Delete form inline */
+    .inline-form { display: inline; }
+
+    /* File Upload */
+    .noc-file-upload {
+        border: 2px dashed var(--noc-border);
+        border-radius: 6px;
+        transition: all 0.15s;
+    }
+
+    .noc-file-upload:hover {
+        border-color: var(--noc-cyan);
+        background: rgba(0, 212, 255, 0.03);
+    }
+
+    .noc-file-upload.dragover {
+        border-color: var(--noc-cyan);
+        background: rgba(0, 212, 255, 0.08);
+    }
+
+    .noc-file-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        cursor: pointer;
+        color: var(--noc-text-dim);
+    }
+
+    .noc-file-placeholder svg {
+        margin-bottom: 0.5rem;
+        color: var(--noc-text-muted);
+    }
+
+    .noc-file-placeholder span {
+        font-size: 0.8rem;
+    }
+
+    .noc-file-upload.has-file {
+        border-style: solid;
+        border-color: var(--noc-green);
+        background: var(--noc-green-dim);
+    }
+
+    .noc-file-upload.has-file .noc-file-placeholder svg {
+        color: var(--noc-green);
+    }
+
+    .noc-file-upload.has-file .noc-file-placeholder span {
+        color: var(--noc-text);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="noc-layout">
+    <!-- Compact Header -->
+    <header class="noc-header">
+        <div class="noc-header-left">
+            <a href="{{ url_for('project_list') }}" class="noc-back" title="Back to Projects">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+            </a>
+            <div class="noc-title-group">
+                <h1 class="noc-project-name">{{ project.name }}</h1>
+                <span class="noc-status {{ project.status|lower }}">
+                    <span class="noc-status-dot"></span>
+                    {{ project.status_display }}
+                </span>
+            </div>
+        </div>
+        <div class="noc-header-actions">
+            <!-- Import/Export Dropdown -->
+            <div class="noc-dropdown">
+                <button class="noc-btn noc-btn-ghost noc-dropdown-toggle" onclick="toggleDropdown(this)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Import/Export
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <div class="noc-dropdown-menu">
+                    <button class="noc-dropdown-item" onclick="openModal('importModal')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Import from Excel
+                    </button>
+                    <a href="/api/projects/{{ project.id }}/export/" class="noc-dropdown-item">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export to Excel
+                    </a>
+                    <div class="noc-dropdown-divider"></div>
+                    <a href="/api/projects/template/" class="noc-dropdown-item">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        Download Template
+                    </a>
+                </div>
+            </div>
+            <a href="{{ url_for('project_policy_view', project_id=project.id) }}" class="noc-btn noc-btn-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                Build All
+            </a>
+            <button class="noc-btn noc-btn-primary" onclick="openModal('addEntryModal')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Rule
+            </button>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="noc-sidebar">
+        <!-- Project Info -->
+        <div class="noc-panel">
+            <div class="noc-panel-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                Project Info
+            </div>
+            <div class="noc-panel-body">
+                <div class="noc-meta-grid">
+                    <div class="noc-meta-item">
+                        <span class="noc-meta-label">Owner</span>
+                        <span class="noc-meta-value">{{ project.owner }}</span>
+                    </div>
+                    {% if project.location %}
+                    <div class="noc-meta-item">
+                        <span class="noc-meta-label">Location</span>
+                        <span class="noc-meta-value">{{ project.location }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="noc-meta-item">
+                        <span class="noc-meta-label">Created</span>
+                        <span class="noc-meta-value mono">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                    <div class="noc-meta-item">
+                        <span class="noc-meta-label">Updated</span>
+                        <span class="noc-meta-value mono">{{ project.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    {% if project.description %}
+                    <div class="noc-meta-item" style="grid-column: 1 / -1;">
+                        <span class="noc-meta-label">Description</span>
+                        <span class="noc-meta-value" style="font-size: 0.75rem;">{{ project.description }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="noc-panel">
+            <div class="noc-panel-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                Rule Statistics
+            </div>
+            <div class="noc-panel-body">
+                <div class="noc-stats-grid">
+                    <div class="noc-stat">
+                        <div class="noc-stat-value">{{ entry_stats.total }}</div>
+                        <div class="noc-stat-label">Total</div>
+                    </div>
+                    <div class="noc-stat active">
+                        <div class="noc-stat-value">{{ entry_stats.active }}</div>
+                        <div class="noc-stat-label">Active</div>
+                    </div>
+                    <div class="noc-stat permanent">
+                        <div class="noc-stat-value">{{ entry_stats.permanent }}</div>
+                        <div class="noc-stat-label">Permanent</div>
+                    </div>
+                    <div class="noc-stat temporary">
+                        <div class="noc-stat-value">{{ entry_stats.temporary }}</div>
+                        <div class="noc-stat-label">Temporary</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="noc-panel">
+            <div class="noc-panel-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                Quick Actions
+            </div>
+            <div class="noc-panel-body">
+                <div class="noc-actions-list">
+                    <a href="{{ url_for('project_policy_view', project_id=project.id) }}" class="noc-action-btn success">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="4 17 10 11 4 5"></polyline>
+                            <line x1="12" y1="19" x2="20" y2="19"></line>
+                        </svg>
+                        Generate FortiGate CLI
+                    </a>
+                    <a href="{{ url_for('project_edit', project_id=project.id) }}" class="noc-action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        Edit Project
+                    </a>
+                    <button class="noc-action-btn primary" onclick="openModal('addEntryModal')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add New Rule
+                    </button>
+                    <form action="{{ url_for('project_delete', project_id=project.id) }}" method="post" class="inline-form" onsubmit="return confirm('Delete this project and all rules?');">
+                        <button type="submit" class="noc-action-btn danger">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete Project
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resources -->
+        {% if project.resources %}
+        <div class="noc-panel">
+            <div class="noc-panel-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
+                Resources
+            </div>
+            <div class="noc-panel-body">
+                <div class="noc-resources">
+                    {% for resource in project.resources.split(',') %}
+                    <span class="noc-resource-tag">{{ resource.strip() }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </aside>
+
+    <!-- Main Content -->
+    <main class="noc-main">
+        <!-- Filter Bar -->
+        <div class="noc-filter-bar">
+            <div class="noc-filter-left">
+                <form method="get" action="{{ url_for('project_detail', project_id=project.id) }}" style="display: flex; gap: 0.5rem;">
+                    <div class="noc-search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" name="search" placeholder="Search rules..." value="{{ search or '' }}">
+                    </div>
+                    <select name="connection_type" class="noc-select" onchange="this.form.submit()">
+                        <option value="">All Types</option>
+                        {% for value, label in connection_type_choices %}
+                        <option value="{{ value }}" {% if connection_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+            <div class="noc-filter-right">
+                <span class="noc-count">Showing <span>{{ entries|length }}</span> of <span>{{ entry_stats.total }}</span> rules</span>
+            </div>
+        </div>
+
+        <!-- Matrix Table -->
+        {% if entries %}
+        <div class="noc-table-wrapper">
+            <table class="noc-table">
+                <thead>
+                    <tr>
+                        <th style="width: 36px;"><input type="checkbox" class="noc-checkbox" id="selectAll" title="Select all"></th>
+                        <th style="width: 40px;" class="center">Status</th>
+                        <th>Source</th>
+                        <th style="width: 36px;"></th>
+                        <th>Destination</th>
+                        <th>Port</th>
+                        <th>Proto</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th style="width: 110px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr class="{% if not entry.is_active %}inactive{% endif %} type-{{ entry.connection_type|lower }}" data-entry-id="{{ entry.id }}">
+                        <td><input type="checkbox" class="noc-checkbox entry-checkbox" value="{{ entry.id }}"></td>
+                        <td>
+                            <div class="noc-rule-status">
+                                <span class="noc-status-light {% if entry.is_active %}on{% endif %}" title="{% if entry.is_active %}Active{% else %}Inactive{% endif %}"></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="noc-ip source">{{ entry.source_ip }}</div>
+                            {% if entry.source_hostname %}
+                            <div class="noc-hostname">{{ entry.source_hostname }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="noc-flow">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                </svg>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="noc-ip dest">{{ entry.destination_ip }}</div>
+                            {% if entry.destination_hostname %}
+                            <div class="noc-hostname">{{ entry.destination_hostname }}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="noc-port">{{ entry.destination_port }}</span></td>
+                        <td><span class="noc-proto {{ entry.protocol|lower }}">{{ entry.protocol }}</span></td>
+                        <td><span class="noc-type {{ entry.connection_type|lower }}">{{ entry.connection_type_display }}</span></td>
+                        <td><span class="noc-desc" title="{{ entry.description or '' }}">{{ entry.description or '-' }}</span></td>
+                        <td>
+                            <div class="noc-row-actions">
+                                <button class="noc-row-btn" onclick="viewEntry({{ entry.id }}, '{{ entry.source_ip }}', '{{ entry.source_hostname or '' }}', '{{ entry.destination_ip }}', '{{ entry.destination_hostname or '' }}', '{{ entry.destination_port }}', '{{ entry.protocol }}', '{{ entry.connection_type }}', '{{ entry.description|replace("'", "\\'")|default('', true) }}', {{ 'true' if entry.is_active else 'false' }}, '{{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}')" title="View">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                                <button class="noc-row-btn success" onclick="buildEntryPolicy({{ entry.id }})" title="Build Policy">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="4 17 10 11 4 5"></polyline>
+                                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                                    </svg>
+                                </button>
+                                <button class="noc-row-btn" onclick="editEntry({{ entry.id }}, '{{ entry.source_ip }}', '{{ entry.source_hostname or '' }}', '{{ entry.destination_ip }}', '{{ entry.destination_hostname or '' }}', '{{ entry.destination_port }}', '{{ entry.protocol }}', '{{ entry.connection_type }}', '{{ entry.description|replace("'", "\\'")|default('', true) }}', {{ 'true' if entry.is_active else 'false' }})" title="Edit">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </button>
+                                <form action="{{ url_for('entry_toggle', project_id=project.id, entry_id=entry.id) }}" method="post" class="inline-form">
+                                    <button type="submit" class="noc-row-btn warning" title="{% if entry.is_active %}Disable{% else %}Enable{% endif %}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            {% if entry.is_active %}
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                                            {% else %}
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                            {% endif %}
+                                        </svg>
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('entry_delete', project_id=project.id, entry_id=entry.id) }}" method="post" class="inline-form" onsubmit="return confirm('Delete this rule?');">
+                                    <button type="submit" class="noc-row-btn danger" title="Delete">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="noc-empty">
+            <div class="noc-empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+            </div>
+            <div class="noc-empty-title">No communication rules</div>
+            <p class="noc-empty-text">
+                {% if search or connection_type_filter %}
+                No rules match your current filters.
+                {% else %}
+                Start building your communication matrix by adding rules.
+                {% endif %}
+            </p>
+            <button class="noc-btn noc-btn-primary" onclick="openModal('addEntryModal')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add First Rule
+            </button>
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<!-- Add Entry Modal -->
+<div class="noc-modal-overlay" id="addEntryModal">
+    <div class="noc-modal">
+        <div class="noc-modal-header">
+            <h3 class="noc-modal-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Communication Rule
+            </h3>
+            <button class="noc-modal-close" onclick="closeModal('addEntryModal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <form action="{{ url_for('entry_add', project_id=project.id) }}" method="post">
+            <div class="noc-modal-body">
+                <div class="noc-form-grid">
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Source IP <span class="req">*</span></label>
+                        <input type="text" name="source_ip" class="noc-form-input mono" placeholder="192.168.1.0/24" required>
+                        <span class="noc-form-hint">IP, CIDR, range, or 'any'</span>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Source Hostname <span class="opt">(optional)</span></label>
+                        <input type="text" name="source_hostname" class="noc-form-input" placeholder="web-server-01">
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Destination IP <span class="req">*</span></label>
+                        <input type="text" name="destination_ip" class="noc-form-input mono" placeholder="10.0.0.1" required>
+                        <span class="noc-form-hint">IP, CIDR, range, or 'any'</span>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Destination Hostname <span class="opt">(optional)</span></label>
+                        <input type="text" name="destination_hostname" class="noc-form-input" placeholder="db-server-01">
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Port <span class="req">*</span></label>
+                        <input type="text" name="destination_port" class="noc-form-input mono" placeholder="443 or 80-443" required>
+                        <span class="noc-form-hint">Single, range, or comma-separated</span>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Protocol</label>
+                        <select name="protocol" class="noc-form-select">
+                            {% for value, label in protocol_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Connection Type</label>
+                        <select name="connection_type" class="noc-form-select">
+                            {% for value, label in connection_type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="noc-form-group full">
+                        <label class="noc-form-label">Description <span class="opt">(optional)</span></label>
+                        <input type="text" name="description" class="noc-form-input" placeholder="Brief description of this rule">
+                    </div>
+                </div>
+            </div>
+            <div class="noc-modal-footer">
+                <button type="button" class="noc-btn noc-btn-ghost" onclick="closeModal('addEntryModal')">Cancel</button>
+                <button type="submit" class="noc-btn noc-btn-primary">Add Rule</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Entry Modal -->
+<div class="noc-modal-overlay" id="editEntryModal">
+    <div class="noc-modal">
+        <div class="noc-modal-header">
+            <h3 class="noc-modal-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Edit Rule
+            </h3>
+            <button class="noc-modal-close" onclick="closeModal('editEntryModal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <form id="editEntryForm" method="post">
+            <div class="noc-modal-body">
+                <div class="noc-form-grid">
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Source IP <span class="req">*</span></label>
+                        <input type="text" name="source_ip" id="edit_source_ip" class="noc-form-input mono" required>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Source Hostname</label>
+                        <input type="text" name="source_hostname" id="edit_source_hostname" class="noc-form-input">
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Destination IP <span class="req">*</span></label>
+                        <input type="text" name="destination_ip" id="edit_destination_ip" class="noc-form-input mono" required>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Destination Hostname</label>
+                        <input type="text" name="destination_hostname" id="edit_destination_hostname" class="noc-form-input">
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Port <span class="req">*</span></label>
+                        <input type="text" name="destination_port" id="edit_destination_port" class="noc-form-input mono" required>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Protocol</label>
+                        <select name="protocol" id="edit_protocol" class="noc-form-select">
+                            {% for value, label in protocol_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-label">Connection Type</label>
+                        <select name="connection_type" id="edit_connection_type" class="noc-form-select">
+                            {% for value, label in connection_type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="noc-form-group">
+                        <label class="noc-form-check">
+                            <input type="checkbox" name="is_active" id="edit_is_active">
+                            Active
+                        </label>
+                    </div>
+                    <div class="noc-form-group full">
+                        <label class="noc-form-label">Description</label>
+                        <input type="text" name="description" id="edit_description" class="noc-form-input">
+                    </div>
+                </div>
+            </div>
+            <div class="noc-modal-footer">
+                <button type="button" class="noc-btn noc-btn-ghost" onclick="closeModal('editEntryModal')">Cancel</button>
+                <button type="submit" class="noc-btn noc-btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- View Details Modal -->
+<div class="noc-modal-overlay" id="viewEntryModal">
+    <div class="noc-modal">
+        <div class="noc-modal-header">
+            <h3 class="noc-modal-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                Rule Details
+            </h3>
+            <button class="noc-modal-close" onclick="closeModal('viewEntryModal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="noc-modal-body">
+            <div class="noc-detail-flow">
+                <span class="src" id="view_source_ip"></span>
+                <span class="arrow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+                <span class="dst" id="view_destination_ip"></span>
+                <span class="port">:<span id="view_destination_port"></span></span>
+            </div>
+            <div class="noc-detail-grid">
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Source Hostname</span>
+                    <span class="noc-detail-value" id="view_source_hostname">-</span>
+                </div>
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Destination Hostname</span>
+                    <span class="noc-detail-value" id="view_destination_hostname">-</span>
+                </div>
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Protocol</span>
+                    <span class="noc-detail-value" id="view_protocol"></span>
+                </div>
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Connection Type</span>
+                    <span class="noc-detail-value" id="view_connection_type"></span>
+                </div>
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Status</span>
+                    <span class="noc-detail-value" id="view_status"></span>
+                </div>
+                <div class="noc-detail-item">
+                    <span class="noc-detail-label">Created</span>
+                    <span class="noc-detail-value" id="view_created"></span>
+                </div>
+                <div class="noc-detail-item full">
+                    <span class="noc-detail-label">Description</span>
+                    <span class="noc-detail-value" id="view_description">-</span>
+                </div>
+            </div>
+        </div>
+        <div class="noc-modal-footer">
+            <button type="button" class="noc-btn noc-btn-ghost" onclick="closeModal('viewEntryModal')">Close</button>
+            <button type="button" class="noc-btn noc-btn-success" id="view_build_policy_btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                Build Policy
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="noc-modal-overlay" id="importModal">
+    <div class="noc-modal">
+        <div class="noc-modal-header">
+            <h3 class="noc-modal-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Import from Excel
+            </h3>
+            <button class="noc-modal-close" onclick="closeModal('importModal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <form id="importForm" action="/projects/{{ project.id }}/import/" method="post" enctype="multipart/form-data">
+            <div class="noc-modal-body">
+                <div class="noc-form-grid">
+                    <div class="noc-form-group full">
+                        <label class="noc-form-label">Excel File <span class="req">*</span></label>
+                        <div class="noc-file-upload" id="fileUploadArea">
+                            <input type="file" name="file" id="importFile" accept=".xlsx,.xls" required style="display: none;">
+                            <div class="noc-file-placeholder" onclick="document.getElementById('importFile').click()">
+                                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="12" y1="18" x2="12" y2="12"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                </svg>
+                                <span id="fileName">Click to select Excel file</span>
+                            </div>
+                        </div>
+                        <span class="noc-form-hint">Upload .xlsx or .xls file with communication matrix data</span>
+                    </div>
+                    <div class="noc-form-group full">
+                        <div style="background: var(--noc-surface-3); border-radius: 6px; padding: 0.75rem; font-size: 0.75rem; color: var(--noc-text-dim);">
+                            <strong style="color: var(--noc-text);">Expected Columns:</strong><br>
+                            <code style="color: var(--noc-cyan);">source_ip</code>,
+                            <code style="color: var(--noc-cyan);">destination_ip</code>,
+                            <code style="color: var(--noc-cyan);">destination_port</code>,
+                            <code style="color: var(--noc-cyan);">protocol</code>,
+                            <code style="color: var(--noc-cyan);">connection_type</code>,
+                            <code style="color: var(--noc-cyan);">description</code><br>
+                            <span style="margin-top: 0.25rem; display: block;">Optional: <code>source_hostname</code>, <code>destination_hostname</code></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="noc-modal-footer">
+                <a href="/api/projects/template/" class="noc-btn noc-btn-ghost">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download Template
+                </a>
+                <button type="button" class="noc-btn noc-btn-ghost" onclick="closeModal('importModal')">Cancel</button>
+                <button type="submit" class="noc-btn noc-btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Import
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Policy CLI Modal -->
+<div class="noc-modal-overlay" id="policyModal">
+    <div class="noc-modal wide">
+        <div class="noc-modal-header">
+            <h3 class="noc-modal-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                <span id="policyModalTitle">Firewall Policy CLI</span>
+            </h3>
+            <button class="noc-modal-close" onclick="closeModal('policyModal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="noc-modal-body" style="padding: 0;">
+            <!-- Vendor Selection Tabs -->
+            <div class="noc-vendor-tabs">
+                <button type="button" class="noc-vendor-tab active" data-vendor="fortinet" onclick="selectPolicyVendor('fortinet')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    Fortinet
+                </button>
+                <button type="button" class="noc-vendor-tab" data-vendor="paloalto" onclick="selectPolicyVendor('paloalto')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M12 8v8M8 12h8"/>
+                    </svg>
+                    Palo Alto
+                </button>
+                <span class="noc-vendor-loading" id="policyLoading" style="display: none;">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    Loading...
+                </span>
+            </div>
+            <div class="noc-cli-wrapper">
+                <div class="noc-cli-toolbar">
+                    <span class="noc-cli-title" id="policyCliFilename">fortigate-config.txt</span>
+                    <button class="noc-cli-copy" onclick="copyPolicyCli()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+                <pre class="noc-cli-content" id="policyCliContent"></pre>
+            </div>
+        </div>
+        <div class="noc-modal-footer">
+            <button type="button" class="noc-btn noc-btn-ghost" onclick="closeModal('policyModal')">Close</button>
+            <button type="button" class="noc-btn noc-btn-success" onclick="copyPolicyCli()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy CLI
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function editEntry(id, srcIp, srcHost, dstIp, dstHost, dstPort, protocol, connType, desc, isActive) {
+        document.getElementById('editEntryForm').action = '/projects/{{ project.id }}/entries/' + id + '/update/';
+        document.getElementById('edit_source_ip').value = srcIp;
+        document.getElementById('edit_source_hostname').value = srcHost;
+        document.getElementById('edit_destination_ip').value = dstIp;
+        document.getElementById('edit_destination_hostname').value = dstHost;
+        document.getElementById('edit_destination_port').value = dstPort;
+        document.getElementById('edit_protocol').value = protocol;
+        document.getElementById('edit_connection_type').value = connType;
+        document.getElementById('edit_description').value = desc;
+        document.getElementById('edit_is_active').checked = isActive;
+        openModal('editEntryModal');
+    }
+
+    function viewEntry(id, srcIp, srcHost, dstIp, dstHost, dstPort, protocol, connType, desc, isActive, created) {
+        document.getElementById('view_source_ip').textContent = srcIp;
+        document.getElementById('view_source_hostname').textContent = srcHost || '-';
+        document.getElementById('view_destination_ip').textContent = dstIp;
+        document.getElementById('view_destination_hostname').textContent = dstHost || '-';
+        document.getElementById('view_destination_port').textContent = dstPort;
+        document.getElementById('view_protocol').textContent = protocol;
+        document.getElementById('view_connection_type').textContent = connType === 'PERMANENT' ? 'Permanent' : 'Temporary';
+        document.getElementById('view_status').innerHTML = isActive
+            ? '<span style="color: var(--noc-green);">Active</span>'
+            : '<span style="color: var(--noc-text-muted);">Inactive</span>';
+        document.getElementById('view_description').textContent = desc || '-';
+        document.getElementById('view_created').textContent = created;
+        document.getElementById('view_build_policy_btn').onclick = function() {
+            closeModal('viewEntryModal');
+            buildEntryPolicy(id);
+        };
+        openModal('viewEntryModal');
+    }
+
+    // Vendor selection state
+    let currentPolicyVendor = 'fortinet';
+    let currentPolicyEntryId = null;
+
+    const vendorConfig = {
+        'fortinet': {
+            title: 'FortiGate (Fortinet) Policy CLI',
+            filename: 'fortigate-config.txt'
+        },
+        'paloalto': {
+            title: 'Palo Alto Networks Policy CLI',
+            filename: 'paloalto-config.txt'
+        }
+    };
+
+    async function buildEntryPolicy(entryId) {
+        currentPolicyEntryId = entryId;
+        currentPolicyVendor = 'fortinet';
+
+        // Reset UI
+        document.querySelectorAll('.noc-vendor-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.vendor === 'fortinet');
+        });
+        updateVendorUI('fortinet');
+
+        try {
+            await fetchPolicyForVendor(entryId, 'fortinet');
+            openModal('policyModal');
+        } catch (error) {
+            showToast('Error generating policy', true);
+        }
+    }
+
+    async function selectPolicyVendor(vendor) {
+        if (vendor === currentPolicyVendor || !currentPolicyEntryId) return;
+
+        currentPolicyVendor = vendor;
+
+        // Update tabs
+        document.querySelectorAll('.noc-vendor-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.vendor === vendor);
+        });
+
+        updateVendorUI(vendor);
+        await fetchPolicyForVendor(currentPolicyEntryId, vendor);
+    }
+
+    function updateVendorUI(vendor) {
+        const config = vendorConfig[vendor];
+        document.getElementById('policyModalTitle').textContent = config.title;
+        document.getElementById('policyCliFilename').textContent = config.filename;
+    }
+
+    async function fetchPolicyForVendor(entryId, vendor) {
+        const loadingEl = document.getElementById('policyLoading');
+        const cliContent = document.getElementById('policyCliContent');
+
+        loadingEl.style.display = 'inline-flex';
+        cliContent.style.opacity = '0.5';
+
+        try {
+            const response = await fetch('/api/projects/{{ project.id }}/entries/' + entryId + '/policy/?vendor=' + vendor);
+            const data = await response.json();
+            cliContent.textContent = data.policy.cli;
+        } catch (error) {
+            cliContent.textContent = 'Error: ' + error.message;
+        } finally {
+            loadingEl.style.display = 'none';
+            cliContent.style.opacity = '1';
+        }
+    }
+
+    function copyPolicyCli() {
+        const cli = document.getElementById('policyCliContent').textContent;
+        navigator.clipboard.writeText(cli).then(() => {
+            showToast('CLI copied to clipboard');
+        }).catch(() => {
+            // Fallback for non-secure contexts
+            const textarea = document.createElement('textarea');
+            textarea.value = cli;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('CLI copied to clipboard');
+            } catch (e) {
+                showToast('Copy failed', true);
+            }
+            document.body.removeChild(textarea);
+        });
+    }
+
+    function showToast(message, isError = false) {
+        const existing = document.querySelector('.noc-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'noc-toast';
+        if (isError) toast.style.background = 'var(--noc-red)';
+        toast.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                ${isError
+                    ? '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'
+                    : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>'}
+            </svg>
+            ${message}
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'toastOut 0.3s ease forwards';
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    }
+
+    // Select all functionality
+    document.getElementById('selectAll')?.addEventListener('change', function() {
+        document.querySelectorAll('.entry-checkbox').forEach(cb => cb.checked = this.checked);
+    });
+
+    // Close modal on overlay click
+    document.querySelectorAll('.noc-modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.noc-modal-overlay.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+            document.body.style.overflow = '';
+        }
+    });
+
+    // Search form submit on Enter
+    document.querySelector('.noc-search input')?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') this.form.submit();
+    });
+
+    // Dropdown toggle
+    function toggleDropdown(btn) {
+        const dropdown = btn.closest('.noc-dropdown');
+        const isOpen = dropdown.classList.contains('open');
+
+        // Close all dropdowns first
+        document.querySelectorAll('.noc-dropdown.open').forEach(d => d.classList.remove('open'));
+
+        // Toggle this one
+        if (!isOpen) {
+            dropdown.classList.add('open');
+        }
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.noc-dropdown')) {
+            document.querySelectorAll('.noc-dropdown.open').forEach(d => d.classList.remove('open'));
+        }
+    });
+
+    // File input change handler
+    const fileInput = document.getElementById('importFile');
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileNameSpan = document.getElementById('fileName');
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                fileNameSpan.textContent = this.files[0].name;
+                fileUploadArea.classList.add('has-file');
+            } else {
+                fileNameSpan.textContent = 'Click to select Excel file';
+                fileUploadArea.classList.remove('has-file');
+            }
+        });
+
+        // Drag and drop support
+        fileUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+
+        fileUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+        });
+
+        fileUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                fileInput.files = e.dataTransfer.files;
+                fileNameSpan.textContent = e.dataTransfer.files[0].name;
+                fileUploadArea.classList.add('has-file');
+            }
+        });
+    }
+</script>
+{% endblock %}

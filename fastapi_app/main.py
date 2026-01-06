@@ -17,6 +17,8 @@ from .db.clickhouse import ClickHouseClient
 from .api.devices import router as devices_api_router
 from .api.logs import router as logs_api_router
 from .api.views import router as views_router
+from .api.projects import router as projects_router
+from .api.edl import router as edl_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -99,6 +101,8 @@ app.include_router(logs_api_router, prefix="/api")
 
 # Include HTML view routes
 app.include_router(views_router)
+app.include_router(projects_router)
+app.include_router(edl_router)
 
 
 @app.get("/api/health")
@@ -120,6 +124,8 @@ async def api_root():
         "endpoints": {
             "devices": "/api/devices/",
             "logs": "/api/logs/",
+            "projects": "/api/projects/",
+            "edl": "/api/edl/",
             "health": "/api/health",
             "docs": "/api/docs",
         }

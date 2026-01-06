@@ -1689,6 +1689,54 @@
             color: var(--accent-green);
         }
 
+        /* Vendor Tabs */
+        .vendor-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-default);
+        }
+
+        .vendor-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-default);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .vendor-tab:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .vendor-tab.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .vendor-tab svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .cli-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--accent-primary);
+        }
+
         .modal-footer {
             display: flex;
             align-items: center;
@@ -1779,6 +1827,8 @@
                 <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('log_list') }}" class="nav-link">Logs</a>
                 <a href="{{ url_for('policy_builder') }}" class="nav-link active">Policy Builder</a>
+                <a href="{{ url_for('edl_list') }}" class="nav-link">EDL</a>
+                <a href="{{ url_for('project_list') }}" class="nav-link">Projects</a>
                 <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
             </nav>
             <div class="header-spacer"></div>
@@ -2320,7 +2370,7 @@ Action: ALLOW</div>
                         <line x1="16" y1="13" x2="8" y2="13"/>
                         <line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
-                    FortiGate Policy CLI Commands
+                    <span id="modalTitleText">Firewall Policy CLI Commands</span>
                 </div>
                 <button type="button" class="modal-close" onclick="closeModal()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2329,9 +2379,32 @@ Action: ALLOW</div>
                 </button>
             </div>
             <div class="modal-body">
+                <!-- Vendor Selection Tabs -->
+                <div class="vendor-tabs">
+                    <button type="button" class="vendor-tab active" data-vendor="fortinet" onclick="selectVendor('fortinet')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        Fortinet
+                    </button>
+                    <button type="button" class="vendor-tab" data-vendor="paloalto" onclick="selectVendor('paloalto')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M12 8v8M8 12h8"/>
+                        </svg>
+                        Palo Alto
+                    </button>
+                </div>
                 <div class="modal-section">
                     <div class="modal-section-header">
                         <span class="modal-section-title">Complete CLI Configuration</span>
+                        <span class="cli-loading" id="cliLoading" style="display: none;">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                            Generating...
+                        </span>
                     </div>
                     <div class="cli-output" id="cliOutput">
                         <!-- CLI output will be inserted here -->
@@ -2518,6 +2591,80 @@ Action: ALLOW</div>
 
         // ===== Policy Builder Functions =====
         let currentCliOutput = '';
+        let currentVendor = 'fortinet';
+        let currentLogData = null;
+        let currentDeviceIp = null;
+
+        // Vendor display names
+        const vendorNames = {
+            'fortinet': 'FortiGate (Fortinet)',
+            'paloalto': 'Palo Alto Networks'
+        };
+
+        // Select vendor and regenerate CLI
+        async function selectVendor(vendor) {
+            if (vendor === currentVendor) return;
+
+            currentVendor = vendor;
+
+            // Update tab UI
+            document.querySelectorAll('.vendor-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.vendor === vendor);
+            });
+
+            // Update modal title
+            document.getElementById('modalTitleText').textContent = vendorNames[vendor] + ' Policy CLI';
+
+            // Regenerate CLI if we have log data
+            if (currentLogData) {
+                await regenerateCli();
+            }
+        }
+
+        // Regenerate CLI for current vendor
+        async function regenerateCli() {
+            const cliOutput = document.getElementById('cliOutput');
+            const cliLoading = document.getElementById('cliLoading');
+
+            // Show loading state
+            cliLoading.style.display = 'inline-flex';
+            cliOutput.style.opacity = '0.5';
+
+            try {
+                const response = await fetch('/api/build-policy/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        log_data: currentLogData,
+                        device_ip: currentDeviceIp,
+                        vendor: currentVendor
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentCliOutput = result.cli;
+                    cliOutput.textContent = result.cli;
+
+                    // Update metadata
+                    const meta = result.metadata || {};
+                    document.getElementById('metaSrcZone').textContent = meta.srczone || 'any';
+                    document.getElementById('metaDstZone').textContent = meta.dstzone || 'any';
+                    document.getElementById('metaService').textContent = meta.service_name || '--';
+                } else {
+                    cliOutput.textContent = 'Error: ' + (result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error regenerating CLI:', error);
+                cliOutput.textContent = 'Error: ' + error.message;
+            } finally {
+                cliLoading.style.display = 'none';
+                cliOutput.style.opacity = '1';
+            }
+        }
 
         // Build policy CLI from log data
         async function buildPolicy(index, event) {
@@ -2539,6 +2686,17 @@ Action: ALLOW</div>
 
             const deviceIp = btn.dataset.device;
 
+            // Store for vendor switching
+            currentLogData = logData;
+            currentDeviceIp = deviceIp;
+
+            // Reset to default vendor (Fortinet)
+            currentVendor = 'fortinet';
+            document.querySelectorAll('.vendor-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.vendor === 'fortinet');
+            });
+            document.getElementById('modalTitleText').textContent = vendorNames['fortinet'] + ' Policy CLI';
+
             // Set loading state
             btn.classList.add('loading');
             const originalHtml = btn.innerHTML;
@@ -2552,7 +2710,8 @@ Action: ALLOW</div>
                     },
                     body: JSON.stringify({
                         log_data: logData,
-                        device_ip: deviceIp
+                        device_ip: deviceIp,
+                        vendor: currentVendor
                     })
                 });
 

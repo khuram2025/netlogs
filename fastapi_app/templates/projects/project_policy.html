@@ -1,0 +1,584 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .back-btn {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: all 0.2s;
+        flex-shrink: 0;
+    }
+
+    .back-btn:hover {
+        background: var(--card-bg);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .page-subtitle {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-color);
+    }
+
+    .btn-outline:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) {
+        .stats-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .stat-mini {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .stat-mini-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .stat-mini-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .policy-section {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+
+    .policy-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .policy-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: white;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .policy-body {
+        padding: 0;
+    }
+
+    .cli-container {
+        background: #0d1117;
+        border-radius: 0;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .cli-code {
+        padding: 1.25rem;
+        margin: 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+        font-size: 0.8rem;
+        line-height: 1.6;
+        color: #c9d1d9;
+        overflow-x: auto;
+        white-space: pre;
+    }
+
+    .cli-code .comment {
+        color: #8b949e;
+    }
+
+    .cli-code .keyword {
+        color: #ff7b72;
+    }
+
+    .cli-code .string {
+        color: #a5d6ff;
+    }
+
+    .cli-code .value {
+        color: #7ee787;
+    }
+
+    .copy-btn {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        padding: 0.375rem 0.75rem;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 0.375rem;
+        color: #c9d1d9;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .copy-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .copy-btn.copied {
+        background: rgba(34, 197, 94, 0.2);
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #22c55e;
+    }
+
+    .rule-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        margin-bottom: 1rem;
+    }
+
+    .rule-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .rule-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .rule-number {
+        width: 28px;
+        height: 28px;
+        background: var(--primary);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .rule-details {
+        font-size: 0.9rem;
+    }
+
+    .rule-flow {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: monospace;
+    }
+
+    .rule-flow .arrow {
+        color: var(--primary);
+    }
+
+    .rule-meta {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+    }
+
+    .mini-badge {
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .mini-badge.protocol { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .mini-badge.port { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+
+    .rule-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-sm {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .collapsible-content {
+        display: none;
+        border-top: 1px solid var(--border);
+    }
+
+    .collapsible-content.open {
+        display: block;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .empty-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 0.375rem;
+    }
+
+    .empty-text {
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+    }
+
+    /* Vendor Tabs */
+    .vendor-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .vendor-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .vendor-tab:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .vendor-tab.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border-color: #3b82f6;
+    }
+
+    .vendor-tab svg {
+        width: 16px;
+        height: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="header-left">
+        <a href="{{ url_for('project_detail', project_id=project.id) }}" class="back-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+        </a>
+        <div>
+            <h1 class="page-title">Policy Builder</h1>
+            <p class="page-subtitle">{{ project.name }} - {{ vendor_name|default('FortiGate') }} CLI Configuration</p>
+        </div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <button class="btn btn-success" onclick="copyAllCli()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy All CLI
+        </button>
+        <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-outline">
+            Back to Project
+        </a>
+    </div>
+</div>
+
+<!-- Vendor Selection Tabs -->
+<div class="vendor-tabs">
+    <a href="{{ url_for('project_policy_view', project_id=project.id, vendor='fortinet') }}"
+       class="vendor-tab {% if vendor|default('fortinet') == 'fortinet' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Fortinet
+    </a>
+    <a href="{{ url_for('project_policy_view', project_id=project.id, vendor='paloalto') }}"
+       class="vendor-tab {% if vendor|default('fortinet') == 'paloalto' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M12 8v8M8 12h8"/>
+        </svg>
+        Palo Alto
+    </a>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-mini">
+        <div class="stat-mini-value">{{ total_entries }}</div>
+        <div class="stat-mini-label">Active Rules</div>
+    </div>
+    <div class="stat-mini">
+        <div class="stat-mini-value" style="color: #22c55e;">{{ policies|length }}</div>
+        <div class="stat-mini-label">Policies Generated</div>
+    </div>
+    <div class="stat-mini">
+        <div class="stat-mini-value" style="color: #3b82f6;">{{ combined_cli.split('\n')|length }}</div>
+        <div class="stat-mini-label">CLI Lines</div>
+    </div>
+</div>
+
+{% if policies %}
+<!-- Combined CLI Section -->
+<div class="policy-section">
+    <div class="policy-header">
+        <h2 class="policy-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            Complete {{ vendor_name|default('FortiGate') }} CLI Configuration
+        </h2>
+        <button class="btn btn-sm btn-primary" onclick="copyAllCli()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy
+        </button>
+    </div>
+    <div class="policy-body">
+        <div class="cli-container">
+            <pre class="cli-code" id="combinedCli">{{ combined_cli }}</pre>
+        </div>
+    </div>
+</div>
+
+<!-- Individual Rules -->
+<h3 style="color: white; margin: 2rem 0 1rem; font-size: 1.1rem;">Individual Rules</h3>
+
+{% for policy in policies %}
+<div class="rule-card">
+    <div class="rule-header">
+        <div class="rule-info">
+            <span class="rule-number">{{ loop.index }}</span>
+            <div class="rule-details">
+                <div class="rule-flow">
+                    <span>{{ policy.source_ip }}</span>
+                    <span class="arrow">-></span>
+                    <span>{{ policy.destination_ip }}:{{ policy.destination_port }}</span>
+                </div>
+                <div class="rule-meta">
+                    <span class="mini-badge protocol">{{ policy.protocol }}</span>
+                    <span class="mini-badge port">{{ policy.connection_type }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="rule-actions">
+            <button class="btn btn-sm btn-outline" onclick="toggleRule({{ loop.index }})">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                View CLI
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="copyRuleCli({{ loop.index }})">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+            </button>
+        </div>
+    </div>
+    <div class="collapsible-content" id="rule-{{ loop.index }}">
+        <div class="cli-container">
+            <pre class="cli-code" id="ruleCli-{{ loop.index }}">{{ policy.cli }}</pre>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+    </div>
+    <h3 class="empty-title">No Active Rules</h3>
+    <p class="empty-text">There are no active communication matrix entries to generate policies from.</p>
+    <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-primary">
+        Add Rules
+    </a>
+</div>
+{% endif %}
+
+<script>
+    function toggleRule(index) {
+        const content = document.getElementById('rule-' + index);
+        content.classList.toggle('open');
+    }
+
+    function copyAllCli() {
+        const cli = document.getElementById('combinedCli').textContent;
+        navigator.clipboard.writeText(cli).then(() => {
+            showCopyFeedback('All CLI copied to clipboard!');
+        });
+    }
+
+    function copyRuleCli(index) {
+        const cli = document.getElementById('ruleCli-' + index).textContent;
+        navigator.clipboard.writeText(cli).then(() => {
+            showCopyFeedback('Rule CLI copied to clipboard!');
+        });
+    }
+
+    function showCopyFeedback(message) {
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #22c55e;
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 2000);
+    }
+
+    // Add CSS animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+{% endblock %}

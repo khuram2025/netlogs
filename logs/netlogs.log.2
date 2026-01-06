@@ -1,0 +1,460 @@
+2025-12-22 10:16:07 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Fetch routing tables from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 11:16:07 UTC)" (scheduled at 2025-12-22 10:16:07.595277+00:00)
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:32 - Starting scheduled routing table fetch for all devices
+2025-12-22 10:16:07 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Fetch zone/interface data from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 11:16:07 UTC)" (scheduled at 2025-12-22 10:16:07.595496+00:00)
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:105 - Starting scheduled zone data fetch for all devices
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT devices_device.id, devices_device.ip_address, devices_device.hostname, devices_device.status, devices_device.parser, devices_device.device_type, devices_device.retention_days, devices_device.created_at, devices_device.updated_at, devices_device.last_log_received, devices_device.log_count, device_credentials.id AS id_1, device_credentials.device_id, device_credentials.credential_type, device_credentials.username, device_credentials.password, device_credentials.port, device_credentials.description, device_credentials.is_active, device_credentials.last_used, device_credentials.last_success, device_credentials.created_at AS created_at_1, device_credentials.updated_at AS updated_at_1 
+FROM devices_device JOIN device_credentials ON devices_device.id = device_credentials.device_id 
+WHERE devices_device.parser = $1::VARCHAR AND devices_device.status = $2::VARCHAR AND device_credentials.is_active = true AND device_credentials.credential_type = $3::VARCHAR
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00098s] ('FORTINET', 'APPROVED', 'SSH')
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT devices_device.id, devices_device.ip_address, devices_device.hostname, devices_device.status, devices_device.parser, devices_device.device_type, devices_device.retention_days, devices_device.created_at, devices_device.updated_at, devices_device.last_log_received, devices_device.log_count, device_credentials.id AS id_1, device_credentials.device_id, device_credentials.credential_type, device_credentials.username, device_credentials.password, device_credentials.port, device_credentials.description, device_credentials.is_active, device_credentials.last_used, device_credentials.last_success, device_credentials.created_at AS created_at_1, device_credentials.updated_at AS updated_at_1 
+FROM devices_device JOIN device_credentials ON devices_device.id = device_credentials.device_id 
+WHERE devices_device.parser = $1::VARCHAR AND devices_device.status = $2::VARCHAR AND device_credentials.is_active = true AND device_credentials.credential_type = $3::VARCHAR
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 0.0022s ago] ('FORTINET', 'APPROVED', 'SSH')
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:55 - Found 2 devices to fetch routing tables from
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:62 - Fetching routing tables for 192.168.100.221
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true ORDER BY device_vdoms.is_default DESC, device_vdoms.vdom_name
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00020s] (4,)
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:128 - Found 2 devices to fetch zone data from
+2025-12-22 10:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:135 - Fetching zone data for 192.168.100.221
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00016s] (4,)
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00029s] (4, 1)
+2025-12-22 10:16:07 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:363 - No VDOMs configured for 192.168.100.221, fetching from global context
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 0.001101s ago] (4, 1)
+2025-12-22 10:16:07 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.100.221 via 192.168.100.221
+2025-12-22 10:16:07 - fastapi_app.models.credential - INFO - _load_or_create_key:44 - Loaded encryption key from /home/net/net-logs/fastapi_app/.credential_key
+2025-12-22 10:16:07 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.100.221 (VDOM: global): get router info routing-table all
+2025-12-22 10:16:07 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.100.221 via 192.168.100.221
+2025-12-22 10:16:07 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.100.221:22 as admin
+2025-12-22 10:16:07 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.100.221:22 as admin
+2025-12-22 10:16:17 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.100.221: TimeoutError: timed out
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00026s] (datetime.datetime(2025, 12, 22, 10, 16, 17, 692743), 1)
+2025-12-22 10:16:17 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.100.221: TimeoutError: timed out
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00021s] (4, None, '', None, 0, 0, 10013, False, 'TimeoutError: timed out')
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00022s] (4, None, '0', '', 0, 10005, False, 'TimeoutError: timed out')
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:17 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.100.221 (VDOM: global): TimeoutError: timed out
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 10:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00026s] (781,)
+2025-12-22 10:16:17 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.100.221 (VDOM: global): TimeoutError: timed out
+2025-12-22 10:16:18 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:62 - Fetching routing tables for 192.168.47.1
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true ORDER BY device_vdoms.is_default DESC, device_vdoms.vdom_name
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.05s ago] (2,)
+2025-12-22 10:16:18 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: root
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.05s ago] (2, 1)
+2025-12-22 10:16:18 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: root)
+2025-12-22 10:16:18 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: root): config vdom -> edit root -> get router info routing-table all -> end
+2025-12-22 10:16:18 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:18 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 10:16:18 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:135 - Fetching zone data for 192.168.47.1
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.06s ago] (2,)
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.06s ago] (2, 1)
+2025-12-22 10:16:18 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: WAN)
+2025-12-22 10:16:18 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:18 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Authentication (password) failed.
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed.
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.403s ago] (datetime.datetime(2025, 12, 22, 10, 16, 19, 96961), 2)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.401s ago] (2, 'root', '0', '', 0, 360, False, 'AuthenticationException: Authentication failed.')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: Campus
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Authentication (password) failed.
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed.
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.412s ago] (2, 'WAN', '', None, 0, 0, 363, False, 'AuthenticationException: Authentication failed.')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.45s ago] (2, 1)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: Campus)
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: Campus): config vdom -> edit Campus -> get router info routing-table all -> end
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.427s ago] (783,)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.49s ago] (2, 1)
+2025-12-22 10:16:19 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: Campus)
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Disconnect (code 2): Too many authentication failures
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.59s ago] (2, 'Campus', '', None, 0, 0, 115, False, 'AuthenticationException: Authentication failed: transport shut down or saw EOF')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.587s ago] (785,)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.64s ago] (2, 1)
+2025-12-22 10:16:19 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: root)
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1938 - Exception (client): Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2363, in _check_banner
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     buf = self.packetizer.readline(timeout)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 395, in readline
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     buf += self._read_timeout(timeout)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 663, in _read_timeout
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     x = self.__socket.recv(128)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -         ^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - ConnectionResetError: [Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - During handling of the above exception, another exception occurred:
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2179, in run
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     self._check_banner()
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2367, in _check_banner
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     raise SSHException(
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - paramiko.ssh_exception.SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.639s ago] (2, 'root', '', None, 0, 0, 7, False, 'SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.646s ago] (786,)
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: WAN): AuthenticationException: Authentication failed.
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: Campus): AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: root): SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - INFO - _log:1938 - Disconnect (code 2): Too many authentication failures
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.823s ago] (datetime.datetime(2025, 12, 22, 10, 16, 19, 516685), 2)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.82s ago] (2, 'Campus', '0', '', 0, 381, False, 'AuthenticationException: Authentication failed: transport shut down or saw EOF')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: WAN
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 11.88s ago] (2, 1)
+2025-12-22 10:16:19 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: WAN)
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: WAN): config vdom -> edit WAN -> get router info routing-table all -> end
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1938 - Exception (client): Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2363, in _check_banner
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     buf = self.packetizer.readline(timeout)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 395, in readline
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     buf += self._read_timeout(timeout)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 663, in _read_timeout
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     x = self.__socket.recv(128)
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -         ^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - ConnectionResetError: [Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - During handling of the above exception, another exception occurred:
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2179, in run
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     self._check_banner()
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2367, in _check_banner
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 -     raise SSHException(
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - paramiko.ssh_exception.SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 10:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.872s ago] (datetime.datetime(2025, 12, 22, 10, 16, 19, 566265), 2)
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1.87s ago] (2, 'WAN', '0', '', 0, 4, False, 'SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer')
+2025-12-22 10:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: root): AuthenticationException: Authentication failed.
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: Campus): AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 10:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: WAN): SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 10:16:20 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:164 - Scheduled zone data fetch completed: 0 successful, 2 failed
+2025-12-22 10:16:20 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2025-12-22 10:16:20 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Fetch zone/interface data from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 11:16:07 UTC)" executed successfully
+2025-12-22 10:16:20 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:90 - Scheduled routing table fetch completed: 0 successful, 2 failed
+2025-12-22 10:16:20 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Fetch routing tables from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 11:16:07 UTC)" executed successfully
+2025-12-22 11:16:07 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Fetch routing tables from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 12:16:07 UTC)" (scheduled at 2025-12-22 11:16:07.595277+00:00)
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:32 - Starting scheduled routing table fetch for all devices
+2025-12-22 11:16:07 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Fetch zone/interface data from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 12:16:07 UTC)" (scheduled at 2025-12-22 11:16:07.595496+00:00)
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:105 - Starting scheduled zone data fetch for all devices
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT devices_device.id, devices_device.ip_address, devices_device.hostname, devices_device.status, devices_device.parser, devices_device.device_type, devices_device.retention_days, devices_device.created_at, devices_device.updated_at, devices_device.last_log_received, devices_device.log_count, device_credentials.id AS id_1, device_credentials.device_id, device_credentials.credential_type, device_credentials.username, device_credentials.password, device_credentials.port, device_credentials.description, device_credentials.is_active, device_credentials.last_used, device_credentials.last_success, device_credentials.created_at AS created_at_1, device_credentials.updated_at AS updated_at_1 
+FROM devices_device JOIN device_credentials ON devices_device.id = device_credentials.device_id 
+WHERE devices_device.parser = $1::VARCHAR AND devices_device.status = $2::VARCHAR AND device_credentials.is_active = true AND device_credentials.credential_type = $3::VARCHAR
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] ('FORTINET', 'APPROVED', 'SSH')
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:128 - Found 2 devices to fetch zone data from
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:135 - Fetching zone data for 192.168.100.221
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4,)
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT devices_device.id, devices_device.ip_address, devices_device.hostname, devices_device.status, devices_device.parser, devices_device.device_type, devices_device.retention_days, devices_device.created_at, devices_device.updated_at, devices_device.last_log_received, devices_device.log_count, device_credentials.id AS id_1, device_credentials.device_id, device_credentials.credential_type, device_credentials.username, device_credentials.password, device_credentials.port, device_credentials.description, device_credentials.is_active, device_credentials.last_used, device_credentials.last_success, device_credentials.created_at AS created_at_1, device_credentials.updated_at AS updated_at_1 
+FROM devices_device JOIN device_credentials ON devices_device.id = device_credentials.device_id 
+WHERE devices_device.parser = $1::VARCHAR AND devices_device.status = $2::VARCHAR AND device_credentials.is_active = true AND device_credentials.credential_type = $3::VARCHAR
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] ('FORTINET', 'APPROVED', 'SSH')
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4, 1)
+2025-12-22 11:16:07 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.100.221 via 192.168.100.221
+2025-12-22 11:16:07 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.100.221:22 as admin
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:55 - Found 2 devices to fetch routing tables from
+2025-12-22 11:16:07 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:62 - Fetching routing tables for 192.168.100.221
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true ORDER BY device_vdoms.is_default DESC, device_vdoms.vdom_name
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4,)
+2025-12-22 11:16:07 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:363 - No VDOMs configured for 192.168.100.221, fetching from global context
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4, 1)
+2025-12-22 11:16:07 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.100.221 via 192.168.100.221
+2025-12-22 11:16:07 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.100.221 (VDOM: global): get router info routing-table all
+2025-12-22 11:16:07 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.100.221:22 as admin
+2025-12-22 11:16:17 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.100.221: TimeoutError: timed out
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4, None, '', None, 0, 0, 10012, False, 'TimeoutError: timed out')
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:17 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.100.221: TimeoutError: timed out
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (datetime.datetime(2025, 12, 22, 11, 16, 17, 677561), 1)
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (4, None, '0', '', 0, 10010, False, 'TimeoutError: timed out')
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:17 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.100.221 (VDOM: global): TimeoutError: timed out
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 11:16:17 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3600s ago] (789,)
+2025-12-22 11:16:17 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.100.221 (VDOM: global): TimeoutError: timed out
+2025-12-22 11:16:18 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:62 - Fetching routing tables for 192.168.47.1
+2025-12-22 11:16:18 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:135 - Fetching zone data for 192.168.47.1
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3611s ago] (2,)
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_vdoms.id, device_vdoms.device_id, device_vdoms.vdom_name, device_vdoms.description, device_vdoms.is_active, device_vdoms.is_default, device_vdoms.created_at 
+FROM device_vdoms 
+WHERE device_vdoms.device_id = $1::INTEGER AND device_vdoms.is_active = true ORDER BY device_vdoms.is_default DESC, device_vdoms.vdom_name
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3611s ago] (2,)
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3611s ago] (2, 1)
+2025-12-22 11:16:18 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: WAN)
+2025-12-22 11:16:18 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:18 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: root
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3611s ago] (2, 1)
+2025-12-22 11:16:18 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 11:16:18 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: root)
+2025-12-22 11:16:18 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: root): config vdom -> edit root -> get router info routing-table all -> end
+2025-12-22 11:16:18 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:18 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Authentication (password) failed.
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed.
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3601s ago] (2, 'WAN', '', None, 0, 0, 369, False, 'AuthenticationException: Authentication failed.')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Authentication (password) failed.
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed.
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3601s ago] (791,)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3601s ago] (datetime.datetime(2025, 12, 22, 11, 16, 19, 148289), 2)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3601s ago] (2, 'root', '0', '', 0, 395, False, 'AuthenticationException: Authentication failed.')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3611s ago] (2, 1)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: Campus)
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:19 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: Campus
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3612s ago] (2, 1)
+2025-12-22 11:16:19 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: Campus)
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: Campus): config vdom -> edit Campus -> get router info routing-table all -> end
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Connected (version 2.0, client -BM5G)
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Disconnect (code 2): Too many authentication failures
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (datetime.datetime(2025, 12, 22, 11, 16, 19, 326969), 2)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (2, 'Campus', '0', '', 0, 125, False, 'AuthenticationException: Authentication failed: transport shut down or saw EOF')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - fastapi_app.services.routing_service - INFO - fetch_all_vdom_routing_tables:371 - Fetching routing table for 192.168.47.1 VDOM: WAN
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3612s ago] (2, 1)
+2025-12-22 11:16:19 - fastapi_app.services.routing_service - INFO - fetch_routing_table:58 - Fetching routing table for device 192.168.47.1 via 192.168.47.1 (VDOM: WAN)
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - get_fortinet_routing_table:388 - Fortinet VDOM commands for 192.168.47.1 (VDOM: WAN): config vdom -> edit WAN -> get router info routing-table all -> end
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1938 - Exception (client): Error reading SSH protocol banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2363, in _check_banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     buf = self.packetizer.readline(timeout)
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 395, in readline
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     buf += self._read_timeout(timeout)
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 665, in _read_timeout
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     raise EOFError()
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - EOFError
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - During handling of the above exception, another exception occurred:
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2179, in run
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     self._check_banner()
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2367, in _check_banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     raise SSHException(
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - paramiko.ssh_exception.SSHException: Error reading SSH protocol banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: SSHException: Error reading SSH protocol banner
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE device_credentials SET last_used=$1::TIMESTAMP WITH TIME ZONE, updated_at=now() WHERE device_credentials.id = $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (datetime.datetime(2025, 12, 22, 11, 16, 19, 438851), 2)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO routing_table_snapshots (device_id, vdom, vrf, raw_output, route_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::BOOLEAN, $8::VARCHAR) RETURNING routing_table_snapshots.id, routing_table_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (2, 'WAN', '0', '', 0, 4, False, 'SSHException: Error reading SSH protocol banner')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: root): AuthenticationException: Authentication failed.
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: Campus): AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_routing_tables:76 - Failed to fetch routes from 192.168.47.1 (VDOM: WAN): SSHException: Error reading SSH protocol banner
+2025-12-22 11:16:19 - paramiko.transport - INFO - _log:1938 - Disconnect (code 2): Too many authentication failures
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (2, 'Campus', '', None, 0, 0, 375, False, 'AuthenticationException: Authentication failed: transport shut down or saw EOF')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (795,)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT device_ssh_settings.ssh_host 
+FROM device_ssh_settings 
+WHERE device_ssh_settings.device_id = $1::INTEGER 
+ LIMIT $2::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3612s ago] (2, 1)
+2025-12-22 11:16:19 - fastapi_app.services.zone_service - INFO - fetch_zone_data:356 - Fetching zone data from 192.168.47.1 via 192.168.47.1 (VDOM: root)
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - INFO - connect_interactive:208 - Connecting interactively to 192.168.47.1:22 as admin
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1938 - Exception (client): Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2363, in _check_banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     buf = self.packetizer.readline(timeout)
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 395, in readline
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     buf += self._read_timeout(timeout)
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/packet.py", line 663, in _read_timeout
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     x = self.__socket.recv(128)
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -         ^^^^^^^^^^^^^^^^^^^^^^^
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - ConnectionResetError: [Errno 104] Connection reset by peer
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - During handling of the above exception, another exception occurred:
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - Traceback (most recent call last):
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2179, in run
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     self._check_banner()
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -   File "/home/net/net-logs/venv/lib/python3.12/site-packages/paramiko/transport.py", line 2367, in _check_banner
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 -     raise SSHException(
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - paramiko.ssh_exception.SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 11:16:19 - paramiko.transport - ERROR - _log:1936 - 
+2025-12-22 11:16:19 - fastapi_app.services.ssh_service - ERROR - connect_interactive:286 - Interactive SSH error for 192.168.47.1: SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - INSERT INTO zone_snapshots (device_id, vdom, raw_zone_output, raw_interface_output, zone_count, interface_count, fetch_duration_ms, success, error_message) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::INTEGER, $6::INTEGER, $7::INTEGER, $8::BOOLEAN, $9::VARCHAR) RETURNING zone_snapshots.id, zone_snapshots.fetched_at
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (2, 'root', '', None, 0, 0, 8, False, 'SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer')
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT zone_snapshots.id, zone_snapshots.device_id, zone_snapshots.vdom, zone_snapshots.raw_zone_output, zone_snapshots.raw_interface_output, zone_snapshots.zone_count, zone_snapshots.interface_count, zone_snapshots.fetched_at, zone_snapshots.fetch_duration_ms, zone_snapshots.success, zone_snapshots.error_message 
+FROM zone_snapshots 
+WHERE zone_snapshots.id = $1::INTEGER
+2025-12-22 11:16:19 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3602s ago] (796,)
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: WAN): AuthenticationException: Authentication failed.
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: Campus): AuthenticationException: Authentication failed: transport shut down or saw EOF
+2025-12-22 11:16:19 - fastapi_app.services.scheduler - WARNING - fetch_all_zone_data:150 - Failed to fetch zones from 192.168.47.1 (VDOM: root): SSHException: Error reading SSH protocol banner[Errno 104] Connection reset by peer
+2025-12-22 11:16:20 - fastapi_app.services.scheduler - INFO - fetch_all_routing_tables:90 - Scheduled routing table fetch completed: 0 successful, 2 failed
+2025-12-22 11:16:20 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Fetch routing tables from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 12:16:07 UTC)" executed successfully
+2025-12-22 11:16:20 - fastapi_app.services.scheduler - INFO - fetch_all_zone_data:164 - Scheduled zone data fetch completed: 0 successful, 2 failed
+2025-12-22 11:16:20 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2025-12-22 11:16:20 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Fetch zone/interface data from all devices (trigger: interval[1:00:00], next run at: 2025-12-22 12:16:07 UTC)" executed successfully
+2025-12-22 11:28:45 - fastapi_app.main - INFO - lifespan:61 - Shutting down NetLogs...
+2025-12-22 11:28:45 - fastapi_app.services.scheduler - INFO - stop_scheduler:217 - Scheduler stopped
+2025-12-22 11:28:45 - fastapi_app.main - INFO - lifespan:64 - Database connections closed
+2025-12-22 11:28:45 - apscheduler.scheduler - INFO - shutdown:245 - Scheduler has been shut down
