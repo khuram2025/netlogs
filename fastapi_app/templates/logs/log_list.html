@@ -1207,6 +1207,31 @@
             display: block;
         }
 
+        .raw-loading, .raw-error {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .raw-error {
+            color: var(--accent-red);
+        }
+
+        .raw-loading-spinner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+        }
+
+        .raw-loading-spinner .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-default);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
         /* ===== PAGINATION ===== */
         .pagination-bar {
             display: flex;
@@ -1663,6 +1688,113 @@
             flex-shrink: 0;
         }
 
+        /* Sidebar Filter Inputs */
+        .sidebar-filter-group {
+            margin-bottom: 12px;
+        }
+
+        .sidebar-filter-group.half {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .sidebar-filter-row {
+            display: flex;
+            gap: 8px;
+            padding: 0 12px;
+        }
+
+        .sidebar-filter-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            padding-left: 2px;
+        }
+
+        .sidebar-filter-input {
+            width: 100%;
+            height: 34px;
+            padding: 0 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            transition: all 0.15s ease;
+        }
+
+        .sidebar-filter-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+        }
+
+        .sidebar-filter-input::placeholder {
+            color: var(--text-ghost);
+            font-family: var(--font-sans);
+        }
+
+        .sidebar-filter-input.threat-input:focus {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
+        }
+
+        /* Sidebar section icon on left */
+        .sidebar-section-icon-left {
+            color: var(--text-muted);
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Sidebar footer with buttons */
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border-default);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* Filter chip variants */
+        .filter-chip.threat {
+            background: var(--accent-red-dim);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-red);
+        }
+
+        .filter-chip.threat .filter-chip-remove {
+            color: var(--accent-red);
+        }
+
+        .filter-chip.threat .filter-chip-remove:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .filter-chip.zone {
+            background: var(--accent-green-dim);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: var(--accent-green);
+        }
+
+        .filter-chip.zone .filter-chip-remove {
+            color: var(--accent-green);
+        }
+
+        .filter-chip.zone .filter-chip-remove:hover {
+            background: rgba(34, 197, 94, 0.3);
+        }
+
         /* Layout wrapper */
         .content-wrapper {
             flex: 1;
@@ -1718,15 +1850,27 @@
                 <div class="search-group">
                     <div class="search-field">
                         <span class="search-label">Source IP</span>
-                        <input type="text" name="srcip" class="search-input" placeholder="e.g. 192.168.1.1 or 10.0.0.0/24" value="{{ current_srcip or '' }}">
+                        <input type="text" name="srcip" class="search-input" placeholder="192.168.1.1 or /24" value="{{ current_srcip or '' }}">
                     </div>
                     <div class="search-field">
                         <span class="search-label">Destination IP</span>
-                        <input type="text" name="dstip" class="search-input" placeholder="e.g. 8.8.8.8 or 10.11.40.0/24" value="{{ current_dstip or '' }}">
+                        <input type="text" name="dstip" class="search-input" placeholder="8.8.8.8 or /24" value="{{ current_dstip or '' }}">
                     </div>
                     <div class="search-field narrow">
-                        <span class="search-label">Dest Port</span>
-                        <input type="text" name="dstport" class="search-input" placeholder="e.g. 443" value="{{ current_dstport or '' }}">
+                        <span class="search-label">Src Port</span>
+                        <input type="text" name="srcport" class="search-input" placeholder="Any" value="{{ current_srcport or '' }}">
+                    </div>
+                    <div class="search-field narrow">
+                        <span class="search-label">Dst Port</span>
+                        <input type="text" name="dstport" class="search-input" placeholder="443" value="{{ current_dstport or '' }}">
+                    </div>
+                    <div class="search-field narrow">
+                        <span class="search-label">Protocol</span>
+                        <input type="text" name="protocol" class="search-input" placeholder="TCP/UDP" value="{{ current_protocol or '' }}">
+                    </div>
+                    <div class="search-field">
+                        <span class="search-label">Application</span>
+                        <input type="text" name="application" class="search-input" placeholder="ssl, web-browsing" value="{{ current_application or '' }}">
                     </div>
                     <div class="search-actions">
                         <button type="submit" class="btn btn-primary" onclick="showLoading()">
@@ -1746,6 +1890,12 @@
                 </div>
                 <div class="toolbar-divider"></div>
                 <div class="toolbar-right">
+                    <button type="button" class="btn btn-ghost" onclick="toggleSidebar()" title="More Filters">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                        </svg>
+                        Filters
+                    </button>
                     <button type="button" class="btn btn-ghost" onclick="location.reload()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -1783,11 +1933,11 @@
             </div>
 
             <!-- Active Filters -->
-            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_dstport %}
+            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
             <div class="active-filters">
                 {% if current_srcip %}
                 <span class="filter-chip">
-                    Src: {{ current_srcip }}
+                    Src IP: {{ current_srcip }}
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('srcip')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -1795,16 +1945,88 @@
                 {% endif %}
                 {% if current_dstip %}
                 <span class="filter-chip">
-                    Dst: {{ current_dstip }}
+                    Dst IP: {{ current_dstip }}
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstip')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_srcport %}
+                <span class="filter-chip">
+                    Src Port: {{ current_srcport }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('srcport')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_dstport %}
                 <span class="filter-chip">
-                    Port: {{ current_dstport }}
+                    Dst Port: {{ current_dstport }}
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstport')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_protocol %}
+                <span class="filter-chip">
+                    Protocol: {{ current_protocol }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('protocol')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_application %}
+                <span class="filter-chip">
+                    App: {{ current_application }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('application')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_policyname %}
+                <span class="filter-chip">
+                    Policy: {{ current_policyname }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('policyname')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_log_type %}
+                <span class="filter-chip">
+                    Log Type: {{ current_log_type }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('log_type')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_threat_id %}
+                <span class="filter-chip threat">
+                    Threat: {{ current_threat_id }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('threat_id')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_session_end_reason %}
+                <span class="filter-chip">
+                    End Reason: {{ current_session_end_reason }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('session_end_reason')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_src_zone %}
+                <span class="filter-chip zone">
+                    Src Zone: {{ current_src_zone }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('src_zone')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_dst_zone %}
+                <span class="filter-chip zone">
+                    Dst Zone: {{ current_dst_zone }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('dst_zone')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
@@ -1881,6 +2103,7 @@
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td class="col-time">
                                         <span class="timestamp">
+                                            {# Show firewall's log timestamp (time from the log itself) #}
                                             {% if pd.get('log_datetime') %}{{ pd.get('log_datetime') }}{% elif pd.get('date') and pd.get('time') %}{{ pd.get('date') }} {{ pd.get('time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
                                         </span>
                                     </td>
@@ -2023,8 +2246,12 @@
                                                 </div>
                                             </div>
 
-                                            <!-- Raw Log -->
-                                            <div class="raw-section" id="raw-section-{{ loop.index }}">
+                                            <!-- Raw Log (lazy-loaded for performance) -->
+                                            {% set ts = log.get('timestamp', '') %}
+                                            <div class="raw-section" id="raw-section-{{ loop.index }}"
+                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
+                                                 data-device="{{ log.get('device_ip', '') }}"
+                                                 data-loaded="false">
                                                 <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
                                                     <span class="raw-title">
                                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -2038,7 +2265,9 @@
                                                         Copy
                                                     </button>
                                                 </div>
-                                                <div class="raw-body" id="raw-{{ loop.index }}">{{ log.get('raw', '') | e }}</div>
+                                                <div class="raw-body" id="raw-{{ loop.index }}">
+                                                    <span class="raw-loading">Click to load raw message...</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -2085,10 +2314,10 @@
                     {% endif %}
                 </div>
 
-                <!-- Right Sidebar -->
-                <aside class="sidebar">
+                <!-- Right Sidebar - Advanced Filters -->
+                <aside class="sidebar" id="filterSidebar">
                     <div class="sidebar-header">
-                        <span class="sidebar-title">Filters</span>
+                        <span class="sidebar-title">Advanced Filters</span>
                         <button type="button" class="sidebar-close" onclick="toggleSidebar()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
@@ -2097,6 +2326,9 @@
                     <!-- Time Range -->
                     <div class="sidebar-section">
                         <div class="sidebar-section-header-static">
+                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                            </svg>
                             <span class="sidebar-section-title">Time Range</span>
                         </div>
                         <div class="sidebar-section-content">
@@ -2135,51 +2367,110 @@
                         </div>
                     </div>
 
-                    <!-- Device Filter - Dropdown -->
+                    <!-- Traffic Analysis -->
                     <div class="sidebar-section">
                         <div class="sidebar-section-header-static">
-                            <span class="sidebar-section-title">Device</span>
+                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                            </svg>
+                            <span class="sidebar-section-title">Traffic Analysis</span>
                         </div>
                         <div class="sidebar-section-content">
-                            <div class="filter-dropdown-wrapper">
-                                <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
-                                    <option value="" {% if not current_device %}selected{% endif %}>All Devices</option>
-                                    {% for device in devices %}
-                                    <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
-                                    {% endfor %}
-                                </select>
-                                <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6 9 12 15 18 9"/>
-                                </svg>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Action</label>
+                                <div class="action-filter-group">
+                                    <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">All</button>
+                                    <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
+                                        Accept
+                                    </button>
+                                    <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        Deny
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Session End Reason</label>
+                                <input type="text" name="session_end_reason" class="sidebar-filter-input" placeholder="e.g. aged-out, tcp-fin" value="{{ current_session_end_reason or '' }}">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Action Filter - Simplified -->
+                    <!-- Policy & Security -->
                     <div class="sidebar-section">
                         <div class="sidebar-section-header-static">
-                            <span class="sidebar-section-title">Action</span>
+                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                            <span class="sidebar-section-title">Policy & Security</span>
                         </div>
                         <div class="sidebar-section-content">
-                            <div class="action-filter-group">
-                                <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">
-                                    All
-                                </button>
-                                <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                    Accept
-                                </button>
-                                <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
-                                        <line x1="18" y1="6" x2="6" y2="18"/>
-                                        <line x1="6" y1="6" x2="18" y2="18"/>
-                                    </svg>
-                                    Deny
-                                </button>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Policy/Rule Name</label>
+                                <input type="text" name="policyname" class="sidebar-filter-input" placeholder="e.g. allow-internet" value="{{ current_policyname or '' }}">
+                            </div>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Log Type</label>
+                                <input type="text" name="log_type" class="sidebar-filter-input" placeholder="e.g. TRAFFIC, THREAT" value="{{ current_log_type or '' }}">
+                            </div>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Threat ID</label>
+                                <input type="text" name="threat_id" class="sidebar-filter-input threat-input" placeholder="e.g. 40000, 50000" value="{{ current_threat_id or '' }}">
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Zones & Infrastructure -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-header-static">
+                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                            </svg>
+                            <span class="sidebar-section-title">Zones & Infrastructure</span>
+                        </div>
+                        <div class="sidebar-section-content">
+                            <div class="sidebar-filter-row">
+                                <div class="sidebar-filter-group half">
+                                    <label class="sidebar-filter-label">Source Zone</label>
+                                    <input type="text" name="src_zone" class="sidebar-filter-input" placeholder="trust" value="{{ current_src_zone or '' }}">
+                                </div>
+                                <div class="sidebar-filter-group half">
+                                    <label class="sidebar-filter-label">Dest Zone</label>
+                                    <input type="text" name="dst_zone" class="sidebar-filter-input" placeholder="untrust" value="{{ current_dst_zone or '' }}">
+                                </div>
+                            </div>
+                            <div class="sidebar-filter-group">
+                                <label class="sidebar-filter-label">Device</label>
+                                <div class="filter-dropdown-wrapper">
+                                    <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
+                                        <option value="" {% if not current_device %}selected{% endif %}>All Devices</option>
+                                        {% for device in devices %}
+                                        <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Apply Filters Button -->
+                    <div class="sidebar-footer">
+                        <button type="submit" class="btn btn-primary btn-full" onclick="showLoading()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                            </svg>
+                            Apply Filters
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-full" onclick="clearFilters()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <path d="M18 6 6 18M6 6l12 12"/>
+                            </svg>
+                            Clear All
+                        </button>
                     </div>
                 </aside>
             </div>
@@ -2217,10 +2508,42 @@
             }
         }
 
-        // Toggle raw section
-        function toggleRawSection(index) {
+        // Toggle raw section with lazy loading
+        async function toggleRawSection(index) {
             const section = document.getElementById(`raw-section-${index}`);
+            const rawBody = document.getElementById(`raw-${index}`);
+            const isLoaded = section.dataset.loaded === 'true';
+
+            // Toggle expanded state
             section.classList.toggle('expanded');
+
+            // If expanding and not yet loaded, fetch the raw message
+            if (section.classList.contains('expanded') && !isLoaded) {
+                const timestamp = section.dataset.timestamp;
+                const device = section.dataset.device;
+
+                if (!timestamp || !device) {
+                    rawBody.innerHTML = '<span class="raw-error">Missing timestamp or device info</span>';
+                    return;
+                }
+
+                // Show loading state
+                rawBody.innerHTML = '<div class="raw-loading-spinner"><div class="spinner"></div> Loading raw message...</div>';
+
+                try {
+                    const response = await fetch(`/api/logs/detail?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const data = await response.json();
+                    const rawText = data.raw || data.message || 'No raw message available';
+                    rawBody.textContent = rawText;
+                    section.dataset.loaded = 'true';
+                } catch (error) {
+                    console.error('Failed to load raw message:', error);
+                    rawBody.innerHTML = `<span class="raw-error">Failed to load: ${error.message}</span>`;
+                }
+            }
         }
 
         // Copy raw log
@@ -2264,11 +2587,16 @@
         }
 
         function clearFilters() {
-            document.querySelectorAll('.search-input').forEach(input => input.value = '');
+            // Clear all text inputs in toolbar and sidebar
+            document.querySelectorAll('.search-input, .sidebar-filter-input').forEach(input => input.value = '');
+            // Clear hidden inputs
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
             document.getElementById('hiddenAction').value = '';
             document.getElementById('hiddenPageInput').value = 1;
+            // Reset device dropdown
+            const deviceSelect = document.getElementById('deviceSelect');
+            if (deviceSelect) deviceSelect.value = '';
             showLoading();
             document.getElementById('filterForm').submit();
         }
@@ -2322,7 +2650,11 @@
         }
 
         function toggleSidebar() {
-            document.querySelector('.sidebar').style.display = 'none';
+            const sidebar = document.getElementById('filterSidebar');
+            if (sidebar) {
+                const isVisible = sidebar.style.display !== 'none';
+                sidebar.style.display = isVisible ? 'none' : 'flex';
+            }
         }
 
         // Loading

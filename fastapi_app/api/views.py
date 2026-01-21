@@ -224,10 +224,22 @@ async def log_list(
     time_range: Optional[str] = Query(None),
     page: Optional[str] = Query("1"),
     per_page: Optional[str] = Query("100"),
-    # New direct filter parameters for simplified search
+    # Network filter parameters
     srcip: Optional[str] = Query(None),
     dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
+    protocol: Optional[str] = Query(None),
+    # Policy & Security filters
+    policyname: Optional[str] = Query(None),
+    log_type: Optional[str] = Query(None),
+    threat_id: Optional[str] = Query(None),
+    # Traffic analysis filters
+    application: Optional[str] = Query(None),
+    session_end_reason: Optional[str] = Query(None),
+    # Infrastructure filters
+    src_zone: Optional[str] = Query(None),
+    dst_zone: Optional[str] = Query(None),
 ):
     """Log list view with filtering."""
     try:
@@ -314,6 +326,51 @@ async def log_list(
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
             search_parts.append(f"dstport:{dstport_clean}")
+
+        # Handle policyname parameter
+        policyname_clean = policyname.strip() if policyname and policyname.strip() else None
+        if policyname_clean:
+            search_parts.append(f"policyname:{policyname_clean}")
+
+        # Handle srcport parameter
+        srcport_clean = srcport.strip() if srcport and srcport.strip() else None
+        if srcport_clean:
+            search_parts.append(f"srcport:{srcport_clean}")
+
+        # Handle protocol parameter
+        protocol_clean = protocol.strip() if protocol and protocol.strip() else None
+        if protocol_clean:
+            search_parts.append(f"proto:{protocol_clean}")
+
+        # Handle log_type parameter
+        log_type_clean = log_type.strip() if log_type and log_type.strip() else None
+        if log_type_clean:
+            search_parts.append(f"log_type:{log_type_clean}")
+
+        # Handle threat_id parameter
+        threat_id_clean = threat_id.strip() if threat_id and threat_id.strip() else None
+        if threat_id_clean:
+            search_parts.append(f"threat_id:{threat_id_clean}")
+
+        # Handle application parameter
+        application_clean = application.strip() if application and application.strip() else None
+        if application_clean:
+            search_parts.append(f"application:{application_clean}")
+
+        # Handle session_end_reason parameter
+        session_end_reason_clean = session_end_reason.strip() if session_end_reason and session_end_reason.strip() else None
+        if session_end_reason_clean:
+            search_parts.append(f"session_end_reason:{session_end_reason_clean}")
+
+        # Handle src_zone parameter
+        src_zone_clean = src_zone.strip() if src_zone and src_zone.strip() else None
+        if src_zone_clean:
+            search_parts.append(f"src_zone:{src_zone_clean}")
+
+        # Handle dst_zone parameter
+        dst_zone_clean = dst_zone.strip() if dst_zone and dst_zone.strip() else None
+        if dst_zone_clean:
+            search_parts.append(f"dst_zone:{dst_zone_clean}")
 
         # Combine with existing q parameter if present
         search_query = q or ""
@@ -422,10 +479,22 @@ async def log_list(
             "current_start": start,
             "current_end": end,
             "current_time_range": effective_time_range,
-            # New direct filter values
+            # Network filter values
             "current_srcip": srcip_clean,
             "current_dstip": dstip_clean,
+            "current_srcport": srcport_clean,
             "current_dstport": dstport_clean,
+            "current_protocol": protocol_clean,
+            # Policy & Security filter values
+            "current_policyname": policyname_clean,
+            "current_log_type": log_type_clean,
+            "current_threat_id": threat_id_clean,
+            # Traffic analysis filter values
+            "current_application": application_clean,
+            "current_session_end_reason": session_end_reason_clean,
+            # Infrastructure filter values
+            "current_src_zone": src_zone_clean,
+            "current_dst_zone": dst_zone_clean,
             "error": None,
         })
     except Exception as e:
@@ -457,9 +526,22 @@ async def log_list(
             "current_start": start if start else None,
             "current_end": end if end else None,
             "current_time_range": time_range if time_range else '1h',
+            # Network filter values
             "current_srcip": srcip if srcip else None,
             "current_dstip": dstip if dstip else None,
+            "current_srcport": srcport if srcport else None,
             "current_dstport": dstport if dstport else None,
+            "current_protocol": protocol if protocol else None,
+            # Policy & Security filter values
+            "current_policyname": policyname if policyname else None,
+            "current_log_type": log_type if log_type else None,
+            "current_threat_id": threat_id if threat_id else None,
+            # Traffic analysis filter values
+            "current_application": application if application else None,
+            "current_session_end_reason": session_end_reason if session_end_reason else None,
+            # Infrastructure filter values
+            "current_src_zone": src_zone if src_zone else None,
+            "current_dst_zone": dst_zone if dst_zone else None,
             "error": str(e),
         })
 
@@ -478,6 +560,7 @@ async def policy_builder(
     srcip: Optional[str] = Query(None),
     dstip: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
+    policyname: Optional[str] = Query(None),
 ):
     """Policy Builder view - shows only denied traffic for policy analysis."""
     try:
@@ -564,6 +647,11 @@ async def policy_builder(
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
             search_parts.append(f"dstport:{dstport_clean}")
+
+        # Handle policyname parameter
+        policyname_clean = policyname.strip() if policyname and policyname.strip() else None
+        if policyname_clean:
+            search_parts.append(f"policyname:{policyname_clean}")
 
         # Combine with existing q parameter if present
         search_query = q or ""
@@ -664,6 +752,7 @@ async def policy_builder(
             "current_srcip": srcip_clean,
             "current_dstip": dstip_clean,
             "current_dstport": dstport_clean,
+            "current_policyname": policyname_clean,
             "error": None,
         })
     except Exception as e:
@@ -692,6 +781,7 @@ async def policy_builder(
             "current_srcip": srcip if srcip else None,
             "current_dstip": dstip if dstip else None,
             "current_dstport": dstport if dstport else None,
+            "current_policyname": policyname if policyname else None,
             "error": str(e),
         })
 
@@ -1568,3 +1658,155 @@ async def build_policy(
             {"success": False, "error": str(e)},
             status_code=500
         )
+
+
+# ============================================================
+# System Monitoring Endpoints
+# ============================================================
+
+def get_disk_usage(path: str = '/') -> dict:
+    """Get disk usage statistics for the specified path."""
+    import shutil
+    total, used, free = shutil.disk_usage(path)
+    usage_percent = (used / total) * 100
+    return {
+        'total_bytes': total,
+        'used_bytes': used,
+        'free_bytes': free,
+        'total_gb': round(total / (1024**3), 1),
+        'used_gb': round(used / (1024**3), 1),
+        'free_gb': round(free / (1024**3), 1),
+        'usage_percent': round(usage_percent, 1)
+    }
+
+
+@router.get("/system/", response_class=HTMLResponse, name="system_monitor")
+async def system_monitor(request: Request):
+    """System monitoring page showing disk usage and ClickHouse storage."""
+    try:
+        # Get disk usage
+        disk_info = get_disk_usage('/')
+
+        # Get ClickHouse table sizes
+        all_tables = ClickHouseClient.get_all_table_sizes()
+        system_tables = ClickHouseClient.get_system_table_sizes()
+        db_summary = ClickHouseClient.get_database_storage_summary()
+
+        # Get syslogs partition info
+        partitions = ClickHouseClient.get_syslogs_partition_info()
+
+        # Get cleanup status
+        cleanup_status = ClickHouseClient.get_cleanup_status()
+
+        # Calculate ClickHouse vs disk usage
+        clickhouse_bytes = db_summary.get('total_bytes', 0)
+        disk_used = disk_info['used_bytes']
+        clickhouse_percent_of_used = round((clickhouse_bytes / disk_used * 100), 1) if disk_used > 0 else 0
+
+        # Determine warning level
+        usage_percent = disk_info['usage_percent']
+        if usage_percent >= 95:
+            disk_status = 'critical'
+        elif usage_percent >= 90:
+            disk_status = 'warning'
+        elif usage_percent >= 80:
+            disk_status = 'caution'
+        else:
+            disk_status = 'healthy'
+
+        return templates.TemplateResponse("system/system_monitor.html", {
+            "request": request,
+            "disk_info": disk_info,
+            "disk_status": disk_status,
+            "all_tables": all_tables,
+            "system_tables": system_tables,
+            "db_summary": db_summary,
+            "partitions": partitions,
+            "cleanup_status": cleanup_status,
+            "clickhouse_percent_of_used": clickhouse_percent_of_used,
+            "error": None,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return templates.TemplateResponse("system/system_monitor.html", {
+            "request": request,
+            "disk_info": get_disk_usage('/'),
+            "disk_status": 'unknown',
+            "all_tables": [],
+            "system_tables": [],
+            "db_summary": {'databases': [], 'total_bytes': 0, 'total_readable': '0 B'},
+            "partitions": [],
+            "cleanup_status": {'pending_mutations': 0, 'mutations': []},
+            "clickhouse_percent_of_used": 0,
+            "error": str(e),
+        })
+
+
+@router.post("/api/system/truncate-table/", name="truncate_system_table")
+async def truncate_system_table(request: Request):
+    """Truncate a system table to free up space."""
+    try:
+        body = await request.json()
+        table = body.get('table', '')
+
+        if not table:
+            return JSONResponse({"success": False, "error": "Table name required"}, status_code=400)
+
+        success = ClickHouseClient.truncate_system_table(table)
+
+        if success:
+            return JSONResponse({"success": True, "message": f"Truncated system.{table}"})
+        else:
+            return JSONResponse({"success": False, "error": f"Failed to truncate {table}"}, status_code=400)
+
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/system/run-cleanup/", name="run_system_cleanup")
+async def run_system_cleanup(request: Request):
+    """Run the disk cleanup script manually."""
+    import subprocess
+
+    try:
+        # Run cleanup script
+        result = subprocess.run(
+            ['/home/net/net-logs/venv/bin/python', '-m', 'fastapi_app.cli.disk_cleanup', '--threshold', '90'],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd='/home/net/net-logs'
+        )
+
+        return JSONResponse({
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        })
+
+    except subprocess.TimeoutExpired:
+        return JSONResponse({"success": False, "error": "Cleanup script timed out"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/api/system/disk-usage/", name="get_disk_usage")
+async def api_disk_usage():
+    """API endpoint to get current disk usage."""
+    try:
+        disk_info = get_disk_usage('/')
+        db_summary = ClickHouseClient.get_database_storage_summary()
+
+        return JSONResponse({
+            "success": True,
+            "disk": disk_info,
+            "clickhouse": {
+                "total_bytes": db_summary['total_bytes'],
+                "total_readable": db_summary['total_readable']
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)

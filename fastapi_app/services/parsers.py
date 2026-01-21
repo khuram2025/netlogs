@@ -625,23 +625,72 @@ class PaloAltoParser(BaseParser):
         if not message:
             return {}
 
+        # Extract syslog header timestamp before stripping (this is the correct timestamp)
+        syslog_timestamp = self._extract_syslog_timestamp(message)
+
         # Strip syslog header if present
         message = self._strip_syslog_header(message)
 
         # Check for CEF format
         if message.startswith('CEF:'):
-            return self._parse_cef(message)
-
+            result = self._parse_cef(message)
         # Check for LEEF format
-        if message.startswith('LEEF:'):
-            return self._parse_leef(message)
-
+        elif message.startswith('LEEF:'):
+            result = self._parse_leef(message)
         # Try key=value format
-        if '=' in message and message.count('=') > message.count(',') / 3:
-            return self._parse_kv(message)
-
+        elif '=' in message and message.count('=') > message.count(',') / 3:
+            result = self._parse_kv(message)
         # Default: CSV format
-        return self._parse_csv(message)
+        else:
+            result = self._parse_csv(message)
+
+        # Use syslog header timestamp as log_datetime (more accurate than CSV timestamp)
+        if syslog_timestamp:
+            result['log_datetime'] = syslog_timestamp
+            result['syslog_timestamp'] = syslog_timestamp
+
+        return result
+
+    def _extract_syslog_timestamp(self, message: str) -> Optional[str]:
+        """
+        Extract timestamp from RFC 3164 syslog header.
+
+        Format: <PRI>Mon DD HH:MM:SS hostname ...
+        Example: <14>Jan  8 15:43:53 VID-PA-01 ...
+
+        Returns timestamp in format: YYYY-MM-DD HH:MM:SS
+        """
+        if not message.startswith('<'):
+            return None
+
+        pri_end = message.find('>')
+        if pri_end == -1 or pri_end >= 5:
+            return None
+
+        after_pri = message[pri_end + 1:].lstrip()
+
+        # Match RFC 3164 timestamp: Mon DD HH:MM:SS or Mon  D HH:MM:SS
+        rfc3164_ts_pattern = r'^([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})'
+        match = re.match(rfc3164_ts_pattern, after_pri)
+
+        if match:
+            month_str, day, hour, minute, second = match.groups()
+
+            # Convert month name to number
+            months = {
+                'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+            }
+            month = months.get(month_str, '01')
+
+            # Use current year (syslog RFC 3164 doesn't include year)
+            year = datetime.now().year
+
+            # Format: YYYY-MM-DD HH:MM:SS
+            return f"{year}-{month}-{day.zfill(2)} {hour}:{minute}:{second}"
+
+        return None
 
     def _strip_syslog_header(self, message: str) -> str:
         """Strip RFC 3164/5424 syslog header if present."""

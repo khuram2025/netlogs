@@ -80,6 +80,15 @@ class ClickHouseClient:
             dstport UInt16 DEFAULT 0 CODEC(T64, LZ4),
             proto UInt8 DEFAULT 0 CODEC(T64, LZ4),
             action LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            policyname LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Additional indexed columns for Palo Alto and advanced queries
+            log_type LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            application LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            src_zone LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            dst_zone LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            session_end_reason LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
+            threat_id String DEFAULT '' CODEC(ZSTD(1)),
 
             -- Keep parsed_data Map for all other fields
             parsed_data Map(String, String) CODEC(ZSTD(1)),
@@ -95,7 +104,15 @@ class ClickHouseClient:
             INDEX idx_srcport srcport TYPE minmax GRANULARITY 4,
             INDEX idx_dstport dstport TYPE minmax GRANULARITY 4,
             INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
-            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4
+            INDEX idx_policyname policyname TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_message message TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
+            -- Indexes for Palo Alto specific queries
+            INDEX idx_log_type log_type TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_application application TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_src_zone src_zone TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dst_zone dst_zone TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_session_end_reason session_end_reason TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_threat_id threat_id TYPE bloom_filter(0.01) GRANULARITY 4
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (device_ip, timestamp)
@@ -125,16 +142,32 @@ class ClickHouseClient:
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstport UInt16 DEFAULT 0 CODEC(T64, LZ4)",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS proto UInt8 DEFAULT 0 CODEC(T64, LZ4)",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS action String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS policyname String DEFAULT '' CODEC(ZSTD(1))",
+            # Add Palo Alto specific indexed columns
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_type String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS application String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS src_zone String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dst_zone String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS session_end_reason String DEFAULT '' CODEC(ZSTD(1))",
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS threat_id String DEFAULT '' CODEC(ZSTD(1))",
             # Keep parsed_data for other fields
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS parsed_data Map(String, String) CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_date Date MATERIALIZED toDate(timestamp)",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_hour UInt8 MATERIALIZED toHour(timestamp)",
-            # Add indexes
+            # Add indexes for original columns
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_srcip srcip TYPE bloom_filter(0.01) GRANULARITY 4",
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dstip dstip TYPE bloom_filter(0.01) GRANULARITY 4",
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_srcport srcport TYPE minmax GRANULARITY 4",
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dstport dstport TYPE minmax GRANULARITY 4",
             "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_action action TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_policyname policyname TYPE bloom_filter(0.01) GRANULARITY 4",
+            # Add indexes for Palo Alto specific columns
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_log_type log_type TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_application application TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_src_zone src_zone TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_dst_zone dst_zone TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_session_end_reason session_end_reason TYPE bloom_filter(0.01) GRANULARITY 4",
+            "ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_threat_id threat_id TYPE bloom_filter(0.01) GRANULARITY 4",
         ]
         for migration in migrations:
             try:
@@ -195,6 +228,129 @@ class ClickHouseClient:
             return {'status': 'error', 'message': str(e)}
 
     @classmethod
+    def backfill_new_indexed_columns(cls) -> Dict[str, Any]:
+        """
+        Backfill new indexed columns from parsed_data for existing records.
+
+        This populates: srcip, dstip, log_type, application, src_zone, dst_zone,
+        session_end_reason, threat_id for records inserted before these columns were added.
+
+        Returns status dict with mutation info.
+        """
+        client = cls.get_client()
+
+        # Check how many rows need updating (sample check on srcip)
+        check_query = """
+        SELECT count() as needs_update
+        FROM syslogs
+        WHERE srcip = '' AND (parsed_data['srcip'] != '' OR parsed_data['src_ip'] != '')
+        """
+        result = client.query(check_query).result_rows
+        empty_count = result[0][0] if result else 0
+
+        if empty_count == 0:
+            return {'status': 'complete', 'rows_updated': 0, 'message': 'No rows need backfilling'}
+
+        # Backfill all new indexed columns
+        mutations = [
+            # IP columns
+            """ALTER TABLE syslogs UPDATE srcip = if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip'])
+               WHERE srcip = '' AND (parsed_data['srcip'] != '' OR parsed_data['src_ip'] != '')""",
+            """ALTER TABLE syslogs UPDATE dstip = if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])
+               WHERE dstip = '' AND (parsed_data['dstip'] != '' OR parsed_data['dst_ip'] != '')""",
+            # Log type (Fortinet: type/subtype, Palo Alto: log_type)
+            """ALTER TABLE syslogs UPDATE log_type = if(parsed_data['log_type'] != '', parsed_data['log_type'],
+                   if(parsed_data['type'] != '', concat(parsed_data['type'], if(parsed_data['subtype'] != '', concat('/', parsed_data['subtype']), '')), ''))
+               WHERE log_type = '' AND (parsed_data['log_type'] != '' OR parsed_data['type'] != '')""",
+            # Application (Fortinet: app, Palo Alto: application)
+            """ALTER TABLE syslogs UPDATE application = if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application'])
+               WHERE application = '' AND (parsed_data['app'] != '' OR parsed_data['application'] != '')""",
+            # Source zone (Fortinet: srcintf, Palo Alto: src_zone)
+            """ALTER TABLE syslogs UPDATE src_zone = multiIf(
+                   parsed_data['src_zone'] != '', parsed_data['src_zone'],
+                   parsed_data['srczone'] != '', parsed_data['srczone'],
+                   parsed_data['srcintf'] != '', parsed_data['srcintf'], '')
+               WHERE src_zone = '' AND (parsed_data['src_zone'] != '' OR parsed_data['srczone'] != '' OR parsed_data['srcintf'] != '')""",
+            # Destination zone (Fortinet: dstintf, Palo Alto: dst_zone)
+            """ALTER TABLE syslogs UPDATE dst_zone = multiIf(
+                   parsed_data['dst_zone'] != '', parsed_data['dst_zone'],
+                   parsed_data['dstzone'] != '', parsed_data['dstzone'],
+                   parsed_data['dstintf'] != '', parsed_data['dstintf'], '')
+               WHERE dst_zone = '' AND (parsed_data['dst_zone'] != '' OR parsed_data['dstzone'] != '' OR parsed_data['dstintf'] != '')""",
+            # Session end reason (Palo Alto specific)
+            """ALTER TABLE syslogs UPDATE session_end_reason = parsed_data['session_end_reason']
+               WHERE session_end_reason = '' AND parsed_data['session_end_reason'] != ''""",
+            # Threat ID (Palo Alto specific)
+            """ALTER TABLE syslogs UPDATE threat_id = parsed_data['threat_id']
+               WHERE threat_id = '' AND parsed_data['threat_id'] != ''""",
+        ]
+
+        try:
+            logger.info(f"Starting backfill for approximately {empty_count:,} rows...")
+            for mutation in mutations:
+                try:
+                    client.command(mutation)
+                except Exception as e:
+                    logger.warning(f"Mutation skipped (may not apply): {e}")
+
+            logger.info("Backfill mutations scheduled. Run 'SELECT * FROM system.mutations WHERE is_done = 0' to check status.")
+            return {
+                'status': 'scheduled',
+                'rows_to_update': empty_count,
+                'mutations_scheduled': len(mutations),
+                'message': 'Backfill mutations scheduled. ClickHouse will process them asynchronously.'
+            }
+        except Exception as e:
+            logger.error(f"Backfill failed: {e}")
+            return {'status': 'error', 'message': str(e)}
+
+    @classmethod
+    def backfill_policyname_column(cls) -> Dict[str, Any]:
+        """
+        Backfill policyname column from parsed_data for existing records.
+
+        This is a one-time migration to populate the indexed policyname column
+        for records that were inserted before the optimization.
+
+        Supports both Fortinet (policyname) and Palo Alto (rule) field names.
+
+        Returns status dict with rows_updated count.
+        """
+        client = cls.get_client()
+
+        # Check how many rows need updating
+        check_query = """
+        SELECT count() as empty_policyname
+        FROM syslogs
+        WHERE policyname = '' AND (parsed_data['policyname'] != '' OR parsed_data['rule'] != '')
+        """
+        result = client.query(check_query).result_rows
+        empty_count = result[0][0] if result else 0
+
+        if empty_count == 0:
+            return {'status': 'complete', 'rows_updated': 0, 'message': 'No rows need backfilling'}
+
+        # Backfill policyname column (Fortinet: policyname, Palo Alto: rule)
+        policyname_query = """
+        ALTER TABLE syslogs
+        UPDATE policyname = if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule'])
+        WHERE policyname = '' AND (parsed_data['policyname'] != '' OR parsed_data['rule'] != '')
+        """
+
+        try:
+            logger.info(f"Starting policyname backfill for approximately {empty_count:,} rows...")
+            client.command(policyname_query)
+            logger.info("Policyname backfill mutation scheduled. Run 'SELECT * FROM system.mutations WHERE is_done = 0' to check status.")
+            return {
+                'status': 'scheduled',
+                'rows_to_update': empty_count,
+                'message': 'Policyname backfill mutation scheduled. ClickHouse will process it asynchronously.'
+            }
+        except Exception as e:
+            logger.error(f"Policyname backfill failed: {e}")
+            return {'status': 'error', 'message': str(e)}
+
+    @classmethod
     def insert_logs(cls, logs: List[Tuple]) -> None:
         """
         Insert logs in batch.
@@ -202,34 +358,89 @@ class ClickHouseClient:
         Args:
             logs: List of tuples matching the schema columns
                   (timestamp, device_ip, facility, severity, message, raw,
-                   srcip, dstip, srcport, dstport, proto, action, parsed_data)
+                   srcport, dstport, proto, action, policyname,
+                   log_type, application, src_zone, dst_zone, session_end_reason,
+                   threat_id, parsed_data)
 
-        Note: srcip and dstip are now populated for fast indexed queries.
-              They have bloom filter indexes for efficient filtering.
+        Note: srcip and dstip are MATERIALIZED columns - auto-populated from parsed_data.
+              Other indexed columns are populated directly for fast queries.
         """
         if not logs:
             return
         client = cls.get_client()
 
-        # Include srcip and dstip for indexed queries (bloom filter)
-        # Input:  (timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data)
-        # Output: (timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data)
+        # Note: srcip and dstip are MATERIALIZED (auto-computed from parsed_data)
+        # Only insert into DEFAULT columns
         client.insert('syslogs', logs, column_names=[
             'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
-            'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'parsed_data'
+            'srcport', 'dstport', 'proto', 'action', 'policyname',
+            'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
+            'threat_id', 'parsed_data'
         ])
 
     @classmethod
-    def get_recent_logs(cls, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get most recent logs."""
+    def get_recent_logs(cls, limit: int = 100, include_raw: bool = False) -> List[Dict[str, Any]]:
+        """
+        Get most recent logs.
+
+        Args:
+            limit: Maximum number of logs to return
+            include_raw: If False (default), excludes 'raw' and 'parsed_data' for performance
+        """
         client = cls.get_client()
+        columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
         query = f"""
-        SELECT timestamp, device_ip, facility, severity, message, raw,
-               srcip, dstip, srcport, dstport, proto, action, parsed_data
+        SELECT {columns}
         FROM syslogs ORDER BY timestamp DESC LIMIT {limit}
         """
         result = client.query(query)
         return list(result.named_results())
+
+    @classmethod
+    def get_log_by_id(
+        cls,
+        timestamp: str,
+        device_ip: str,
+        include_raw: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get a single log entry by timestamp and device IP.
+
+        Used for fetching full log details including raw message on demand.
+
+        Args:
+            timestamp: ISO format timestamp of the log
+            device_ip: Device IP that logged the entry
+            include_raw: If True (default), includes raw and parsed_data
+
+        Returns:
+            Log entry dict or None if not found
+        """
+        client = cls.get_client()
+        safe_device = device_ip.replace("'", "''")
+
+        # Clean up timestamp format
+        clean_timestamp = timestamp.replace('T', ' ').replace('Z', '')
+        if '.' in clean_timestamp:
+            parts = clean_timestamp.split('.')
+            if len(parts[1]) > 3:
+                clean_timestamp = parts[0] + '.' + parts[1][:3]
+
+        columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
+
+        # Use a small window to handle timestamp precision issues
+        query = f"""
+        SELECT {columns}
+        FROM syslogs
+        WHERE toString(device_ip) = '{safe_device}'
+          AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
+          AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
+        ORDER BY timestamp ASC
+        LIMIT 1
+        """
+
+        result = list(client.query(query).named_results())
+        return result[0] if result else None
 
     @classmethod
     def get_stats(cls) -> Dict[str, Any]:
@@ -450,22 +661,36 @@ class ClickHouseClient:
             return f"{col} = '{safe_value}'"
 
         # Field mapping for normalized and vendor-specific fields
-        # Uses COALESCE to check both normalized (Fortinet-style) and Palo Alto fields
+        # Uses indexed columns where available, with fallback to parsed_data
         field_mapping = {
-            # Common normalized fields - check both normalized and PA original
-            'srcip': "if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip'])",
-            'dstip': "if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])",
+            # Common normalized fields - use indexed column first, then parsed_data
+            'srcip': "if(srcip != '', srcip, if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip']))",
+            'dstip': "if(dstip != '', dstip, if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip']))",
             'srcport': "if(parsed_data['srcport'] != '', parsed_data['srcport'], parsed_data['src_port'])",
             'dstport': "if(parsed_data['dstport'] != '', parsed_data['dstport'], parsed_data['dst_port'])",
             'action': "if(action != '', action, parsed_data['action'])",
+            'policyname': "if(policyname != '', policyname, if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule']))",
+            'rule': "if(policyname != '', policyname, if(parsed_data['rule'] != '', parsed_data['rule'], parsed_data['policyname']))",
             'proto': "if(parsed_data['proto'] != '', parsed_data['proto'], parsed_data['protocol'])",
-            'app': "if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application'])",
+            # Use indexed application column
+            'app': "if(application != '', application, if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application']))",
+            'application': "if(application != '', application, if(parsed_data['application'] != '', parsed_data['application'], parsed_data['app']))",
             'srcintf': "if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if'])",
             'dstintf': "if(parsed_data['dstintf'] != '', parsed_data['dstintf'], parsed_data['outbound_if'])",
-            'srczone': "if(parsed_data['srczone'] != '', parsed_data['srczone'], parsed_data['src_zone'])",
-            'dstzone': "if(parsed_data['dstzone'] != '', parsed_data['dstzone'], parsed_data['dst_zone'])",
+            # Use indexed zone columns
+            'srczone': "if(src_zone != '', src_zone, if(parsed_data['srczone'] != '', parsed_data['srczone'], parsed_data['src_zone']))",
+            'dstzone': "if(dst_zone != '', dst_zone, if(parsed_data['dstzone'] != '', parsed_data['dstzone'], parsed_data['dst_zone']))",
+            'src_zone': "if(src_zone != '', src_zone, if(parsed_data['src_zone'] != '', parsed_data['src_zone'], parsed_data['srczone']))",
+            'dst_zone': "if(dst_zone != '', dst_zone, if(parsed_data['dst_zone'] != '', parsed_data['dst_zone'], parsed_data['dstzone']))",
             'srcuser': "if(parsed_data['srcuser'] != '', parsed_data['srcuser'], parsed_data['src_user'])",
             'dstuser': "if(parsed_data['dstuser'] != '', parsed_data['dstuser'], parsed_data['dst_user'])",
+            # Use indexed log_type column
+            'log_type': "if(log_type != '', log_type, parsed_data['log_type'])",
+            'type': "if(log_type != '', log_type, parsed_data['type'])",
+            # Use indexed session_end_reason column
+            'session_end_reason': "if(session_end_reason != '', session_end_reason, parsed_data['session_end_reason'])",
+            # Use indexed threat_id column
+            'threat_id': "if(threat_id != '', threat_id, parsed_data['threat_id'])",
             'sessionid': "if(parsed_data['sessionid'] != '', parsed_data['sessionid'], parsed_data['session_id'])",
             'duration': "if(parsed_data['duration'] != '', parsed_data['duration'], parsed_data['elapsed_time'])",
             'sentbyte': "if(parsed_data['sentbyte'] != '', parsed_data['sentbyte'], parsed_data['bytes_sent'])",
@@ -475,7 +700,6 @@ class ClickHouseClient:
             # Fortinet-specific
             'service': "parsed_data['service']",
             'policyid': "parsed_data['policyid']",
-            'policyname': "if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule'])",
             'appcat': "if(parsed_data['appcat'] != '', parsed_data['appcat'], parsed_data['category_of_app'])",
             'user': "parsed_data['user']",
             # Palo Alto-specific (original field names)
@@ -490,7 +714,6 @@ class ClickHouseClient:
             'inbound_if': "if(parsed_data['inbound_if'] != '', parsed_data['inbound_if'], parsed_data['srcintf'])",
             'outbound_if': "if(parsed_data['outbound_if'] != '', parsed_data['outbound_if'], parsed_data['dstintf'])",
             'application': "if(parsed_data['application'] != '', parsed_data['application'], parsed_data['app'])",
-            'rule': "if(parsed_data['rule'] != '', parsed_data['rule'], parsed_data['policyname'])",
             'serial': "parsed_data['serial']",
             'vsys': "parsed_data['vsys']",
             'device_name': "if(parsed_data['device_name'] != '', parsed_data['device_name'], parsed_data['devname'])",
@@ -739,6 +962,12 @@ class ClickHouseClient:
 
         return " AND ".join(where_clauses)
 
+    # Light columns for fast queries (excludes only 'raw' - the heaviest field)
+    # Keeps parsed_data as it's needed for detail panel display
+    LIGHT_COLUMNS = "timestamp, device_ip, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+    # Full columns including raw message
+    FULL_COLUMNS = "timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+
     @classmethod
     def search_logs(
         cls,
@@ -750,9 +979,16 @@ class ClickHouseClient:
         end_time: Optional[datetime] = None,
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
-        default_hours: int = 1
+        default_hours: int = 1,
+        include_raw: bool = False
     ) -> List[Dict[str, Any]]:
-        """Search logs with advanced filtering. Defaults to last 1 hour for performance."""
+        """
+        Search logs with advanced filtering. Defaults to last 1 hour for performance.
+
+        Args:
+            include_raw: If False (default), excludes 'raw' and 'parsed_data' columns
+                        for faster queries. Set to True to include full log data.
+        """
         client = cls.get_client()
 
         # Build time filter separately for PREWHERE optimization
@@ -774,9 +1010,11 @@ class ClickHouseClient:
         # Use PREWHERE for time filter (allows skipping data blocks early)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
+        # Use light columns by default for performance (excludes raw, parsed_data)
+        columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
+
         query = f"""
-        SELECT timestamp, device_ip, facility, severity, message, raw,
-               srcip, dstip, srcport, dstport, proto, action, parsed_data
+        SELECT {columns}
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
@@ -1130,32 +1368,43 @@ class ClickHouseClient:
         client = cls.get_client()
 
         # Map field names to actual column expressions with fallback for vendor variations
+        # Uses indexed columns where available for better performance
         field_mapping = {
-            'srcip': "if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip'])",
-            'dstip': "if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip'])",
+            # Use indexed columns first, then fall back to parsed_data
+            'srcip': "if(srcip != '', srcip, if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip']))",
+            'dstip': "if(dstip != '', dstip, if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip']))",
             'srcport': "if(parsed_data['srcport'] != '', parsed_data['srcport'], parsed_data['src_port'])",
             'dstport': "if(parsed_data['dstport'] != '', parsed_data['dstport'], parsed_data['dst_port'])",
             'action': "if(action != '', action, parsed_data['action'])",
+            'policyname': "if(policyname != '', policyname, if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule']))",
+            'rule': "if(policyname != '', policyname, if(parsed_data['rule'] != '', parsed_data['rule'], parsed_data['policyname']))",
             'proto': "if(parsed_data['proto'] != '', parsed_data['proto'], parsed_data['protocol'])",
-            'app': "if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application'])",
+            # Use indexed application column
+            'app': "if(application != '', application, if(parsed_data['app'] != '', parsed_data['app'], parsed_data['application']))",
+            'application': "if(application != '', application, if(parsed_data['application'] != '', parsed_data['application'], parsed_data['app']))",
             'srcintf': "if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if'])",
             'dstintf': "if(parsed_data['dstintf'] != '', parsed_data['dstintf'], parsed_data['outbound_if'])",
             'service': "parsed_data['service']",
             'policyid': "parsed_data['policyid']",
-            'policyname': "if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule'])",
             'srccountry': "if(parsed_data['srccountry'] != '', parsed_data['srccountry'], parsed_data['src_location'])",
             'dstcountry': "if(parsed_data['dstcountry'] != '', parsed_data['dstcountry'], parsed_data['dst_location'])",
             'appcat': "if(parsed_data['appcat'] != '', parsed_data['appcat'], parsed_data['category_of_app'])",
-            'srczone': "if(parsed_data['srczone'] != '', parsed_data['srczone'], parsed_data['src_zone'])",
-            'dstzone': "if(parsed_data['dstzone'] != '', parsed_data['dstzone'], parsed_data['dst_zone'])",
+            # Use indexed zone columns
+            'srczone': "if(src_zone != '', src_zone, if(parsed_data['srczone'] != '', parsed_data['srczone'], parsed_data['src_zone']))",
+            'dstzone': "if(dst_zone != '', dst_zone, if(parsed_data['dstzone'] != '', parsed_data['dstzone'], parsed_data['dst_zone']))",
+            'src_zone': "if(src_zone != '', src_zone, if(parsed_data['src_zone'] != '', parsed_data['src_zone'], parsed_data['srczone']))",
+            'dst_zone': "if(dst_zone != '', dst_zone, if(parsed_data['dst_zone'] != '', parsed_data['dst_zone'], parsed_data['dstzone']))",
             'srcuser': "if(parsed_data['srcuser'] != '', parsed_data['srcuser'], parsed_data['src_user'])",
             'dstuser': "if(parsed_data['dstuser'] != '', parsed_data['dstuser'], parsed_data['dst_user'])",
-            'type': "parsed_data['type']",
+            # Use indexed log_type column
+            'log_type': "if(log_type != '', log_type, parsed_data['log_type'])",
+            'type': "if(log_type != '', log_type, parsed_data['type'])",
             'subtype': "parsed_data['subtype']",
             'device': "toString(device_ip)",
             'device_name': "if(parsed_data['device_name'] != '', parsed_data['device_name'], parsed_data['devname'])",
-            'rule': "if(parsed_data['rule'] != '', parsed_data['rule'], parsed_data['policyname'])",
-            'session_end_reason': "parsed_data['session_end_reason']",
+            # Use indexed session_end_reason and threat_id columns
+            'session_end_reason': "if(session_end_reason != '', session_end_reason, parsed_data['session_end_reason'])",
+            'threat_id': "if(threat_id != '', threat_id, parsed_data['threat_id'])",
         }
 
         col_expr = field_mapping.get(field, f"parsed_data['{field}']")
@@ -1516,4 +1765,176 @@ class ClickHouseClient:
                 'has_deny': has_deny,
                 'total_hops': len(flow)
             }
+        }
+
+    # ============================================================
+    # System Monitoring Methods
+    # ============================================================
+
+    @classmethod
+    def get_all_table_sizes(cls) -> List[Dict[str, Any]]:
+        """
+        Get sizes of all ClickHouse tables for system monitoring.
+        Returns list sorted by size descending.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            database,
+            table,
+            sum(bytes_on_disk) AS total_bytes,
+            sum(rows) AS total_rows,
+            formatReadableSize(sum(bytes_on_disk)) AS size_readable
+        FROM system.parts
+        WHERE active
+        GROUP BY database, table
+        ORDER BY total_bytes DESC
+        """
+
+        return list(client.query(query).named_results())
+
+    @classmethod
+    def get_database_storage_summary(cls) -> Dict[str, Any]:
+        """
+        Get summary of ClickHouse storage usage.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            database,
+            sum(bytes_on_disk) AS total_bytes,
+            sum(rows) AS total_rows,
+            formatReadableSize(sum(bytes_on_disk)) AS size_readable
+        FROM system.parts
+        WHERE active
+        GROUP BY database
+        ORDER BY total_bytes DESC
+        """
+
+        results = list(client.query(query).named_results())
+        total_bytes = sum(r['total_bytes'] for r in results)
+
+        return {
+            'databases': results,
+            'total_bytes': total_bytes,
+            'total_readable': cls._format_bytes(total_bytes)
+        }
+
+    @classmethod
+    def _format_bytes(cls, size: int) -> str:
+        """Format bytes to human readable string."""
+        if size < 1024:
+            return f"{size} B"
+        for unit in ['KB', 'MB', 'GB', 'TB']:
+            size /= 1024.0
+            if size < 1024.0:
+                if size < 10:
+                    return f"{size:.2f} {unit}"
+                elif size < 100:
+                    return f"{size:.1f} {unit}"
+                else:
+                    return f"{size:.0f} {unit}"
+        return f"{size:.1f} PB"
+
+    @classmethod
+    def get_system_table_sizes(cls) -> List[Dict[str, Any]]:
+        """
+        Get sizes of system tables specifically.
+        These are the tables that can be truncated during cleanup.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            database,
+            table,
+            sum(bytes_on_disk) AS total_bytes,
+            sum(rows) AS total_rows,
+            formatReadableSize(sum(bytes_on_disk)) AS size_readable
+        FROM system.parts
+        WHERE active AND database = 'system'
+        GROUP BY database, table
+        ORDER BY total_bytes DESC
+        """
+
+        return list(client.query(query).named_results())
+
+    @classmethod
+    def truncate_system_table(cls, table: str) -> bool:
+        """
+        Truncate a system table to free up space.
+        Only allows truncation of safe system log tables.
+        """
+        safe_tables = [
+            'trace_log', 'text_log', 'query_log', 'metric_log',
+            'part_log', 'asynchronous_metric_log', 'processors_profile_log',
+            'query_metric_log', 'asynchronous_insert_log', 'error_log'
+        ]
+
+        if table not in safe_tables:
+            logger.warning(f"Attempted to truncate non-safe table: {table}")
+            return False
+
+        try:
+            client = cls.get_client()
+            client.command(f"TRUNCATE TABLE system.{table}")
+            logger.info(f"Truncated system.{table}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to truncate system.{table}: {e}")
+            return False
+
+    @classmethod
+    def get_syslogs_partition_info(cls) -> List[Dict[str, Any]]:
+        """
+        Get partition information for the syslogs table.
+        Shows data distribution by month.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            partition,
+            sum(bytes_on_disk) AS total_bytes,
+            sum(rows) AS total_rows,
+            formatReadableSize(sum(bytes_on_disk)) AS size_readable,
+            min(min_time) AS min_time,
+            max(max_time) AS max_time
+        FROM system.parts
+        WHERE active AND table = 'syslogs'
+        GROUP BY partition
+        ORDER BY partition DESC
+        """
+
+        return list(client.query(query).named_results())
+
+    @classmethod
+    def get_cleanup_status(cls) -> Dict[str, Any]:
+        """
+        Get status of ongoing mutations (deletions/optimizations).
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            database,
+            table,
+            mutation_id,
+            command,
+            create_time,
+            is_done,
+            latest_fail_reason
+        FROM system.mutations
+        WHERE NOT is_done
+        ORDER BY create_time DESC
+        LIMIT 20
+        """
+
+        mutations = list(client.query(query).named_results())
+
+        return {
+            'pending_mutations': len(mutations),
+            'mutations': mutations
         }

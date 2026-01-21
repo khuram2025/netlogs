@@ -1,0 +1,18 @@
+[Unit]
+Description=NetLogs ClickHouse Disk Cleanup
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=net
+WorkingDirectory=/home/net/net-logs
+ExecStart=/home/net/net-logs/venv/bin/python -m fastapi_app.cli.disk_cleanup --threshold 90 --retention 60
+StandardOutput=append:/home/net/net-logs/logs/disk_cleanup.log
+StandardError=append:/home/net/net-logs/logs/disk_cleanup.log
+
+# Restart on failure after 5 minutes
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=multi-user.target

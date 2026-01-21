@@ -1217,6 +1217,31 @@
             display: block;
         }
 
+        .raw-loading, .raw-error {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .raw-error {
+            color: var(--accent-red);
+        }
+
+        .raw-loading-spinner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+        }
+
+        .raw-loading-spinner .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-default);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
         /* ===== PAGINATION ===== */
         .pagination-bar {
             display: flex;
@@ -1878,6 +1903,10 @@
                         <span class="search-label">Dest Port</span>
                         <input type="text" name="dstport" class="search-input" placeholder="e.g. 443" value="{{ current_dstport or '' }}">
                     </div>
+                    <div class="search-field">
+                        <span class="search-label">Policy/Rule</span>
+                        <input type="text" name="policyname" class="search-input" placeholder="e.g. allow-internet" value="{{ current_policyname or '' }}">
+                    </div>
                     <div class="search-actions">
                         <button type="submit" class="btn btn-primary" onclick="showLoading()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2015,6 +2044,7 @@
                                 <tr class="log-row deny-row" data-index="{{ loop.index }}">
                                     <td class="col-time">
                                         <span class="timestamp">
+                                            {# Show firewall's log timestamp (time from the log itself) #}
                                             {% if pd.get('log_datetime') %}{{ pd.get('log_datetime') }}{% elif pd.get('date') and pd.get('time') %}{{ pd.get('date') }} {{ pd.get('time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
                                         </span>
                                     </td>
@@ -2216,8 +2246,12 @@ Action: ALLOW</div>
                                                 </div>
                                             </div>
 
-                                            <!-- Raw Log -->
-                                            <div class="raw-section" id="raw-section-{{ loop.index }}">
+                                            <!-- Raw Log (lazy-loaded for performance) -->
+                                            {% set ts = log.get('timestamp', '') %}
+                                            <div class="raw-section" id="raw-section-{{ loop.index }}"
+                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
+                                                 data-device="{{ log.get('device_ip', '') }}"
+                                                 data-loaded="false">
                                                 <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
                                                     <span class="raw-title">
                                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -2231,7 +2265,9 @@ Action: ALLOW</div>
                                                         Copy
                                                     </button>
                                                 </div>
-                                                <div class="raw-body" id="raw-{{ loop.index }}">{{ log.get('raw', '') | e }}</div>
+                                                <div class="raw-body" id="raw-{{ loop.index }}">
+                                                    <span class="raw-loading">Click to load raw message...</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -2464,10 +2500,42 @@ Action: ALLOW</div>
             }
         }
 
-        // Toggle raw section
-        function toggleRawSection(index) {
+        // Toggle raw section with lazy loading
+        async function toggleRawSection(index) {
             const section = document.getElementById(`raw-section-${index}`);
+            const rawBody = document.getElementById(`raw-${index}`);
+            const isLoaded = section.dataset.loaded === 'true';
+
+            // Toggle expanded state
             section.classList.toggle('expanded');
+
+            // If expanding and not yet loaded, fetch the raw message
+            if (section.classList.contains('expanded') && !isLoaded) {
+                const timestamp = section.dataset.timestamp;
+                const device = section.dataset.device;
+
+                if (!timestamp || !device) {
+                    rawBody.innerHTML = '<span class="raw-error">Missing timestamp or device info</span>';
+                    return;
+                }
+
+                // Show loading state
+                rawBody.innerHTML = '<div class="raw-loading-spinner"><div class="spinner"></div> Loading raw message...</div>';
+
+                try {
+                    const response = await fetch(`/api/logs/detail?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const data = await response.json();
+                    const rawText = data.raw || data.message || 'No raw message available';
+                    rawBody.textContent = rawText;
+                    section.dataset.loaded = 'true';
+                } catch (error) {
+                    console.error('Failed to load raw message:', error);
+                    rawBody.innerHTML = `<span class="raw-error">Failed to load: ${error.message}</span>`;
+                }
+            }
         }
 
         // Copy raw log

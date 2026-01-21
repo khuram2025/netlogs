@@ -30,7 +30,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional, List, Tuple
 from threading import Lock
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, cast, text
+from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
@@ -233,7 +234,12 @@ PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     """
     Parse raw syslog message.
-    Returns: (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data) or None on error
+    Returns: (facility, severity, message, raw, srcport, dstport, proto,
+              action, policyname, log_type, application, src_zone, dst_zone,
+              session_end_reason, threat_id, parsed_data) or None on error
+
+    Note: srcip and dstip are MATERIALIZED columns in ClickHouse (auto-computed from parsed_data).
+    Other indexed fields are extracted directly for fast queries.
     """
     try:
         decoded = data.decode('utf-8', errors='replace')
@@ -252,10 +258,13 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         parser = get_parser(device_parser)
         parsed_data = parser.parse(message)
 
-        # Extract key fields for dedicated columns (support both Fortinet and Palo Alto field names)
-        srcip = parsed_data.get('srcip') or parsed_data.get('src_ip', '')
-        dstip = parsed_data.get('dstip') or parsed_data.get('dst_ip', '')
+        # Note: srcip/dstip are MATERIALIZED in ClickHouse - auto-populated from parsed_data
+
+        # Extract action field
         action = parsed_data.get('action', '')
+
+        # Extract policy name (Fortinet: policyname, Palo Alto: rule)
+        policyname = parsed_data.get('policyname') or parsed_data.get('rule', '')
 
         # Parse ports as integers (default to 0)
         srcport_str = parsed_data.get('srcport') or parsed_data.get('src_port', '0')
@@ -276,7 +285,31 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         except (ValueError, TypeError):
             proto = 0
 
-        return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto, action, parsed_data)
+        # Extract log type (Fortinet: type/subtype, Palo Alto: log_type)
+        log_type = parsed_data.get('log_type', '')
+        if not log_type:
+            # Fortinet format: type/subtype
+            fgt_type = parsed_data.get('type', '')
+            fgt_subtype = parsed_data.get('subtype', '')
+            if fgt_type:
+                log_type = f"{fgt_type}/{fgt_subtype}" if fgt_subtype else fgt_type
+
+        # Extract application (Fortinet: app, Palo Alto: application)
+        application = parsed_data.get('app') or parsed_data.get('application', '')
+
+        # Extract zones (Fortinet: srcintf/dstintf, Palo Alto: src_zone/dst_zone)
+        src_zone = parsed_data.get('src_zone') or parsed_data.get('srczone') or parsed_data.get('srcintf', '')
+        dst_zone = parsed_data.get('dst_zone') or parsed_data.get('dstzone') or parsed_data.get('dstintf', '')
+
+        # Extract session end reason (Palo Alto specific)
+        session_end_reason = parsed_data.get('session_end_reason', '')
+
+        # Extract threat ID (Palo Alto specific for THREAT logs)
+        threat_id = parsed_data.get('threat_id', '')
+
+        return (facility, severity, message, decoded, srcport, dstport, proto,
+                action, policyname, log_type, application, src_zone, dst_zone,
+                session_end_reason, threat_id, parsed_data)
     except Exception as e:
         logger.debug(f"Parse error: {e}")
         return None
@@ -291,7 +324,7 @@ async def get_or_create_device(ip: str) -> Optional[Tuple[str, str]]:
     try:
         async with async_session_maker() as session:
             result = await session.execute(
-                select(Device).where(Device.ip_address == ip)
+                select(Device).where(Device.ip_address == cast(ip, INET))
             )
             device = result.scalar_one_or_none()
 
@@ -321,7 +354,7 @@ async def update_device_stats(updates: Dict[str, dict]):
             for ip, data in updates.items():
                 await session.execute(
                     update(Device)
-                    .where(Device.ip_address == ip)
+                    .where(Device.ip_address == cast(ip, INET))
                     .values(
                         last_log_received=data['last_time'],
                         log_count=Device.log_count + data['count']
@@ -422,12 +455,17 @@ class SyslogCollector:
             self.metrics.log_dropped()
             return
 
-        facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, parsed_data = parsed
+        # Note: srcip/dstip are MATERIALIZED columns - not included in tuple
+        (facility, severity, message, raw, srcport, dstport, proto,
+         action, policyname, log_type, application, src_zone, dst_zone,
+         session_end_reason, threat_id, parsed_data) = parsed
         now = datetime.now(timezone.utc)
 
-        # Log entry now includes dedicated columns for key fields
+        # Log entry - srcip/dstip auto-populated from parsed_data (MATERIALIZED)
         log_entry = (now, client_ip, facility, severity, message, raw,
-                     srcip, dstip, srcport, dstport, proto, action, parsed_data)
+                     srcport, dstport, proto, action, policyname,
+                     log_type, application, src_zone, dst_zone, session_end_reason,
+                     threat_id, parsed_data)
 
         if not self.log_buffer.add(log_entry, client_ip, now):
             logger.warning("Buffer full! Dropping log")

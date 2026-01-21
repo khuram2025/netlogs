@@ -73,3 +73,25 @@ else default forinet devices witout vdom
 
 
 fix all this issue/logc and then check and use playwright for the navigation if required 
+
+
+
+
+We need to change the behavour of the paloalto firewall logs redesighn the system any logs 
+received  should be parsed as per below https://docs.paloaltonetworks.com/ngfw/administration/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/traffic-log-fields
+
+then after parsing should be saved in click house along with the raw message and parsed value for different 
+should be saved in the clickhouse it will help us later to retreive the logs faster 
+http://10.12.50.77:8002/logs/
+
+
+just go through this one and then me what your suggestion  about this is it right approach 
+
+
+
+
+http://10.12.50.77:8002/dashboard/
+
+here we have storage being 100% used so we need to make sure that this drive never reach again  more then 90% 
+we need to automate this process then also build the UI  http://10.12.50.77:8002/system/ which should show the 
+usage of the drive  which one taking and how much 

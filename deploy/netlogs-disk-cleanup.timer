@@ -1,0 +1,16 @@
+[Unit]
+Description=Run NetLogs disk cleanup every 15 minutes
+
+[Timer]
+# Run every 15 minutes
+OnBootSec=5min
+OnUnitActiveSec=15min
+
+# Randomize start time slightly to avoid thundering herd
+RandomizedDelaySec=60
+
+# Persist last trigger time across reboots
+Persistent=true
+
+[Install]
+WantedBy=timers.target

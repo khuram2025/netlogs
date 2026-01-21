@@ -238,8 +238,14 @@ async def search_logs(
     end: Optional[datetime] = Query(None, description="End time"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
+    include_raw: bool = Query(False, description="Include raw message and parsed_data (slower)"),
 ):
-    """Search logs with advanced filtering."""
+    """
+    Search logs with advanced filtering.
+
+    By default, excludes 'raw' and 'parsed_data' columns for faster queries.
+    Set include_raw=true to include full log data when needed.
+    """
     try:
         device_ips = [device] if device else None
         severities = [severity] if severity is not None else None
@@ -254,6 +260,7 @@ async def search_logs(
             end_time=end,
             query_text=q,
             facilities=facilities,
+            include_raw=include_raw,
         )
 
         total = ClickHouseClient.count_logs(
@@ -281,11 +288,51 @@ async def search_logs(
 @router.get("/recent")
 async def get_recent_logs(
     limit: int = Query(50, ge=1, le=500, description="Number of logs to return"),
+    include_raw: bool = Query(False, description="Include raw message and parsed_data (slower)"),
 ):
-    """Get most recent logs."""
+    """
+    Get most recent logs.
+
+    By default, excludes 'raw' and 'parsed_data' columns for faster queries.
+    """
     try:
-        logs = ClickHouseClient.get_recent_logs(limit=limit)
+        logs = ClickHouseClient.get_recent_logs(limit=limit, include_raw=include_raw)
         return [format_log_entry(log) for log in logs]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/detail")
+async def get_log_detail(
+    timestamp: str = Query(..., description="Log timestamp in ISO format"),
+    device: str = Query(..., description="Device IP that logged the entry"),
+):
+    """
+    Get full log details including raw message and parsed_data.
+
+    Use this endpoint to fetch complete log data on demand (e.g., when user
+    clicks "View Raw" on a log entry). This is more efficient than fetching
+    raw data for all logs in a search.
+    """
+    try:
+        log = ClickHouseClient.get_log_by_id(
+            timestamp=timestamp,
+            device_ip=device,
+            include_raw=True
+        )
+
+        if not log:
+            raise HTTPException(status_code=404, detail="Log entry not found")
+
+        formatted = format_log_entry(log)
+
+        # Format timestamp for JSON serialization
+        if 'timestamp' in formatted and hasattr(formatted['timestamp'], 'isoformat'):
+            formatted['timestamp'] = formatted['timestamp'].isoformat()
+
+        return formatted
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

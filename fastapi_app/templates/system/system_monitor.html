@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .progress-bar-container {
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        height: 2rem;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .progress-bar {
+        height: 100%;
+        border-radius: 0.5rem;
+        transition: width 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: white;
+    }
+
+    .progress-healthy { background: linear-gradient(90deg, #22c55e, #16a34a); }
+    .progress-caution { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .progress-warning { background: linear-gradient(90deg, #f97316, #ea580c); }
+    .progress-critical { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-healthy { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-caution { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .status-warning { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+    .status-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+    .table-row:hover {
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .size-bar {
+        height: 8px;
+        background: var(--input-bg);
+        border-radius: 4px;
+        overflow: hidden;
+        min-width: 100px;
+    }
+
+    .size-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        border-radius: 4px;
+    }
+
+    .action-btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .action-btn.danger {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .action-btn.danger:hover {
+        background: rgba(239, 68, 68, 0.3);
+    }
+
+    .action-btn.primary {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .action-btn.primary:hover {
+        background: rgba(59, 130, 246, 0.3);
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .refresh-time {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .disk-visual {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .disk-segment {
+        flex: 1;
+        padding: 1rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+
+    .disk-segment .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .disk-segment .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        z-index: 100;
+        display: none;
+    }
+
+    .toast.success { border-color: #22c55e; }
+    .toast.error { border-color: #ef4444; }
+
+    .cleanup-log {
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--input-bg);
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+        white-space: pre-wrap;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section-header">
+    <h1>System Monitor</h1>
+    <div>
+        <span class="refresh-time">Last updated: <span id="lastUpdate">{{ now().strftime('%H:%M:%S') if now is defined else 'now' }}</span></span>
+        <button class="btn btn-primary" style="margin-left: 1rem;" onclick="location.reload()">Refresh</button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<!-- Disk Usage Overview -->
+<div class="card">
+    <div class="section-header">
+        <h2>Disk Usage - Root Partition (/)</h2>
+        <span class="status-badge status-{{ disk_status }}">{{ disk_status }}</span>
+    </div>
+
+    <div class="progress-bar-container" style="margin-bottom: 1rem;">
+        <div class="progress-bar progress-{{ disk_status }}" style="width: {{ disk_info.usage_percent }}%;">
+            {{ disk_info.usage_percent }}%
+        </div>
+    </div>
+
+    <div class="disk-visual">
+        <div class="disk-segment">
+            <div class="value">{{ disk_info.total_gb }} GB</div>
+            <div class="label">Total</div>
+        </div>
+        <div class="disk-segment">
+            <div class="value" style="color: {% if disk_status == 'critical' %}#ef4444{% elif disk_status == 'warning' %}#f97316{% else %}white{% endif %}">
+                {{ disk_info.used_gb }} GB
+            </div>
+            <div class="label">Used</div>
+        </div>
+        <div class="disk-segment">
+            <div class="value" style="color: #22c55e">{{ disk_info.free_gb }} GB</div>
+            <div class="label">Free</div>
+        </div>
+        <div class="disk-segment">
+            <div class="value">{{ clickhouse_percent_of_used }}%</div>
+            <div class="label">ClickHouse</div>
+        </div>
+    </div>
+
+    {% if disk_status in ['warning', 'critical'] %}
+    <div class="alert" style="background: rgba(239, 68, 68, 0.1); border-color: #ef4444; margin-bottom: 1rem;">
+        <strong>Warning:</strong> Disk usage is above 90%. Consider running cleanup to free space.
+    </div>
+    {% endif %}
+
+    <button class="btn btn-primary" onclick="runCleanup()" id="cleanupBtn">
+        Run Disk Cleanup
+    </button>
+    <div class="cleanup-log" id="cleanupLog"></div>
+</div>
+
+<!-- ClickHouse Storage Summary -->
+<div class="card">
+    <h2>ClickHouse Storage ({{ db_summary.total_readable }})</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Database</th>
+                <th>Size</th>
+                <th>Rows</th>
+                <th style="width: 200px;">Visual</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for db in db_summary.databases %}
+            <tr class="table-row">
+                <td><strong>{{ db.database }}</strong></td>
+                <td>{{ db.size_readable }}</td>
+                <td>{{ "{:,}".format(db.total_rows) }}</td>
+                <td>
+                    <div class="size-bar">
+                        <div class="size-bar-fill" style="width: {{ (db.total_bytes / db_summary.total_bytes * 100) if db_summary.total_bytes > 0 else 0 }}%"></div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- All Tables by Size -->
+<div class="card">
+    <h2>All Tables by Size</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Database</th>
+                <th>Table</th>
+                <th>Size</th>
+                <th>Rows</th>
+                <th style="width: 150px;">Visual</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set max_size = all_tables[0].total_bytes if all_tables else 1 %}
+            {% for table in all_tables[:20] %}
+            <tr class="table-row">
+                <td>{{ table.database }}</td>
+                <td><strong>{{ table.table }}</strong></td>
+                <td>{{ table.size_readable }}</td>
+                <td>{{ "{:,}".format(table.total_rows) }}</td>
+                <td>
+                    <div class="size-bar">
+                        <div class="size-bar-fill" style="width: {{ (table.total_bytes / max_size * 100) }}%"></div>
+                    </div>
+                </td>
+                <td>
+                    {% if table.database == 'system' and table.table in ['trace_log', 'text_log', 'query_log', 'metric_log', 'part_log', 'asynchronous_metric_log', 'processors_profile_log', 'query_metric_log', 'asynchronous_insert_log', 'error_log'] %}
+                    <button class="action-btn danger" onclick="truncateTable('{{ table.table }}')">
+                        Truncate
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Syslogs Partitions -->
+{% if partitions %}
+<div class="card">
+    <h2>Syslogs Partitions (by Month)</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Partition</th>
+                <th>Size</th>
+                <th>Rows</th>
+                <th>Date Range</th>
+                <th style="width: 150px;">Visual</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set max_part_size = partitions[0].total_bytes if partitions else 1 %}
+            {% for part in partitions %}
+            <tr class="table-row">
+                <td><strong>{{ part.partition }}</strong></td>
+                <td>{{ part.size_readable }}</td>
+                <td>{{ "{:,}".format(part.total_rows) }}</td>
+                <td class="text-muted text-sm">
+                    {% if part.min_time %}{{ part.min_time.strftime('%Y-%m-%d') if part.min_time.strftime is defined else part.min_time }}{% endif %}
+                    -
+                    {% if part.max_time %}{{ part.max_time.strftime('%Y-%m-%d') if part.max_time.strftime is defined else part.max_time }}{% endif %}
+                </td>
+                <td>
+                    <div class="size-bar">
+                        <div class="size-bar-fill" style="width: {{ (part.total_bytes / max_part_size * 100) }}%"></div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Pending Mutations -->
+{% if cleanup_status.pending_mutations > 0 %}
+<div class="card">
+    <h2>Pending Operations ({{ cleanup_status.pending_mutations }})</h2>
+    <p class="text-muted text-sm">These mutations are being processed by ClickHouse in the background.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Table</th>
+                <th>Operation</th>
+                <th>Created</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mut in cleanup_status.mutations %}
+            <tr class="table-row">
+                <td>{{ mut.database }}.{{ mut.table }}</td>
+                <td class="text-sm" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                    {{ mut.command[:50] }}{% if mut.command|length > 50 %}...{% endif %}
+                </td>
+                <td>{{ mut.create_time }}</td>
+                <td>
+                    {% if mut.latest_fail_reason %}
+                    <span class="badge badge-critical">Failed</span>
+                    {% else %}
+                    <span class="badge badge-warning">Processing</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Toast Notification -->
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast ' + type;
+    toast.style.display = 'block';
+    setTimeout(() => {
+        toast.style.display = 'none';
+    }, 3000);
+}
+
+async function truncateTable(tableName) {
+    if (!confirm(`Are you sure you want to truncate system.${tableName}? This will delete all data in this table.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system/truncate-table/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({table: tableName})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`Truncated system.${tableName}`, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to truncate table', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+async function runCleanup() {
+    const btn = document.getElementById('cleanupBtn');
+    const log = document.getElementById('cleanupLog');
+
+    btn.disabled = true;
+    btn.textContent = 'Running cleanup...';
+    log.style.display = 'block';
+    log.textContent = 'Starting cleanup...\n';
+
+    try {
+        const response = await fetch('/api/system/run-cleanup/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        const data = await response.json();
+
+        if (data.stdout) {
+            log.textContent += data.stdout;
+        }
+        if (data.stderr) {
+            log.textContent += '\nErrors:\n' + data.stderr;
+        }
+
+        if (data.success) {
+            showToast('Cleanup completed successfully', 'success');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast('Cleanup completed with issues', 'error');
+        }
+    } catch (err) {
+        log.textContent += '\nError: ' + err.message;
+        showToast('Cleanup failed: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Disk Cleanup';
+    }
+}
+
+// Auto-refresh disk usage every 30 seconds
+setInterval(async () => {
+    try {
+        const response = await fetch('/api/system/disk-usage/');
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+    } catch (err) {
+        console.error('Failed to refresh disk usage:', err);
+    }
+}, 30000);
+</script>
+{% endblock %}
