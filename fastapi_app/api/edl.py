@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
 
+from fastapi_app.core.auth import get_current_user
 from fastapi_app.db.database import get_db
 from fastapi_app.models.edl import EDLList, EDLEntry, EDLType
 from fastapi_app.schemas.edl import (
@@ -101,6 +102,8 @@ async def edl_list_page(
 
     return templates.TemplateResponse("edl/edl_list.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "lists": lists,
         "total_entries": total_entries,
         "active_lists": active_lists,
@@ -115,6 +118,8 @@ async def edl_create_page(request: Request):
     """Display form to create a new EDL list."""
     return templates.TemplateResponse("edl/edl_form.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "edl": None,
         "edl_types": [e for e in EDLType],
         "is_edit": False,
@@ -137,6 +142,8 @@ async def edl_create(
     if existing.scalar_one_or_none():
         return templates.TemplateResponse("edl/edl_form.html", {
             "request": request,
+            "current_user": getattr(request.state, "current_user", None),
+            "unread_alert_count": 0,
             "edl": None,
             "edl_types": [e for e in EDLType],
             "is_edit": False,
@@ -210,6 +217,8 @@ async def edl_detail_page(
 
     return templates.TemplateResponse("edl/edl_detail.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "edl": edl,
         "entries": entries,
         "search": search or "",
@@ -238,6 +247,8 @@ async def edl_edit_page(
 
     return templates.TemplateResponse("edl/edl_form.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "edl": edl,
         "edl_types": [e for e in EDLType],
         "is_edit": True,
@@ -268,6 +279,8 @@ async def edl_update(
         if existing.scalar_one_or_none():
             return templates.TemplateResponse("edl/edl_form.html", {
                 "request": request,
+                "current_user": getattr(request.state, "current_user", None),
+                "unread_alert_count": 0,
                 "edl": edl,
                 "edl_types": [e for e in EDLType],
                 "is_edit": True,

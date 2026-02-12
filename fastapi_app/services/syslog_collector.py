@@ -234,12 +234,9 @@ PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     """
     Parse raw syslog message.
-    Returns: (facility, severity, message, raw, srcport, dstport, proto,
+    Returns: (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto,
               action, policyname, log_type, application, src_zone, dst_zone,
               session_end_reason, threat_id, parsed_data) or None on error
-
-    Note: srcip and dstip are MATERIALIZED columns in ClickHouse (auto-computed from parsed_data).
-    Other indexed fields are extracted directly for fast queries.
     """
     try:
         decoded = data.decode('utf-8', errors='replace')
@@ -258,7 +255,9 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         parser = get_parser(device_parser)
         parsed_data = parser.parse(message)
 
-        # Note: srcip/dstip are MATERIALIZED in ClickHouse - auto-populated from parsed_data
+        # Extract srcip/dstip for dedicated columns
+        srcip = parsed_data.get('srcip') or parsed_data.get('src_ip', '')
+        dstip = parsed_data.get('dstip') or parsed_data.get('dst_ip', '')
 
         # Extract action field
         action = parsed_data.get('action', '')
@@ -307,7 +306,7 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         # Extract threat ID (Palo Alto specific for THREAT logs)
         threat_id = parsed_data.get('threat_id', '')
 
-        return (facility, severity, message, decoded, srcport, dstport, proto,
+        return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto,
                 action, policyname, log_type, application, src_zone, dst_zone,
                 session_end_reason, threat_id, parsed_data)
     except Exception as e:
@@ -455,15 +454,28 @@ class SyslogCollector:
             self.metrics.log_dropped()
             return
 
-        # Note: srcip/dstip are MATERIALIZED columns - not included in tuple
-        (facility, severity, message, raw, srcport, dstport, proto,
+        (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto,
          action, policyname, log_type, application, src_zone, dst_zone,
          session_end_reason, threat_id, parsed_data) = parsed
         now = datetime.now(timezone.utc)
 
-        # Log entry - srcip/dstip auto-populated from parsed_data (MATERIALIZED)
+        # Real-time IOC matching (< 1ms overhead per log)
+        try:
+            from .ioc_matcher import check_and_record_matches
+            check_and_record_matches(
+                srcip=srcip or "",
+                dstip=dstip or "",
+                log_timestamp=now,
+                device_ip=client_ip,
+                srcport=srcport or 0,
+                dstport=dstport or 0,
+                action=action or "",
+            )
+        except Exception:
+            pass  # Never block the log pipeline
+
         log_entry = (now, client_ip, facility, severity, message, raw,
-                     srcport, dstport, proto, action, policyname,
+                     srcip, dstip, srcport, dstport, proto, action, policyname,
                      log_type, application, src_zone, dst_zone, session_end_reason,
                      threat_id, parsed_data)
 
@@ -522,6 +534,16 @@ class SyslogCollector:
                 f"cache_hit={cache_stats['hit_rate']}"
             )
 
+    async def _ioc_refresh_loop(self):
+        """Background task to refresh IOC matcher cache periodically."""
+        while self._running:
+            try:
+                from .ioc_matcher import refresh_ioc_cache
+                await refresh_ioc_cache()
+            except Exception as e:
+                logger.error(f"IOC cache refresh error: {e}")
+            await asyncio.sleep(300)  # Every 5 minutes
+
     async def start(self):
         """Start the syslog collector."""
         self._running = True
@@ -533,6 +555,14 @@ class SyslogCollector:
             logger.error(f"ClickHouse setup failed: {e}")
             raise
 
+        # Load IOC matcher cache for real-time matching
+        try:
+            from .ioc_matcher import refresh_ioc_cache
+            await refresh_ioc_cache()
+            logger.info("IOC matcher cache loaded for syslog collector")
+        except Exception as e:
+            logger.warning(f"IOC cache initial load warning: {e}")
+
         transport, protocol = await self._loop.create_datagram_endpoint(
             lambda: SyslogProtocol(self),
             local_addr=(self.config.host, self.config.port)
@@ -541,6 +571,7 @@ class SyslogCollector:
 
         self._flush_task = asyncio.create_task(self._flush_loop())
         self._metrics_task = asyncio.create_task(self._metrics_loop())
+        self._ioc_refresh_task = asyncio.create_task(self._ioc_refresh_loop())
 
         logger.info(f"Syslog collector started on {self.config.host}:{self.config.port}")
         logger.info(f"Config: batch_size={self.config.batch_size}, flush_interval={self.config.flush_interval}s, cache_ttl={self.config.device_cache_ttl}s")
@@ -561,6 +592,13 @@ class SyslogCollector:
             self._metrics_task.cancel()
             try:
                 await self._metrics_task
+            except asyncio.CancelledError:
+                pass
+
+        if hasattr(self, '_ioc_refresh_task') and self._ioc_refresh_task:
+            self._ioc_refresh_task.cancel()
+            try:
+                await self._ioc_refresh_task
             except asyncio.CancelledError:
                 pass
 

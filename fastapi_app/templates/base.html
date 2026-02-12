@@ -292,14 +292,41 @@
 <body>
     <nav>
         <a href="/" class="brand">NetLogs</a>
-        <div>
+        <div style="display:flex;align-items:center;">
             <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
             <a href="{{ url_for('log_list') }}" class="nav-link">Logs</a>
             <a href="{{ url_for('policy_builder') }}" class="nav-link">Policy Builder</a>
             <a href="{{ url_for('edl_list') }}" class="nav-link">EDL</a>
             <a href="{{ url_for('project_list') }}" class="nav-link">Projects</a>
+            <a href="{{ url_for('dashboard_list') }}" class="nav-link">Dashboards</a>
             <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
+            {% if current_user and current_user.role in ('ADMIN', 'ANALYST') %}
+            <a href="{{ url_for('threat_intel_feeds') }}" class="nav-link">Threat Intel</a>
+            <a href="{{ url_for('correlation_rules_page') }}" class="nav-link">Correlation</a>
+            {% endif %}
+            {% if current_user and current_user.role in ('ADMIN', 'ANALYST') %}
+            <a href="{{ url_for('alert_dashboard') }}" class="nav-link">Alerts
+                {% if unread_alert_count %}<span class="badge badge-critical" style="margin-left:4px;font-size:0.65rem;padding:1px 6px;">{{ unread_alert_count }}</span>{% endif %}
+            </a>
+            {% endif %}
+            {% if current_user and current_user.role in ('ADMIN', 'ANALYST') %}
             <a href="{{ url_for('system_monitor') }}" class="nav-link">System</a>
+            {% endif %}
+            {% if current_user and current_user.role == 'ADMIN' %}
+            <a href="{{ url_for('user_list') }}" class="nav-link">Users</a>
+            {% endif %}
+            {% if current_user %}
+            <a href="{{ url_for('api_keys_page') }}" class="nav-link">API Keys</a>
+            {% endif %}
+            <span style="margin-left:1.5rem;border-left:1px solid var(--border);padding-left:1.25rem;display:flex;align-items:center;gap:0.75rem;">
+                <span style="font-size:0.8rem;color:var(--text-muted);">
+                    {% if current_user %}
+                    <span style="color:white;font-weight:500;">{{ current_user.username }}</span>
+                    <span class="badge" style="margin-left:0.375rem;background:rgba(59,130,246,0.1);color:var(--primary);border:1px solid rgba(59,130,246,0.2);font-size:0.6rem;">{{ current_user.role }}</span>
+                    {% endif %}
+                </span>
+                <a href="{{ url_for('logout') }}" class="nav-link" style="margin-left:0;font-size:0.85rem;color:var(--text-muted);">Logout</a>
+            </span>
         </div>
     </nav>
     <div class="container">
@@ -310,6 +337,7 @@
         {% endif %}
         {% block content %}{% endblock %}
     </div>
+    {% block extra_js %}{% endblock %}
 </body>
 
 </html>

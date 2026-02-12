@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+
+{% block title %}Correlation Rules{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .page-header h2 { margin: 0; }
+    .tab-nav { display: flex; gap: 0; margin-bottom: 1.5rem; }
+    .tab-nav a {
+        padding: 0.5rem 1.25rem; border: 1px solid var(--border); color: var(--text-muted);
+        text-decoration: none; font-size: 0.85rem; transition: all 0.2s; cursor: pointer;
+    }
+    .tab-nav a:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+    .tab-nav a:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+    .tab-nav a.active { background: var(--primary); color: white; border-color: var(--primary); }
+    .tab-nav a:hover:not(.active) { color: white; background: rgba(255,255,255,0.05); }
+
+    .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .summary-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; }
+    .summary-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .summary-card .value { font-size: 1.75rem; font-weight: 700; color: white; margin-top: 0.25rem; }
+    .summary-card .sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 0.75rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    tr:hover td { background: rgba(59,130,246,0.03); }
+
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; font-weight: 600; }
+    .badge-critical { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-high { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-medium { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-low { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .badge-success { background: rgba(34,197,94,0.1); color: #22c55e; }
+    .badge-muted { background: rgba(148,163,184,0.1); color: #94a3b8; }
+
+    .btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.5rem; }
+    .status-dot.active { background: #22c55e; }
+    .status-dot.inactive { background: #94a3b8; }
+
+    .stage-chain { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .stage-pill { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd; padding: 0.2rem 0.6rem; border-radius: 0.375rem; font-size: 0.7rem; }
+    .stage-arrow { color: var(--text-muted); font-size: 0.75rem; }
+    .mitre-tag { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.2); color: #c084fc; padding: 0.15rem 0.5rem; border-radius: 0.375rem; font-size: 0.65rem; }
+
+    .card-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .card-section h3 { margin-top: 0; font-size: 1rem; margin-bottom: 1rem; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; }
+    .modal h3 { margin-top: 0; margin-bottom: 1rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.375rem; }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border);
+        border-radius: 0.375rem; color: var(--text-color); font-size: 0.85rem;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.85rem; z-index: 200; display: none; }
+    .toast.show { display: block; }
+    .toast-success { background: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .toast-error { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+
+    .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
+    .empty-state p { margin: 0.5rem 0; }
+
+    @media (max-width: 768px) {
+        .summary-row { grid-template-columns: repeat(2, 1fr); }
+        .form-row { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h2>Correlation Engine</h2>
+        <div style="display:flex;gap:0.5rem;">
+            <a href="{{ url_for('mitre_attack_map') }}" class="btn btn-outline">MITRE ATT&CK Map</a>
+            {% if current_user and current_user.role == 'ADMIN' %}
+            <button class="btn btn-primary" onclick="showAddRuleModal()">+ Add Rule</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+        <a class="active" onclick="showTab('rules')">Rules</a>
+        <a onclick="showTab('matches')">Recent Matches</a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-row">
+        <div class="summary-card">
+            <div class="label">Total Rules</div>
+            <div class="value">{{ rules|length }}</div>
+            <div class="sub">{{ rules|selectattr('is_enabled')|list|length }} active</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Matches</div>
+            <div class="value">{{ match_stats.total }}</div>
+            <div class="sub">{{ match_stats.today }} today</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Critical</div>
+            <div class="value" style="color: #ef4444;">{{ match_stats.critical }}</div>
+            <div class="sub">critical severity matches</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">High</div>
+            <div class="value" style="color: #f59e0b;">{{ match_stats.high }}</div>
+            <div class="sub">high severity matches</div>
+        </div>
+    </div>
+
+    <!-- Rules Tab -->
+    <div id="tab-rules" class="card-section">
+        <h3>Correlation Rules</h3>
+        {% if rules %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>Severity</th>
+                    <th>Stages</th>
+                    <th>MITRE</th>
+                    <th>Triggers</th>
+                    <th>Last Evaluated</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in rules %}
+                <tr>
+                    <td>
+                        <span class="status-dot {{ 'active' if rule.is_enabled else 'inactive' }}"></span>
+                        {{ 'Enabled' if rule.is_enabled else 'Disabled' }}
+                    </td>
+                    <td>
+                        <div style="font-weight:500;">{{ rule.name }}</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">{{ rule.description[:80] }}{{ '...' if rule.description|length > 80 else '' }}</div>
+                    </td>
+                    <td><span class="badge badge-{{ rule.severity }}">{{ rule.severity }}</span></td>
+                    <td>
+                        <div class="stage-chain">
+                            {% for stage in rule.stages %}
+                            {% if not loop.first %}<span class="stage-arrow">&#8594;</span>{% endif %}
+                            <span class="stage-pill">{{ stage.name }}</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if rule.mitre_tactic %}
+                        <span class="mitre-tag">{{ rule.mitre_tactic }}</span>
+                        {% endif %}
+                        {% if rule.mitre_technique %}
+                        <span class="mitre-tag" style="margin-top:0.25rem;display:inline-block;">{{ rule.mitre_technique }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-weight:600;">{{ rule.trigger_count or 0 }}</span>
+                        {% if rule.last_triggered_at %}
+                        <div style="font-size:0.7rem;color:var(--text-muted);">{{ rule.last_triggered_at.strftime('%Y-%m-%d %H:%M') if rule.last_triggered_at else 'Never' }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if rule.last_evaluated_at %}
+                        <span style="font-size:0.8rem;">{{ rule.last_evaluated_at.strftime('%H:%M:%S') }}</span>
+                        {% else %}
+                        <span style="color:var(--text-muted);">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:0.375rem;">
+                            <button class="btn btn-sm btn-outline" onclick="toggleRule({{ rule.id }})">
+                                {{ 'Disable' if rule.is_enabled else 'Enable' }}
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="showRuleDetail({{ rule.id }})">Detail</button>
+                            {% if current_user and current_user.role == 'ADMIN' %}
+                            <button class="btn btn-sm btn-danger" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <p style="font-size:1.5rem;">No correlation rules</p>
+            <p>Create multi-stage correlation rules to detect complex attack patterns.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Matches Tab -->
+    <div id="tab-matches" class="card-section" style="display:none;">
+        <h3>Recent Correlation Matches</h3>
+        {% if recent_matches %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Rule</th>
+                    <th>Severity</th>
+                    <th>Key Value</th>
+                    <th>Stages</th>
+                    <th>Events</th>
+                    <th>MITRE</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in recent_matches %}
+                <tr>
+                    <td style="font-size:0.8rem;white-space:nowrap;">{{ m.timestamp }}</td>
+                    <td style="font-weight:500;">{{ m.rule_name }}</td>
+                    <td><span class="badge badge-{{ m.severity }}">{{ m.severity }}</span></td>
+                    <td>
+                        {% if m.key_value %}
+                        <code style="background:rgba(59,130,246,0.1);padding:0.15rem 0.4rem;border-radius:0.25rem;font-size:0.8rem;">{{ m.key_value }}</code>
+                        {% endif %}
+                    </td>
+                    <td>{{ m.stages_matched }}/{{ m.total_stages }}</td>
+                    <td>{{ m.total_events }}</td>
+                    <td>
+                        {% if m.mitre_tactic %}<span class="mitre-tag">{{ m.mitre_tactic }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <p style="font-size:1.5rem;">No matches yet</p>
+            <p>Correlation matches will appear here when rules detect attack patterns.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Rule Detail Modal -->
+<div id="ruleDetailModal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="detailRuleName">Rule Detail</h3>
+        <div id="detailContent"></div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal('ruleDetailModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div id="addRuleModal" class="modal-overlay">
+    <div class="modal">
+        <h3>Add Correlation Rule</h3>
+        <form id="addRuleForm" onsubmit="return submitAddRule(event)">
+            <div class="form-group">
+                <label>Rule Name</label>
+                <input type="text" id="ruleName" required placeholder="e.g., Scan then Exploit">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="ruleDesc" rows="2" placeholder="Describe what this rule detects..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Severity</label>
+                    <select id="ruleSeverity">
+                        <option value="critical">Critical</option>
+                        <option value="high" selected>High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Enabled</label>
+                    <select id="ruleEnabled">
+                        <option value="true" selected>Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>MITRE Tactic</label>
+                    <input type="text" id="ruleMitreTactic" placeholder="e.g., Initial Access">
+                </div>
+                <div class="form-group">
+                    <label>MITRE Technique</label>
+                    <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1190">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Stages (JSON array)</label>
+                <textarea id="ruleStages" rows="8" required placeholder='[
+  {"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300},
+  {"name": "Stage 2", "filter": {"action": "allow", "srcip": "$stage1.srcip"}, "threshold": 1, "window": 600}
+]'></textarea>
+                <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem;">
+                    Each stage: name, filter (field conditions), threshold (min events), window (seconds).
+                    Use <code>$stage1.field</code> for variable substitution between stages.
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addRuleModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Rule</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Rules data loaded via API when needed
+
+function showTab(tab) {
+    document.getElementById('tab-rules').style.display = tab === 'rules' ? 'block' : 'none';
+    document.getElementById('tab-matches').style.display = tab === 'matches' ? 'block' : 'none';
+    document.querySelectorAll('.tab-nav a').forEach((a, i) => {
+        a.classList.toggle('active', (i === 0 && tab === 'rules') || (i === 1 && tab === 'matches'));
+    });
+}
+
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show toast-' + type;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+function showAddRuleModal() {
+    document.getElementById('addRuleForm').reset();
+    document.getElementById('addRuleModal').classList.add('active');
+}
+
+async function submitAddRule(e) {
+    e.preventDefault();
+    let stages;
+    try {
+        stages = JSON.parse(document.getElementById('ruleStages').value);
+    } catch (err) {
+        showToast('Invalid JSON in stages: ' + err.message, 'error');
+        return false;
+    }
+    const data = {
+        name: document.getElementById('ruleName').value,
+        description: document.getElementById('ruleDesc').value,
+        severity: document.getElementById('ruleSeverity').value,
+        is_enabled: document.getElementById('ruleEnabled').value === 'true',
+        mitre_tactic: document.getElementById('ruleMitreTactic').value || null,
+        mitre_technique: document.getElementById('ruleMitreTechnique').value || null,
+        stages: stages,
+    };
+    try {
+        const res = await fetch('/api/correlation/rules/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (res.ok) {
+            showToast('Rule created successfully', 'success');
+            closeModal('addRuleModal');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(result.detail || 'Failed to create rule', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+    return false;
+}
+
+async function toggleRule(ruleId) {
+    try {
+        const res = await fetch(`/api/correlation/rules/${ruleId}/toggle`, { method: 'POST' });
+        if (res.ok) {
+            showToast('Rule toggled', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast('Failed to toggle rule', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+async function deleteRule(ruleId, name) {
+    if (!confirm(`Delete correlation rule "${name}"?`)) return;
+    try {
+        const res = await fetch(`/api/correlation/rules/${ruleId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showToast('Rule deleted', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast('Failed to delete rule', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+function showRuleDetail(ruleId) {
+    fetch(`/api/correlation/rules/`)
+        .then(r => r.json())
+        .then(rules => {
+            const rule = rules.find(r => r.id === ruleId);
+            if (!rule) return;
+            document.getElementById('detailRuleName').textContent = rule.name;
+            let html = `
+                <div style="margin-bottom:1rem;">
+                    <span class="badge badge-${rule.severity}">${rule.severity}</span>
+                    <span style="margin-left:0.5rem;font-size:0.85rem;color:var(--text-muted);">${rule.is_enabled ? 'Enabled' : 'Disabled'}</span>
+                </div>
+                <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;">${rule.description || 'No description'}</p>
+            `;
+            if (rule.mitre_tactic || rule.mitre_technique) {
+                html += `<div style="margin-bottom:1rem;">`;
+                if (rule.mitre_tactic) html += `<span class="mitre-tag">${rule.mitre_tactic}</span> `;
+                if (rule.mitre_technique) html += `<span class="mitre-tag">${rule.mitre_technique}</span>`;
+                html += `</div>`;
+            }
+            html += `<h4 style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">STAGES</h4>`;
+            rule.stages.forEach((stage, i) => {
+                html += `
+                    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:0.5rem;padding:1rem;margin-bottom:0.75rem;">
+                        <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.5rem;">
+                            Stage ${i + 1}: ${stage.name}
+                        </div>
+                        <div style="font-size:0.8rem;color:var(--text-muted);">
+                            <div><strong>Filter:</strong> ${JSON.stringify(stage.filter || {})}</div>
+                            <div><strong>Threshold:</strong> ${stage.threshold || 1} events</div>
+                            <div><strong>Window:</strong> ${stage.window || 300}s</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += `
+                <div style="margin-top:1rem;font-size:0.8rem;color:var(--text-muted);">
+                    <div>Trigger count: <strong>${rule.trigger_count}</strong></div>
+                    <div>Last evaluated: ${rule.last_evaluated_at || 'Never'}</div>
+                    <div>Last triggered: ${rule.last_triggered_at || 'Never'}</div>
+                </div>
+            `;
+            document.getElementById('detailContent').innerHTML = html;
+            document.getElementById('ruleDetailModal').classList.add('active');
+        });
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
+    });
+});
+</script>
+{% endblock %}

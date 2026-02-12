@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .alert-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .alert-header .tabs { display: flex; gap: 0.5rem; }
+    .alert-header .tabs a { padding: 0.4rem 1rem; border-radius: 0.375rem; font-size: 0.85rem; text-decoration: none; color: var(--text-muted); border: 1px solid var(--border); }
+    .alert-header .tabs a.active, .alert-header .tabs a:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+    .rule-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .rule-card:hover { border-color: rgba(59,130,246,0.3); }
+    .rule-info { flex: 1; }
+    .rule-name { color: white; font-weight: 600; font-size: 0.95rem; }
+    .rule-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+    .rule-actions { display: flex; gap: 0.375rem; align-items: center; }
+
+    .toggle-btn { width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s; }
+    .toggle-btn.on { background: var(--success); }
+    .toggle-btn.off { background: var(--border); }
+    .toggle-btn::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform 0.2s; }
+    .toggle-btn.on::after { transform: translateX(20px); }
+
+    .sev-badge { display: inline-flex; padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; }
+    .sev-critical { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+    .sev-high { background: rgba(249,115,22,0.1); color: #f97316; border: 1px solid rgba(249,115,22,0.2); }
+    .sev-medium { background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); }
+    .sev-low { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
+    .sev-info { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+
+    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.7rem; border-radius: 0.25rem; cursor: pointer; border: none; font-weight: 500; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { background: rgba(255,255,255,0.05); color: white; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 5vh; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; width: 100%; max-width: 640px; max-height: 80vh; overflow-y: auto; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.375rem; font-size: 0.875rem; color: var(--text-muted); }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border); border-radius: 0.375rem; color: white; font-size: 0.875rem; }
+    .form-group textarea { min-height: 60px; font-family: monospace; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.875rem; z-index: 200; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: var(--success); }
+    .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="alert-header">
+    <h2>Alert Rules</h2>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+        <div class="tabs">
+            <a href="{{ url_for('alert_dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('alert_rules_page') }}" class="active">Rules</a>
+            <a href="{{ url_for('notification_channels_page') }}">Channels</a>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateRule()">+ New Rule</button>
+    </div>
+</div>
+
+{% for rule in rules %}
+<div class="rule-card" id="rule-{{ rule.id }}">
+    <div class="rule-info">
+        <div class="rule-name">{{ rule.name }}</div>
+        <div class="rule-meta">
+            <span class="sev-badge sev-{{ rule.severity }}">{{ rule.severity }}</span>
+            <span>Type: {{ rule.condition_type }}</span>
+            {% if rule.category %}<span>Category: {{ rule.category }}</span>{% endif %}
+            <span>Cooldown: {{ rule.cooldown_minutes }}m</span>
+            <span>Triggered: {{ trigger_counts.get(rule.id, 0) }}x</span>
+            {% if rule.last_triggered_at %}
+            <span>Last: {{ rule.last_triggered_at.strftime('%m/%d %H:%M') }}</span>
+            {% endif %}
+        </div>
+        {% if rule.description %}
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.375rem;">{{ rule.description[:120] }}</div>
+        {% endif %}
+    </div>
+    <div class="rule-actions">
+        <button class="toggle-btn {{ 'on' if rule.is_enabled else 'off' }}" onclick="toggleRule({{ rule.id }}, this)" title="{{ 'Enabled' if rule.is_enabled else 'Disabled' }}"></button>
+        <button class="btn-xs btn-outline" onclick="testRule({{ rule.id }})">Test</button>
+        <button class="btn-xs btn-outline" onclick="editRule({{ rule.id }})">Edit</button>
+        <button class="btn-xs btn-outline" style="color:var(--danger);" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
+    </div>
+</div>
+{% endfor %}
+
+{% if not rules %}
+<div class="card" style="text-align:center;padding:3rem;color:var(--text-muted);">
+    No alert rules configured. Click "+ New Rule" to create one.
+</div>
+{% endif %}
+
+<!-- Create/Edit Rule Modal -->
+<div class="modal-overlay" id="ruleModal">
+    <div class="modal">
+        <h3 id="ruleModalTitle">Create Alert Rule</h3>
+        <input type="hidden" id="ruleId">
+        <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="ruleName" placeholder="e.g., Brute Force Detection">
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="ruleDescription" placeholder="Optional description">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Severity</label>
+                <select id="ruleSeverity">
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="low">Low</option>
+                    <option value="info">Info</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <input type="text" id="ruleCategory" placeholder="e.g., brute_force">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Condition Type</label>
+                <select id="ruleConditionType">
+                    <option value="threshold">Threshold</option>
+                    <option value="pattern">Pattern</option>
+                    <option value="absence">Absence</option>
+                    <option value="anomaly">Anomaly</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Cooldown (minutes)</label>
+                <input type="number" id="ruleCooldown" value="15" min="1">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Condition Config (JSON)</label>
+            <textarea id="ruleConfig" placeholder='{"field":"action","value":"deny","threshold":100,"window_minutes":5,"group_by":"srcip"}'></textarea>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>MITRE Tactic</label>
+                <input type="text" id="ruleMitreTactic" placeholder="e.g., Initial Access">
+            </div>
+            <div class="form-group">
+                <label>MITRE Technique</label>
+                <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1110">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="document.getElementById('ruleModal').classList.remove('active')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+        </div>
+    </div>
+</div>
+
+<!-- Test Result Modal -->
+<div class="modal-overlay" id="testModal">
+    <div class="modal">
+        <h3>Rule Test Result</h3>
+        <div id="testResult"></div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="document.getElementById('testModal').classList.remove('active')">Close</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.className = `toast toast-${type} show`;
+    t.textContent = msg;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function openCreateRule() {
+    document.getElementById('ruleModalTitle').textContent = 'Create Alert Rule';
+    document.getElementById('ruleId').value = '';
+    document.getElementById('ruleName').value = '';
+    document.getElementById('ruleDescription').value = '';
+    document.getElementById('ruleSeverity').value = 'medium';
+    document.getElementById('ruleCategory').value = '';
+    document.getElementById('ruleConditionType').value = 'threshold';
+    document.getElementById('ruleCooldown').value = '15';
+    document.getElementById('ruleConfig').value = '';
+    document.getElementById('ruleMitreTactic').value = '';
+    document.getElementById('ruleMitreTechnique').value = '';
+    document.getElementById('ruleModal').classList.add('active');
+}
+
+async function editRule(id) {
+    const res = await fetch('/api/alert-rules/');
+    const data = await res.json();
+    const rule = data.rules.find(r => r.id === id);
+    if (!rule) return;
+
+    document.getElementById('ruleModalTitle').textContent = 'Edit Rule: ' + rule.name;
+    document.getElementById('ruleId').value = rule.id;
+    document.getElementById('ruleName').value = rule.name;
+    document.getElementById('ruleDescription').value = rule.description || '';
+    document.getElementById('ruleSeverity').value = rule.severity;
+    document.getElementById('ruleCategory').value = rule.category || '';
+    document.getElementById('ruleConditionType').value = rule.condition_type;
+    document.getElementById('ruleCooldown').value = rule.cooldown_minutes;
+    document.getElementById('ruleConfig').value = JSON.stringify(rule.condition_config, null, 2);
+    document.getElementById('ruleMitreTactic').value = rule.mitre_tactic || '';
+    document.getElementById('ruleMitreTechnique').value = rule.mitre_technique || '';
+    document.getElementById('ruleModal').classList.add('active');
+}
+
+async function saveRule() {
+    const id = document.getElementById('ruleId').value;
+    const name = document.getElementById('ruleName').value.trim();
+    if (!name) { showToast('Name is required', 'error'); return; }
+
+    let config;
+    try { config = JSON.parse(document.getElementById('ruleConfig').value || '{}'); }
+    catch(e) { showToast('Invalid JSON in config', 'error'); return; }
+
+    const body = {
+        name,
+        description: document.getElementById('ruleDescription').value,
+        severity: document.getElementById('ruleSeverity').value,
+        category: document.getElementById('ruleCategory').value,
+        condition_type: document.getElementById('ruleConditionType').value,
+        condition_config: config,
+        cooldown_minutes: parseInt(document.getElementById('ruleCooldown').value) || 15,
+        mitre_tactic: document.getElementById('ruleMitreTactic').value,
+        mitre_technique: document.getElementById('ruleMitreTechnique').value,
+    };
+
+    const url = id ? `/api/alert-rules/${id}` : '/api/alert-rules/';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success) { showToast(data.message); document.getElementById('ruleModal').classList.remove('active'); setTimeout(() => location.reload(), 500); }
+    else showToast(data.error, 'error');
+}
+
+async function toggleRule(id, btn) {
+    const res = await fetch(`/api/alert-rules/${id}/toggle`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+        btn.className = `toggle-btn ${data.is_enabled ? 'on' : 'off'}`;
+        showToast(data.message);
+    } else showToast(data.error, 'error');
+}
+
+async function testRule(id) {
+    document.getElementById('testResult').innerHTML = '<span style="color:var(--text-muted);">Running test...</span>';
+    document.getElementById('testModal').classList.add('active');
+
+    const res = await fetch(`/api/alert-rules/${id}/test`, { method: 'POST' });
+    const data = await res.json();
+
+    let html = '';
+    if (data.success) {
+        html += `<div style="margin-bottom:1rem;font-size:0.9rem;">Rule: <strong>${data.rule_name}</strong> (${data.severity})</div>`;
+        html += `<div style="margin-bottom:1rem;font-size:0.9rem;">Would trigger: <strong style="color:${data.would_trigger ? 'var(--danger)' : 'var(--success)'}">${data.would_trigger ? 'YES' : 'NO'}</strong></div>`;
+        if (data.details && Object.keys(data.details).length) {
+            html += `<div style="background:var(--input-bg);padding:0.75rem;border-radius:0.375rem;font-family:monospace;font-size:0.75rem;white-space:pre-wrap;">${JSON.stringify(data.details, null, 2)}</div>`;
+        }
+    } else {
+        html = `<span style="color:var(--danger);">${data.error}</span>`;
+    }
+    document.getElementById('testResult').innerHTML = html;
+}
+
+async function deleteRule(id, name) {
+    if (!confirm(`Delete rule "${name}"? This will also delete all associated alerts.`)) return;
+    const res = await fetch(`/api/alert-rules/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast(data.message); document.getElementById(`rule-${id}`).remove(); }
+    else showToast(data.error, 'error');
+}
+</script>
+{% endblock %}

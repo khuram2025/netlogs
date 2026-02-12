@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .key-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; }
+    .key-card .key-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .key-card .key-name { font-weight: 600; font-size: 0.95rem; }
+    .key-card .key-prefix { font-family: monospace; background: rgba(255,255,255,0.05); padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.8rem; color: var(--primary); }
+    .key-card .key-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 1rem; flex-wrap: wrap; }
+    .key-card .key-actions { display: flex; gap: 0.5rem; }
+
+    .perm-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    .perm-read { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .perm-write { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .perm-admin { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.25rem; }
+    .status-active { background: #22c55e; }
+    .status-inactive { background: #6b7280; }
+    .status-expired { background: #ef4444; }
+
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 0.25rem; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-muted); }
+    .btn-sm:hover { background: rgba(255,255,255,0.05); color: white; }
+    .btn-sm.btn-danger { border-color: rgba(239,68,68,0.3); color: #ef4444; }
+    .btn-sm.btn-danger:hover { background: rgba(239,68,68,0.1); }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; width: 90%; max-width: 500px; }
+    .modal h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+    .modal label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal input, .modal select { width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border); color: white; border-radius: 0.375rem; font-size: 0.85rem; box-sizing: border-box; }
+    .modal .btn-row { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .modal .checkbox-group { display: flex; gap: 1rem; margin-top: 0.25rem; }
+    .modal .checkbox-group label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; color: white; margin: 0; }
+    .modal .checkbox-group input[type="checkbox"] { width: auto; }
+
+    .key-reveal { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 0.5rem; padding: 1rem; margin-top: 1rem; }
+    .key-reveal .key-value { font-family: monospace; font-size: 0.85rem; word-break: break-all; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 0.25rem; margin: 0.5rem 0; color: #22c55e; }
+    .key-reveal .warning { font-size: 0.75rem; color: #f59e0b; }
+
+    .btn-copy { padding: 0.25rem 0.75rem; font-size: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.25rem; cursor: pointer; }
+    .btn-copy:hover { opacity: 0.8; }
+
+    .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
+    .empty-state p { margin-bottom: 1rem; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.85rem; z-index: 2000; animation: fadeIn 0.3s; }
+    .toast-success { background: rgba(34,197,94,0.9); color: white; }
+    .toast-error { background: rgba(239,68,68,0.9); color: white; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .owner-badge { font-size: 0.7rem; background: rgba(139,92,246,0.15); color: #8b5cf6; padding: 0.1rem 0.4rem; border-radius: 0.25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>API Keys</h2>
+    <button class="btn btn-primary" onclick="showCreateModal()" style="padding:0.4rem 1rem;font-size:0.85rem;">Create API Key</button>
+</div>
+
+<div class="card" style="padding:1rem;">
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem;">
+        API keys allow programmatic access to the NetLogs API. Use the <code>X-API-Key</code> header or <code>?api_key=</code> query parameter.
+        Rate limit: 100 requests/minute per key.
+    </p>
+
+    <div id="keysList">
+        {% for item in keys %}
+        <div class="key-card" id="key-{{ item.key.id }}">
+            <div class="key-header">
+                <div>
+                    <span class="key-name">{{ item.key.name }}</span>
+                    <span class="key-prefix">{{ item.key.key_prefix }}...</span>
+                    {% if current_user.role == 'ADMIN' and item.owner != current_user.username %}
+                    <span class="owner-badge">{{ item.owner }}</span>
+                    {% endif %}
+                </div>
+                <div class="key-actions">
+                    <button class="btn-sm" onclick="editKey({{ item.key.id }}, '{{ item.key.name }}', {{ item.key.permissions | tojson }}, {{ item.key.is_active | tojson }})">Edit</button>
+                    <button class="btn-sm btn-danger" onclick="deleteKey({{ item.key.id }}, '{{ item.key.name }}')">Revoke</button>
+                </div>
+            </div>
+            <div class="key-meta">
+                <span>
+                    {% if item.key.is_expired %}
+                    <span class="status-dot status-expired"></span>Expired
+                    {% elif item.key.is_active %}
+                    <span class="status-dot status-active"></span>Active
+                    {% else %}
+                    <span class="status-dot status-inactive"></span>Inactive
+                    {% endif %}
+                </span>
+                <span>Permissions:
+                    {% for p in (item.key.permissions or ['read']) %}
+                    <span class="perm-badge perm-{{ p }}">{{ p }}</span>
+                    {% endfor %}
+                </span>
+                <span>Created: {{ item.key.created_at.strftime('%Y-%m-%d') if item.key.created_at else 'N/A' }}</span>
+                <span>Last used: {{ item.key.last_used_at.strftime('%Y-%m-%d %H:%M') if item.key.last_used_at else 'Never' }}</span>
+                {% if item.key.expires_at %}
+                <span>Expires: {{ item.key.expires_at.strftime('%Y-%m-%d') }}</span>
+                {% else %}
+                <span>No expiration</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not keys %}
+        <div class="empty-state">
+            <p>No API keys yet.</p>
+            <button class="btn btn-primary" onclick="showCreateModal()" style="padding:0.4rem 1rem;font-size:0.85rem;">Create Your First API Key</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- New key reveal area -->
+<div id="newKeyReveal" class="key-reveal" style="display:none;">
+    <strong>New API Key Created</strong>
+    <div class="key-value" id="newKeyValue"></div>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button class="btn-copy" onclick="copyKey()">Copy to Clipboard</button>
+        <span class="warning">Save this key now! It will not be shown again.</span>
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal-backdrop" id="createModal">
+    <div class="modal">
+        <h3>Create API Key</h3>
+        <label>Name</label>
+        <input type="text" id="createName" placeholder="e.g. CI/CD Pipeline, SIEM Integration">
+        <label>Permissions</label>
+        <div class="checkbox-group">
+            <label><input type="checkbox" id="permRead" checked> Read</label>
+            <label><input type="checkbox" id="permWrite"> Write</label>
+            {% if current_user and current_user.role == 'ADMIN' %}
+            <label><input type="checkbox" id="permAdmin"> Admin</label>
+            {% endif %}
+        </div>
+        <label>Expiration (days, 0 = never)</label>
+        <input type="number" id="createExpiry" value="0" min="0" max="365">
+        <div class="btn-row">
+            <button class="btn-sm" onclick="closeModal('createModal')">Cancel</button>
+            <button class="btn btn-primary" style="padding:0.35rem 1rem;font-size:0.85rem;" onclick="createKey()">Create Key</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-backdrop" id="editModal">
+    <div class="modal">
+        <h3>Edit API Key</h3>
+        <input type="hidden" id="editKeyId">
+        <label>Name</label>
+        <input type="text" id="editName">
+        <label>Permissions</label>
+        <div class="checkbox-group">
+            <label><input type="checkbox" id="editPermRead"> Read</label>
+            <label><input type="checkbox" id="editPermWrite"> Write</label>
+            {% if current_user and current_user.role == 'ADMIN' %}
+            <label><input type="checkbox" id="editPermAdmin"> Admin</label>
+            {% endif %}
+        </div>
+        <label>Status</label>
+        <select id="editActive">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+        </select>
+        <div class="btn-row">
+            <button class="btn-sm" onclick="closeModal('editModal')">Cancel</button>
+            <button class="btn btn-primary" style="padding:0.35rem 1rem;font-size:0.85rem;" onclick="saveKey()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showCreateModal() {
+    document.getElementById('createName').value = '';
+    document.getElementById('permRead').checked = true;
+    document.getElementById('permWrite').checked = false;
+    const pa = document.getElementById('permAdmin');
+    if (pa) pa.checked = false;
+    document.getElementById('createExpiry').value = '0';
+    document.getElementById('createModal').classList.add('active');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+function toast(msg, type='success') {
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+
+async function createKey() {
+    const name = document.getElementById('createName').value.trim();
+    if (!name) { toast('Name is required', 'error'); return; }
+
+    const perms = [];
+    if (document.getElementById('permRead').checked) perms.push('read');
+    if (document.getElementById('permWrite').checked) perms.push('write');
+    const pa = document.getElementById('permAdmin');
+    if (pa && pa.checked) perms.push('admin');
+    if (perms.length === 0) { toast('Select at least one permission', 'error'); return; }
+
+    const expiry = parseInt(document.getElementById('createExpiry').value) || 0;
+
+    try {
+        const resp = await fetch('/api/keys/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, permissions: perms, expires_in_days: expiry })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeModal('createModal');
+            // Show the key
+            document.getElementById('newKeyValue').textContent = data.key;
+            document.getElementById('newKeyReveal').style.display = 'block';
+            toast('API key created!');
+            setTimeout(() => location.reload(), 5000);
+        } else {
+            toast(data.error || 'Failed to create key', 'error');
+        }
+    } catch (e) {
+        toast('Error creating key', 'error');
+    }
+}
+
+function copyKey() {
+    const keyText = document.getElementById('newKeyValue').textContent;
+    navigator.clipboard.writeText(keyText).then(() => toast('Key copied!')).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = keyText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        toast('Key copied!');
+    });
+}
+
+function editKey(id, name, permissions, isActive) {
+    document.getElementById('editKeyId').value = id;
+    document.getElementById('editName').value = name;
+    document.getElementById('editPermRead').checked = permissions.includes('read');
+    document.getElementById('editPermWrite').checked = permissions.includes('write');
+    const pa = document.getElementById('editPermAdmin');
+    if (pa) pa.checked = permissions.includes('admin');
+    document.getElementById('editActive').value = isActive ? 'true' : 'false';
+    document.getElementById('editModal').classList.add('active');
+}
+
+async function saveKey() {
+    const id = document.getElementById('editKeyId').value;
+    const name = document.getElementById('editName').value.trim();
+    const perms = [];
+    if (document.getElementById('editPermRead').checked) perms.push('read');
+    if (document.getElementById('editPermWrite').checked) perms.push('write');
+    const pa = document.getElementById('editPermAdmin');
+    if (pa && pa.checked) perms.push('admin');
+    const isActive = document.getElementById('editActive').value === 'true';
+
+    try {
+        const resp = await fetch(`/api/keys/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, permissions: perms, is_active: isActive })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeModal('editModal');
+            toast('API key updated');
+            location.reload();
+        } else {
+            toast(data.error || 'Failed to update key', 'error');
+        }
+    } catch (e) {
+        toast('Error updating key', 'error');
+    }
+}
+
+async function deleteKey(id, name) {
+    if (!confirm(`Revoke API key "${name}"? This action cannot be undone.`)) return;
+
+    try {
+        const resp = await fetch(`/api/keys/${id}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('key-' + id)?.remove();
+            toast('API key revoked');
+        } else {
+            toast(data.error || 'Failed to revoke key', 'error');
+        }
+    } catch (e) {
+        toast('Error revoking key', 'error');
+    }
+}
+</script>
+{% endblock %}

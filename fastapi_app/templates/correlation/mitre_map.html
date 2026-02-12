@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}MITRE ATT&CK Matrix{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .page-header h2 { margin: 0; }
+
+    .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .summary-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; }
+    .summary-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .summary-card .value { font-size: 1.75rem; font-weight: 700; color: white; margin-top: 0.25rem; }
+    .summary-card .sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    .matrix-container { overflow-x: auto; padding-bottom: 1rem; }
+
+    .mitre-matrix {
+        display: grid;
+        grid-template-columns: repeat({{ tactic_stats|length }}, minmax(140px, 1fr));
+        gap: 0.5rem;
+        min-width: {{ tactic_stats|length * 150 }}px;
+    }
+
+    .tactic-column { display: flex; flex-direction: column; gap: 0.375rem; }
+
+    .tactic-header {
+        background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.5rem;
+        padding: 0.75rem 0.5rem; text-align: center; position: sticky; top: 0; z-index: 5;
+    }
+    .tactic-header .tactic-name { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: white; }
+    .tactic-header .tactic-coverage { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .tactic-header .coverage-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 0.375rem; overflow: hidden; }
+    .tactic-header .coverage-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+
+    .technique-cell {
+        border-radius: 0.375rem; padding: 0.5rem; font-size: 0.7rem; cursor: pointer;
+        transition: all 0.2s; border: 1px solid transparent; min-height: 44px;
+        display: flex; flex-direction: column; justify-content: center;
+    }
+    .technique-cell:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .technique-cell .tech-id { font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-bottom: 0.125rem; }
+    .technique-cell .tech-name { font-weight: 500; line-height: 1.3; }
+    .technique-cell .tech-rules { font-size: 0.6rem; margin-top: 0.25rem; opacity: 0.7; }
+
+    /* Color coding */
+    .technique-cell.covered {
+        background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); color: #86efac;
+    }
+    .technique-cell.detectable-not-covered {
+        background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); color: #fcd34d;
+    }
+    .technique-cell.not-detectable {
+        background: rgba(148,163,184,0.05); border-color: rgba(148,163,184,0.1); color: #64748b;
+    }
+
+    /* Legend */
+    .legend { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-muted); }
+    .legend-swatch { width: 16px; height: 16px; border-radius: 0.25rem; }
+    .legend-swatch.covered { background: rgba(34,197,94,0.3); border: 1px solid rgba(34,197,94,0.5); }
+    .legend-swatch.gap { background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.4); }
+    .legend-swatch.na { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); }
+
+    /* Tactic detail bar */
+    .tactic-detail-bar { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .tactic-stat {
+        background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.5rem;
+        padding: 0.75rem; display: flex; align-items: center; gap: 0.75rem;
+    }
+    .tactic-pct { font-size: 1.2rem; font-weight: 700; min-width: 48px; text-align: center; }
+    .tactic-pct.high { color: #22c55e; }
+    .tactic-pct.medium { color: #f59e0b; }
+    .tactic-pct.low { color: #ef4444; }
+    .tactic-pct.zero { color: #64748b; }
+    .tactic-stat .info .name { font-size: 0.8rem; font-weight: 500; }
+    .tactic-stat .info .detail { font-size: 0.7rem; color: var(--text-muted); }
+
+    /* Rule detail popup */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; max-width: 550px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal h3 { margin-top: 0; margin-bottom: 0.25rem; }
+    .modal .tech-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+    .btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+    .rule-card {
+        background: var(--input-bg); border: 1px solid var(--border); border-radius: 0.5rem;
+        padding: 0.75rem; margin-bottom: 0.5rem;
+    }
+    .rule-card .rule-name { font-weight: 600; font-size: 0.85rem; }
+    .rule-card .rule-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; gap: 0.75rem; }
+    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.65rem; font-weight: 600; }
+    .badge-alert { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-correlation { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .badge-critical { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-high { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-medium { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-low { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+    .no-rules { text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; }
+
+    @media (max-width: 768px) {
+        .summary-row { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h2>MITRE ATT&CK Coverage</h2>
+        <a href="{{ url_for('correlation_rules_page') }}" class="btn btn-outline">Back to Correlation</a>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-row">
+        <div class="summary-card">
+            <div class="label">Overall Coverage</div>
+            <div class="value" style="color: {% if overall_pct >= 50 %}#22c55e{% elif overall_pct >= 25 %}#f59e0b{% else %}#ef4444{% endif %};">{{ overall_pct }}%</div>
+            <div class="sub">of detectable techniques</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Techniques Covered</div>
+            <div class="value">{{ total_covered }}</div>
+            <div class="sub">of {{ total_detectable }} detectable</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Techniques</div>
+            <div class="value">{{ total_techniques }}</div>
+            <div class="sub">across {{ tactic_stats|length }} tactics</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Detection Rules</div>
+            <div class="value">{{ coverage|length }}</div>
+            <div class="sub">unique technique mappings</div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <div class="legend-item"><div class="legend-swatch covered"></div> Covered by detection rule</div>
+        <div class="legend-item"><div class="legend-swatch gap"></div> Detectable but no rule (gap)</div>
+        <div class="legend-item"><div class="legend-swatch na"></div> Not detectable via firewall</div>
+    </div>
+
+    <!-- Coverage per tactic -->
+    <div class="tactic-detail-bar">
+        {% for ts in tactic_stats %}
+        <div class="tactic-stat">
+            <div class="tactic-pct {% if ts.pct >= 50 %}high{% elif ts.pct > 0 %}medium{% elif ts.detectable == 0 %}zero{% else %}low{% endif %}">
+                {{ ts.pct }}%
+            </div>
+            <div class="info">
+                <div class="name">{{ ts.name }}</div>
+                <div class="detail">{{ ts.covered }}/{{ ts.detectable }} detectable covered</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- ATT&CK Matrix Grid -->
+    <div class="matrix-container">
+        <div class="mitre-matrix">
+            {% for ts in tactic_stats %}
+            <div class="tactic-column">
+                <div class="tactic-header">
+                    <div class="tactic-name">{{ ts.name }}</div>
+                    <div class="tactic-coverage">{{ ts.covered }}/{{ ts.detectable }}</div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill" style="width: {{ ts.pct }}%; background: {% if ts.pct >= 50 %}#22c55e{% elif ts.pct > 0 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+                    </div>
+                </div>
+                {% for tech in ts.techniques %}
+                {% set tech_id_clean = tech.id.split(' ')[0] %}
+                <div class="technique-cell {% if tech_id_clean in coverage %}covered{% elif tech.detectable %}detectable-not-covered{% else %}not-detectable{% endif %}"
+                     onclick="showTechniqueDetail('{{ tech.id }}', '{{ tech.name }}', '{{ tech.description }}', {{ 'true' if tech.detectable else 'false' }})">
+                    <div class="tech-id">{{ tech.id }}</div>
+                    <div class="tech-name">{{ tech.name }}</div>
+                    {% if tech_id_clean in coverage %}
+                    <div class="tech-rules">{{ coverage[tech_id_clean]|length }} rule{{ 's' if coverage[tech_id_clean]|length > 1 else '' }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Technique Detail Modal -->
+<div id="techDetailModal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="techTitle">Technique</h3>
+        <div id="techId" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;"></div>
+        <div id="techDesc" class="tech-desc"></div>
+        <div id="techDetectable" style="margin-bottom:1rem;"></div>
+        <div id="techRules"></div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="document.getElementById('techDetailModal').classList.remove('active')">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const coverageData = {{ coverage|tojson|safe }};
+
+function showTechniqueDetail(techId, name, description, detectable) {
+    document.getElementById('techTitle').textContent = name;
+    document.getElementById('techId').textContent = techId;
+    document.getElementById('techDesc').textContent = description;
+
+    const detectDiv = document.getElementById('techDetectable');
+    if (detectable) {
+        detectDiv.innerHTML = '<span class="badge" style="background:rgba(34,197,94,0.15);color:#22c55e;">Detectable via firewall logs</span>';
+    } else {
+        detectDiv.innerHTML = '<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8;">Not directly detectable via firewall</span>';
+    }
+
+    const rulesDiv = document.getElementById('techRules');
+    const techIdClean = techId.split(' ')[0];
+    const rules = coverageData[techIdClean] || [];
+
+    if (rules.length > 0) {
+        let html = '<h4 style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">COVERING RULES</h4>';
+        rules.forEach(rule => {
+            html += `
+                <div class="rule-card">
+                    <div class="rule-name">${rule.name}</div>
+                    <div class="rule-meta">
+                        <span class="badge badge-${rule.type}">${rule.type}</span>
+                        <span class="badge badge-${rule.severity}">${rule.severity}</span>
+                        <span>${rule.enabled ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                </div>
+            `;
+        });
+        rulesDiv.innerHTML = html;
+    } else {
+        rulesDiv.innerHTML = '<div class="no-rules">No detection rules cover this technique. Consider creating an alert or correlation rule.</div>';
+    }
+
+    document.getElementById('techDetailModal').classList.add('active');
+}
+
+// Close modal on overlay click
+document.getElementById('techDetailModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+});
+</script>
+{% endblock %}

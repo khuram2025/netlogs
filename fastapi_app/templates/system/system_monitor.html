@@ -155,6 +155,173 @@
         white-space: pre-wrap;
         display: none;
     }
+
+    /* Storage Quota Styles */
+    .quota-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .quota-card {
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .quota-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .quota-card .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .quota-progress {
+        position: relative;
+        height: 2.5rem;
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        overflow: hidden;
+        margin-bottom: 1rem;
+    }
+
+    .quota-progress-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 0.75rem;
+        font-weight: 600;
+        color: white;
+        font-size: 0.875rem;
+    }
+
+    .quota-progress-text {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-weight: 600;
+        color: white;
+        font-size: 0.875rem;
+    }
+
+    .settings-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .settings-group {
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .settings-group label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+    }
+
+    .settings-group input[type="number"],
+    .settings-group select {
+        width: 100%;
+        padding: 0.5rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        color: white;
+        font-size: 1rem;
+    }
+
+    .settings-group input:focus,
+    .settings-group select:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
+    .toggle-switch {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .toggle-switch input[type="checkbox"] {
+        width: 3rem;
+        height: 1.5rem;
+        appearance: none;
+        background: var(--border);
+        border-radius: 0.75rem;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .toggle-switch input[type="checkbox"]:checked {
+        background: #22c55e;
+    }
+
+    .toggle-switch input[type="checkbox"]::before {
+        content: '';
+        position: absolute;
+        width: 1.25rem;
+        height: 1.25rem;
+        background: white;
+        border-radius: 50%;
+        top: 0.125rem;
+        left: 0.125rem;
+        transition: transform 0.3s;
+    }
+
+    .toggle-switch input[type="checkbox"]:checked::before {
+        transform: translateX(1.5rem);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .status-indicator.healthy { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-indicator.caution { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .status-indicator.warning { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+    .status-indicator.critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+    .cleanup-history-table {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .estimate-result {
+        background: var(--input-bg);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
 </style>
 {% endblock %}
 
@@ -215,6 +382,98 @@
         Run Disk Cleanup
     </button>
     <div class="cleanup-log" id="cleanupLog"></div>
+</div>
+
+<!-- Storage Quota Management -->
+<div class="card" id="storageQuotaSection">
+    <div class="section-header">
+        <h2>Syslogs Storage Quota</h2>
+        <span class="status-indicator" id="quotaStatus">Loading...</span>
+    </div>
+
+    <!-- Quota Progress Bar -->
+    <div class="quota-progress" id="quotaProgressContainer">
+        <div class="quota-progress-fill progress-healthy" id="quotaProgressFill" style="width: 0%;">
+            <span id="quotaProgressText">0%</span>
+        </div>
+    </div>
+
+    <!-- Quota Stats Cards -->
+    <div class="quota-container">
+        <div class="quota-card">
+            <div class="value" id="currentSizeDisplay">--</div>
+            <div class="label">Current Size (GB)</div>
+        </div>
+        <div class="quota-card">
+            <div class="value" id="quotaSizeDisplay">--</div>
+            <div class="label">Quota Limit (GB)</div>
+        </div>
+        <div class="quota-card">
+            <div class="value" id="freeQuotaDisplay">--</div>
+            <div class="label">Free Quota (GB)</div>
+        </div>
+        <div class="quota-card">
+            <div class="value" id="totalRowsDisplay">--</div>
+            <div class="label">Total Rows</div>
+        </div>
+    </div>
+
+    <!-- Settings Form -->
+    <h3 style="margin-bottom: 1rem;">Storage Settings</h3>
+    <div class="settings-form">
+        <div class="settings-group">
+            <label for="syslogsMaxSize">Max Storage Size (GB)</label>
+            <input type="number" id="syslogsMaxSize" min="10" max="10000" step="10" value="600">
+        </div>
+        <div class="settings-group">
+            <label for="cleanupTrigger">Cleanup Trigger (%)</label>
+            <input type="number" id="cleanupTrigger" min="50" max="99" step="1" value="95">
+            <small style="color: var(--text-muted); font-size: 0.7rem;">Auto-cleanup starts when usage reaches this %</small>
+        </div>
+        <div class="settings-group">
+            <label for="cleanupTarget">Cleanup Target (%)</label>
+            <input type="number" id="cleanupTarget" min="30" max="90" step="1" value="80">
+            <small style="color: var(--text-muted); font-size: 0.7rem;">Cleanup reduces storage to this % of quota</small>
+        </div>
+        <div class="settings-group">
+            <label for="minRetention">Min Retention (Days)</label>
+            <input type="number" id="minRetention" min="1" max="365" step="1" value="7">
+            <small style="color: var(--text-muted); font-size: 0.7rem;">Never delete logs newer than this</small>
+        </div>
+        <div class="settings-group">
+            <label>Auto Cleanup</label>
+            <div class="toggle-switch">
+                <input type="checkbox" id="autoCleanupEnabled" checked>
+                <span id="autoCleanupLabel">Enabled</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="action-buttons">
+        <button class="btn btn-primary" onclick="saveStorageSettings()" id="saveSettingsBtn">
+            Save Settings
+        </button>
+        <button class="btn" style="background: rgba(249, 115, 22, 0.2); color: #f97316;" onclick="triggerManualCleanup()" id="manualCleanupBtn">
+            Trigger Cleanup Now
+        </button>
+        <button class="btn" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6;" onclick="showEstimateModal()">
+            Estimate Cleanup
+        </button>
+    </div>
+
+    <!-- Estimate Result -->
+    <div class="estimate-result" id="estimateResult">
+        <h4 style="margin-bottom: 0.5rem;">Cleanup Estimate</h4>
+        <div id="estimateContent"></div>
+    </div>
+
+    <!-- Last Cleanup Info -->
+    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <h4 style="margin-bottom: 0.5rem;">Last Cleanup</h4>
+        <div id="lastCleanupInfo" style="color: var(--text-muted); font-size: 0.875rem;">
+            No cleanup performed yet
+        </div>
+    </div>
 </div>
 
 <!-- ClickHouse Storage Summary -->
@@ -454,5 +713,261 @@ setInterval(async () => {
         console.error('Failed to refresh disk usage:', err);
     }
 }, 30000);
+
+// ============================================================
+// Storage Quota Management Functions
+// ============================================================
+
+// Load storage settings on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadStorageStatus();
+
+    // Toggle label update
+    document.getElementById('autoCleanupEnabled').addEventListener('change', function() {
+        document.getElementById('autoCleanupLabel').textContent = this.checked ? 'Enabled' : 'Disabled';
+    });
+});
+
+async function loadStorageStatus() {
+    try {
+        const response = await fetch('/api/system/storage-status/');
+        const data = await response.json();
+
+        if (data.success) {
+            updateQuotaDisplay(data);
+            loadStorageSettings();
+        } else {
+            console.error('Failed to load storage status:', data.error);
+        }
+    } catch (err) {
+        console.error('Error loading storage status:', err);
+    }
+}
+
+async function loadStorageSettings() {
+    try {
+        const response = await fetch('/api/system/storage-settings/');
+        const data = await response.json();
+
+        if (data.success) {
+            const settings = data.settings;
+            document.getElementById('syslogsMaxSize').value = settings.syslogs_max_size_gb;
+            document.getElementById('cleanupTrigger').value = settings.cleanup_trigger_percent;
+            document.getElementById('cleanupTarget').value = settings.cleanup_target_percent;
+            document.getElementById('minRetention').value = settings.min_retention_days;
+            document.getElementById('autoCleanupEnabled').checked = settings.auto_cleanup_enabled;
+            document.getElementById('autoCleanupLabel').textContent = settings.auto_cleanup_enabled ? 'Enabled' : 'Disabled';
+
+            // Update last cleanup info
+            if (settings.last_cleanup_at) {
+                const date = new Date(settings.last_cleanup_at);
+                document.getElementById('lastCleanupInfo').innerHTML = `
+                    <strong>Time:</strong> ${date.toLocaleString()}<br>
+                    <strong>Status:</strong> ${settings.last_cleanup_status || 'Unknown'}<br>
+                    <strong>Freed:</strong> ${settings.last_cleanup_freed_gb ? settings.last_cleanup_freed_gb.toFixed(2) + ' GB' : 'N/A'}
+                `;
+            }
+        }
+    } catch (err) {
+        console.error('Error loading storage settings:', err);
+    }
+}
+
+function updateQuotaDisplay(data) {
+    const quota = data.quota;
+    const syslogs = data.syslogs;
+
+    // Update cards
+    document.getElementById('currentSizeDisplay').textContent = quota.current_size_gb.toFixed(2);
+    document.getElementById('quotaSizeDisplay').textContent = quota.max_size_gb.toFixed(0);
+    document.getElementById('freeQuotaDisplay').textContent = quota.free_quota_gb.toFixed(2);
+    document.getElementById('totalRowsDisplay').textContent = formatNumber(syslogs.total_rows);
+
+    // Update progress bar
+    const usagePercent = Math.min(quota.usage_percent, 100);
+    const progressFill = document.getElementById('quotaProgressFill');
+    const progressText = document.getElementById('quotaProgressText');
+
+    progressFill.style.width = usagePercent + '%';
+    progressText.textContent = quota.usage_percent.toFixed(1) + '% of quota';
+
+    // Update progress bar color based on status
+    progressFill.className = 'quota-progress-fill';
+    if (data.status === 'critical') {
+        progressFill.classList.add('progress-critical');
+    } else if (data.status === 'warning') {
+        progressFill.classList.add('progress-warning');
+    } else if (data.status === 'caution') {
+        progressFill.classList.add('progress-caution');
+    } else {
+        progressFill.classList.add('progress-healthy');
+    }
+
+    // Update status indicator
+    const statusEl = document.getElementById('quotaStatus');
+    statusEl.className = 'status-indicator ' + data.status;
+    statusEl.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
+    // Color the current size based on status
+    const currentSizeEl = document.getElementById('currentSizeDisplay');
+    if (data.status === 'critical') {
+        currentSizeEl.style.color = '#ef4444';
+    } else if (data.status === 'warning') {
+        currentSizeEl.style.color = '#f97316';
+    } else if (data.status === 'caution') {
+        currentSizeEl.style.color = '#f59e0b';
+    } else {
+        currentSizeEl.style.color = '#22c55e';
+    }
+}
+
+function formatNumber(num) {
+    if (num >= 1000000000) {
+        return (num / 1000000000).toFixed(2) + 'B';
+    } else if (num >= 1000000) {
+        return (num / 1000000).toFixed(2) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toLocaleString();
+}
+
+async function saveStorageSettings() {
+    const btn = document.getElementById('saveSettingsBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+        const settings = {
+            syslogs_max_size_gb: parseFloat(document.getElementById('syslogsMaxSize').value),
+            cleanup_trigger_percent: parseFloat(document.getElementById('cleanupTrigger').value),
+            cleanup_target_percent: parseFloat(document.getElementById('cleanupTarget').value),
+            min_retention_days: parseInt(document.getElementById('minRetention').value),
+            auto_cleanup_enabled: document.getElementById('autoCleanupEnabled').checked
+        };
+
+        // Validation
+        if (settings.syslogs_max_size_gb < 10) {
+            showToast('Max size must be at least 10 GB', 'error');
+            return;
+        }
+        if (settings.cleanup_target_percent >= settings.cleanup_trigger_percent) {
+            showToast('Cleanup target must be less than trigger percentage', 'error');
+            return;
+        }
+
+        const response = await fetch('/api/system/storage-settings/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Storage settings saved successfully', 'success');
+            loadStorageStatus(); // Refresh display
+        } else {
+            showToast(data.error || 'Failed to save settings', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Settings';
+    }
+}
+
+async function triggerManualCleanup() {
+    if (!confirm('This will delete old logs to bring storage within quota limits. Continue?')) {
+        return;
+    }
+
+    const btn = document.getElementById('manualCleanupBtn');
+    btn.disabled = true;
+    btn.textContent = 'Running cleanup...';
+
+    try {
+        const response = await fetch('/api/system/trigger-cleanup/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({force: true})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.cleanup_performed) {
+                showToast(`Cleanup initiated! Est. ${data.details.estimated_freed_gb.toFixed(2)} GB to be freed`, 'success');
+            } else {
+                showToast(data.message, 'success');
+            }
+            // Refresh page after a short delay
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast(data.error || data.message || 'Cleanup failed', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Trigger Cleanup Now';
+    }
+}
+
+async function showEstimateModal() {
+    const days = prompt('Enter retention days to estimate (e.g., 30):', '30');
+    if (!days) return;
+
+    const daysNum = parseInt(days);
+    if (isNaN(daysNum) || daysNum < 1) {
+        showToast('Please enter a valid number of days', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system/estimate-cleanup/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({days: daysNum})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const estimateDiv = document.getElementById('estimateResult');
+            const contentDiv = document.getElementById('estimateContent');
+
+            contentDiv.innerHTML = `
+                <table style="width: 100%; font-size: 0.875rem;">
+                    <tr>
+                        <td style="padding: 0.25rem 0;"><strong>Retention Days:</strong></td>
+                        <td>${data.retention_days} days</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.25rem 0;"><strong>Rows to Delete:</strong></td>
+                        <td>${formatNumber(data.estimate.rows_to_delete)} (${data.estimate.percent_of_total}%)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.25rem 0;"><strong>Estimated Size:</strong></td>
+                        <td>${data.estimate.estimated_gb.toFixed(2)} GB</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.25rem 0;"><strong>Remaining After:</strong></td>
+                        <td>${data.current_storage.remaining_after_cleanup_gb.toFixed(2)} GB</td>
+                    </tr>
+                </table>
+            `;
+            estimateDiv.style.display = 'block';
+        } else {
+            showToast(data.error || 'Failed to estimate', 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+// Refresh storage status every 60 seconds
+setInterval(loadStorageStatus, 60000);
 </script>
 {% endblock %}

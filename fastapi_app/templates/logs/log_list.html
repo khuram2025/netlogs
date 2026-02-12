@@ -202,6 +202,175 @@
             overflow: hidden;
         }
 
+        /* ===== NQL QUERY BAR ===== */
+        .nql-bar {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .nql-bar .nql-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-cyan);
+            white-space: nowrap;
+            padding: 4px 8px;
+            background: var(--accent-cyan-dim);
+            border-radius: var(--radius-sm);
+        }
+        .nql-bar .nql-input {
+            flex: 1;
+            height: 34px;
+            padding: 0 12px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--accent-cyan);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            transition: all 0.15s ease;
+        }
+        .nql-bar .nql-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+        }
+        .nql-bar .nql-input::placeholder {
+            color: var(--text-ghost);
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+        .nql-bar .nql-input.nql-error {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
+        }
+        .nql-bar .nql-input.nql-valid {
+            border-color: var(--accent-green);
+        }
+        .nql-bar .nql-run-btn {
+            height: 34px;
+            padding: 0 16px;
+            background: var(--accent-cyan);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nql-bar .nql-run-btn:hover { background: #2563eb; }
+        .nql-bar .nql-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            min-width: 60px;
+        }
+        .nql-bar .nql-status.error { color: var(--accent-red); }
+        .nql-bar .nql-status.success { color: var(--accent-green); }
+        .nql-autocomplete {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .nql-autocomplete.visible { display: block; }
+        .nql-autocomplete-item {
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .nql-autocomplete-item:hover, .nql-autocomplete-item.selected {
+            background: var(--bg-hover);
+        }
+        .nql-autocomplete-item .nql-ac-type {
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+        /* NQL results overlay */
+        .nql-results-panel {
+            display: none;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            margin: 12px 20px;
+            overflow: hidden;
+        }
+        .nql-results-panel.visible { display: block; }
+        .nql-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .nql-results-header .nql-results-info {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .nql-results-header .nql-results-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+        }
+        .nql-results-body {
+            max-height: 500px;
+            overflow: auto;
+        }
+        .nql-results-body table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: var(--font-mono);
+        }
+        .nql-results-body th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-elevated);
+            padding: 6px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-default);
+        }
+        .nql-results-body td {
+            padding: 5px 10px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            white-space: nowrap;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .nql-results-body tr:hover td { background: var(--bg-hover); }
+
         /* ===== SEARCH TOOLBAR ===== */
         .toolbar {
             height: var(--toolbar-height);
@@ -1795,6 +1964,261 @@
             background: rgba(34, 197, 94, 0.3);
         }
 
+        /* ===== VIEW TOGGLE & GROUP-BY ===== */
+        .view-toggle {
+            display: flex;
+            gap: 4px;
+            padding: 2px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-md);
+        }
+
+        .view-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .view-pill:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .view-pill.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+        }
+
+        .view-pill svg {
+            width: 13px;
+            height: 13px;
+            flex-shrink: 0;
+        }
+
+        .group-by-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 20px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .group-by-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .group-by-pills {
+            display: flex;
+            gap: 4px;
+        }
+
+        .group-pill {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .group-pill:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-emphasis);
+        }
+
+        .group-pill.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        /* ===== AGGREGATE TABLE ===== */
+        .agg-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .agg-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .agg-table th {
+            height: 36px;
+            padding: 0 12px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-default);
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .agg-table td {
+            height: var(--row-height);
+            padding: 0 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .agg-table td:has(.subnet-samples) {
+            overflow: visible;
+        }
+
+        .agg-row {
+            transition: background 0.1s ease;
+        }
+
+        .agg-row:hover {
+            background: var(--bg-hover);
+        }
+
+        .event-count-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            background: var(--accent-cyan-dim);
+            color: var(--accent-blue);
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .agg-timestamp {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .agg-mono {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .drill-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        .drill-btn:hover {
+            background: var(--accent-cyan-dim);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .drill-btn svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .device-count {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Subnet display */
+        .subnet-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .subnet-cidr {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent-purple);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .subnet-cidr:hover {
+            color: var(--accent-blue);
+        }
+
+        .subnet-ip-count {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .subnet-ip-count strong {
+            color: var(--accent-purple);
+            font-weight: 700;
+        }
+
+        .subnet-samples {
+            position: relative;
+            display: inline-block;
+        }
+
+        .subnet-samples-tooltip {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            padding: 8px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-primary);
+            white-space: nowrap;
+            z-index: 50;
+        }
+
+        .subnet-samples:hover .subnet-samples-tooltip {
+            display: block;
+        }
+
+        .subnet-samples-tooltip div {
+            padding: 2px 0;
+            color: var(--text-secondary);
+        }
+
         /* Layout wrapper */
         .content-wrapper {
             flex: 1;
@@ -1845,6 +2269,25 @@
 
         <!-- Main Content -->
         <main class="main">
+            <!-- NQL Query Bar -->
+            <div class="nql-bar">
+                <span class="nql-label">NQL</span>
+                <div style="position:relative;flex:1;display:flex;align-items:center;">
+                    <input type="text" id="nqlInput" class="nql-input"
+                        placeholder='srcip:10.0.0.0/8 AND action:deny | stats count by srcip | sort -count | limit 20'
+                        autocomplete="off" spellcheck="false">
+                    <div id="nqlAutocomplete" class="nql-autocomplete"></div>
+                </div>
+                <button type="button" class="nql-run-btn" onclick="runNQL()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Run
+                </button>
+                <span id="nqlStatus" class="nql-status"></span>
+            </div>
+
+            <!-- NQL Results Panel (for aggregate queries) -->
+            <div id="nqlResults" class="nql-results-panel"></div>
+
             <!-- Search Toolbar -->
             <div class="toolbar">
                 <div class="search-group">
@@ -1890,6 +2333,23 @@
                 </div>
                 <div class="toolbar-divider"></div>
                 <div class="toolbar-right">
+                    <div style="position:relative;">
+                        <button type="button" class="btn btn-ghost" onclick="toggleSavedSearches()" title="Saved Searches">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            Saved
+                        </button>
+                        <div id="savedSearchDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;width:320px;max-height:400px;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:0.5rem;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:60;padding:0.5rem;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.375rem 0.5rem;margin-bottom:0.25rem;">
+                                <span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-secondary);">Saved Searches</span>
+                                <button type="button" class="btn btn-ghost" style="padding:0.2rem 0.5rem;font-size:0.7rem;" onclick="showSaveSearchModal()">+ Save Current</button>
+                            </div>
+                            <div id="savedSearchList" style="font-size:0.8rem;">
+                                <div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.75rem;">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
                     <button type="button" class="btn btn-ghost" onclick="toggleSidebar()" title="More Filters">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
@@ -1914,7 +2374,7 @@
                     <div class="stat-item">
                         <span>Total</span>
                         <span class="stat-value">{{ total | format_number }}</span>
-                        <span>logs</span>
+                        <span>{% if is_aggregate %}groups{% else %}logs{% endif %}</span>
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-item">
@@ -1922,8 +2382,20 @@
                         <span>Devices Active</span>
                     </div>
                 </div>
+                <div class="view-toggle">
+                    <button type="button" class="view-pill {% if not is_aggregate %}active{% endif %}" onclick="setViewMode('')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                        Log View
+                    </button>
+                    <button type="button" class="view-pill {% if is_aggregate %}active{% endif %}" onclick="setViewMode('aggregate')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Aggregate
+                    </button>
+                </div>
                 <div class="stats-right">
                     <div class="time-pills">
+                        <button type="button" class="time-pill {% if current_time_range == '1m' %}active{% endif %}" data-range="1m" onclick="setTimeRange('1m')">1M</button>
+                        <button type="button" class="time-pill {% if current_time_range == '5m' %}active{% endif %}" data-range="5m" onclick="setTimeRange('5m')">5M</button>
                         <button type="button" class="time-pill {% if current_time_range == '1h' %}active{% endif %}" data-range="1h" onclick="setTimeRange('1h')">1H</button>
                         <button type="button" class="time-pill {% if current_time_range == '24h' %}active{% endif %}" data-range="24h" onclick="setTimeRange('24h')">24H</button>
                         <button type="button" class="time-pill {% if current_time_range == '7d' %}active{% endif %}" data-range="7d" onclick="setTimeRange('7d')">7D</button>
@@ -2066,6 +2538,25 @@
             </div>
             {% endif %}
 
+            <!-- Group-By Selector (visible only in aggregate mode) -->
+            {% if is_aggregate %}
+            <div class="group-by-bar">
+                <span class="group-by-label">Group by:</span>
+                <div class="group-by-pills">
+                    <button type="button" class="group-pill {% if 'srcip' in group_fields %}active{% endif %}" onclick="toggleGroupField('srcip')">Src IP</button>
+                    <button type="button" class="group-pill {% if 'dstip' in group_fields %}active{% endif %}" onclick="toggleGroupField('dstip')">Dst IP</button>
+                    <button type="button" class="group-pill {% if 'dstport' in group_fields %}active{% endif %}" onclick="toggleGroupField('dstport')">Dst Port</button>
+                </div>
+                {% if 'srcip' in group_fields %}
+                <div style="width:1px;height:20px;background:var(--border-default);margin:0 4px;"></div>
+                <button type="button" class="group-pill {% if is_subnet_rollup %}active{% endif %}" onclick="toggleSubnetRollup()" title="Group source IPs by /24 subnet">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Subnet /24
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <!-- Content Wrapper -->
             <div class="content-wrapper">
                 <div class="main-panel">
@@ -2075,6 +2566,7 @@
                             <div class="spinner"></div>
                         </div>
 
+                        {% if not is_aggregate %}
                         {% if logs %}
                         <table class="log-table">
                             <thead>
@@ -2286,10 +2778,92 @@
                             <p>Try adjusting your filters or time range to find logs.</p>
                         </div>
                         {% endif %}
+                        {% else %}
+                        {# ===== AGGREGATE TABLE ===== #}
+                        {% if agg_rows %}
+                        <table class="agg-table">
+                            <thead>
+                                <tr>
+                                    {% if 'srcip' in group_fields %}<th>Source IP</th>{% endif %}
+                                    {% if 'dstip' in group_fields %}<th>Dest IP</th>{% endif %}
+                                    {% if 'dstport' in group_fields %}<th>Dst Port</th>{% endif %}
+                                    <th>Events</th>
+                                    <th>First Seen</th>
+                                    <th>Last Seen</th>
+                                    <th>Action</th>
+                                    <th>Policy</th>
+                                    <th>Application</th>
+                                    <th>Devices</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in agg_rows %}
+                                <tr class="agg-row">
+                                    {% if 'srcip' in group_fields %}
+                                    {% if is_subnet_rollup %}
+                                    <td>
+                                        <div class="subnet-cell subnet-samples">
+                                            <a href="?srcip={{ row.src_subnet or '' }}&time_range={{ current_time_range }}" class="subnet-cidr">{{ row.src_subnet or '--' }}</a>
+                                            <span class="subnet-ip-count"><strong>{{ row.unique_src_ips }}</strong> unique IP{{ 's' if row.unique_src_ips != 1 else '' }}</span>
+                                            {% if row.sample_ips %}
+                                            <div class="subnet-samples-tooltip">
+                                                {% for ip in row.sample_ips[:5] %}<div>{{ ip }}</div>{% endfor %}
+                                                {% if row.unique_src_ips > 5 %}<div style="color:var(--text-muted);">+{{ row.unique_src_ips - 5 }} more</div>{% endif %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    {% else %}
+                                    <td><a href="?srcip={{ row.srcip or '' }}&time_range={{ current_time_range }}" class="ip-link">{{ row.srcip or '--' }}</a></td>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% if 'dstip' in group_fields %}
+                                    <td><a href="?dstip={{ row.dstip or '' }}&time_range={{ current_time_range }}" class="ip-link">{{ row.dstip or '--' }}</a></td>
+                                    {% endif %}
+                                    {% if 'dstport' in group_fields %}
+                                    <td><span class="port-value">{{ row.dstport or '--' }}</span></td>
+                                    {% endif %}
+                                    <td><span class="event-count-badge">{{ "{:,}".format(row.event_count) }}</span></td>
+                                    <td><span class="agg-timestamp">{{ row.first_seen.strftime('%Y-%m-%d %H:%M:%S') if row.first_seen else '--' }}</span></td>
+                                    <td><span class="agg-timestamp">{{ row.last_seen.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen else '--' }}</span></td>
+                                    <td>
+                                        {% set agg_action = (row.top_action or '') | lower %}
+                                        {% if agg_action in ['deny', 'drop', 'block', 'reject'] %}
+                                        <span class="status-badge status-deny">{{ row.top_action | upper }}</span>
+                                        {% elif row.top_action %}
+                                        <span class="status-badge status-accept">{{ row.top_action | upper }}</span>
+                                        {% else %}
+                                        <span class="agg-mono">--</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="agg-mono">{{ row.top_policy or '--' }}</span></td>
+                                    <td><span class="agg-mono">{{ row.top_app or '--' }}</span></td>
+                                    <td><span class="device-count">{{ row.device_count }}</span></td>
+                                    <td>
+                                        {% set drill_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
+                                        <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                            </svg>
+                            <h3>No aggregate groups found</h3>
+                            <p>Try broadening your time range or adjusting filters.</p>
+                        </div>
+                        {% endif %}
+                        {% endif %}
                     </div>
 
                     <!-- Pagination -->
-                    {% if logs %}
+                    {% if logs or agg_rows %}
                     <div class="pagination-bar">
                         <div class="pagination-info">
                             Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total | format_number }}
@@ -2484,6 +3058,9 @@
     <input type="hidden" name="action" id="hiddenAction" value="{{ current_action or '' }}">
     <input type="hidden" name="time_range" id="hiddenTimeRange" value="{{ current_time_range or '1h' }}">
     <input type="hidden" name="per_page" value="{{ per_page }}">
+    <input type="hidden" name="view" id="hiddenView" value="{{ current_view or '' }}">
+    <input type="hidden" name="group_by" id="hiddenGroupBy" value="{{ current_group_by or 'srcip,dstip,dstport' }}">
+    <input type="hidden" name="subnet_rollup" id="hiddenSubnetRollup" value="{{ '1' if is_subnet_rollup else '' }}">
     </form>
 
     <script>
@@ -2594,9 +3171,47 @@
             document.getElementById('hiddenSeverity').value = '';
             document.getElementById('hiddenAction').value = '';
             document.getElementById('hiddenPageInput').value = 1;
+            document.getElementById('hiddenView').value = '';
+            document.getElementById('hiddenGroupBy').value = 'srcip,dstip,dstport';
+            document.getElementById('hiddenSubnetRollup').value = '';
             // Reset device dropdown
             const deviceSelect = document.getElementById('deviceSelect');
             if (deviceSelect) deviceSelect.value = '';
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // View mode toggle (Log View / Aggregate)
+        function setViewMode(mode) {
+            document.getElementById('hiddenView').value = mode;
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Toggle subnet /24 rollup
+        function toggleSubnetRollup() {
+            const input = document.getElementById('hiddenSubnetRollup');
+            input.value = input.value === '1' ? '' : '1';
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Toggle group-by field (multi-select, at least one must remain)
+        function toggleGroupField(field) {
+            const input = document.getElementById('hiddenGroupBy');
+            let fields = input.value.split(',').filter(f => f.trim());
+            const idx = fields.indexOf(field);
+            if (idx >= 0) {
+                // Don't remove if it's the last one
+                if (fields.length <= 1) return;
+                fields.splice(idx, 1);
+            } else {
+                fields.push(field);
+            }
+            input.value = fields.join(',');
+            document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
         }
@@ -2765,6 +3380,482 @@
                 if (btn.dataset.range === timeRange) btn.classList.add('active');
             });
         });
+    </script>
+
+    <!-- Save Search Modal -->
+    <div id="saveSearchModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:0.75rem;padding:1.5rem;max-width:450px;width:90%;">
+            <h3 style="margin:0 0 1rem;font-size:1rem;">Save Current Search</h3>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.375rem;">Name</label>
+                <input type="text" id="saveSearchName" style="width:100%;padding:0.5rem;background:var(--bg-void);border:1px solid var(--border-default);border-radius:0.375rem;color:var(--text-primary);font-size:0.85rem;" placeholder="e.g., Denied traffic from 10.x">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block;font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.375rem;">Description (optional)</label>
+                <input type="text" id="saveSearchDesc" style="width:100%;padding:0.5rem;background:var(--bg-void);border:1px solid var(--border-default);border-radius:0.375rem;color:var(--text-primary);font-size:0.85rem;" placeholder="Brief description">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;">
+                    <input type="checkbox" id="saveSearchShared"> Share with team
+                </label>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
+                <button type="button" class="btn btn-ghost" onclick="closeSaveSearchModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="doSaveSearch()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ==================== Saved Searches ====================
+    let savedSearchesLoaded = false;
+
+    function toggleSavedSearches() {
+        const dd = document.getElementById('savedSearchDropdown');
+        if (dd.style.display === 'none') {
+            dd.style.display = 'block';
+            if (!savedSearchesLoaded) loadSavedSearches();
+        } else {
+            dd.style.display = 'none';
+        }
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const dd = document.getElementById('savedSearchDropdown');
+        if (dd.style.display !== 'none' && !e.target.closest('#savedSearchDropdown') && !e.target.closest('[title="Saved Searches"]')) {
+            dd.style.display = 'none';
+        }
+    });
+
+    async function loadSavedSearches() {
+        try {
+            const res = await fetch('/api/saved-searches/');
+            if (!res.ok) throw new Error('Failed to load');
+            const searches = await res.json();
+            savedSearchesLoaded = true;
+
+            const list = document.getElementById('savedSearchList');
+            if (searches.length === 0) {
+                list.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.75rem;">No saved searches yet.<br>Use "Save Current" to save your first search.</div>';
+                return;
+            }
+
+            let html = '';
+            searches.forEach(s => {
+                const params = s.query_params || {};
+                const summary = Object.entries(params)
+                    .filter(([k, v]) => v && v !== '' && k !== 'page')
+                    .map(([k, v]) => `${k}=${v}`)
+                    .slice(0, 3)
+                    .join(', ');
+
+                html += `<div style="padding:0.5rem;border-radius:0.375rem;cursor:pointer;border-bottom:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:flex-start;" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background=''" onclick="loadSavedSearch(${s.id})">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name}</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary || 'No filters'}</div>
+                        <div style="font-size:0.65rem;color:var(--text-ghost);margin-top:0.125rem;">
+                            ${s.is_shared ? '<span style="color:var(--accent-cyan);">Shared</span> · ' : ''}Used ${s.use_count}x
+                        </div>
+                    </div>
+                    ${s.is_own ? `<button type="button" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0.25rem;font-size:0.7rem;" onclick="event.stopPropagation();deleteSavedSearch(${s.id},'${s.name.replace(/'/g, "\\'")}')" title="Delete">&#x2715;</button>` : ''}
+                </div>`;
+            });
+            list.innerHTML = html;
+        } catch (e) {
+            document.getElementById('savedSearchList').innerHTML = '<div style="text-align:center;padding:1rem;color:var(--accent-red);font-size:0.75rem;">Failed to load saved searches</div>';
+        }
+    }
+
+    async function loadSavedSearch(id) {
+        try {
+            const res = await fetch(`/api/saved-searches/${id}/use`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed');
+            const data = await res.json();
+            const params = data.query_params || {};
+
+            // Build URL with saved params
+            const url = new URL(window.location.pathname, window.location.origin);
+            Object.entries(params).forEach(([k, v]) => {
+                if (v && v !== '') url.searchParams.set(k, v);
+            });
+            window.location.href = url.toString();
+        } catch (e) {
+            alert('Failed to load saved search');
+        }
+    }
+
+    function showSaveSearchModal() {
+        document.getElementById('savedSearchDropdown').style.display = 'none';
+        document.getElementById('saveSearchModal').style.display = 'flex';
+        document.getElementById('saveSearchName').focus();
+    }
+
+    function closeSaveSearchModal() {
+        document.getElementById('saveSearchModal').style.display = 'none';
+    }
+
+    // Close modal on overlay click
+    document.getElementById('saveSearchModal').addEventListener('click', function(e) {
+        if (e.target === this) closeSaveSearchModal();
+    });
+
+    function getCurrentFilters() {
+        const form = document.getElementById('filterForm');
+        const params = {};
+        const fields = ['srcip', 'dstip', 'srcport', 'dstport', 'protocol', 'application',
+                        'device', 'severity', 'action', 'time_range', 'per_page', 'q',
+                        'session_end_reason', 'policyname', 'log_type', 'threat_id', 'src_zone', 'dst_zone',
+                        'start', 'end'];
+        fields.forEach(f => {
+            const input = form.querySelector(`[name="${f}"]`);
+            if (input && input.value && input.value.trim() !== '') {
+                params[f] = input.value.trim();
+            }
+        });
+        return params;
+    }
+
+    async function doSaveSearch() {
+        const name = document.getElementById('saveSearchName').value.trim();
+        if (!name) { alert('Please enter a name'); return; }
+
+        const params = getCurrentFilters();
+        if (Object.keys(params).length === 0) {
+            alert('No filters to save. Apply some filters first.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/saved-searches/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    description: document.getElementById('saveSearchDesc').value.trim(),
+                    query_params: params,
+                    is_shared: document.getElementById('saveSearchShared').checked,
+                }),
+            });
+            if (res.ok) {
+                closeSaveSearchModal();
+                savedSearchesLoaded = false;
+                document.getElementById('saveSearchName').value = '';
+                document.getElementById('saveSearchDesc').value = '';
+                document.getElementById('saveSearchShared').checked = false;
+            } else {
+                const err = await res.json();
+                alert(err.detail || 'Failed to save');
+            }
+        } catch (e) {
+            alert('Error saving search: ' + e.message);
+        }
+    }
+
+    async function deleteSavedSearch(id, name) {
+        if (!confirm(`Delete saved search "${name}"?`)) return;
+        try {
+            const res = await fetch(`/api/saved-searches/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                savedSearchesLoaded = false;
+                loadSavedSearches();
+            }
+        } catch (e) {
+            alert('Failed to delete');
+        }
+    }
+
+    // ============================
+    // NQL Query Language
+    // ============================
+    const NQL_FIELDS = [
+        { name: 'srcip', type: 'ip', desc: 'Source IP' },
+        { name: 'dstip', type: 'ip', desc: 'Destination IP' },
+        { name: 'srcport', type: 'number', desc: 'Source port' },
+        { name: 'dstport', type: 'number', desc: 'Destination port' },
+        { name: 'proto', type: 'string', desc: 'Protocol number' },
+        { name: 'action', type: 'string', desc: 'Firewall action' },
+        { name: 'severity', type: 'number', desc: 'Severity (0-7)' },
+        { name: 'device', type: 'ip', desc: 'Device IP' },
+        { name: 'policyname', type: 'string', desc: 'Policy name' },
+        { name: 'log_type', type: 'string', desc: 'Log type' },
+        { name: 'application', type: 'string', desc: 'Application' },
+        { name: 'src_zone', type: 'string', desc: 'Source zone' },
+        { name: 'dst_zone', type: 'string', desc: 'Destination zone' },
+        { name: 'session_end_reason', type: 'string', desc: 'Session end reason' },
+        { name: 'threat_id', type: 'string', desc: 'Threat ID' },
+        { name: 'message', type: 'text', desc: 'Log message' },
+    ];
+
+    const nqlInput = document.getElementById('nqlInput');
+    const nqlStatus = document.getElementById('nqlStatus');
+    const nqlAutocomplete = document.getElementById('nqlAutocomplete');
+    let nqlValidateTimer = null;
+    let nqlSelectedAC = -1;
+
+    // Validate on typing (debounced)
+    nqlInput.addEventListener('input', () => {
+        clearTimeout(nqlValidateTimer);
+        nqlValidateTimer = setTimeout(() => validateNQL(), 500);
+        showAutocomplete();
+    });
+
+    // Run on Enter
+    nqlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            const ac = nqlAutocomplete;
+            if (ac.classList.contains('visible')) {
+                const selected = ac.querySelector('.selected');
+                if (selected) {
+                    e.preventDefault();
+                    selected.click();
+                    return;
+                }
+            }
+            e.preventDefault();
+            runNQL();
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateAutocomplete(e.key === 'ArrowDown' ? 1 : -1);
+        } else if (e.key === 'Escape') {
+            hideAutocomplete();
+        } else if (e.key === 'Tab') {
+            const ac = nqlAutocomplete;
+            if (ac.classList.contains('visible')) {
+                const selected = ac.querySelector('.selected') || ac.querySelector('.nql-autocomplete-item');
+                if (selected) {
+                    e.preventDefault();
+                    selected.click();
+                }
+            }
+        }
+    });
+
+    nqlInput.addEventListener('blur', () => {
+        setTimeout(hideAutocomplete, 200);
+    });
+
+    function showAutocomplete() {
+        const val = nqlInput.value;
+        const cursorPos = nqlInput.selectionStart;
+        const textBefore = val.substring(0, cursorPos);
+
+        // Get the current "word" being typed
+        const wordMatch = textBefore.match(/(\S+)$/);
+        if (!wordMatch) { hideAutocomplete(); return; }
+        const currentWord = wordMatch[1].toLowerCase();
+
+        // If typing a field name (no colon yet)
+        if (!currentWord.includes(':')) {
+            const matches = NQL_FIELDS.filter(f => f.name.startsWith(currentWord));
+            if (matches.length === 0 || currentWord.length < 1) { hideAutocomplete(); return; }
+
+            nqlAutocomplete.innerHTML = matches.map((f, i) =>
+                `<div class="nql-autocomplete-item${i === 0 ? ' selected' : ''}" onclick="insertAutocomplete('${f.name}:')">
+                    <span>${f.name}:</span>
+                    <span class="nql-ac-type">${f.desc}</span>
+                </div>`
+            ).join('');
+            nqlAutocomplete.classList.add('visible');
+            nqlSelectedAC = 0;
+        } else {
+            hideAutocomplete();
+        }
+    }
+
+    function hideAutocomplete() {
+        nqlAutocomplete.classList.remove('visible');
+        nqlSelectedAC = -1;
+    }
+
+    function navigateAutocomplete(dir) {
+        const items = nqlAutocomplete.querySelectorAll('.nql-autocomplete-item');
+        if (items.length === 0) return;
+        items.forEach(i => i.classList.remove('selected'));
+        nqlSelectedAC = Math.max(0, Math.min(items.length - 1, nqlSelectedAC + dir));
+        items[nqlSelectedAC].classList.add('selected');
+        items[nqlSelectedAC].scrollIntoView({ block: 'nearest' });
+    }
+
+    function insertAutocomplete(text) {
+        const val = nqlInput.value;
+        const cursorPos = nqlInput.selectionStart;
+        const textBefore = val.substring(0, cursorPos);
+        const textAfter = val.substring(cursorPos);
+        const wordMatch = textBefore.match(/(\S+)$/);
+        const wordStart = wordMatch ? cursorPos - wordMatch[1].length : cursorPos;
+
+        nqlInput.value = val.substring(0, wordStart) + text + textAfter;
+        nqlInput.focus();
+        nqlInput.selectionStart = nqlInput.selectionEnd = wordStart + text.length;
+        hideAutocomplete();
+    }
+
+    async function validateNQL() {
+        const query = nqlInput.value.trim();
+        if (!query) {
+            nqlInput.classList.remove('nql-error', 'nql-valid');
+            nqlStatus.textContent = '';
+            nqlStatus.className = 'nql-status';
+            return;
+        }
+        try {
+            const res = await fetch('/api/nql/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+            });
+            const data = await res.json();
+            if (data.valid) {
+                nqlInput.classList.remove('nql-error');
+                nqlInput.classList.add('nql-valid');
+                nqlStatus.textContent = 'Valid';
+                nqlStatus.className = 'nql-status success';
+            } else {
+                nqlInput.classList.remove('nql-valid');
+                nqlInput.classList.add('nql-error');
+                nqlStatus.textContent = data.error || 'Invalid';
+                nqlStatus.className = 'nql-status error';
+            }
+        } catch (e) {
+            nqlStatus.textContent = '';
+        }
+    }
+
+    async function runNQL() {
+        const query = nqlInput.value.trim();
+        if (!query) return;
+
+        nqlStatus.textContent = 'Running...';
+        nqlStatus.className = 'nql-status';
+
+        // Get current time range from the time pills
+        const activePill = document.querySelector('.time-pill.active');
+        const timeRange = activePill ? activePill.dataset.range : '1h';
+
+        try {
+            const res = await fetch('/api/nql/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, time_range: timeRange, per_page: 200 }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                nqlStatus.textContent = data.detail || 'Error';
+                nqlStatus.className = 'nql-status error';
+                nqlInput.classList.add('nql-error');
+                return;
+            }
+
+            nqlInput.classList.remove('nql-error');
+            nqlInput.classList.add('nql-valid');
+
+            if (data.type === 'aggregate') {
+                // Show aggregate results in the NQL results panel
+                showNQLResults(data);
+                nqlStatus.textContent = `${data.rows.length} rows`;
+                nqlStatus.className = 'nql-status success';
+            } else {
+                // Regular log query - show total then reload page with NQL as q param
+                nqlStatus.textContent = `${data.total.toLocaleString()} results`;
+                nqlStatus.className = 'nql-status success';
+                showNQLLogResults(data);
+            }
+        } catch (e) {
+            nqlStatus.textContent = 'Request failed';
+            nqlStatus.className = 'nql-status error';
+        }
+    }
+
+    function showNQLResults(data) {
+        const panel = document.getElementById('nqlResults');
+        if (!data.rows || data.rows.length === 0) {
+            panel.innerHTML = `
+                <div class="nql-results-header">
+                    <span class="nql-results-info">No results</span>
+                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+                </div>`;
+            panel.classList.add('visible');
+            return;
+        }
+
+        const cols = data.columns || Object.keys(data.rows[0]);
+        let html = `
+            <div class="nql-results-header">
+                <span class="nql-results-info">Aggregate: ${data.rows.length} rows</span>
+                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+            </div>
+            <div class="nql-results-body">
+            <table>
+                <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+                <tbody>`;
+
+        for (const row of data.rows) {
+            html += '<tr>';
+            for (const col of cols) {
+                let val = row[col];
+                if (typeof val === 'number') val = val.toLocaleString();
+                html += `<td>${val ?? ''}</td>`;
+            }
+            html += '</tr>';
+        }
+
+        html += '</tbody></table></div>';
+        panel.innerHTML = html;
+        panel.classList.add('visible');
+    }
+
+    function showNQLLogResults(data) {
+        // For non-aggregate queries, show results in the NQL panel
+        const panel = document.getElementById('nqlResults');
+        if (!data.rows || data.rows.length === 0) {
+            panel.innerHTML = `
+                <div class="nql-results-header">
+                    <span class="nql-results-info">No matching logs (total: ${(data.total || 0).toLocaleString()})</span>
+                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+                </div>`;
+            panel.classList.add('visible');
+            return;
+        }
+
+        const displayCols = ['timestamp', 'device_ip', 'severity', 'srcip', 'dstip', 'dstport', 'action', 'message'];
+        const sevNames = {0:'Emergency',1:'Alert',2:'Critical',3:'Error',4:'Warning',5:'Notice',6:'Info',7:'Debug'};
+
+        let html = `
+            <div class="nql-results-header">
+                <span class="nql-results-info">${data.total.toLocaleString()} total matches (showing ${data.rows.length})</span>
+                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+            </div>
+            <div class="nql-results-body">
+            <table>
+                <thead><tr>${displayCols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+                <tbody>`;
+
+        for (const row of data.rows) {
+            html += '<tr>';
+            for (const col of displayCols) {
+                let val = row[col] ?? '';
+                if (col === 'timestamp' && val) {
+                    val = val.replace('T', ' ').substring(0, 19);
+                } else if (col === 'severity') {
+                    val = sevNames[val] || val;
+                } else if (col === 'message' && typeof val === 'string' && val.length > 120) {
+                    val = val.substring(0, 120) + '...';
+                }
+                html += `<td>${val}</td>`;
+            }
+            html += '</tr>';
+        }
+
+        html += '</tbody></table></div>';
+        panel.innerHTML = html;
+        panel.classList.add('visible');
+    }
+
+    function closeNQLResults() {
+        document.getElementById('nqlResults').classList.remove('visible');
+    }
     </script>
 </body>
 </html>

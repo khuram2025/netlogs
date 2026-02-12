@@ -3,6 +3,7 @@ HTML view routes for the web UI.
 """
 
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional
@@ -19,6 +20,9 @@ from ..models.credential import DeviceCredential, CredentialType, DeviceVdom
 from ..models.device_ssh_settings import DeviceSshSettings
 from ..models.routing import RoutingTableSnapshot, RoutingEntry, RouteChange
 from ..models.zone import ZoneSnapshot, ZoneEntry, InterfaceEntry
+from ..core.permissions import require_role, require_min_role
+
+logger = logging.getLogger(__name__)
 
 # Thread pool for running blocking ClickHouse queries in parallel
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -26,6 +30,24 @@ _executor = ThreadPoolExecutor(max_workers=4)
 router = APIRouter(tags=["views"])
 
 templates = Jinja2Templates(directory="fastapi_app/templates")
+
+
+def _base_context(request: Request) -> dict:
+    """Build base template context with current user info."""
+    ctx = {"request": request}
+    user = getattr(request.state, "current_user", None)
+    ctx["current_user"] = user
+    # Alert count is set async in _render_async or defaults to 0
+    ctx["unread_alert_count"] = getattr(request.state, "_alert_count", 0)
+    return ctx
+
+
+def _render(template_name: str, request: Request, context: dict = None):
+    """Render template with base context (current_user, etc.) merged in."""
+    ctx = _base_context(request)
+    if context:
+        ctx.update(context)
+    return templates.TemplateResponse(template_name, ctx)
 
 
 # Severity mapping
@@ -173,8 +195,7 @@ async def dashboard(request: Request):
             27017: 'MongoDB'
         }
 
-        return templates.TemplateResponse("logs/dashboard.html", {
-            "request": request,
+        return _render("logs/dashboard.html", request, {
             "logs": logs,
             "severity_map": SEVERITY_MAP,
             "stats": stats,
@@ -193,8 +214,7 @@ async def dashboard(request: Request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return templates.TemplateResponse("logs/dashboard.html", {
-            "request": request,
+        return _render("logs/dashboard.html", request, {
             "logs": [],
             "severity_map": SEVERITY_MAP,
             "stats": {},
@@ -240,6 +260,10 @@ async def log_list(
     # Infrastructure filters
     src_zone: Optional[str] = Query(None),
     dst_zone: Optional[str] = Query(None),
+    # Aggregate view parameters
+    view: Optional[str] = Query(None),
+    group_by: Optional[str] = Query(None),
+    subnet_rollup: Optional[str] = Query(None),
 ):
     """Log list view with filtering."""
     try:
@@ -312,65 +336,69 @@ async def log_list(
         # Build search query from direct filter parameters (srcip, dstip, dstport)
         search_parts = []
 
+        def _fmt(field, val):
+            """Quote values with spaces so the regex parser captures the full value."""
+            return f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+
         # Handle srcip parameter
         srcip_clean = srcip.strip() if srcip and srcip.strip() else None
         if srcip_clean:
-            search_parts.append(f"srcip:{srcip_clean}")
+            search_parts.append(_fmt("srcip", srcip_clean))
 
         # Handle dstip parameter
         dstip_clean = dstip.strip() if dstip and dstip.strip() else None
         if dstip_clean:
-            search_parts.append(f"dstip:{dstip_clean}")
+            search_parts.append(_fmt("dstip", dstip_clean))
 
         # Handle dstport parameter
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
-            search_parts.append(f"dstport:{dstport_clean}")
+            search_parts.append(_fmt("dstport", dstport_clean))
 
         # Handle policyname parameter
         policyname_clean = policyname.strip() if policyname and policyname.strip() else None
         if policyname_clean:
-            search_parts.append(f"policyname:{policyname_clean}")
+            search_parts.append(_fmt("policyname", policyname_clean))
 
         # Handle srcport parameter
         srcport_clean = srcport.strip() if srcport and srcport.strip() else None
         if srcport_clean:
-            search_parts.append(f"srcport:{srcport_clean}")
+            search_parts.append(_fmt("srcport", srcport_clean))
 
         # Handle protocol parameter
         protocol_clean = protocol.strip() if protocol and protocol.strip() else None
         if protocol_clean:
-            search_parts.append(f"proto:{protocol_clean}")
+            search_parts.append(_fmt("proto", protocol_clean))
 
         # Handle log_type parameter
         log_type_clean = log_type.strip() if log_type and log_type.strip() else None
         if log_type_clean:
-            search_parts.append(f"log_type:{log_type_clean}")
+            search_parts.append(_fmt("log_type", log_type_clean))
 
         # Handle threat_id parameter
         threat_id_clean = threat_id.strip() if threat_id and threat_id.strip() else None
         if threat_id_clean:
-            search_parts.append(f"threat_id:{threat_id_clean}")
+            search_parts.append(_fmt("threat_id", threat_id_clean))
 
         # Handle application parameter
         application_clean = application.strip() if application and application.strip() else None
         if application_clean:
-            search_parts.append(f"application:{application_clean}")
+            search_parts.append(_fmt("application", application_clean))
 
         # Handle session_end_reason parameter
         session_end_reason_clean = session_end_reason.strip() if session_end_reason and session_end_reason.strip() else None
         if session_end_reason_clean:
-            search_parts.append(f"session_end_reason:{session_end_reason_clean}")
+            search_parts.append(_fmt("session_end_reason", session_end_reason_clean))
 
         # Handle src_zone parameter
         src_zone_clean = src_zone.strip() if src_zone and src_zone.strip() else None
         if src_zone_clean:
-            search_parts.append(f"src_zone:{src_zone_clean}")
+            search_parts.append(_fmt("src_zone", src_zone_clean))
 
         # Handle dst_zone parameter
         dst_zone_clean = dst_zone.strip() if dst_zone and dst_zone.strip() else None
         if dst_zone_clean:
-            search_parts.append(f"dst_zone:{dst_zone_clean}")
+            search_parts.append(_fmt("dst_zone", dst_zone_clean))
 
         # Combine with existing q parameter if present
         search_query = q or ""
@@ -395,32 +423,76 @@ async def log_list(
                 else:
                     search_query = action_terms[action]
 
+        # Determine if aggregate view
+        is_aggregate = view and view.strip().lower() == 'aggregate'
+
+        # Parse group_by fields (whitelist validated)
+        allowed_group_fields = {'srcip', 'dstip', 'dstport'}
+        if group_by and group_by.strip():
+            group_fields = [f.strip() for f in group_by.split(',') if f.strip() in allowed_group_fields]
+        else:
+            group_fields = ['srcip', 'dstip', 'dstport']
+        if not group_fields:
+            group_fields = ['srcip', 'dstip', 'dstport']
+
+        # Subnet rollup: group srcip by /24 subnet
+        is_subnet_rollup = subnet_rollup and subnet_rollup.strip().lower() in ('1', 'true', 'on')
+
         # Run all ClickHouse queries in parallel for better performance
         loop = asyncio.get_event_loop()
 
-        logs_future = loop.run_in_executor(
-            _executor,
-            lambda: ClickHouseClient.search_logs(
-                limit=per_page_num,
-                offset=offset,
-                device_ips=device_ips,
-                severities=severities,
-                start_time=start_time,
-                end_time=end_time,
-                query_text=search_query if search_query else None,
+        if is_aggregate:
+            logs_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.aggregate_logs(
+                    group_by_fields=group_fields,
+                    limit=per_page_num,
+                    offset=offset,
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                    subnet_rollup=is_subnet_rollup,
+                )
             )
-        )
 
-        total_future = loop.run_in_executor(
-            _executor,
-            lambda: ClickHouseClient.count_logs(
-                device_ips=device_ips,
-                severities=severities,
-                start_time=start_time,
-                end_time=end_time,
-                query_text=search_query if search_query else None,
+            total_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.count_aggregate_groups(
+                    group_by_fields=group_fields,
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                    subnet_rollup=is_subnet_rollup,
+                )
             )
-        )
+        else:
+            logs_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.search_logs(
+                    limit=per_page_num,
+                    offset=offset,
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                )
+            )
+
+            total_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.count_logs(
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                )
+            )
 
         stats_future = loop.run_in_executor(
             _executor,
@@ -438,7 +510,7 @@ async def log_list(
         )
 
         # Wait for all queries to complete
-        logs, total, stats, devices = await asyncio.gather(
+        logs_or_agg, total, stats, devices = await asyncio.gather(
             logs_future, total_future, stats_future, devices_future
         )
 
@@ -457,9 +529,7 @@ async def log_list(
         current_action = action if action and action.strip() else None
         current_q = q if q and q.strip() else None
 
-        return templates.TemplateResponse("logs/log_list.html", {
-            "request": request,
-            "logs": logs,
+        context = {
             "severity_map": SEVERITY_MAP,
             "devices": devices,
             "total": total,
@@ -495,8 +565,23 @@ async def log_list(
             # Infrastructure filter values
             "current_src_zone": src_zone_clean,
             "current_dst_zone": dst_zone_clean,
+            # Aggregate view
+            "is_aggregate": is_aggregate,
+            "current_view": 'aggregate' if is_aggregate else '',
+            "current_group_by": ','.join(group_fields),
+            "group_fields": group_fields,
+            "is_subnet_rollup": is_subnet_rollup,
             "error": None,
-        })
+        }
+
+        if is_aggregate:
+            context["logs"] = []
+            context["agg_rows"] = logs_or_agg
+        else:
+            context["logs"] = logs_or_agg
+            context["agg_rows"] = []
+
+        return _render("logs/log_list.html", request, context)
     except Exception as e:
         import traceback
         import logging
@@ -505,8 +590,7 @@ async def log_list(
         logger.error(traceback.format_exc())
         print(f"ERROR in log_list: {type(e).__name__}: {e}")
         print(traceback.format_exc())
-        return templates.TemplateResponse("logs/log_list.html", {
-            "request": request,
+        return _render("logs/log_list.html", request, {
             "logs": [],
             "severity_map": SEVERITY_MAP,
             "devices": [],
@@ -542,6 +626,13 @@ async def log_list(
             # Infrastructure filter values
             "current_src_zone": src_zone if src_zone else None,
             "current_dst_zone": dst_zone if dst_zone else None,
+            # Aggregate view
+            "is_aggregate": False,
+            "current_view": '',
+            "current_group_by": 'srcip,dstip,dstport',
+            "group_fields": ['srcip', 'dstip', 'dstport'],
+            "is_subnet_rollup": False,
+            "agg_rows": [],
             "error": str(e),
         })
 
@@ -633,25 +724,28 @@ async def policy_builder(
         # Build search query - ALWAYS include deny filter for Policy Builder
         search_parts = []
 
+        def _fmt(field, val):
+            return f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+
         # Handle srcip parameter
         srcip_clean = srcip.strip() if srcip and srcip.strip() else None
         if srcip_clean:
-            search_parts.append(f"srcip:{srcip_clean}")
+            search_parts.append(_fmt("srcip", srcip_clean))
 
         # Handle dstip parameter
         dstip_clean = dstip.strip() if dstip and dstip.strip() else None
         if dstip_clean:
-            search_parts.append(f"dstip:{dstip_clean}")
+            search_parts.append(_fmt("dstip", dstip_clean))
 
         # Handle dstport parameter
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
-            search_parts.append(f"dstport:{dstport_clean}")
+            search_parts.append(_fmt("dstport", dstport_clean))
 
         # Handle policyname parameter
         policyname_clean = policyname.strip() if policyname and policyname.strip() else None
         if policyname_clean:
-            search_parts.append(f"policyname:{policyname_clean}")
+            search_parts.append(_fmt("policyname", policyname_clean))
 
         # Combine with existing q parameter if present
         search_query = q or ""
@@ -729,8 +823,7 @@ async def policy_builder(
         current_device = device if device and device.strip() else None
         current_q = q if q and q.strip() else None
 
-        return templates.TemplateResponse("logs/policy_builder.html", {
-            "request": request,
+        return _render("logs/policy_builder.html", request, {
             "logs": logs,
             "severity_map": SEVERITY_MAP,
             "devices": devices,
@@ -761,8 +854,7 @@ async def policy_builder(
         logger = logging.getLogger(__name__)
         logger.error(f"Error in policy_builder view: {type(e).__name__}: {e}")
         logger.error(traceback.format_exc())
-        return templates.TemplateResponse("logs/policy_builder.html", {
-            "request": request,
+        return _render("logs/policy_builder.html", request, {
             "logs": [],
             "severity_map": SEVERITY_MAP,
             "devices": [],
@@ -810,8 +902,7 @@ async def device_list(
             }
             device_storage_map = {}
 
-        return templates.TemplateResponse("devices/device_list.html", {
-            "request": request,
+        return _render("devices/device_list.html", request, {
             "devices": devices,
             "storage_stats": storage_stats,
             "device_storage_map": device_storage_map,
@@ -819,8 +910,7 @@ async def device_list(
             "format_number": format_number,
         })
     except Exception as e:
-        return templates.TemplateResponse("devices/device_list.html", {
-            "request": request,
+        return _render("devices/device_list.html", request, {
             "devices": [],
             "storage_stats": {},
             "device_storage_map": {},
@@ -830,7 +920,8 @@ async def device_list(
         })
 
 
-@router.get("/devices/{device_id}/edit/", response_class=HTMLResponse, name="edit_device")
+@router.get("/devices/{device_id}/edit/", response_class=HTMLResponse, name="edit_device",
+            dependencies=[Depends(require_role("ADMIN"))])
 async def edit_device(
     request: Request,
     device_id: int,
@@ -866,8 +957,7 @@ async def edit_device(
         vdom_obj = vdom_result.scalar_one_or_none()
         current_vdom = vdom_obj.vdom_name if vdom_obj else None
 
-    return templates.TemplateResponse("devices/edit_device.html", {
-        "request": request,
+    return _render("devices/edit_device.html", request, {
         "device": device,
         "parser_choices": ParserType.CHOICES,
         "retention_choices": RetentionDays.CHOICES,
@@ -876,7 +966,8 @@ async def edit_device(
     })
 
 
-@router.post("/devices/{device_id}/edit/", name="edit_device_post")
+@router.post("/devices/{device_id}/edit/", name="edit_device_post",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def edit_device_post(
     device_id: int,
     hostname: str = Form(""),
@@ -954,7 +1045,8 @@ async def edit_device_post(
     return RedirectResponse(url="/devices/", status_code=303)
 
 
-@router.get("/devices/{device_id}/approve/", name="approve_device_view")
+@router.get("/devices/{device_id}/approve/", name="approve_device_view",
+            dependencies=[Depends(require_min_role("ANALYST"))])
 async def approve_device_view(
     device_id: int,
     db: AsyncSession = Depends(get_db),
@@ -970,7 +1062,8 @@ async def approve_device_view(
     return RedirectResponse(url="/devices/", status_code=303)
 
 
-@router.get("/devices/{device_id}/reject/", name="reject_device_view")
+@router.get("/devices/{device_id}/reject/", name="reject_device_view",
+            dependencies=[Depends(require_min_role("ANALYST"))])
 async def reject_device_view(
     device_id: int,
     db: AsyncSession = Depends(get_db),
@@ -1072,8 +1165,7 @@ async def device_detail(
     valid_tabs = ['routes', 'zones', 'changes', 'snapshots']
     current_tab = tab if tab in valid_tabs else 'routes'
 
-    return templates.TemplateResponse("devices/device_detail.html", {
-        "request": request,
+    return _render("devices/device_detail.html", request, {
         "device": device,
         "credentials_count": credentials_count,
         "has_credentials": has_credentials,
@@ -1240,7 +1332,8 @@ async def fetch_zone_data(
 # Device Credentials Endpoints
 # ============================================================
 
-@router.get("/devices/{device_id}/credentials/", response_class=HTMLResponse, name="device_credentials")
+@router.get("/devices/{device_id}/credentials/", response_class=HTMLResponse, name="device_credentials",
+            dependencies=[Depends(require_role("ADMIN"))])
 async def device_credentials(
     request: Request,
     device_id: int,
@@ -1269,8 +1362,7 @@ async def device_credentials(
     )
     vdoms = vdoms_result.scalars().all()
 
-    return templates.TemplateResponse("devices/device_credentials.html", {
-        "request": request,
+    return _render("devices/device_credentials.html", request, {
         "device": device,
         "credentials": credentials,
         "credential_types": CredentialType.CHOICES,
@@ -1278,7 +1370,8 @@ async def device_credentials(
     })
 
 
-@router.post("/devices/{device_id}/credentials/add/", name="add_credential")
+@router.post("/devices/{device_id}/credentials/add/", name="add_credential",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def add_credential(
     device_id: int,
     credential_type: str = Form("SSH"),
@@ -1317,7 +1410,8 @@ async def add_credential(
     )
 
 
-@router.post("/devices/{device_id}/credentials/update/", name="update_credential")
+@router.post("/devices/{device_id}/credentials/update/", name="update_credential",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def update_credential(
     device_id: int,
     credential_id: int = Form(...),
@@ -1360,7 +1454,8 @@ async def update_credential(
     )
 
 
-@router.post("/devices/{device_id}/credentials/{credential_id}/delete/", name="delete_credential")
+@router.post("/devices/{device_id}/credentials/{credential_id}/delete/", name="delete_credential",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def delete_credential(
     device_id: int,
     credential_id: int,
@@ -1384,7 +1479,8 @@ async def delete_credential(
     return JSONResponse({"success": False, "message": "Credential not found"}, status_code=404)
 
 
-@router.post("/devices/{device_id}/credentials/{credential_id}/test/", name="test_credential")
+@router.post("/devices/{device_id}/credentials/{credential_id}/test/", name="test_credential",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def test_credential(
     device_id: int,
     credential_id: int,
@@ -1680,7 +1776,8 @@ def get_disk_usage(path: str = '/') -> dict:
     }
 
 
-@router.get("/system/", response_class=HTMLResponse, name="system_monitor")
+@router.get("/system/", response_class=HTMLResponse, name="system_monitor",
+            dependencies=[Depends(require_min_role("ANALYST"))])
 async def system_monitor(request: Request):
     """System monitoring page showing disk usage and ClickHouse storage."""
     try:
@@ -1714,8 +1811,7 @@ async def system_monitor(request: Request):
         else:
             disk_status = 'healthy'
 
-        return templates.TemplateResponse("system/system_monitor.html", {
-            "request": request,
+        return _render("system/system_monitor.html", request, {
             "disk_info": disk_info,
             "disk_status": disk_status,
             "all_tables": all_tables,
@@ -1730,8 +1826,7 @@ async def system_monitor(request: Request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return templates.TemplateResponse("system/system_monitor.html", {
-            "request": request,
+        return _render("system/system_monitor.html", request, {
             "disk_info": get_disk_usage('/'),
             "disk_status": 'unknown',
             "all_tables": [],
@@ -1744,7 +1839,8 @@ async def system_monitor(request: Request):
         })
 
 
-@router.post("/api/system/truncate-table/", name="truncate_system_table")
+@router.post("/api/system/truncate-table/", name="truncate_system_table",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def truncate_system_table(request: Request):
     """Truncate a system table to free up space."""
     try:
@@ -1765,7 +1861,8 @@ async def truncate_system_table(request: Request):
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-@router.post("/api/system/run-cleanup/", name="run_system_cleanup")
+@router.post("/api/system/run-cleanup/", name="run_system_cleanup",
+             dependencies=[Depends(require_role("ADMIN"))])
 async def run_system_cleanup(request: Request):
     """Run the disk cleanup script manually."""
     import subprocess
@@ -1810,3 +1907,605 @@ async def api_disk_usage():
         })
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ============================================================
+# Storage Quota Management Endpoints
+# ============================================================
+
+@router.get("/api/system/storage-settings/", name="get_storage_settings")
+async def get_storage_settings(db: AsyncSession = Depends(get_db)):
+    """Get current storage settings."""
+    from sqlalchemy import select
+    from ..models.storage_settings import StorageSettings
+
+    try:
+        # Get or create default settings
+        result = await db.execute(select(StorageSettings).limit(1))
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            # Create default settings
+            settings = StorageSettings(
+                syslogs_max_size_gb=600.0,
+                auto_cleanup_enabled=True,
+                cleanup_trigger_percent=95.0,
+                cleanup_target_percent=80.0,
+                min_retention_days=7,
+                disk_warning_percent=85.0,
+                disk_critical_percent=95.0,
+                monitor_interval_minutes=15
+            )
+            db.add(settings)
+            await db.commit()
+            await db.refresh(settings)
+
+        # Get current syslogs storage info
+        syslogs_info = ClickHouseClient.get_syslogs_storage_info()
+
+        return JSONResponse({
+            "success": True,
+            "settings": {
+                "id": settings.id,
+                "syslogs_max_size_gb": settings.syslogs_max_size_gb,
+                "auto_cleanup_enabled": settings.auto_cleanup_enabled,
+                "cleanup_trigger_percent": settings.cleanup_trigger_percent,
+                "cleanup_target_percent": settings.cleanup_target_percent,
+                "min_retention_days": settings.min_retention_days,
+                "disk_warning_percent": settings.disk_warning_percent,
+                "disk_critical_percent": settings.disk_critical_percent,
+                "monitor_interval_minutes": settings.monitor_interval_minutes,
+                "last_cleanup_at": settings.last_cleanup_at.isoformat() if settings.last_cleanup_at else None,
+                "last_cleanup_freed_gb": settings.last_cleanup_freed_gb,
+                "last_cleanup_status": settings.last_cleanup_status,
+                "current_size_gb": settings.current_size_gb,
+                "usage_percent": settings.usage_percent,
+                "needs_cleanup": settings.needs_cleanup
+            },
+            "current_storage": syslogs_info
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/system/storage-settings/", name="update_storage_settings",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def update_storage_settings(request: Request, db: AsyncSession = Depends(get_db)):
+    """Update storage settings."""
+    from sqlalchemy import select
+    from ..models.storage_settings import StorageSettings
+
+    try:
+        body = await request.json()
+
+        result = await db.execute(select(StorageSettings).limit(1))
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            settings = StorageSettings()
+            db.add(settings)
+
+        # Update allowed fields
+        allowed_fields = [
+            'syslogs_max_size_gb', 'auto_cleanup_enabled', 'cleanup_trigger_percent',
+            'cleanup_target_percent', 'min_retention_days', 'disk_warning_percent',
+            'disk_critical_percent', 'monitor_interval_minutes'
+        ]
+
+        for field in allowed_fields:
+            if field in body:
+                setattr(settings, field, body[field])
+
+        await db.commit()
+        await db.refresh(settings)
+
+        return JSONResponse({
+            "success": True,
+            "message": "Storage settings updated successfully",
+            "settings": {
+                "syslogs_max_size_gb": settings.syslogs_max_size_gb,
+                "auto_cleanup_enabled": settings.auto_cleanup_enabled,
+                "cleanup_trigger_percent": settings.cleanup_trigger_percent,
+                "cleanup_target_percent": settings.cleanup_target_percent,
+                "min_retention_days": settings.min_retention_days
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/system/trigger-cleanup/", name="trigger_manual_cleanup",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def trigger_manual_cleanup(request: Request, db: AsyncSession = Depends(get_db)):
+    """Manually trigger storage cleanup based on current settings."""
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    from ..models.storage_settings import StorageSettings, StorageCleanupLog
+
+    try:
+        body = await request.json() if request.headers.get('content-type') == 'application/json' else {}
+        force = body.get('force', False)
+
+        # Get settings
+        result = await db.execute(select(StorageSettings).limit(1))
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            return JSONResponse({
+                "success": False,
+                "error": "Storage settings not configured. Please configure settings first."
+            }, status_code=400)
+
+        # Get current storage info
+        syslogs_info = ClickHouseClient.get_syslogs_storage_info()
+        current_size_gb = syslogs_info['size_gb']
+
+        # Check if cleanup is needed
+        target_size_gb = settings.syslogs_max_size_gb * (settings.cleanup_target_percent / 100)
+
+        if not force and current_size_gb <= settings.syslogs_max_size_gb:
+            return JSONResponse({
+                "success": True,
+                "message": f"No cleanup needed. Current size ({current_size_gb:.2f} GB) is within quota ({settings.syslogs_max_size_gb:.2f} GB)",
+                "cleanup_performed": False,
+                "current_size_gb": current_size_gb,
+                "quota_gb": settings.syslogs_max_size_gb
+            })
+
+        # Create cleanup log entry
+        cleanup_log = StorageCleanupLog(
+            triggered_by='manual',
+            trigger_reason=f"Manual trigger (force={force}). Size: {current_size_gb:.2f} GB, Quota: {settings.syslogs_max_size_gb:.2f} GB",
+            size_before_gb=current_size_gb,
+            rows_before=syslogs_info['total_rows'],
+            status='started'
+        )
+        db.add(cleanup_log)
+        await db.commit()
+        await db.refresh(cleanup_log)
+
+        # Execute cleanup
+        cleanup_result = ClickHouseClient.delete_logs_to_reach_target_size(
+            target_size_gb=target_size_gb,
+            min_retention_days=settings.min_retention_days
+        )
+
+        # Update cleanup log
+        cleanup_log.status = 'success' if cleanup_result['success'] else 'failed'
+        cleanup_log.error_message = cleanup_result.get('message')
+        cleanup_log.completed_at = datetime.now(timezone.utc)
+        cleanup_log.duration_seconds = (cleanup_log.completed_at - cleanup_log.started_at).total_seconds()
+
+        if cleanup_result.get('action_taken'):
+            cleanup_log.deletion_query = f"DELETE WHERE timestamp < now() - INTERVAL {cleanup_result.get('retention_days_used', 0)} DAY"
+
+        # Update settings with last cleanup info
+        settings.last_cleanup_at = datetime.now(timezone.utc)
+        settings.last_cleanup_status = cleanup_log.status
+        settings.last_cleanup_freed_gb = cleanup_result.get('estimated_freed_gb', 0)
+        settings.last_cleanup_rows_deleted = cleanup_result.get('rows_affected', 0)
+        settings.current_size_gb = current_size_gb
+        settings.current_rows = syslogs_info['total_rows']
+        settings.last_monitored_at = datetime.now(timezone.utc)
+
+        await db.commit()
+
+        return JSONResponse({
+            "success": cleanup_result['success'],
+            "message": cleanup_result['message'],
+            "cleanup_performed": cleanup_result.get('action_taken', False),
+            "details": {
+                "size_before_gb": current_size_gb,
+                "target_size_gb": target_size_gb,
+                "estimated_freed_gb": cleanup_result.get('estimated_freed_gb', 0),
+                "rows_affected": cleanup_result.get('rows_affected', 0),
+                "retention_days_used": cleanup_result.get('retention_days_used'),
+                "mutation_id": cleanup_result.get('mutation_id')
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/api/system/storage-status/", name="get_storage_status")
+async def get_storage_status(db: AsyncSession = Depends(get_db)):
+    """Get comprehensive storage status including quota usage and recommendations."""
+    from sqlalchemy import select
+    from ..models.storage_settings import StorageSettings
+
+    try:
+        # Get settings
+        result = await db.execute(select(StorageSettings).limit(1))
+        settings = result.scalar_one_or_none()
+
+        # Get current storage info
+        syslogs_info = ClickHouseClient.get_syslogs_storage_info()
+        disk_info = get_disk_usage('/')
+        cleanup_status = ClickHouseClient.get_cleanup_status()
+
+        current_size_gb = syslogs_info['size_gb']
+        quota_gb = settings.syslogs_max_size_gb if settings else 600.0
+
+        # Calculate status
+        usage_percent = (current_size_gb / quota_gb * 100) if quota_gb > 0 else 0
+
+        if usage_percent >= 95:
+            status = 'critical'
+            status_message = 'Storage quota critically exceeded! Immediate cleanup required.'
+        elif usage_percent >= 85:
+            status = 'warning'
+            status_message = 'Storage approaching quota limit. Cleanup recommended.'
+        elif usage_percent >= 70:
+            status = 'caution'
+            status_message = 'Storage usage is moderate.'
+        else:
+            status = 'healthy'
+            status_message = 'Storage usage is within healthy limits.'
+
+        # Estimate how long until quota is reached (based on simple projection)
+        # This would need historical data for accurate prediction
+        oldest_log_days = ClickHouseClient.get_oldest_log_age_days()
+
+        return JSONResponse({
+            "success": True,
+            "status": status,
+            "status_message": status_message,
+            "quota": {
+                "max_size_gb": quota_gb,
+                "current_size_gb": current_size_gb,
+                "usage_percent": round(usage_percent, 1),
+                "free_quota_gb": round(quota_gb - current_size_gb, 2),
+                "auto_cleanup_enabled": settings.auto_cleanup_enabled if settings else True
+            },
+            "syslogs": {
+                "total_rows": syslogs_info['total_rows'],
+                "size_readable": syslogs_info['size_readable'],
+                "oldest_data": syslogs_info['oldest_data'].isoformat() if syslogs_info['oldest_data'] else None,
+                "newest_data": syslogs_info['newest_data'].isoformat() if syslogs_info['newest_data'] else None,
+                "oldest_log_days": oldest_log_days
+            },
+            "disk": disk_info,
+            "pending_mutations": cleanup_status['pending_mutations'],
+            "last_cleanup": {
+                "at": settings.last_cleanup_at.isoformat() if settings and settings.last_cleanup_at else None,
+                "status": settings.last_cleanup_status if settings else None,
+                "freed_gb": settings.last_cleanup_freed_gb if settings else None
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/api/system/cleanup-history/", name="get_cleanup_history")
+async def get_cleanup_history(db: AsyncSession = Depends(get_db), limit: int = 20):
+    """Get history of cleanup operations."""
+    from sqlalchemy import select
+    from ..models.storage_settings import StorageCleanupLog
+
+    try:
+        result = await db.execute(
+            select(StorageCleanupLog)
+            .order_by(StorageCleanupLog.started_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+
+        return JSONResponse({
+            "success": True,
+            "history": [
+                {
+                    "id": log.id,
+                    "triggered_by": log.triggered_by,
+                    "trigger_reason": log.trigger_reason,
+                    "size_before_gb": log.size_before_gb,
+                    "size_after_gb": log.size_after_gb,
+                    "rows_before": log.rows_before,
+                    "rows_after": log.rows_after,
+                    "status": log.status,
+                    "error_message": log.error_message,
+                    "started_at": log.started_at.isoformat() if log.started_at else None,
+                    "completed_at": log.completed_at.isoformat() if log.completed_at else None,
+                    "duration_seconds": log.duration_seconds
+                }
+                for log in logs
+            ]
+        })
+
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/system/estimate-cleanup/", name="estimate_cleanup")
+async def estimate_cleanup(request: Request):
+    """Estimate the impact of cleanup with different retention days."""
+    try:
+        body = await request.json()
+        days = body.get('days', 30)
+
+        if days < 1:
+            return JSONResponse({"success": False, "error": "Days must be at least 1"}, status_code=400)
+
+        estimate = ClickHouseClient.estimate_deletion_size(days)
+        current_info = ClickHouseClient.get_syslogs_storage_info()
+
+        return JSONResponse({
+            "success": True,
+            "retention_days": days,
+            "estimate": {
+                "rows_to_delete": estimate['rows_to_delete'],
+                "estimated_bytes": estimate['estimated_bytes'],
+                "estimated_gb": estimate['estimated_gb'],
+                "percent_of_total": round((estimate['rows_to_delete'] / current_info['total_rows'] * 100), 1) if current_info['total_rows'] > 0 else 0
+            },
+            "current_storage": {
+                "total_rows": current_info['total_rows'],
+                "size_gb": current_info['size_gb'],
+                "remaining_after_cleanup_gb": round(current_info['size_gb'] - estimate['estimated_gb'], 2)
+            }
+        })
+
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ============================================================
+# Audit Log Viewer (Admin Only)
+# ============================================================
+
+@router.get("/system/audit-log/", response_class=HTMLResponse, name="audit_log",
+            dependencies=[Depends(require_role("ADMIN"))])
+async def audit_log(
+    request: Request,
+    username: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    resource_type: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=200),
+):
+    """Audit log viewer page."""
+    from ..services.audit_service import get_audit_logs, get_distinct_values
+
+    start_time = None
+    end_time = None
+    if start_date:
+        try:
+            start_time = datetime.fromisoformat(start_date)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            end_time = datetime.fromisoformat(end_date + "T23:59:59")
+        except ValueError:
+            pass
+
+    offset = (page - 1) * per_page
+
+    logs, total = get_audit_logs(
+        limit=per_page,
+        offset=offset,
+        username=username or None,
+        action=action or None,
+        resource_type=resource_type or None,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    # Get distinct values for filter dropdowns
+    usernames = get_distinct_values("username")
+    actions = get_distinct_values("action")
+    resource_types = get_distinct_values("resource_type")
+
+    return _render("system/audit_log.html", request, {
+        "logs": logs,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "usernames": usernames,
+        "actions": actions,
+        "resource_types": resource_types,
+        "current_username": username or "",
+        "current_action": action or "",
+        "current_resource_type": resource_type or "",
+        "current_start_date": start_date or "",
+        "current_end_date": end_date or "",
+    })
+
+
+@router.get("/api/system/audit-log/export/", name="audit_log_export",
+            dependencies=[Depends(require_role("ADMIN"))])
+async def audit_log_export(
+    request: Request,
+    username: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    resource_type: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+):
+    """Export audit logs as CSV."""
+    from ..services.audit_service import export_csv
+    from fastapi.responses import Response
+
+    start_time = None
+    end_time = None
+    if start_date:
+        try:
+            start_time = datetime.fromisoformat(start_date)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            end_time = datetime.fromisoformat(end_date + "T23:59:59")
+        except ValueError:
+            pass
+
+    csv_data = export_csv(
+        username=username or None,
+        action=action or None,
+        resource_type=resource_type or None,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_log.csv"},
+    )
+
+
+# ============================================================
+# NQL (NetLogs Query Language) API
+# ============================================================
+
+@router.post("/api/nql/validate", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_validate(request: Request):
+    """Validate an NQL query without executing it."""
+    from ..services.nql_parser import validate_nql
+    data = await request.json()
+    query_text = data.get("query", "")
+    is_valid, error = validate_nql(query_text)
+    return {"valid": is_valid, "error": error}
+
+
+@router.post("/api/nql/query", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_query(request: Request):
+    """Execute an NQL query and return results."""
+    from ..services.nql_parser import compile_nql, NQLSyntaxError
+
+    data = await request.json()
+    query_text = data.get("query", "")
+    time_range = data.get("time_range", "1h")
+    page = max(1, data.get("page", 1))
+    per_page = min(200, max(10, data.get("per_page", 100)))
+
+    if not query_text.strip():
+        return JSONResponse(status_code=400, content={"detail": "Query is required"})
+
+    try:
+        compiled = compile_nql(query_text)
+    except NQLSyntaxError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e), "type": "syntax_error"})
+
+    # Build time filter
+    time_map = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440, "7d": 10080, "30d": 43200}
+    minutes = time_map.get(time_range, 60)
+    time_filter = f"timestamp > now() - INTERVAL {minutes} MINUTE"
+
+    loop = asyncio.get_event_loop()
+
+    def _run_query(sql_text):
+        """Run a ClickHouse query with a fresh client to avoid concurrency issues."""
+        c = ClickHouseClient.get_client()
+        return c.query(sql_text)
+
+    try:
+        if compiled["is_aggregate"]:
+            # Aggregate query
+            select_clause = compiled["select"] or "count() as count"
+            group_by = f"GROUP BY {compiled['group_by']}" if compiled["group_by"] else ""
+            having = f"HAVING {compiled['having']}" if compiled["having"] else ""
+            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else ""
+            limit_val = compiled["limit"] or per_page
+
+            sql = f"""SELECT {select_clause}
+FROM syslogs
+PREWHERE {time_filter}
+WHERE {compiled['where']}
+{group_by}
+{having}
+{order_by}
+LIMIT {limit_val}"""
+
+            result = await loop.run_in_executor(_executor, lambda: _run_query(sql))
+            columns = result.column_names
+            rows = []
+            for row in result.result_rows:
+                rows.append({columns[i]: _serialize_value(row[i]) for i in range(len(columns))})
+
+            return {
+                "type": "aggregate",
+                "columns": columns,
+                "rows": rows,
+                "total": len(rows),
+                "sql": sql,
+            }
+        else:
+            # Regular query
+            offset = (page - 1) * per_page
+            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else "ORDER BY timestamp DESC"
+            limit_val = compiled["limit"] or per_page
+
+            columns_str = ClickHouseClient.LIGHT_COLUMNS
+
+            sql = f"""SELECT {columns_str}
+FROM syslogs
+PREWHERE {time_filter}
+WHERE {compiled['where']}
+{order_by}
+LIMIT {limit_val} OFFSET {offset}"""
+
+            count_sql = f"""SELECT count()
+FROM syslogs
+PREWHERE {time_filter}
+WHERE {compiled['where']}"""
+
+            result_future = loop.run_in_executor(_executor, lambda: list(_run_query(sql).named_results()))
+            count_future = loop.run_in_executor(_executor, lambda: _run_query(count_sql).result_rows[0][0])
+
+            logs, total = await asyncio.gather(result_future, count_future)
+
+            # Serialize results
+            serialized = []
+            for log in logs:
+                row = {}
+                for k, v in log.items():
+                    row[k] = _serialize_value(v)
+                serialized.append(row)
+
+            return {
+                "type": "logs",
+                "rows": serialized,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "sql": sql,
+            }
+
+    except Exception as e:
+        logger.error(f"NQL query error: {e}")
+        return JSONResponse(status_code=400, content={"detail": f"Query execution error: {str(e)}"})
+
+
+@router.get("/api/nql/fields", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_fields():
+    """Return field metadata for NQL autocomplete."""
+    from ..services.nql_parser import FIELD_METADATA
+    return {"fields": FIELD_METADATA}
+
+
+def _serialize_value(v):
+    """Serialize a ClickHouse value to JSON-safe format."""
+    from datetime import datetime as dt
+    from ipaddress import IPv4Address, IPv6Address
+    if isinstance(v, (dt, datetime)):
+        return v.isoformat()
+    if isinstance(v, (IPv4Address, IPv6Address)):
+        return str(v)
+    if isinstance(v, dict):
+        return {k: _serialize_value(val) for k, val in v.items()}
+    return v

@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .user-table-wrap {
+        overflow-x: auto;
+    }
+
+    .user-table tr:hover {
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+
+    .status-active { background-color: var(--success); }
+    .status-inactive { background-color: var(--text-muted); }
+    .status-locked { background-color: var(--danger); }
+
+    .role-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .role-ADMIN {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .role-ANALYST {
+        background: rgba(59, 130, 246, 0.1);
+        color: var(--primary);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .role-VIEWER {
+        background: rgba(148, 163, 184, 0.1);
+        color: var(--text-muted);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    /* Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 100;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal h3 {
+        margin-bottom: 1rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.375rem;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="email"],
+    .form-group input[type="password"],
+    .form-group select {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        color: white;
+        font-size: 0.875rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 1.25rem;
+    }
+
+    .btn-ghost {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+
+    .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .actions-cell {
+        display: flex;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-xs {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        border: none;
+        font-weight: 500;
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    .btn-outline:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        z-index: 200;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.3s ease;
+    }
+
+    .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    .toast-success {
+        background: rgba(34, 197, 94, 0.15);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: var(--success);
+    }
+
+    .toast-error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: var(--danger);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+    }
+
+    .user-meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>User Management</h2>
+    <button class="btn btn-primary" onclick="openCreateModal()">
+        + New User
+    </button>
+</div>
+
+<div class="card">
+    <div class="user-table-wrap">
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody">
+                {% for user in users %}
+                <tr id="user-row-{{ user.id }}" data-user-id="{{ user.id }}">
+                    <td>
+                        <strong style="color:white;">{{ user.username }}</strong>
+                        {% if current_user and current_user.id == user.id %}
+                        <span style="font-size:0.65rem;color:var(--primary);margin-left:4px;">(you)</span>
+                        {% endif %}
+                    </td>
+                    <td class="user-meta">{{ user.email or '—' }}</td>
+                    <td>
+                        <span class="role-badge role-{{ user.role }}">{{ user.role }}</span>
+                    </td>
+                    <td>
+                        {% if user.is_locked %}
+                        <span class="status-dot status-locked"></span>
+                        <span style="color:var(--danger);font-size:0.85rem;">Locked</span>
+                        {% elif user.is_active %}
+                        <span class="status-dot status-active"></span>
+                        <span style="font-size:0.85rem;">Active</span>
+                        {% else %}
+                        <span class="status-dot status-inactive"></span>
+                        <span style="color:var(--text-muted);font-size:0.85rem;">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="user-meta">
+                        {% if user.last_login %}
+                        {{ user.last_login.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                        Never
+                        {% endif %}
+                    </td>
+                    <td class="user-meta">
+                        {{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}
+                    </td>
+                    <td>
+                        <div class="actions-cell">
+                            <button class="btn-xs btn-outline" onclick="openEditModal({{ user.id }}, '{{ user.username }}', '{{ user.email or '' }}', '{{ user.role }}', {{ 'true' if user.is_active else 'false' }})">Edit</button>
+                            <button class="btn-xs btn-outline" onclick="openResetModal({{ user.id }}, '{{ user.username }}')">Reset PW</button>
+                            {% if user.is_locked %}
+                            <button class="btn-xs btn-outline" style="color:var(--warning);" onclick="unlockUser({{ user.id }}, '{{ user.username }}')">Unlock</button>
+                            {% endif %}
+                            {% if not (current_user and current_user.id == user.id) %}
+                            <button class="btn-xs btn-outline" style="color:var(--danger);" onclick="deleteUser({{ user.id }}, '{{ user.username }}')">Delete</button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not users %}
+                <tr>
+                    <td colspan="7">
+                        <div class="empty-state">No users found.</div>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="createModal">
+    <div class="modal">
+        <h3>Create New User</h3>
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="createUsername" placeholder="username" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label>Email (optional)</label>
+            <input type="email" id="createEmail" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="createPassword" placeholder="Min 6 characters">
+        </div>
+        <div class="form-group">
+            <label>Role</label>
+            <select id="createRole">
+                <option value="VIEWER">Viewer - Read-only access</option>
+                <option value="ANALYST">Analyst - Operational access</option>
+                <option value="ADMIN">Admin - Full access</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal('createModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="createUser()">Create User</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <h3>Edit User: <span id="editUsername" style="color:var(--primary);"></span></h3>
+        <input type="hidden" id="editUserId">
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="editEmail" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+            <label>Role</label>
+            <select id="editRole">
+                <option value="VIEWER">Viewer - Read-only access</option>
+                <option value="ANALYST">Analyst - Operational access</option>
+                <option value="ADMIN">Admin - Full access</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select id="editActive">
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal('editModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="updateUser()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="resetModal">
+    <div class="modal">
+        <h3>Reset Password: <span id="resetUsername" style="color:var(--primary);"></span></h3>
+        <input type="hidden" id="resetUserId">
+        <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="resetPassword" placeholder="Min 6 characters">
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal('resetModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="resetPassword()">Reset Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.className = `toast toast-${type} show`;
+    toast.textContent = message;
+    setTimeout(() => { toast.classList.remove('show'); }, 3000);
+}
+
+function openModal(id) {
+    document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', (e) => {
+        if (e.target === el) el.classList.remove('active');
+    });
+});
+
+function openCreateModal() {
+    document.getElementById('createUsername').value = '';
+    document.getElementById('createEmail').value = '';
+    document.getElementById('createPassword').value = '';
+    document.getElementById('createRole').value = 'VIEWER';
+    openModal('createModal');
+    document.getElementById('createUsername').focus();
+}
+
+function openEditModal(id, username, email, role, isActive) {
+    document.getElementById('editUserId').value = id;
+    document.getElementById('editUsername').textContent = username;
+    document.getElementById('editEmail').value = email;
+    document.getElementById('editRole').value = role;
+    document.getElementById('editActive').value = isActive ? 'true' : 'false';
+    openModal('editModal');
+}
+
+function openResetModal(id, username) {
+    document.getElementById('resetUserId').value = id;
+    document.getElementById('resetUsername').textContent = username;
+    document.getElementById('resetPassword').value = '';
+    openModal('resetModal');
+    document.getElementById('resetPassword').focus();
+}
+
+async function createUser() {
+    const username = document.getElementById('createUsername').value.trim();
+    const email = document.getElementById('createEmail').value.trim();
+    const password = document.getElementById('createPassword').value;
+    const role = document.getElementById('createRole').value;
+
+    if (!username || !password) {
+        showToast('Username and password are required', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/users/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password, role }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message);
+            closeModal('createModal');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Request failed', 'error');
+    }
+}
+
+async function updateUser() {
+    const id = document.getElementById('editUserId').value;
+    const email = document.getElementById('editEmail').value.trim();
+    const role = document.getElementById('editRole').value;
+    const isActive = document.getElementById('editActive').value === 'true';
+
+    try {
+        const res = await fetch(`/api/users/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, role, is_active: isActive }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message);
+            closeModal('editModal');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Request failed', 'error');
+    }
+}
+
+async function resetPassword() {
+    const id = document.getElementById('resetUserId').value;
+    const password = document.getElementById('resetPassword').value;
+
+    if (!password || password.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/users/${id}/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message);
+            closeModal('resetModal');
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Request failed', 'error');
+    }
+}
+
+async function unlockUser(id, username) {
+    if (!confirm(`Unlock account "${username}"?`)) return;
+
+    try {
+        const res = await fetch(`/api/users/${id}/unlock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message);
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Request failed', 'error');
+    }
+}
+
+async function deleteUser(id, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) return;
+
+    try {
+        const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message);
+            const row = document.getElementById(`user-row-${id}`);
+            if (row) row.remove();
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Request failed', 'error');
+    }
+}
+</script>
+{% endblock %}

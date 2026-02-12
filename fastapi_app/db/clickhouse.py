@@ -358,22 +358,17 @@ class ClickHouseClient:
         Args:
             logs: List of tuples matching the schema columns
                   (timestamp, device_ip, facility, severity, message, raw,
-                   srcport, dstport, proto, action, policyname,
+                   srcip, dstip, srcport, dstport, proto, action, policyname,
                    log_type, application, src_zone, dst_zone, session_end_reason,
                    threat_id, parsed_data)
-
-        Note: srcip and dstip are MATERIALIZED columns - auto-populated from parsed_data.
-              Other indexed columns are populated directly for fast queries.
         """
         if not logs:
             return
         client = cls.get_client()
 
-        # Note: srcip and dstip are MATERIALIZED (auto-computed from parsed_data)
-        # Only insert into DEFAULT columns
         client.insert('syslogs', logs, column_names=[
             'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
-            'srcport', 'dstport', 'proto', 'action', 'policyname',
+            'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
             'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
             'threat_id', 'parsed_data'
         ])
@@ -1081,6 +1076,157 @@ class ClickHouseClient:
         count = result[0][0] if result else 0
 
         # Return -1 to indicate "100,000+" logs
+        if count > max_count:
+            return -1
+        return count
+
+    # SQL expression to compute /24 subnet from srcip column
+    _SUBNET24_EXPR = "if(srcip = '', '', concat(IPv4NumToString(toUInt32(bitAnd(IPv4StringToNumOrDefault(srcip), 4294967040))), '/24'))"
+
+    @classmethod
+    def _build_agg_columns(cls, group_by_fields: List[str], subnet_rollup: bool = False):
+        """
+        Build SELECT columns and GROUP BY columns for aggregate queries.
+        When subnet_rollup=True and srcip is grouped, uses /24 subnet expression.
+        Returns (select_cols_str, group_by_cols_str, subnet_extra_str).
+        """
+        select_cols = []
+        group_cols = []
+        has_subnet = False
+
+        for field in group_by_fields:
+            if field == 'srcip' and subnet_rollup:
+                select_cols.append(f"{cls._SUBNET24_EXPR} as src_subnet")
+                group_cols.append(cls._SUBNET24_EXPR)
+                has_subnet = True
+            else:
+                select_cols.append(field)
+                group_cols.append(field)
+
+        # Extra columns when subnet rollup is active
+        subnet_extra = ""
+        if has_subnet:
+            subnet_extra = ",\n            uniq(srcip) as unique_src_ips,\n            groupUniqArray(5)(srcip) as sample_ips"
+
+        return ", ".join(select_cols), ", ".join(group_cols), subnet_extra
+
+    @classmethod
+    def aggregate_logs(
+        cls,
+        group_by_fields: List[str],
+        limit: int = 100,
+        offset: int = 0,
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        query_text: Optional[str] = None,
+        facilities: Optional[List[int]] = None,
+        default_hours: int = 1,
+        subnet_rollup: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Aggregate logs by specified fields (srcip, dstip, dstport).
+        Returns grouped rows with event counts, time ranges, and top values.
+
+        When subnet_rollup=True and srcip is in group_by_fields, groups source IPs
+        by /24 subnet and includes unique_src_ips count and sample_ips array.
+        """
+        allowed = {'srcip', 'dstip', 'dstport'}
+        group_by_fields = [f for f in group_by_fields if f in allowed]
+        if not group_by_fields:
+            group_by_fields = ['srcip', 'dstip', 'dstport']
+
+        client = cls.get_client()
+
+        # Build PREWHERE time filter
+        prewhere_parts = []
+        if start_time is None and end_time is None:
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
+        else:
+            if start_time:
+                prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if end_time:
+                prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+
+        select_cols, group_cols, subnet_extra = cls._build_agg_columns(group_by_fields, subnet_rollup)
+
+        query = f"""
+        SELECT
+            {select_cols},
+            count() as event_count,
+            min(timestamp) as first_seen,
+            max(timestamp) as last_seen,
+            topK(1)(action)[1] as top_action,
+            topK(1)(policyname)[1] as top_policy,
+            topK(1)(application)[1] as top_app,
+            uniq(device_ip) as device_count{subnet_extra}
+        FROM syslogs
+        PREWHERE {prewhere_clause}
+        WHERE {where_sql}
+        GROUP BY {group_cols}
+        ORDER BY event_count DESC
+        LIMIT {limit} OFFSET {offset}
+        """
+
+        result = client.query(query).named_results()
+        return list(result)
+
+    @classmethod
+    def count_aggregate_groups(
+        cls,
+        group_by_fields: List[str],
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        query_text: Optional[str] = None,
+        facilities: Optional[List[int]] = None,
+        default_hours: int = 1,
+        max_count: int = 100000,
+        subnet_rollup: bool = False,
+    ) -> int:
+        """
+        Count distinct groups for aggregate view. Uses capped-count pattern.
+        Returns -1 if count exceeds max_count.
+        """
+        allowed = {'srcip', 'dstip', 'dstport'}
+        group_by_fields = [f for f in group_by_fields if f in allowed]
+        if not group_by_fields:
+            group_by_fields = ['srcip', 'dstip', 'dstport']
+
+        client = cls.get_client()
+
+        prewhere_parts = []
+        if start_time is None and end_time is None:
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
+        else:
+            if start_time:
+                prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if end_time:
+                prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+
+        _, group_cols, _ = cls._build_agg_columns(group_by_fields, subnet_rollup)
+
+        query = f"""
+        SELECT count() as total FROM (
+            SELECT 1
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            GROUP BY {group_cols}
+            LIMIT {max_count + 1}
+        )
+        """
+
+        result = client.query(query).result_rows
+        count = result[0][0] if result else 0
         if count > max_count:
             return -1
         return count
@@ -1938,3 +2084,272 @@ class ClickHouseClient:
             'pending_mutations': len(mutations),
             'mutations': mutations
         }
+
+    # ============================================================
+    # Storage Quota Management Methods
+    # ============================================================
+
+    @classmethod
+    def get_syslogs_storage_info(cls) -> Dict[str, Any]:
+        """
+        Get detailed storage information for the syslogs table.
+        Used for storage quota monitoring and auto-cleanup decisions.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            sum(bytes_on_disk) AS total_bytes,
+            sum(rows) AS total_rows,
+            formatReadableSize(sum(bytes_on_disk)) AS size_readable,
+            min(min_time) AS oldest_data,
+            max(max_time) AS newest_data,
+            count() AS partition_count
+        FROM system.parts
+        WHERE active AND table = 'syslogs' AND database = 'default'
+        """
+
+        result = client.query(query).named_results()
+        if result:
+            data = list(result)[0]
+            return {
+                'total_bytes': data['total_bytes'] or 0,
+                'total_rows': data['total_rows'] or 0,
+                'size_readable': data['size_readable'] or '0 B',
+                'size_gb': round((data['total_bytes'] or 0) / (1024**3), 2),
+                'oldest_data': data['oldest_data'],
+                'newest_data': data['newest_data'],
+                'partition_count': data['partition_count'] or 0
+            }
+        return {
+            'total_bytes': 0,
+            'total_rows': 0,
+            'size_readable': '0 B',
+            'size_gb': 0.0,
+            'oldest_data': None,
+            'newest_data': None,
+            'partition_count': 0
+        }
+
+    @classmethod
+    def get_syslogs_date_range_info(cls) -> List[Dict[str, Any]]:
+        """
+        Get storage breakdown by date range for intelligent cleanup.
+        Returns data grouped by day with size information.
+        """
+        client = cls.get_client()
+
+        query = """
+        SELECT
+            toDate(timestamp) AS log_date,
+            count() AS row_count,
+            sum(length(raw)) AS estimated_bytes
+        FROM syslogs
+        WHERE timestamp > now() - INTERVAL 90 DAY
+        GROUP BY log_date
+        ORDER BY log_date ASC
+        """
+
+        try:
+            return list(client.query(query).named_results())
+        except Exception as e:
+            logger.error(f"Failed to get date range info: {e}")
+            return []
+
+    @classmethod
+    def estimate_deletion_size(cls, days_to_keep: int) -> Dict[str, Any]:
+        """
+        Estimate how much data would be deleted if we keep only the last N days.
+        Helps in determining the right deletion threshold.
+        """
+        client = cls.get_client()
+
+        query = f"""
+        SELECT
+            count() AS rows_to_delete,
+            sum(length(raw)) AS estimated_bytes
+        FROM syslogs
+        WHERE timestamp < now() - INTERVAL {days_to_keep} DAY
+        """
+
+        result = client.query(query).named_results()
+        if result:
+            data = list(result)[0]
+            return {
+                'rows_to_delete': data['rows_to_delete'] or 0,
+                'estimated_bytes': data['estimated_bytes'] or 0,
+                'estimated_gb': round((data['estimated_bytes'] or 0) / (1024**3), 2)
+            }
+        return {'rows_to_delete': 0, 'estimated_bytes': 0, 'estimated_gb': 0.0}
+
+    @classmethod
+    def delete_logs_older_than(cls, days: int, batch_size: int = 0) -> Dict[str, Any]:
+        """
+        Delete syslogs older than specified days.
+        Uses ALTER TABLE DELETE for asynchronous mutation.
+
+        Args:
+            days: Delete logs older than this many days
+            batch_size: Not used for ALTER DELETE (ClickHouse handles internally)
+
+        Returns:
+            Dict with status, mutation_id, and estimated affected rows
+        """
+        client = cls.get_client()
+
+        # First estimate what will be deleted
+        estimate = cls.estimate_deletion_size(days)
+
+        if estimate['rows_to_delete'] == 0:
+            return {
+                'success': True,
+                'message': 'No logs to delete',
+                'rows_affected': 0,
+                'mutation_id': None
+            }
+
+        # Execute deletion
+        delete_query = f"""
+        ALTER TABLE syslogs DELETE WHERE timestamp < now() - INTERVAL {days} DAY
+        """
+
+        try:
+            client.command(delete_query)
+            logger.info(f"Initiated deletion of logs older than {days} days (est. {estimate['rows_to_delete']} rows)")
+
+            # Get the mutation ID
+            mutation_query = """
+            SELECT mutation_id
+            FROM system.mutations
+            WHERE table = 'syslogs' AND NOT is_done
+            ORDER BY create_time DESC
+            LIMIT 1
+            """
+            mutation_result = list(client.query(mutation_query).named_results())
+            mutation_id = mutation_result[0]['mutation_id'] if mutation_result else None
+
+            return {
+                'success': True,
+                'message': f'Deletion initiated for logs older than {days} days',
+                'rows_affected': estimate['rows_to_delete'],
+                'estimated_freed_gb': estimate['estimated_gb'],
+                'mutation_id': mutation_id
+            }
+        except Exception as e:
+            logger.error(f"Failed to delete old logs: {e}")
+            return {
+                'success': False,
+                'message': str(e),
+                'rows_affected': 0,
+                'mutation_id': None
+            }
+
+    @classmethod
+    def delete_logs_to_reach_target_size(cls, target_size_gb: float, min_retention_days: int = 7) -> Dict[str, Any]:
+        """
+        Intelligently delete old logs to reach a target storage size.
+        Uses binary search to find the optimal retention period.
+
+        Args:
+            target_size_gb: Target size in GB
+            min_retention_days: Never delete logs newer than this
+
+        Returns:
+            Dict with status and details of what was deleted
+        """
+        current_info = cls.get_syslogs_storage_info()
+        current_size_gb = current_info['size_gb']
+
+        if current_size_gb <= target_size_gb:
+            return {
+                'success': True,
+                'message': f'Current size ({current_size_gb:.2f} GB) is already below target ({target_size_gb:.2f} GB)',
+                'action_taken': False,
+                'current_size_gb': current_size_gb,
+                'target_size_gb': target_size_gb
+            }
+
+        size_to_free_gb = current_size_gb - target_size_gb
+        logger.info(f"Need to free {size_to_free_gb:.2f} GB to reach target of {target_size_gb:.2f} GB")
+
+        # Binary search to find optimal retention days
+        # Start with reasonable bounds
+        low_days = min_retention_days
+        high_days = 365
+
+        optimal_days = high_days
+
+        for _ in range(10):  # Max 10 iterations
+            mid_days = (low_days + high_days) // 2
+            estimate = cls.estimate_deletion_size(mid_days)
+
+            if estimate['estimated_gb'] >= size_to_free_gb:
+                optimal_days = mid_days
+                low_days = mid_days + 1
+            else:
+                high_days = mid_days - 1
+
+            if low_days > high_days:
+                break
+
+        # Make sure we don't go below minimum retention
+        if optimal_days < min_retention_days:
+            return {
+                'success': False,
+                'message': f'Cannot reach target without violating minimum retention of {min_retention_days} days',
+                'action_taken': False,
+                'current_size_gb': current_size_gb,
+                'target_size_gb': target_size_gb,
+                'min_retention_days': min_retention_days
+            }
+
+        # Execute the deletion
+        result = cls.delete_logs_older_than(optimal_days)
+
+        return {
+            'success': result['success'],
+            'message': result['message'],
+            'action_taken': True,
+            'retention_days_used': optimal_days,
+            'current_size_gb': current_size_gb,
+            'target_size_gb': target_size_gb,
+            'estimated_freed_gb': result.get('estimated_freed_gb', 0),
+            'rows_affected': result.get('rows_affected', 0),
+            'mutation_id': result.get('mutation_id')
+        }
+
+    @classmethod
+    def get_oldest_log_age_days(cls) -> int:
+        """Get the age of the oldest log entry in days."""
+        client = cls.get_client()
+
+        query = """
+        SELECT dateDiff('day', min(timestamp), now()) AS age_days
+        FROM syslogs
+        """
+
+        try:
+            result = list(client.query(query).named_results())
+            if result and result[0]['age_days']:
+                return int(result[0]['age_days'])
+        except Exception as e:
+            logger.error(f"Failed to get oldest log age: {e}")
+
+        return 0
+
+    @classmethod
+    def optimize_syslogs_table(cls) -> Dict[str, Any]:
+        """
+        Run OPTIMIZE TABLE to reclaim space after deletions.
+        This forces merge of parts and physical deletion of data.
+        """
+        client = cls.get_client()
+
+        try:
+            # Use OPTIMIZE with FINAL to force full merge
+            client.command("OPTIMIZE TABLE syslogs FINAL", settings={'receive_timeout': 600})
+            logger.info("OPTIMIZE TABLE syslogs FINAL completed")
+            return {'success': True, 'message': 'Optimization completed'}
+        except Exception as e:
+            logger.error(f"Failed to optimize syslogs table: {e}")
+            return {'success': False, 'message': str(e)}

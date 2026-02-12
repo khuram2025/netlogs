@@ -49,6 +49,12 @@
         box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.3);
     }
 
+    a.kpi-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
     .kpi-card::before {
         content: '';
         position: absolute;
@@ -183,6 +189,19 @@
 
     .data-table tr:hover td {
         background: rgba(59, 130, 246, 0.05);
+    }
+
+    .data-table tr.clickable-row {
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .data-table tr.clickable-row:hover td {
+        background: rgba(59, 130, 246, 0.12);
+    }
+
+    .data-table tr.clickable-row:active td {
+        background: rgba(59, 130, 246, 0.2);
     }
 
     .data-table .ip {
@@ -423,47 +442,59 @@
 
 <!-- KPI Cards Row -->
 <div class="dashboard-grid grid-kpi">
-    <div class="kpi-card primary">
-        <div class="kpi-icon">&#128202;</div>
-        <div class="kpi-label">Total Events (24h)</div>
-        <div class="kpi-value">{{ stats.get('total_logs_24h', 0) | format_number }}</div>
-        <div class="kpi-subtext">{{ stats.get('avg_eps', 0) }} avg EPS</div>
-    </div>
+    <a href="{{ url_for('log_list') }}" class="kpi-link" title="View all events">
+        <div class="kpi-card primary">
+            <div class="kpi-icon">&#128202;</div>
+            <div class="kpi-label">Total Events (24h)</div>
+            <div class="kpi-value">{{ stats.get('total_logs_24h', 0) | format_number }}</div>
+            <div class="kpi-subtext">{{ stats.get('avg_eps', 0) }} avg EPS</div>
+        </div>
+    </a>
 
-    <div class="kpi-card cyan">
-        <div class="kpi-icon">&#9889;</div>
-        <div class="kpi-label">Current EPS</div>
-        <div class="kpi-value">{{ stats.get('current_eps', 0) }}</div>
-        <div class="kpi-subtext">Events per second</div>
-    </div>
+    <a href="{{ url_for('log_list') }}" class="kpi-link" title="View current traffic">
+        <div class="kpi-card cyan">
+            <div class="kpi-icon">&#9889;</div>
+            <div class="kpi-label">Current EPS</div>
+            <div class="kpi-value">{{ stats.get('current_eps', 0) }}</div>
+            <div class="kpi-subtext">Events per second</div>
+        </div>
+    </a>
 
-    <div class="kpi-card success">
-        <div class="kpi-icon">&#10003;</div>
-        <div class="kpi-label">Allowed</div>
-        <div class="kpi-value">{{ stats.get('allowed_count', 0) | format_number }}</div>
-        <div class="kpi-subtext">Permitted connections</div>
-    </div>
+    <a href="{{ url_for('log_list') }}?action=accept" class="kpi-link" title="View allowed connections">
+        <div class="kpi-card success">
+            <div class="kpi-icon">&#10003;</div>
+            <div class="kpi-label">Allowed</div>
+            <div class="kpi-value">{{ stats.get('allowed_count', 0) | format_number }}</div>
+            <div class="kpi-subtext">Permitted connections</div>
+        </div>
+    </a>
 
-    <div class="kpi-card danger">
-        <div class="kpi-icon">&#128683;</div>
-        <div class="kpi-label">Blocked</div>
-        <div class="kpi-value">{{ stats.get('denied_count', 0) | format_number }}</div>
-        <div class="kpi-subtext">Denied connections</div>
-    </div>
+    <a href="{{ url_for('log_list') }}?action=deny" class="kpi-link" title="View blocked connections">
+        <div class="kpi-card danger">
+            <div class="kpi-icon">&#128683;</div>
+            <div class="kpi-label">Blocked</div>
+            <div class="kpi-value">{{ stats.get('denied_count', 0) | format_number }}</div>
+            <div class="kpi-subtext">Denied connections</div>
+        </div>
+    </a>
 
-    <div class="kpi-card warning">
-        <div class="kpi-icon">&#9888;</div>
-        <div class="kpi-label">Critical Events</div>
-        <div class="kpi-value">{{ stats.get('critical_count', 0) | format_number }}</div>
-        <div class="kpi-subtext">Severity 0-3</div>
-    </div>
+    <a href="{{ url_for('log_list') }}?severity=3" class="kpi-link" title="View critical events">
+        <div class="kpi-card warning">
+            <div class="kpi-icon">&#9888;</div>
+            <div class="kpi-label">Critical Events</div>
+            <div class="kpi-value">{{ stats.get('critical_count', 0) | format_number }}</div>
+            <div class="kpi-subtext">Severity 0-3</div>
+        </div>
+    </a>
 
-    <div class="kpi-card purple">
-        <div class="kpi-icon">&#128421;</div>
-        <div class="kpi-label">Active Devices</div>
-        <div class="kpi-value">{{ stats.get('active_devices', 0) }}</div>
-        <div class="kpi-subtext">Sending logs</div>
-    </div>
+    <a href="{{ url_for('log_list') }}" class="kpi-link" title="View all devices">
+        <div class="kpi-card purple">
+            <div class="kpi-icon">&#128421;</div>
+            <div class="kpi-label">Active Devices</div>
+            <div class="kpi-value">{{ stats.get('active_devices', 0) }}</div>
+            <div class="kpi-subtext">Sending logs</div>
+        </div>
+    </a>
 </div>
 
 <!-- Main Charts Row -->
@@ -548,7 +579,7 @@
                 <tbody>
                     {% for src in stats.get('top_sources', [])[:8] %}
                     {% set max_count = stats.get('top_sources', [{}])[0].get('count', 1) %}
-                    <tr>
+                    <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?srcip={{ src.ip }}'" title="View logs from {{ src.ip }}">
                         <td><span class="ip">{{ src.ip }}</span></td>
                         <td class="count">{{ src.count | format_number }}</td>
                         <td class="{% if src.denied_count > 0 %}danger-text{% endif %}">{{ src.denied_count | format_number }}</td>
@@ -586,7 +617,7 @@
                 </thead>
                 <tbody>
                     {% for threat in stats.get('potential_threats', [])[:8] %}
-                    <tr>
+                    <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?srcip={{ threat.ip }}&action=deny'" title="View denied traffic from {{ threat.ip }}">
                         <td><span class="ip">{{ threat.ip }}</span></td>
                         <td class="count danger-text">{{ threat.denied_count | format_number }}</td>
                         <td>{{ threat.unique_targets }}</td>
@@ -621,7 +652,7 @@
                 </thead>
                 <tbody>
                     {% for port in stats.get('top_ports', [])[:8] %}
-                    <tr>
+                    <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?dstport={{ port.port }}'" title="View traffic on port {{ port.port }}">
                         <td><span class="port-label">{{ port.port }}</span></td>
                         <td><span class="service-label">{{ port_services.get(port.port, '-') }}</span></td>
                         <td class="count">{{ port.count | format_number }}</td>
@@ -653,7 +684,7 @@
                 </thead>
                 <tbody>
                     {% for device in stats.get('device_activity', [])[:8] %}
-                    <tr>
+                    <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?device={{ device.device }}'" title="View logs from device {{ device.device }}">
                         <td><span class="ip">{{ device.device }}</span></td>
                         <td class="count">{{ device.log_count | format_number }}</td>
                         <td class="{% if device.critical_count > 0 %}warning-text{% endif %}">{{ device.critical_count | format_number }}</td>
@@ -731,7 +762,7 @@
                 </thead>
                 <tbody>
                     {% for dst in stats.get('top_destinations', [])[:8] %}
-                    <tr>
+                    <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?dstip={{ dst.ip }}'" title="View traffic to {{ dst.ip }}">
                         <td><span class="ip">{{ dst.ip }}</span></td>
                         <td class="count">{{ dst.count | format_number }}</td>
                         <td class="{% if dst.denied_count > 0 %}danger-text{% endif %}">{{ dst.denied_count | format_number }}</td>
@@ -767,7 +798,7 @@
             </thead>
             <tbody>
                 {% for log in logs[:15] %}
-                <tr>
+                <tr class="clickable-row" onclick="window.location.href='{{ url_for('log_list') }}?device={{ log.device_ip }}&severity={{ log.severity }}'" title="View logs from {{ log.device_ip }}">
                     <td class="log-timestamp">{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp else '-' }}</td>
                     <td><span class="ip">{{ log.device_ip }}</span></td>
                     <td>
@@ -859,11 +890,8 @@
     // Severity Chart
     const severityCtx = document.getElementById('severityChart');
     if (severityCtx) {
-        const severityColors = {
-            0: '#dc2626', 1: '#ef4444', 2: '#f87171', 3: '#fb923c',
-            4: '#fbbf24', 5: '#22c55e', 6: '#3b82f6', 7: '#8b5cf6'
-        };
-        new Chart(severityCtx, {
+        const severityValues = [{% for item in severity_data %}{{ item.severity }},{% endfor %}];
+        const severityChart = new Chart(severityCtx, {
             type: 'doughnut',
             data: {
                 labels: [{% for item in severity_data %}'{{ item.name }}',{% endfor %}],
@@ -878,14 +906,26 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 cutout: '65%',
+                onClick: function(evt, elements) {
+                    if (elements.length > 0) {
+                        const idx = elements[0].index;
+                        window.location.href = '{{ url_for("log_list") }}?severity=' + severityValues[idx];
+                    }
+                },
                 plugins: {
                     legend: {
                         position: 'right',
                         labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function() { return 'Click to drill down'; }
+                        }
                     }
                 }
             }
         });
+        severityCtx.style.cursor = 'pointer';
     }
 
     // Real-time Traffic Chart
@@ -920,16 +960,11 @@
     // Action Chart
     const actionCtx = document.getElementById('actionChart');
     if (actionCtx) {
-        const actionColors = {
-            'accept': '#22c55e', 'allow': '#22c55e', 'pass': '#22c55e',
-            'close': '#3b82f6', 'client-rst': '#3b82f6', 'server-rst': '#3b82f6',
-            'deny': '#ef4444', 'drop': '#ef4444', 'block': '#ef4444', 'reject': '#ef4444',
-            'timeout': '#f59e0b'
-        };
+        const actionLabels = [{% for item in action_data %}'{{ item.action }}',{% endfor %}];
         new Chart(actionCtx, {
             type: 'bar',
             data: {
-                labels: [{% for item in action_data %}'{{ item.action }}',{% endfor %}],
+                labels: actionLabels,
                 datasets: [{
                     data: [{% for item in action_data %}{{ item.count }},{% endfor %}],
                     backgroundColor: [{% for item in action_data %}'{{ {"accept": "#22c55e", "allow": "#22c55e", "pass": "#22c55e", "close": "#3b82f6", "client-rst": "#3b82f6", "server-rst": "#3b82f6", "deny": "#ef4444", "drop": "#ef4444", "block": "#ef4444", "reject": "#ef4444", "timeout": "#f59e0b"}.get(item.action, "#64748b") }}',{% endfor %}],
@@ -941,22 +976,44 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 indexAxis: 'y',
-                plugins: { legend: { display: false } },
+                onClick: function(evt, elements) {
+                    if (elements.length > 0) {
+                        const idx = elements[0].index;
+                        const action = actionLabels[idx];
+                        // Map specific actions to log viewer action filter categories
+                        let filterAction = action;
+                        if (['accept', 'allow', 'pass'].includes(action)) filterAction = 'accept';
+                        else if (['deny', 'drop', 'block', 'reject'].includes(action)) filterAction = 'deny';
+                        else if (['close', 'client-rst', 'server-rst'].includes(action)) filterAction = 'close';
+                        else if (action === 'timeout') filterAction = 'timeout';
+                        window.location.href = '{{ url_for("log_list") }}?action=' + filterAction;
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function() { return 'Click to drill down'; }
+                        }
+                    }
+                },
                 scales: {
                     x: { grid: { color: 'rgba(51, 65, 85, 0.3)' } },
                     y: { grid: { display: false } }
                 }
             }
         });
+        actionCtx.style.cursor = 'pointer';
     }
 
     // Protocol Chart
     const protocolCtx = document.getElementById('protocolChart');
     if (protocolCtx) {
+        const protocolLabels = [{% for item in protocol_data %}'{{ item.protocol }}',{% endfor %}];
         new Chart(protocolCtx, {
             type: 'doughnut',
             data: {
-                labels: [{% for item in protocol_data %}'{{ item.protocol }}',{% endfor %}],
+                labels: protocolLabels,
                 datasets: [{
                     data: [{% for item in protocol_data %}{{ item.count }},{% endfor %}],
                     backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4'],
@@ -967,14 +1024,30 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 cutout: '60%',
+                onClick: function(evt, elements) {
+                    if (elements.length > 0) {
+                        const idx = elements[0].index;
+                        const proto = protocolLabels[idx];
+                        // Map protocol names to numbers for the filter
+                        const protoMap = {'TCP': '6', 'UDP': '17', 'ICMP': '1', 'GRE': '47', 'ESP': '50', 'AH': '51'};
+                        const protoNum = protoMap[proto] || proto;
+                        window.location.href = '{{ url_for("log_list") }}?protocol=' + protoNum;
+                    }
+                },
                 plugins: {
                     legend: {
                         position: 'right',
                         labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function() { return 'Click to drill down'; }
+                        }
                     }
                 }
             }
         });
+        protocolCtx.style.cursor = 'pointer';
     }
 
     // Auto-refresh every 60 seconds

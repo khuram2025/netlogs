@@ -11,6 +11,7 @@ from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..core.auth import get_current_user
 from ..db.database import get_db
 from ..models.project import Project, CommunicationMatrixEntry, ProjectStatus, ConnectionType
 from ..services.policy_builder_service import PolicyBuilderService, PolicyData
@@ -76,6 +77,8 @@ async def project_list(
 
     return templates.TemplateResponse("projects/project_list.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "projects": projects,
         "stats": stats,
         "status_filter": status,
@@ -89,6 +92,8 @@ async def project_new(request: Request):
     """Show create project form."""
     return templates.TemplateResponse("projects/project_form.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "project": None,
         "status_choices": ProjectStatus.CHOICES,
         "is_edit": False,
@@ -169,6 +174,8 @@ async def project_detail(
 
     return templates.TemplateResponse("projects/project_detail.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "project": project,
         "entries": entries,
         "entry_stats": entry_stats,
@@ -194,6 +201,8 @@ async def project_edit(
 
     return templates.TemplateResponse("projects/project_form.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "project": project,
         "status_choices": ProjectStatus.CHOICES,
         "is_edit": True,
@@ -1143,6 +1152,8 @@ async def project_policy_view(
 
     return templates.TemplateResponse("projects/project_policy.html", {
         "request": request,
+        "current_user": getattr(request.state, "current_user", None),
+        "unread_alert_count": 0,
         "project": project,
         "policies": policies,
         "combined_cli": '\n'.join(all_cli_parts),

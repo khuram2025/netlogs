@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dashboard.name }} - Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .dash-header h2 { margin: 0; font-size: 1.25rem; }
+    .dash-header .desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .dash-actions { display: flex; gap: 0.5rem; }
+
+    .btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; color: inherit; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+    .widget-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 1rem;
+        min-height: 200px;
+    }
+
+    .widget-card {
+        background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem;
+        padding: 1rem; display: flex; flex-direction: column; min-height: 180px;
+    }
+    .widget-card .widget-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;
+    }
+    .widget-card .widget-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .widget-card .widget-body { flex: 1; display: flex; align-items: center; justify-content: center; }
+    .widget-card .widget-actions { display: none; gap: 0.25rem; }
+    .widget-card:hover .widget-actions { display: flex; }
+
+    .counter-value { font-size: 2.5rem; font-weight: 700; color: white; text-align: center; }
+    .counter-label { font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 0.25rem; }
+
+    .gauge-container { text-align: center; }
+    .gauge-value { font-size: 2rem; font-weight: 700; }
+    .gauge-bar { width: 100%; height: 8px; background: var(--border); border-radius: 4px; margin-top: 0.5rem; overflow: hidden; }
+    .gauge-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+    .widget-table { width: 100%; font-size: 0.8rem; }
+    .widget-table th { text-align: left; padding: 0.375rem 0.5rem; font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .widget-table td { padding: 0.375rem 0.5rem; border-bottom: 1px solid rgba(51,65,85,0.5); }
+
+    .loading-spinner { color: var(--text-muted); font-size: 0.8rem; }
+
+    .empty-dashboard { text-align: center; padding: 4rem; color: var(--text-muted); grid-column: 1 / -1; }
+    .empty-dashboard h3 { color: white; margin-bottom: 0.5rem; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; max-width: 550px; width: 90%; max-height: 85vh; overflow-y: auto; }
+    .modal h3 { margin-top: 0; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.375rem; }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border);
+        border-radius: 0.375rem; color: var(--text-color); font-size: 0.85rem;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.85rem; z-index: 200; display: none; }
+    .toast.show { display: block; }
+    .toast-success { background: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .toast-error { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="dash-header">
+        <div>
+            <h2>{{ dashboard.name }}</h2>
+            {% if dashboard.description %}<div class="desc">{{ dashboard.description }}</div>{% endif %}
+        </div>
+        <div class="dash-actions">
+            <a href="{{ url_for('dashboard_list') }}" class="btn btn-outline">All Dashboards</a>
+            {% if is_owner %}
+            <button class="btn btn-primary" onclick="showAddWidgetModal()">+ Add Widget</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="widget-grid" id="widgetGrid">
+        {% if widgets %}
+        {% for w in widgets %}
+        <div class="widget-card" id="widget-{{ w.id }}"
+             style="grid-column: span {{ w.width }}; grid-row: span {{ [w.height // 2, 1] | max }};">
+            <div class="widget-header">
+                <span class="widget-title">{{ w.title }}</span>
+                {% if is_owner %}
+                <div class="widget-actions">
+                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();deleteWidget({{ w.id }})">Remove</button>
+                </div>
+                {% endif %}
+            </div>
+            <div class="widget-body" id="widget-body-{{ w.id }}">
+                <span class="loading-spinner">Loading...</span>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-dashboard">
+            <h3>Empty Dashboard</h3>
+            <p>Add widgets to start building your custom view.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Widget Modal -->
+<div id="addWidgetModal" class="modal-overlay">
+    <div class="modal">
+        <h3>Add Widget</h3>
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="wTitle" placeholder="e.g., Denied Events (24h)">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Type</label>
+                <select id="wType">
+                    <option value="counter">Counter (single number)</option>
+                    <option value="bar_chart">Bar Chart (top N)</option>
+                    <option value="line_chart">Line Chart (time series)</option>
+                    <option value="doughnut">Doughnut Chart</option>
+                    <option value="table">Table (top N list)</option>
+                    <option value="gauge">Gauge (percentage)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Data Source</label>
+                <select id="wSource">
+                    <option value="logs">Syslog Events</option>
+                    <option value="ioc_matches">IOC Matches</option>
+                    <option value="correlation_matches">Correlation Matches</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Time Range</label>
+                <select id="wTimeRange">
+                    <option value="15m">15 minutes</option>
+                    <option value="1h">1 hour</option>
+                    <option value="6h">6 hours</option>
+                    <option value="24h" selected>24 hours</option>
+                    <option value="7d">7 days</option>
+                    <option value="30d">30 days</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Group By</label>
+                <select id="wGroupBy">
+                    <option value="">(none - for counters)</option>
+                    <option value="srcip">Source IP</option>
+                    <option value="dstip">Destination IP</option>
+                    <option value="action">Action</option>
+                    <option value="dstport">Dest Port</option>
+                    <option value="srcport">Src Port</option>
+                    <option value="device_ip">Device</option>
+                    <option value="severity">Severity</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Filter Field</label>
+                <select id="wFilterField">
+                    <option value="">(no filter)</option>
+                    <option value="action">Action</option>
+                    <option value="srcip">Source IP</option>
+                    <option value="dstip">Dest IP</option>
+                    <option value="dstport">Dest Port</option>
+                    <option value="severity">Severity</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Filter Value</label>
+                <input type="text" id="wFilterValue" placeholder="e.g., deny">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Width (cols, 1-12)</label>
+                <select id="wWidth">
+                    <option value="3">3 (quarter)</option>
+                    <option value="4">4 (third)</option>
+                    <option value="6" selected>6 (half)</option>
+                    <option value="8">8 (two thirds)</option>
+                    <option value="12">12 (full width)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Limit (for charts/tables)</label>
+                <input type="number" id="wLimit" value="10" min="1" max="50">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal('addWidgetModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="addWidget()">Add Widget</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const DASHBOARD_ID = {{ dashboard.id }};
+const chartInstances = {};
+
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show toast-' + type;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function showAddWidgetModal() { document.getElementById('addWidgetModal').classList.add('active'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('active'); });
+});
+
+async function addWidget() {
+    const title = document.getElementById('wTitle').value.trim();
+    if (!title) { alert('Title is required'); return; }
+
+    const filterField = document.getElementById('wFilterField').value;
+    const filterValue = document.getElementById('wFilterValue').value.trim();
+    const query = {};
+    if (filterField && filterValue) {
+        query[filterField] = filterValue;
+    }
+
+    const data = {
+        title: title,
+        widget_type: document.getElementById('wType').value,
+        width: parseInt(document.getElementById('wWidth').value),
+        height: 4,
+        config: {
+            data_source: document.getElementById('wSource').value,
+            time_range: document.getElementById('wTimeRange').value,
+            group_by: document.getElementById('wGroupBy').value || undefined,
+            query: query,
+            limit: parseInt(document.getElementById('wLimit').value) || 10,
+        },
+    };
+
+    try {
+        const res = await fetch(`/api/dashboards/${DASHBOARD_ID}/widgets`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        if (res.ok) {
+            location.reload();
+        } else {
+            showToast('Failed to add widget', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function deleteWidget(widgetId) {
+    if (!confirm('Remove this widget?')) return;
+    try {
+        const res = await fetch(`/api/dashboards/widgets/${widgetId}`, { method: 'DELETE' });
+        if (res.ok) location.reload();
+    } catch (e) {
+        showToast('Failed', 'error');
+    }
+}
+
+// ==================== Widget Rendering ====================
+
+const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+
+async function loadWidgetData(widgetId) {
+    try {
+        const res = await fetch(`/api/dashboards/widgets/${widgetId}/data`);
+        const result = await res.json();
+        if (result.status === 'ok') {
+            renderWidget(widgetId, result.widget_type, result.data);
+        } else {
+            renderError(widgetId, result.error || 'Failed to load');
+        }
+    } catch (e) {
+        renderError(widgetId, e.message);
+    }
+}
+
+function renderError(widgetId, msg) {
+    const body = document.getElementById(`widget-body-${widgetId}`);
+    if (body) body.innerHTML = `<span style="color:var(--accent-red);font-size:0.8rem;">${msg}</span>`;
+}
+
+function renderWidget(widgetId, type, data) {
+    const body = document.getElementById(`widget-body-${widgetId}`);
+    if (!body) return;
+
+    if (type === 'counter') {
+        const val = (data.value || 0).toLocaleString();
+        body.innerHTML = `<div style="text-align:center;width:100%;"><div class="counter-value">${val}</div></div>`;
+    }
+    else if (type === 'gauge') {
+        const pct = data.value || 0;
+        const color = pct > 75 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#22c55e';
+        body.innerHTML = `
+            <div class="gauge-container" style="width:100%;">
+                <div class="gauge-value" style="color:${color};">${pct}%</div>
+                <div class="gauge-bar"><div class="gauge-fill" style="width:${pct}%;background:${color};"></div></div>
+                <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.375rem;">${(data.filtered||0).toLocaleString()} / ${(data.total||0).toLocaleString()}</div>
+            </div>`;
+    }
+    else if (type === 'table') {
+        const rows = data.rows || [];
+        let html = `<table class="widget-table" style="width:100%;align-self:flex-start;"><thead><tr><th>${data.group_by || 'Key'}</th><th style="text-align:right;">Count</th></tr></thead><tbody>`;
+        rows.forEach(r => {
+            html += `<tr><td style="font-family:monospace;font-size:0.75rem;">${r.key}</td><td style="text-align:right;font-weight:600;">${r.count.toLocaleString()}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+        body.style.alignItems = 'flex-start';
+    }
+    else if (type === 'bar_chart' || type === 'line_chart' || type === 'doughnut') {
+        body.innerHTML = `<canvas id="chart-${widgetId}" style="width:100%;max-height:250px;"></canvas>`;
+        const ctx = document.getElementById(`chart-${widgetId}`).getContext('2d');
+
+        if (chartInstances[widgetId]) chartInstances[widgetId].destroy();
+
+        const labels = data.labels || [];
+        const values = data.values || [];
+
+        let chartType = type === 'line_chart' ? 'line' : type === 'doughnut' ? 'doughnut' : 'bar';
+
+        const config = {
+            type: chartType,
+            data: {
+                labels: labels.map(l => l.length > 20 ? l.substring(0, 20) + '...' : l),
+                datasets: [{
+                    data: values,
+                    backgroundColor: type === 'doughnut' ? CHART_COLORS.slice(0, labels.length) :
+                        type === 'line_chart' ? 'rgba(59,130,246,0.1)' : CHART_COLORS.slice(0, labels.length),
+                    borderColor: type === 'line_chart' ? '#3b82f6' :
+                        type === 'doughnut' ? CHART_COLORS.slice(0, labels.length) : 'transparent',
+                    borderWidth: type === 'line_chart' ? 2 : type === 'doughnut' ? 1 : 0,
+                    fill: type === 'line_chart',
+                    tension: 0.3,
+                    borderRadius: type === 'bar' ? 4 : 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: type === 'doughnut', position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } },
+                },
+                scales: type === 'doughnut' ? {} : {
+                    x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.3)' } },
+                    y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.3)' }, beginAtZero: true },
+                },
+            }
+        };
+
+        chartInstances[widgetId] = new Chart(ctx, config);
+    }
+}
+
+// Load all widget data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const widgetIds = [{% for w in widgets %}{{ w.id }},{% endfor %}];
+    widgetIds.forEach(id => loadWidgetData(id));
+});
+</script>
+{% endblock %}

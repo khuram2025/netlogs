@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .alert-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    .alert-header .tabs {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .alert-header .tabs a {
+        padding: 0.4rem 1rem;
+        border-radius: 0.375rem;
+        font-size: 0.85rem;
+        text-decoration: none;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+    }
+    .alert-header .tabs a.active,
+    .alert-header .tabs a:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .summary-row {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    @media (max-width: 768px) {
+        .summary-row { grid-template-columns: repeat(3, 1fr); }
+    }
+    .summary-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+    }
+    .summary-card .count {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: white;
+    }
+    .summary-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+    .sev-critical .count { color: #ef4444; }
+    .sev-high .count { color: #f97316; }
+    .sev-medium .count { color: #f59e0b; }
+    .sev-low .count { color: #3b82f6; }
+    .sev-info .count { color: #94a3b8; }
+    .sev-new .count { color: #22c55e; }
+
+    .sev-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .sev-dot-critical { background: #ef4444; }
+    .sev-dot-high { background: #f97316; }
+    .sev-dot-medium { background: #f59e0b; }
+    .sev-dot-low { background: #3b82f6; }
+    .sev-dot-info { background: #94a3b8; }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .status-new { background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); }
+    .status-acknowledged { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
+    .status-investigating { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
+    .status-resolved { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
+    .status-false_positive { background: rgba(148, 163, 184, 0.05); color: #64748b; border: 1px solid rgba(148, 163, 184, 0.1); }
+
+    .filters-bar {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+    .filters-bar select {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.8rem;
+        min-width: 120px;
+    }
+
+    .alert-row { cursor: pointer; }
+    .alert-row:hover { background: rgba(59, 130, 246, 0.05); }
+
+    .alert-actions { display: flex; gap: 0.25rem; }
+
+    .btn-xs {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        border: none;
+        font-weight: 500;
+    }
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.05); color: white; }
+
+    /* Detail modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 100;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 5vh;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        width: 100%;
+        max-width: 800px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    }
+    .modal h3 { margin-bottom: 1rem; }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.875rem;
+    }
+    .detail-row .label { color: var(--text-muted); }
+    .detail-row .value { color: white; text-align: right; max-width: 60%; word-break: break-word; }
+    .detail-json {
+        background: var(--input-bg);
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+        max-height: 200px;
+        overflow: auto;
+        margin-top: 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .detail-section { margin-top: 1rem; }
+    .detail-section h4 { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+    .detail-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .detail-table th { text-align: left; padding: 0.35rem 0.5rem; color: var(--text-muted); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; background: rgba(255,255,255,0.02); }
+    .detail-table td { padding: 0.35rem 0.5rem; border-top: 1px solid rgba(255,255,255,0.04); }
+    .detail-table .ip-cell { font-family: monospace; color: var(--primary); font-weight: 500; }
+    .detail-table .count-cell { font-weight: 600; color: white; text-align: right; }
+    .detail-table .port-cell { font-family: monospace; color: #f59e0b; }
+    .detail-table .device-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); }
+    .btn-drill { padding: 0.15rem 0.5rem; font-size: 0.65rem; background: rgba(59,130,246,0.1); color: var(--primary); border: 1px solid rgba(59,130,246,0.2); border-radius: 0.25rem; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .btn-drill:hover { background: rgba(59,130,246,0.2); }
+    .btn-investigate { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: white; border: none; border-radius: 0.375rem; cursor: pointer; text-decoration: none; margin-top: 0.5rem; }
+    .btn-investigate:hover { opacity: 0.85; }
+    .incident-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
+    .incident-stat { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem 0.75rem; }
+    .incident-stat .stat-value { font-size: 1.1rem; font-weight: 700; color: white; }
+    .incident-stat .stat-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+    .modal-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+    .btn-ghost {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.05); color: white; }
+
+    .toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        z-index: 200;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.3s ease;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: var(--success); }
+    .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
+
+    .text-xs { font-size: 0.75rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="alert-header">
+    <h2>Alerts</h2>
+    <div class="tabs">
+        <a href="{{ url_for('alert_dashboard') }}" class="active">Dashboard</a>
+        <a href="{{ url_for('alert_rules_page') }}">Rules</a>
+        <a href="{{ url_for('notification_channels_page') }}">Channels</a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="summary-row">
+    <div class="summary-card sev-new">
+        <div class="count">{{ summary.new_count }}</div>
+        <div class="label">New</div>
+    </div>
+    <div class="summary-card sev-critical">
+        <div class="count">{{ summary.critical }}</div>
+        <div class="label">Critical</div>
+    </div>
+    <div class="summary-card sev-high">
+        <div class="count">{{ summary.high }}</div>
+        <div class="label">High</div>
+    </div>
+    <div class="summary-card sev-medium">
+        <div class="count">{{ summary.medium }}</div>
+        <div class="label">Medium</div>
+    </div>
+    <div class="summary-card sev-low">
+        <div class="count">{{ summary.low }}</div>
+        <div class="label">Low</div>
+    </div>
+    <div class="summary-card sev-info">
+        <div class="count">{{ summary.info }}</div>
+        <div class="label">Info</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card">
+    <div class="filters-bar">
+        <select id="filterSeverity" onchange="filterAlerts()">
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+        </select>
+        <select id="filterStatus" onchange="filterAlerts()">
+            <option value="">All Statuses</option>
+            <option value="new">New</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+            <option value="false_positive">False Positive</option>
+        </select>
+        <select id="filterRule" onchange="filterAlerts()">
+            <option value="">All Rules</option>
+            {% for rule in rules %}
+            <option value="{{ rule.id }}">{{ rule.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Alerts Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>Severity</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Triggered</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="alertTableBody">
+            {% for alert in alerts %}
+            <tr class="alert-row" data-severity="{{ alert.severity }}" data-status="{{ alert.status }}" data-rule="{{ alert.rule_id or '' }}">
+                <td>
+                    <span class="sev-dot sev-dot-{{ alert.severity }}"></span>
+                    <span class="text-xs" style="text-transform:uppercase;">{{ alert.severity }}</span>
+                </td>
+                <td>
+                    <a href="#" onclick="showDetail({{ alert.id }}); return false;" style="color:white;text-decoration:none;">
+                        {{ alert.title[:80] }}{% if alert.title|length > 80 %}...{% endif %}
+                    </a>
+                </td>
+                <td><span class="status-badge status-{{ alert.status }}">{{ alert.status.replace('_', ' ') }}</span></td>
+                <td class="text-xs" style="color:var(--text-muted);">
+                    {{ alert.triggered_at.strftime('%m/%d %H:%M') if alert.triggered_at else '' }}
+                </td>
+                <td>
+                    <div class="alert-actions">
+                        {% if alert.status == 'new' %}
+                        <button class="btn-xs btn-outline" onclick="ackAlert({{ alert.id }}); event.stopPropagation();">Ack</button>
+                        {% endif %}
+                        {% if alert.status in ('new', 'acknowledged', 'investigating') %}
+                        <button class="btn-xs btn-outline" onclick="resolveAlert({{ alert.id }}); event.stopPropagation();">Resolve</button>
+                        <button class="btn-xs btn-outline" onclick="fpAlert({{ alert.id }}); event.stopPropagation();" style="color:var(--text-muted);">FP</button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not alerts %}
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No alerts found.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Alert Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal">
+        <h3 id="detailTitle">Alert Detail</h3>
+        <div id="detailContent"></div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resolve Modal -->
+<div class="modal-overlay" id="resolveModal">
+    <div class="modal">
+        <h3>Resolve Alert</h3>
+        <input type="hidden" id="resolveAlertId">
+        <div style="margin-bottom:1rem;">
+            <label>Resolution Notes</label>
+            <textarea id="resolveNotes" style="width:100%;min-height:80px;background:var(--input-bg);border:1px solid var(--border);color:white;border-radius:0.375rem;padding:0.5rem;font-size:0.875rem;" placeholder="Describe how this was resolved..."></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="document.getElementById('resolveModal').classList.remove('active')">Cancel</button>
+            <button class="btn btn-success" onclick="submitResolve()">Resolve</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.className = `toast toast-${type} show`;
+    t.textContent = msg;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function closeModal() {
+    document.getElementById('detailModal').classList.remove('active');
+}
+
+function filterAlerts() {
+    const sev = document.getElementById('filterSeverity').value;
+    const status = document.getElementById('filterStatus').value;
+    const rule = document.getElementById('filterRule').value;
+
+    document.querySelectorAll('.alert-row').forEach(row => {
+        let show = true;
+        if (sev && row.dataset.severity !== sev) show = false;
+        if (status && row.dataset.status !== status) show = false;
+        if (rule && row.dataset.rule !== rule) show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function fmtTime(iso) {
+    if (!iso) return 'N/A';
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
+}
+
+function buildLogUrl(params) {
+    const u = new URL('/logs/', window.location.origin);
+    Object.entries(params).forEach(([k,v]) => { if (v) u.searchParams.set(k, v); });
+    return u.toString();
+}
+
+async function showDetail(id) {
+    try {
+        const res = await fetch(`/api/alerts/${id}`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        const a = data.alert;
+        const d = a.details || {};
+        let html = '';
+
+        // Header row: severity + status + rule
+        html += `<div class="detail-row"><span class="label">Severity</span><span class="value"><span class="sev-dot sev-dot-${a.severity}"></span>${a.severity.toUpperCase()}</span></div>`;
+        html += `<div class="detail-row"><span class="label">Status</span><span class="value"><span class="status-badge status-${a.status}">${a.status.replace('_', ' ')}</span></span></div>`;
+        if (a.rule_name) html += `<div class="detail-row"><span class="label">Rule</span><span class="value">${a.rule_name} <span style="color:var(--text-muted);font-size:0.7rem;">(${a.rule_type || ''})</span></span></div>`;
+        html += `<div class="detail-row"><span class="label">Triggered</span><span class="value">${fmtTime(a.triggered_at)}</span></div>`;
+        if (a.description) html += `<div class="detail-row"><span class="label">Description</span><span class="value" style="white-space:pre-line;text-align:left;max-width:70%;">${a.description}</span></div>`;
+
+        // MITRE info from description
+        if (a.acknowledged_at) html += `<div class="detail-row"><span class="label">Acknowledged</span><span class="value">${fmtTime(a.acknowledged_at)}</span></div>`;
+        if (a.resolved_at) html += `<div class="detail-row"><span class="label">Resolved</span><span class="value">${fmtTime(a.resolved_at)}</span></div>`;
+        if (a.resolution_notes) html += `<div class="detail-row"><span class="label">Notes</span><span class="value">${a.resolution_notes}</span></div>`;
+
+        // === Incident Summary ===
+        const total = d.total_events || d.count || 0;
+        const timeRange = d.time_range || {};
+        const devices = d.devices || [];
+
+        if (total || timeRange.first || devices.length) {
+            html += `<div class="detail-section"><h4>Incident Summary</h4>`;
+            html += `<div class="incident-summary">`;
+            if (total) html += `<div class="incident-stat"><div class="stat-value">${total.toLocaleString()}</div><div class="stat-label">Total Events</div></div>`;
+            if (d.window_minutes) html += `<div class="incident-stat"><div class="stat-value">${d.window_minutes}m</div><div class="stat-label">Time Window</div></div>`;
+            if (d.threshold) html += `<div class="incident-stat"><div class="stat-value">${d.threshold.toLocaleString()}</div><div class="stat-label">Threshold</div></div>`;
+            if (devices.length) html += `<div class="incident-stat"><div class="stat-value">${devices.length}</div><div class="stat-label">Device${devices.length > 1 ? 's' : ''}</div></div>`;
+            html += `</div>`;
+
+            if (timeRange.first) {
+                html += `<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">Time range: ${fmtTime(timeRange.first)} &mdash; ${fmtTime(timeRange.last)}</div>`;
+            }
+            if (devices.length) {
+                html += `<div style="margin-top:0.35rem;font-size:0.75rem;color:var(--text-muted);">Devices: <span style="font-family:monospace;color:white;">${devices.join(', ')}</span></div>`;
+            }
+
+            // Investigate All button
+            const topSrc = (d.top_sources || [])[0];
+            if (topSrc) {
+                const logUrl = buildLogUrl({srcip: topSrc.ip, time_range: (d.window_minutes || 5) + 'm'});
+                html += `<a href="${logUrl}" target="_blank" class="btn-investigate">Investigate Logs</a>`;
+            }
+            html += `</div>`;
+        }
+
+        // === Top Source IPs ===
+        const topSources = d.top_sources || [];
+        if (topSources.length) {
+            html += `<div class="detail-section"><h4>Top Source IPs</h4>`;
+            html += `<table class="detail-table"><thead><tr><th>Source IP</th><th>Events</th><th>Device(s)</th><th></th></tr></thead><tbody>`;
+            topSources.forEach(s => {
+                const devs = (s.devices || []).join(', ') || '-';
+                const logUrl = buildLogUrl({srcip: s.ip, time_range: (d.window_minutes || 60) + 'm'});
+                html += `<tr>
+                    <td class="ip-cell">${s.ip}</td>
+                    <td class="count-cell">${s.count.toLocaleString()}</td>
+                    <td class="device-cell">${devs}</td>
+                    <td><a href="${logUrl}" target="_blank" class="btn-drill">View Logs</a></td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
+        // === Top Destination IPs ===
+        const topDests = d.top_destinations || [];
+        if (topDests.length) {
+            html += `<div class="detail-section"><h4>Top Destinations</h4>`;
+            html += `<table class="detail-table"><thead><tr><th>Destination IP</th><th>Port</th><th>Events</th><th></th></tr></thead><tbody>`;
+            topDests.forEach(dst => {
+                const logUrl = buildLogUrl({dstip: dst.ip, dstport: dst.port || '', time_range: (d.window_minutes || 60) + 'm'});
+                html += `<tr>
+                    <td class="ip-cell">${dst.ip}</td>
+                    <td class="port-cell">${dst.port || '-'}</td>
+                    <td class="count-cell">${dst.count.toLocaleString()}</td>
+                    <td><a href="${logUrl}" target="_blank" class="btn-drill">View Logs</a></td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
+        // === Top Ports ===
+        const topPorts = d.top_ports || [];
+        if (topPorts.length) {
+            html += `<div class="detail-section"><h4>Top Destination Ports</h4>`;
+            html += `<table class="detail-table"><thead><tr><th>Port</th><th>Events</th></tr></thead><tbody>`;
+            topPorts.forEach(p => {
+                html += `<tr><td class="port-cell">${p.port}</td><td class="count-cell">${p.count.toLocaleString()}</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
+        // === Anomaly details ===
+        if (a.rule_type === 'anomaly' && d.current_eps !== undefined) {
+            html += `<div class="detail-section"><h4>Anomaly Metrics</h4>`;
+            html += `<div class="incident-summary">`;
+            html += `<div class="incident-stat"><div class="stat-value">${d.current_eps}</div><div class="stat-label">Current EPS</div></div>`;
+            html += `<div class="incident-stat"><div class="stat-value">${d.baseline_eps}</div><div class="stat-label">Baseline EPS</div></div>`;
+            html += `<div class="incident-stat"><div class="stat-value">${d.ratio}x</div><div class="stat-label">Ratio</div></div>`;
+            html += `<div class="incident-stat"><div class="stat-value">${d.multiplier}x</div><div class="stat-label">Threshold</div></div>`;
+            html += `</div></div>`;
+        }
+
+        // === Absence details ===
+        if (a.rule_type === 'absence') {
+            html += `<div class="detail-section"><h4>Device Status</h4>`;
+            html += `<div class="incident-summary">`;
+            if (d.device_ip) html += `<div class="incident-stat"><div class="stat-value" style="font-size:0.9rem;font-family:monospace;">${d.device_ip}</div><div class="stat-label">Device IP</div></div>`;
+            if (d.minutes_since_last) html += `<div class="incident-stat"><div class="stat-value">${Math.round(d.minutes_since_last)}m</div><div class="stat-label">Since Last Log</div></div>`;
+            if (d.timeout_minutes) html += `<div class="incident-stat"><div class="stat-value">${d.timeout_minutes}m</div><div class="stat-label">Timeout</div></div>`;
+            html += `</div>`;
+            if (d.last_log) html += `<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">Last log: ${fmtTime(d.last_log)}</div>`;
+            html += `</div>`;
+        }
+
+        // === Raw matches fallback (for old alerts without enrichment) ===
+        const matches = d.matches || [];
+        if (matches.length && !topSources.length) {
+            html += `<div class="detail-section"><h4>Matches</h4>`;
+            html += `<table class="detail-table"><thead><tr><th>Group</th><th>Events</th></tr></thead><tbody>`;
+            matches.forEach(m => {
+                html += `<tr><td class="ip-cell">${m.group || 'N/A'}</td><td class="count-cell">${m.count.toLocaleString()}</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
+        document.getElementById('detailTitle').textContent = a.title;
+        document.getElementById('detailContent').innerHTML = html;
+        document.getElementById('detailModal').classList.add('active');
+    } catch (e) {
+        showToast('Failed to load alert', 'error');
+        console.error(e);
+    }
+}
+
+async function ackAlert(id) {
+    const res = await fetch(`/api/alerts/${id}/acknowledge`, { method: 'POST', headers: {'Content-Type': 'application/json'} });
+    const data = await res.json();
+    if (data.success) { showToast('Alert acknowledged'); setTimeout(() => location.reload(), 500); }
+    else showToast(data.error, 'error');
+}
+
+function resolveAlert(id) {
+    document.getElementById('resolveAlertId').value = id;
+    document.getElementById('resolveNotes').value = '';
+    document.getElementById('resolveModal').classList.add('active');
+}
+
+async function submitResolve() {
+    const id = document.getElementById('resolveAlertId').value;
+    const notes = document.getElementById('resolveNotes').value;
+    const res = await fetch(`/api/alerts/${id}/resolve`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ notes }),
+    });
+    const data = await res.json();
+    if (data.success) { showToast('Alert resolved'); document.getElementById('resolveModal').classList.remove('active'); setTimeout(() => location.reload(), 500); }
+    else showToast(data.error, 'error');
+}
+
+async function fpAlert(id) {
+    if (!confirm('Mark this alert as a false positive?')) return;
+    const res = await fetch(`/api/alerts/${id}/false-positive`, { method: 'POST', headers: {'Content-Type': 'application/json'} });
+    const data = await res.json();
+    if (data.success) { showToast('Marked as false positive'); setTimeout(() => location.reload(), 500); }
+    else showToast(data.error, 'error');
+}
+
+// Auto-refresh every 30 seconds
+setInterval(() => { location.reload(); }, 30000);
+</script>
+{% endblock %}
