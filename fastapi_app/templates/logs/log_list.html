@@ -721,7 +721,7 @@
         .col-intf { width: 90px; }
         .col-port { width: 80px; }
         .col-size { width: 100px; }
-        .col-device { width: 115px; }
+        .col-device { width: 160px; }
         .col-expand { width: 40px; }
 
         /* Timestamp */
@@ -2638,7 +2638,10 @@
                                         </div>
                                     </td>
                                     <td class="col-device">
-                                        <a href="?device={{ log.get('device_ip', '') }}" class="device-link">{{ log.get('device_ip', '--') }}</a>
+                                        {% set dev_ip = log.get('device_ip', '') | string %}
+                                        {% set dev_vdom = log.get('vdom', '') %}
+                                        {% set dev_display = dev_ip ~ '_' ~ dev_vdom if dev_vdom else dev_ip %}
+                                        <a href="?device={{ dev_display }}" class="device-link">{{ dev_display or '--' }}</a>
                                     </td>
                                     <td class="col-expand">
                                         <button type="button" class="expand-btn" onclick="toggleRow({{ loop.index }})">
@@ -2656,7 +2659,7 @@
                                             {% set ts = log.get('timestamp', '') %}
                                             <div class="multiflow-container" id="flow-container-{{ loop.index }}"
                                                  data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
-                                                 data-device="{{ log.get('device_ip', '') }}">
+                                                 data-device="{{ dev_display }}">
                                                 <div class="multiflow-header">
                                                     <span class="multiflow-title">Multi-Firewall Packet Trace</span>
                                                     <button type="button" class="trace-btn" onclick="loadSessionFlow({{ loop.index }})">

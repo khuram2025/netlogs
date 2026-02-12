@@ -474,10 +474,12 @@ class SyslogCollector:
         except Exception:
             pass  # Never block the log pipeline
 
+        vdom = parsed_data.get('vd', '') if parsed_data else ''
+
         log_entry = (now, client_ip, facility, severity, message, raw,
                      srcip, dstip, srcport, dstport, proto, action, policyname,
                      log_type, application, src_zone, dst_zone, session_end_reason,
-                     threat_id, parsed_data)
+                     threat_id, vdom, parsed_data)
 
         if not self.log_buffer.add(log_entry, client_ip, now):
             logger.warning("Buffer full! Dropping log")

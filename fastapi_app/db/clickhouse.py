@@ -89,6 +89,7 @@ class ClickHouseClient:
             dst_zone LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
             session_end_reason LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
             threat_id String DEFAULT '' CODEC(ZSTD(1)),
+            vdom LowCardinality(String) DEFAULT '' CODEC(ZSTD(1)),
 
             -- Keep parsed_data Map for all other fields
             parsed_data Map(String, String) CODEC(ZSTD(1)),
@@ -360,7 +361,7 @@ class ClickHouseClient:
                   (timestamp, device_ip, facility, severity, message, raw,
                    srcip, dstip, srcport, dstport, proto, action, policyname,
                    log_type, application, src_zone, dst_zone, session_end_reason,
-                   threat_id, parsed_data)
+                   threat_id, vdom, parsed_data)
         """
         if not logs:
             return
@@ -370,7 +371,7 @@ class ClickHouseClient:
             'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
             'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
             'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
-            'threat_id', 'parsed_data'
+            'threat_id', 'vdom', 'parsed_data'
         ])
 
     @classmethod
@@ -412,7 +413,7 @@ class ClickHouseClient:
             Log entry dict or None if not found
         """
         client = cls.get_client()
-        safe_device = device_ip.replace("'", "''")
+        device_where = cls._device_where(device_ip)
 
         # Clean up timestamp format
         clean_timestamp = timestamp.replace('T', ' ').replace('Z', '')
@@ -427,7 +428,7 @@ class ClickHouseClient:
         query = f"""
         SELECT {columns}
         FROM syslogs
-        WHERE toString(device_ip) = '{safe_device}'
+        WHERE {device_where}
           AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
           AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
         ORDER BY timestamp ASC
@@ -731,7 +732,7 @@ class ClickHouseClient:
             # Common fields
             'type': "parsed_data['type']",
             'subtype': "parsed_data['subtype']",
-            'device': "toString(device_ip)",
+            'device': cls._DEVICE_DISPLAY_EXPR,
             'severity': "severity",
         }
 
@@ -893,6 +894,27 @@ class ClickHouseClient:
         else:
             return f"lower({col_expr}) = lower('{safe_value}')"
 
+    @staticmethod
+    def _parse_device_id(device_str: str):
+        """Parse a device identifier like '192.168.47.1_WAN' into (ip, vdom).
+        Returns (ip, '') if no VDOM suffix."""
+        import re
+        m = re.match(r'^(\d+\.\d+\.\d+\.\d+)_(.+)$', device_str)
+        if m:
+            return m.group(1), m.group(2)
+        return device_str, ''
+
+    @staticmethod
+    def _device_where(device_str: str) -> str:
+        """Build a WHERE fragment for a device identifier (IP or IP_VDOM)."""
+        import re
+        m = re.match(r'^(\d+\.\d+\.\d+\.\d+)_(.+)$', device_str)
+        if m:
+            ip, vdom = m.group(1), m.group(2).replace("'", "''")
+            return f"device_ip = toIPv4('{ip}') AND vdom = '{vdom}'"
+        safe = device_str.replace("'", "''")
+        return f"toString(device_ip) = '{safe}'"
+
     @classmethod
     def _build_where_clause(
         cls,
@@ -907,9 +929,29 @@ class ClickHouseClient:
         where_clauses = ["1=1"]
 
         if device_ips:
-            # Use toIPv4() for efficient index usage instead of toString()
-            formatted_ips = ", ".join([f"toIPv4('{ip}')" for ip in device_ips])
-            where_clauses.append(f"device_ip IN ({formatted_ips})")
+            # Parse device identifiers: "192.168.47.1_WAN" -> IP + VDOM filter
+            import re
+            ip_only = []
+            ip_vdom_pairs = []
+            for dev in device_ips:
+                m = re.match(r'^(\d+\.\d+\.\d+\.\d+)_(.+)$', dev)
+                if m:
+                    ip_vdom_pairs.append((m.group(1), m.group(2)))
+                else:
+                    ip_only.append(dev)
+
+            device_conditions = []
+            if ip_only:
+                formatted = ", ".join([f"toIPv4('{ip}')" for ip in ip_only])
+                device_conditions.append(f"device_ip IN ({formatted})")
+            for ip, vdom in ip_vdom_pairs:
+                safe_vdom = vdom.replace("'", "''")
+                device_conditions.append(f"(device_ip = toIPv4('{ip}') AND vdom = '{safe_vdom}')")
+
+            if len(device_conditions) == 1:
+                where_clauses.append(device_conditions[0])
+            else:
+                where_clauses.append("(" + " OR ".join(device_conditions) + ")")
 
         if severities:
             formatted_severities = ", ".join(map(str, severities))
@@ -959,9 +1001,12 @@ class ClickHouseClient:
 
     # Light columns for fast queries (excludes only 'raw' - the heaviest field)
     # Keeps parsed_data as it's needed for detail panel display
-    LIGHT_COLUMNS = "timestamp, device_ip, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+    LIGHT_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
     # Full columns including raw message
-    FULL_COLUMNS = "timestamp, device_ip, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+    FULL_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+
+    # Expression to compose device display name: IP_VDOM or just IP
+    _DEVICE_DISPLAY_EXPR = "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(device_ip))"
 
     @classmethod
     def search_logs(
@@ -1163,7 +1208,7 @@ class ClickHouseClient:
             topK(1)(action)[1] as top_action,
             topK(1)(policyname)[1] as top_policy,
             topK(1)(application)[1] as top_app,
-            uniq(device_ip) as device_count{subnet_extra}
+            uniq(device_ip, vdom) as device_count{subnet_extra}
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
@@ -1265,7 +1310,7 @@ class ClickHouseClient:
         query = f"""
         SELECT
             count() as total_logs,
-            uniq(device_ip) as unique_devices,
+            uniq(device_ip, vdom) as unique_devices,
             countIf(severity <= 3) as critical_count,
             countIf(severity = 4) as warning_count,
             countIf(severity >= 5) as info_count
@@ -1299,12 +1344,12 @@ class ClickHouseClient:
 
         query = f"""
         SELECT
-            toString(device_ip) as device_ip,
+            {cls._DEVICE_DISPLAY_EXPR} as device_ip,
             count() as count,
             max(timestamp) as last_log
         FROM syslogs
         WHERE timestamp > now() - INTERVAL {hours} HOUR
-        GROUP BY device_ip
+        GROUP BY device_ip, vdom
         ORDER BY count DESC
         LIMIT 20
         """
@@ -1314,28 +1359,30 @@ class ClickHouseClient:
     @classmethod
     def get_distinct_devices(cls, hours: int = 1) -> List[str]:
         """
-        Get list of distinct device IPs from recent logs.
+        Get list of distinct devices from recent logs.
+        Returns VDOM-aware names: '192.168.47.1_WAN' for VDOM devices,
+        '10.10.0.1' for non-VDOM devices.
 
         Default: last 1 hour (fast) - devices sending logs are typically always active.
         Falls back to 24h if no devices found in 1h window.
         """
         client = cls.get_client()
-        # First try short window for speed
+        # Group by (device_ip, vdom) to treat each VDOM as a separate device
         query = f"""
-        SELECT DISTINCT toString(device_ip) as device_ip
+        SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
         FROM syslogs
         WHERE timestamp > now() - INTERVAL {hours} HOUR
-        ORDER BY device_ip
+        ORDER BY device_name
         """
         result = [row[0] for row in client.query(query).result_rows]
 
         # If no devices found in short window, expand to 24h
         if not result and hours < 24:
-            query = """
-            SELECT DISTINCT toString(device_ip) as device_ip
+            query = f"""
+            SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
             FROM syslogs
             WHERE timestamp > now() - INTERVAL 24 HOUR
-            ORDER BY device_ip
+            ORDER BY device_name
             """
             result = [row[0] for row in client.query(query).result_rows]
 
@@ -1381,14 +1428,15 @@ class ClickHouseClient:
         client = cls.get_client()
 
         # Get device counts and recent activity (fast with time filter)
+        # Group by (device_ip, vdom) to treat each VDOM as a separate device
         query = f"""
         SELECT
-            toString(device_ip) as device_ip,
+            {cls._DEVICE_DISPLAY_EXPR} as device_ip,
             count() as log_count,
             max(timestamp) as newest_log
         FROM syslogs
         WHERE timestamp > now() - INTERVAL {hours} HOUR
-        GROUP BY device_ip
+        GROUP BY device_ip, vdom
         ORDER BY log_count DESC
         """
 
@@ -1438,9 +1486,10 @@ class ClickHouseClient:
 
         client = cls.get_client()
 
+        device_where = cls._device_where(device_ip)
         query = f"""
         ALTER TABLE syslogs DELETE
-        WHERE device_ip = toIPv4('{device_ip}')
+        WHERE {device_where}
         AND timestamp < now() - INTERVAL {retention_days} DAY
         """
 
@@ -1456,6 +1505,7 @@ class ClickHouseClient:
     def get_device_log_age_distribution(cls, device_ip: str) -> Dict[str, Any]:
         """Get age distribution of logs for a specific device."""
         client = cls.get_client()
+        device_where = cls._device_where(device_ip)
 
         query = f"""
         SELECT
@@ -1465,7 +1515,7 @@ class ClickHouseClient:
             countIf(timestamp <= now() - INTERVAL 30 DAY) as older,
             count() as total
         FROM syslogs
-        WHERE device_ip = toIPv4('{device_ip}')
+        WHERE {device_where}
         """
 
         result = list(client.query(query).named_results())
@@ -1500,7 +1550,7 @@ class ClickHouseClient:
     def get_unique_devices_count(cls) -> int:
         """Get count of unique devices."""
         client = cls.get_client()
-        query = "SELECT uniq(device_ip) FROM syslogs"
+        query = "SELECT uniq(device_ip, vdom) FROM syslogs"
         result = client.query(query).result_rows
         return result[0][0] if result else 0
 
@@ -1546,7 +1596,7 @@ class ClickHouseClient:
             'log_type': "if(log_type != '', log_type, parsed_data['log_type'])",
             'type': "if(log_type != '', log_type, parsed_data['type'])",
             'subtype': "parsed_data['subtype']",
-            'device': "toString(device_ip)",
+            'device': cls._DEVICE_DISPLAY_EXPR,
             'device_name': "if(parsed_data['device_name'] != '', parsed_data['device_name'], parsed_data['devname'])",
             # Use indexed session_end_reason and threat_id columns
             'session_end_reason': "if(session_end_reason != '', session_end_reason, parsed_data['session_end_reason'])",
@@ -1613,7 +1663,7 @@ class ClickHouseClient:
         query = f"""
         SELECT
             timestamp,
-            toString(device_ip) as device_ip,
+            {cls._DEVICE_DISPLAY_EXPR} as device_ip,
             severity,
             parsed_data,
             parsed_data['action'] as action,
@@ -1713,12 +1763,12 @@ class ClickHouseClient:
                 WHERE timestamp > now() - INTERVAL 24 HOUR AND dstport > 0
                 GROUP BY dstport ORDER BY count DESC LIMIT 10
             """,
-            'devices': """
-                SELECT toString(device_ip) as device, count() as log_count, max(timestamp) as last_seen,
+            'devices': f"""
+                SELECT {cls._DEVICE_DISPLAY_EXPR} as device, count() as log_count, max(timestamp) as last_seen,
                     countIf(severity <= 3) as critical_count, 0 as denied_count
                 FROM syslogs
                 WHERE timestamp > now() - INTERVAL 24 HOUR
-                GROUP BY device_ip ORDER BY log_count DESC
+                GROUP BY device_ip, vdom ORDER BY log_count DESC
             """,
             'timeline': """
                 SELECT toStartOfHour(timestamp) as hour, count() as total,
@@ -1835,7 +1885,7 @@ class ClickHouseClient:
         client = cls.get_client()
 
         # First get the original log - use a small window for timestamp matching
-        safe_device = device_ip.replace("'", "''")
+        device_where = cls._device_where(device_ip)
 
         # Clean up timestamp format - handle various formats
         clean_timestamp = log_timestamp.replace('T', ' ').replace('Z', '')
@@ -1849,12 +1899,12 @@ class ClickHouseClient:
         query = f"""
         SELECT
             timestamp,
-            toString(device_ip) as device_ip,
+            {cls._DEVICE_DISPLAY_EXPR} as device_ip,
             severity,
             parsed_data
         FROM syslogs
         WHERE
-            toString(device_ip) = '{safe_device}'
+            {device_where}
             AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
             AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
         ORDER BY timestamp ASC
