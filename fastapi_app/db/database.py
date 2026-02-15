@@ -79,6 +79,7 @@ async def init_db() -> None:
     from ..models import correlation  # noqa: F401
     from ..models import saved_search  # noqa: F401
     from ..models import dashboard  # noqa: F401
+    from ..models import address_object  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

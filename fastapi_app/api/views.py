@@ -514,11 +514,11 @@ async def log_list(
             logs_future, total_future, stats_future, devices_future
         )
 
-        # Handle approximate count (-1 means 100,000+)
+        # Handle approximate count (-1 means 10,000+)
         is_approximate = total == -1
         if is_approximate:
-            total = 100000  # Use 100,000 for pagination calculation
-            total_display = "100,000+"
+            total = 10000  # Use 10,000 for pagination calculation
+            total_display = "10,000+"
         else:
             total_display = f"{total:,}"
 
@@ -1731,13 +1731,22 @@ async def build_policy(
                     device.id, db, vdom=None  # Always get all zones for IP matching
                 )
 
+        # Fetch address objects for name lookup
+        from ..models.address_object import AddressObject
+        ao_result = await db.execute(select(AddressObject).order_by(AddressObject.name.asc()))
+        ao_list = [
+            {"name": o.name, "obj_type": o.obj_type, "value": o.value}
+            for o in ao_result.scalars().all()
+        ]
+
         # Build the policy CLI
         result = PolicyBuilderService.build_policy_from_log(
             log_data=log_data,
             zone_table=zone_table,
             vdom=vdom,
             custom_name=policy_name,
-            vendor=vendor
+            vendor=vendor,
+            address_objects=ao_list
         )
 
         return JSONResponse({

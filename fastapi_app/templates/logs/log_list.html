@@ -2052,6 +2052,198 @@
             border-color: rgba(59, 130, 246, 0.3);
         }
 
+        /* FortiGate Export Button */
+        .fg-export-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--accent-green);
+            background: var(--accent-green-dim);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .fg-export-btn:hover {
+            background: rgba(34, 197, 94, 0.25);
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+        .fg-export-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Aggregate row checkbox */
+        .agg-check {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        /* FortiGate Export Modal */
+        .fg-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+        }
+        .fg-modal-overlay.visible {
+            display: flex;
+        }
+        .fg-modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .fg-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .fg-modal-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin: 0;
+        }
+        .fg-modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+        }
+        .fg-modal-close:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .fg-modal-body {
+            padding: 16px 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .fg-modal-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .fg-modal-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+        .fg-modal-field label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+        .fg-modal-field input,
+        .fg-modal-field select {
+            padding: 6px 10px;
+            background: var(--bg-void);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: var(--font-sans);
+        }
+        .fg-modal-field select { cursor: pointer; }
+        .fg-config-preview {
+            width: 100%;
+            min-height: 300px;
+            background: #0d1117;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: #c9d1d9;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.5;
+            padding: 12px;
+            resize: vertical;
+            white-space: pre;
+            overflow: auto;
+        }
+        .fg-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .fg-btn {
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+        .fg-btn-copy {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-default);
+        }
+        .fg-btn-copy:hover { background: var(--bg-active); }
+        .fg-btn-download {
+            color: #fff;
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        .fg-btn-download:hover { opacity: 0.9; }
+        .fg-selected-count {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: 6px;
+        }
+
+        /* Consolidated source IPs cell */
+        .consolidated-src {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            max-width: 320px;
+        }
+        .consolidated-src .src-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            background: var(--accent-cyan-dim);
+            border: 1px solid rgba(59,130,246,0.2);
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+        .consolidated-src .src-tag.subnet {
+            background: var(--accent-purple);
+            background: rgba(139,92,246,0.15);
+            border-color: rgba(139,92,246,0.3);
+            color: #c4b5fd;
+        }
+        .consolidated-src .src-more {
+            font-size: 10px;
+            color: var(--text-muted);
+            padding: 1px 4px;
+        }
+
         /* ===== AGGREGATE TABLE ===== */
         .agg-table {
             width: 100%;
@@ -2554,6 +2746,17 @@
                     Subnet /24
                 </button>
                 {% endif %}
+                <div style="width:1px;height:20px;background:var(--border-default);margin:0 4px;"></div>
+                <button type="button" class="group-pill" id="consolidateBtn" onclick="toggleConsolidate()" title="Merge rows with same Dest IP + Port into one row">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M16 3h5v5M8 3H3v5M3 16v5h5M21 16v5h-5M12 8v8M8 12h8"/></svg>
+                    Consolidate by Dest
+                </button>
+                <div style="width:1px;height:20px;background:var(--border-default);margin:0 4px;"></div>
+                <button type="button" class="fg-export-btn" id="fgExportBtn" onclick="openFortiGateExport()" title="Export selected rows as FortiGate firewall policy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Export FortiGate Policy
+                </button>
+                <span class="fg-selected-count" id="fgSelectedCount"></span>
             </div>
             {% endif %}
 
@@ -2787,6 +2990,7 @@
                         <table class="agg-table">
                             <thead>
                                 <tr>
+                                    <th style="width:32px;text-align:center;"><input type="checkbox" class="agg-check" id="aggSelectAll" onchange="toggleAllAggRows(this)" title="Select All"></th>
                                     {% if 'srcip' in group_fields %}<th>Source IP</th>{% endif %}
                                     {% if 'dstip' in group_fields %}<th>Dest IP</th>{% endif %}
                                     {% if 'dstport' in group_fields %}<th>Dst Port</th>{% endif %}
@@ -2802,7 +3006,8 @@
                             </thead>
                             <tbody>
                                 {% for row in agg_rows %}
-                                <tr class="agg-row">
+                                <tr class="agg-row" data-agg-idx="{{ loop.index0 }}">
+                                    <td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="{{ loop.index0 }}" onchange="updateAggSelection()"></td>
                                     {% if 'srcip' in group_fields %}
                                     {% if is_subnet_rollup %}
                                     <td>
@@ -3860,5 +4065,611 @@
         document.getElementById('nqlResults').classList.remove('visible');
     }
     </script>
+
+    {% if is_aggregate %}
+    <!-- FortiGate Export Modal -->
+    <div class="fg-modal-overlay" id="fgModal" onclick="if(event.target===this)closeFortiGateExport()">
+        <div class="fg-modal">
+            <div class="fg-modal-header">
+                <h3>Export FortiGate Policy Configuration</h3>
+                <button class="fg-modal-close" onclick="closeFortiGateExport()">&times;</button>
+            </div>
+            <div class="fg-modal-body">
+                <div class="fg-modal-row">
+                    <div class="fg-modal-field">
+                        <label>Policy Name Prefix (optional)</label>
+                        <input type="text" id="fgPolicyPrefix" value="" placeholder="e.g. Campus" oninput="regenerateFortiGateConfig()">
+                    </div>
+                    <div class="fg-modal-field">
+                        <label>Action</label>
+                        <select id="fgPolicyAction" onchange="regenerateFortiGateConfig()">
+                            <option value="accept">Accept</option>
+                            <option value="deny">Deny</option>
+                        </select>
+                    </div>
+                    <div class="fg-modal-field">
+                        <label>Source Interface</label>
+                        <input type="text" id="fgSrcIntf" value="any" oninput="regenerateFortiGateConfig()">
+                    </div>
+                    <div class="fg-modal-field">
+                        <label>Dest Interface</label>
+                        <input type="text" id="fgDstIntf" value="any" oninput="regenerateFortiGateConfig()">
+                    </div>
+                </div>
+                <textarea class="fg-config-preview" id="fgConfigPreview" readonly></textarea>
+            </div>
+            <div class="fg-modal-footer">
+                <button class="fg-btn fg-btn-copy" onclick="copyFortiGateConfig()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy to Clipboard
+                </button>
+                <button class="fg-btn fg-btn-download" onclick="downloadFortiGateConfig()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download .conf
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ==================== FortiGate Export ====================
+    // Serialize aggregate data from Jinja
+    window.aggData = [
+        {% for row in agg_rows %}
+        {
+            srcip: {{ (row.srcip or '')|tojson }},
+            src_subnet: {{ (row.src_subnet if is_subnet_rollup else '')|tojson }},
+            dstip: {{ (row.dstip or '')|tojson }},
+            dstport: {{ (row.dstport or '')|tojson }},
+            event_count: {{ row.event_count }},
+            top_action: {{ (row.top_action or '')|tojson }},
+            top_policy: {{ (row.top_policy or '')|tojson }},
+            top_app: {{ (row.top_app or '')|tojson }},
+            unique_src_ips: {{ row.unique_src_ips|default(1) }},
+            sample_ips: {{ (row.sample_ips or [])|tojson }},
+            first_seen: {{ (row.first_seen.strftime('%Y-%m-%d %H:%M:%S') if row.first_seen else '')|tojson }},
+            last_seen: {{ (row.last_seen.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen else '')|tojson }},
+            device_count: {{ row.device_count|default(0) }}
+        }{{ ',' if not loop.last }}
+        {% endfor %}
+    ];
+    window.isSubnetRollup = {{ 'true' if is_subnet_rollup else 'false' }};
+    window.groupFields = {{ group_fields|tojson }};
+
+    // Port-to-builtin FortiGate service mapping
+    const FG_BUILTIN_SERVICES = {
+        '80':'HTTP', '443':'HTTPS', '53':'DNS', '22':'SSH', '21':'FTP',
+        '23':'TELNET', '25':'SMTP', '110':'POP3', '143':'IMAP', '993':'IMAPS',
+        '995':'POP3S', '3389':'RDP', '161':'SNMP', '389':'LDAP', '636':'LDAPS',
+        '123':'NTP', '514':'SYSLOG', '8080':'Web-Access'
+    };
+
+    // ==================== Address Object Lookup ====================
+    // Cache of address objects from the global store for policy export
+    window.addressObjects = [];
+    window.addressObjectsLoaded = false;
+
+    // Load address objects from API on page load
+    (async function loadAddressObjects() {
+        try {
+            const resp = await fetch('/api/address-objects/');
+            if (resp.ok) {
+                window.addressObjects = await resp.json();
+                window.addressObjectsLoaded = true;
+                console.log(`Loaded ${window.addressObjects.length} address objects for policy export`);
+            }
+        } catch (e) {
+            console.warn('Could not load address objects:', e);
+        }
+    })();
+
+    /**
+     * Look up an IP/CIDR against the address objects store.
+     * Returns { name, value, obj_type } if found, or null if no match.
+     * Match priority: exact value match (host) > subnet contains > range contains
+     */
+    function lookupAddressObject(ip) {
+        if (!window.addressObjects || window.addressObjects.length === 0) return null;
+        const ipClean = ip.trim();
+
+        // 1. Exact value match on host objects (fastest, most specific)
+        for (const obj of window.addressObjects) {
+            if (obj.value === ipClean && obj.obj_type === 'host') {
+                return { name: obj.name, value: obj.value, obj_type: obj.obj_type };
+            }
+        }
+        // Exact value match on any type
+        for (const obj of window.addressObjects) {
+            if (obj.value === ipClean) {
+                return { name: obj.name, value: obj.value, obj_type: obj.obj_type };
+            }
+        }
+
+        // 2. For bare IPs (no /), check subnet containment and range containment
+        if (!ipClean.includes('/')) {
+            const ipParts = ipClean.split('.').map(Number);
+            if (ipParts.length !== 4 || ipParts.some(p => isNaN(p) || p < 0 || p > 255)) return null;
+            const ipNum = ((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0;
+
+            // Prefer most specific subnet (longest prefix)
+            let bestSubnet = null;
+            let bestPrefix = -1;
+            for (const obj of window.addressObjects) {
+                if (obj.obj_type === 'subnet' && obj.value.includes('/')) {
+                    const [netAddr, prefix] = obj.value.split('/');
+                    const prefixLen = parseInt(prefix);
+                    if (isNaN(prefixLen) || prefixLen < 0 || prefixLen > 32) continue;
+                    const netParts = netAddr.split('.').map(Number);
+                    if (netParts.length !== 4) continue;
+                    const netNum = ((netParts[0] << 24) | (netParts[1] << 16) | (netParts[2] << 8) | netParts[3]) >>> 0;
+                    const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
+                    if ((ipNum & mask) === (netNum & mask) && prefixLen > bestPrefix) {
+                        bestSubnet = obj;
+                        bestPrefix = prefixLen;
+                    }
+                }
+                if (obj.obj_type === 'range' && obj.value.includes('-')) {
+                    const [startStr, endStr] = obj.value.split('-');
+                    const sParts = startStr.trim().split('.').map(Number);
+                    const eParts = endStr.trim().split('.').map(Number);
+                    if (sParts.length === 4 && eParts.length === 4) {
+                        const startNum = ((sParts[0] << 24) | (sParts[1] << 16) | (sParts[2] << 8) | sParts[3]) >>> 0;
+                        const endNum = ((eParts[0] << 24) | (eParts[1] << 16) | (eParts[2] << 8) | eParts[3]) >>> 0;
+                        if (ipNum >= startNum && ipNum <= endNum) {
+                            return { name: obj.name, value: obj.value, obj_type: obj.obj_type };
+                        }
+                    }
+                }
+            }
+            if (bestSubnet) {
+                return { name: bestSubnet.name, value: bestSubnet.value, obj_type: bestSubnet.obj_type };
+            }
+        } else {
+            // IP is a CIDR — check exact subnet match with normalized form
+            try {
+                const [netAddr, prefix] = ipClean.split('/');
+                const prefixLen = parseInt(prefix);
+                const ipParts = netAddr.split('.').map(Number);
+                const ipNum = ((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0;
+                const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
+                const networkAddr = ipNum & mask;
+                const normParts = [(networkAddr >>> 24) & 255, (networkAddr >>> 16) & 255, (networkAddr >>> 8) & 255, networkAddr & 255];
+                const normCidr = `${normParts.join('.')}/${prefixLen}`;
+                for (const obj of window.addressObjects) {
+                    if (obj.obj_type === 'subnet' && obj.value === normCidr) {
+                        return { name: obj.name, value: obj.value, obj_type: obj.obj_type };
+                    }
+                }
+            } catch(e) {}
+        }
+
+        return null;
+    }
+
+    function toggleAllAggRows(masterCb) {
+        document.querySelectorAll('.agg-row-check').forEach(cb => { cb.checked = masterCb.checked; });
+        updateAggSelection();
+    }
+
+    function updateAggSelection() {
+        const checks = document.querySelectorAll('.agg-row-check');
+        const checked = document.querySelectorAll('.agg-row-check:checked');
+        const countEl = document.getElementById('fgSelectedCount');
+        const master = document.getElementById('aggSelectAll');
+        if (countEl) {
+            countEl.textContent = checked.length > 0 ? `${checked.length} selected` : '';
+        }
+        if (master) {
+            master.checked = checks.length > 0 && checked.length === checks.length;
+            master.indeterminate = checked.length > 0 && checked.length < checks.length;
+        }
+    }
+
+    // ==================== Consolidate by Destination ====================
+    let isConsolidated = false;
+    let originalTbodyHTML = null;
+
+    function toggleConsolidate() {
+        const btn = document.getElementById('consolidateBtn');
+        const tbody = document.querySelector('.agg-table tbody');
+        if (!tbody) return;
+
+        if (!isConsolidated) {
+            // Save original HTML so we can restore
+            if (!originalTbodyHTML) originalTbodyHTML = tbody.innerHTML;
+            renderConsolidatedTable(tbody);
+            btn.classList.add('active');
+            isConsolidated = true;
+        } else {
+            // Restore original
+            tbody.innerHTML = originalTbodyHTML;
+            btn.classList.remove('active');
+            isConsolidated = false;
+        }
+    }
+
+    function renderConsolidatedTable(tbody) {
+        const SUBNET_THRESHOLD = 5;
+        const hasSrcip = window.groupFields.includes('srcip');
+        const hasDstip = window.groupFields.includes('dstip');
+        const hasDstport = window.groupFields.includes('dstport');
+        const timeRange = '{{ current_time_range or "1h" }}';
+
+        // Group by (dstip, dstport)
+        const groups = new Map();
+        window.aggData.forEach((row, idx) => {
+            const key = `${row.dstip || ''}|${row.dstport || ''}`;
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    dstip: row.dstip,
+                    dstport: row.dstport,
+                    sources: [],       // {label, isSubnet, ips[]}
+                    totalEvents: 0,
+                    firstSeen: row.first_seen,
+                    lastSeen: row.last_seen,
+                    actions: new Map(),
+                    policies: new Set(),
+                    apps: new Set(),
+                    deviceCount: 0,
+                    rowIndices: []
+                });
+            }
+            const g = groups.get(key);
+            g.totalEvents += row.event_count || 0;
+            g.rowIndices.push(idx);
+
+            // Track first/last seen across group
+            if (row.first_seen && (!g.firstSeen || row.first_seen < g.firstSeen)) g.firstSeen = row.first_seen;
+            if (row.last_seen && (!g.lastSeen || row.last_seen > g.lastSeen)) g.lastSeen = row.last_seen;
+
+            // Actions (track most common)
+            const act = row.top_action || '';
+            if (act) g.actions.set(act, (g.actions.get(act) || 0) + (row.event_count || 1));
+
+            if (row.top_policy) g.policies.add(row.top_policy);
+            if (row.top_app) g.apps.add(row.top_app);
+            g.deviceCount = Math.max(g.deviceCount, row.device_count || 0);
+
+            // Collect source addresses with subnet threshold logic
+            if (hasSrcip) {
+                if (window.isSubnetRollup) {
+                    const count = row.unique_src_ips || 0;
+                    if (count > SUBNET_THRESHOLD && row.src_subnet) {
+                        g.sources.push({ label: row.src_subnet, isSubnet: true });
+                    } else if (row.sample_ips && row.sample_ips.length > 0) {
+                        row.sample_ips.forEach(ip => g.sources.push({ label: ip, isSubnet: false }));
+                    } else {
+                        g.sources.push({ label: row.src_subnet || row.srcip || '--', isSubnet: !!row.src_subnet });
+                    }
+                } else {
+                    if (row.srcip) g.sources.push({ label: row.srcip, isSubnet: false });
+                }
+            }
+        });
+
+        // Render consolidated rows
+        let html = '';
+        let gIdx = 0;
+        groups.forEach((g) => {
+            // Deduplicate sources
+            const seen = new Set();
+            const uniqSources = [];
+            g.sources.forEach(s => {
+                if (!seen.has(s.label)) { seen.add(s.label); uniqSources.push(s); }
+            });
+
+            // Top action
+            let topAction = '';
+            let topCount = 0;
+            g.actions.forEach((count, act) => { if (count > topCount) { topAction = act; topCount = count; } });
+
+            const topPolicy = Array.from(g.policies).join(', ') || '--';
+            const topApp = Array.from(g.apps).join(', ') || '--';
+
+            // Comma-separated row indices for checkbox data
+            const idxList = g.rowIndices.join(',');
+
+            html += `<tr class="agg-row" data-consolidated-idx="${gIdx}">`;
+            html += `<td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="${idxList}" onchange="updateAggSelection()"></td>`;
+
+            if (hasSrcip) {
+                html += '<td><div class="consolidated-src">';
+                const MAX_SHOW = 8;
+                uniqSources.slice(0, MAX_SHOW).forEach(s => {
+                    const cls = s.isSubnet ? 'src-tag subnet' : 'src-tag';
+                    html += `<span class="${cls}">${s.label}</span>`;
+                });
+                if (uniqSources.length > MAX_SHOW) {
+                    html += `<span class="src-more">+${uniqSources.length - MAX_SHOW} more</span>`;
+                }
+                html += '</div></td>';
+            }
+
+            if (hasDstip) {
+                html += `<td><a href="?dstip=${encodeURIComponent(g.dstip || '')}&time_range=${timeRange}" class="ip-link">${g.dstip || '--'}</a></td>`;
+            }
+            if (hasDstport) {
+                html += `<td><span class="port-value">${g.dstport || '--'}</span></td>`;
+            }
+
+            html += `<td><span class="event-count-badge">${g.totalEvents.toLocaleString()}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.firstSeen || '--'}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.lastSeen || '--'}</span></td>`;
+
+            // Action badge
+            const actLower = topAction.toLowerCase();
+            const isDeny = ['deny','drop','block','reject'].includes(actLower);
+            if (isDeny) {
+                html += `<td><span class="status-badge status-deny">${topAction.toUpperCase()}</span></td>`;
+            } else if (topAction) {
+                html += `<td><span class="status-badge status-accept">${topAction.toUpperCase()}</span></td>`;
+            } else {
+                html += '<td><span class="agg-mono">--</span></td>';
+            }
+
+            html += `<td><span class="agg-mono">${topPolicy}</span></td>`;
+            html += `<td><span class="agg-mono">${topApp}</span></td>`;
+            html += `<td><span class="device-count">${g.deviceCount}</span></td>`;
+            html += `<td></td>`;  // no drill-down for consolidated rows
+            html += '</tr>';
+            gIdx++;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function getSelectedAggRows() {
+        const selected = [];
+        document.querySelectorAll('.agg-row-check:checked').forEach(cb => {
+            // data-idx can be comma-separated (consolidated) or single
+            const idxStr = cb.dataset.idx;
+            idxStr.split(',').forEach(i => {
+                const idx = parseInt(i);
+                if (window.aggData[idx]) selected.push(window.aggData[idx]);
+            });
+        });
+        // Deduplicate by reference
+        return [...new Map(selected.map(r => [r, r])).values()];
+    }
+
+    function openFortiGateExport() {
+        let rows = getSelectedAggRows();
+        if (rows.length === 0) {
+            // If none selected, select all
+            document.querySelectorAll('.agg-row-check').forEach(cb => { cb.checked = true; });
+            updateAggSelection();
+            rows = getSelectedAggRows();
+        }
+        if (rows.length === 0) return;
+        regenerateFortiGateConfig();
+        document.getElementById('fgModal').classList.add('visible');
+    }
+
+    function closeFortiGateExport() {
+        document.getElementById('fgModal').classList.remove('visible');
+    }
+
+    function regenerateFortiGateConfig() {
+        const rows = getSelectedAggRows();
+        if (rows.length === 0) {
+            document.getElementById('fgConfigPreview').value = '# No rows selected';
+            return;
+        }
+
+        const prefix = document.getElementById('fgPolicyPrefix').value.trim();
+        const action = document.getElementById('fgPolicyAction').value;
+        const srcintf = document.getElementById('fgSrcIntf').value.trim() || 'any';
+        const dstintf = document.getElementById('fgDstIntf').value.trim() || 'any';
+
+        // Subnet rollup threshold: use /24 only when > 5 unique IPs, otherwise individual IPs
+        const SUBNET_THRESHOLD = 5;
+
+        // Resolve source addresses per row: returns array of IPs (individual or subnet)
+        function resolveSourceAddrs(row) {
+            if (!window.isSubnetRollup) return row.srcip ? [row.srcip] : [];
+            const count = row.unique_src_ips || 0;
+            if (count > SUBNET_THRESHOLD && row.src_subnet) {
+                // Enough IPs to justify the /24
+                return [row.src_subnet];
+            }
+            // Use individual IPs from sample_ips
+            if (row.sample_ips && row.sample_ips.length > 0) {
+                return row.sample_ips;
+            }
+            // Fallback: single srcip or subnet if we have no samples
+            return row.srcip ? [row.srcip] : (row.src_subnet ? [row.src_subnet] : []);
+        }
+
+        // Collect unique addresses and services
+        const addresses = new Set();
+        const customServices = new Set();
+
+        rows.forEach(row => {
+            resolveSourceAddrs(row).forEach(ip => addresses.add(ip));
+            if (row.dstip) addresses.add(row.dstip);
+
+            const port = String(row.dstport || '').trim();
+            if (port && !FG_BUILTIN_SERVICES[port]) {
+                customServices.add(port);
+            }
+        });
+
+        let config = '';
+
+        // --- Resolve address names from global address objects store ---
+        // Build a map: raw IP/CIDR -> { name, objValue, objType, isKnown }
+        const addrNameMap = new Map();
+        addresses.forEach(addr => {
+            const match = lookupAddressObject(addr);
+            if (match) {
+                addrNameMap.set(addr, { name: match.name, objValue: match.value, objType: match.obj_type, isKnown: true });
+            } else {
+                addrNameMap.set(addr, { name: addr, objValue: addr, objType: 'host', isKnown: false });
+            }
+        });
+
+        // --- Address Objects — use store name + correct value ---
+        // Deduplicate by resolved name (multiple IPs may resolve to same object)
+        const seenObjNames = new Set();
+        const addrEntries = [];
+        addrNameMap.forEach((info, addr) => {
+            if (!seenObjNames.has(info.name)) {
+                seenObjNames.add(info.name);
+                addrEntries.push(info);
+            }
+        });
+
+        if (addrEntries.length > 0) {
+            config += 'config firewall address\n';
+            addrEntries.forEach(entry => {
+                // Use the object's actual value for the subnet line
+                const val = entry.objValue;
+                config += `    edit "${entry.name}"\n`;
+                if (entry.objType === 'range' && val.includes('-')) {
+                    const [start, end] = val.split('-');
+                    config += `        set type iprange\n`;
+                    config += `        set start-ip ${start.trim()}\n`;
+                    config += `        set end-ip ${end.trim()}\n`;
+                } else if (entry.objType === 'fqdn') {
+                    config += `        set type fqdn\n`;
+                    config += `        set fqdn "${val}"\n`;
+                } else {
+                    // host or subnet
+                    const subnet = val.includes('/') ? val : val + '/32';
+                    config += `        set subnet ${cidrToSubnet(subnet)}\n`;
+                }
+                config += `    next\n`;
+            });
+            config += 'end\n\n';
+        }
+
+        // --- Custom Service Objects ---
+        if (customServices.size > 0) {
+            config += 'config firewall service custom\n';
+            customServices.forEach(port => {
+                config += `    edit "TCP-${port}"\n`;
+                config += `        set tcp-portrange ${port}\n`;
+                config += `    next\n`;
+            });
+            config += 'end\n\n';
+        }
+
+        // --- Policies (consolidated by dstip+dstport) ---
+        // Group rows by (dstip, dstport) so multiple sources → same dest become one policy
+        const policyGroups = new Map();
+        rows.forEach(row => {
+            const key = `${row.dstip || 'all'}|${row.dstport || ''}`;
+            if (!policyGroups.has(key)) {
+                policyGroups.set(key, { dstip: row.dstip || '', dstport: row.dstport || '', srcAddrs: new Set(), totalEvents: 0, policies: new Set() });
+            }
+            const group = policyGroups.get(key);
+            resolveSourceAddrs(row).forEach(a => group.srcAddrs.add(a));
+            group.totalEvents += row.event_count || 0;
+            if (row.top_policy) group.policies.add(row.top_policy);
+        });
+
+        config += 'config firewall policy\n';
+        // Track name counts to handle duplicates (e.g. two HTTPS policies)
+        const nameCount = {};
+        policyGroups.forEach((group) => {
+            const dstAddr = group.dstip || 'all';
+            const dstAddrName = dstAddr !== 'all' ? (addrNameMap.get(dstAddr)?.name || dstAddr) : 'all';
+            const port = String(group.dstport || '').trim();
+            let svcName = 'ALL';
+            if (port) {
+                svcName = FG_BUILTIN_SERVICES[port] || `TCP-${port}`;
+            }
+
+            const srcArr = Array.from(group.srcAddrs);
+            // Deduplicate resolved names (multiple IPs may map to same address object, e.g. 10.0.0.0/8)
+            const srcNames = [...new Set(srcArr.map(a => addrNameMap.get(a)?.name || a))];
+            const srcAddrStr = srcNames.length > 0 ? srcNames.map(n => `"${n}"`).join(' ') : '"all"';
+            const policyList = Array.from(group.policies).join(', ');
+
+            // Build policy name: ServiceName or Prefix-ServiceName (e.g. "HTTPS", "Campus-HTTPS-2")
+            const baseName = prefix ? `${prefix}-${svcName}` : svcName;
+            nameCount[baseName] = (nameCount[baseName] || 0) + 1;
+            const policyName = nameCount[baseName] > 1 ? `${baseName}-${nameCount[baseName]}` : baseName;
+
+            config += `    edit 0\n`;
+            config += `        set name "${policyName}"\n`;
+            config += `        set srcintf "${srcintf}"\n`;
+            config += `        set dstintf "${dstintf}"\n`;
+            config += `        set srcaddr ${srcAddrStr}\n`;
+            config += `        set dstaddr "${dstAddrName}"\n`;
+            config += `        set service "${svcName}"\n`;
+            config += `        set action ${action}\n`;
+            config += `        set schedule "always"\n`;
+            config += `        set logtraffic all\n`;
+            config += `        set comment "Events: ${group.totalEvents}${policyList ? ', Policy: ' + policyList : ''}"\n`;
+            config += `    next\n`;
+        });
+        config += 'end\n';
+
+        document.getElementById('fgConfigPreview').value = config;
+    }
+
+    // Convert CIDR to FortiGate subnet notation (e.g. 10.10.1.0/24 -> 10.10.1.0 255.255.255.0)
+    function cidrToSubnet(cidr) {
+        const parts = cidr.split('/');
+        const ip = parts[0];
+        const bits = parseInt(parts[1] || '32');
+        const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+        const m = [
+            (mask >>> 24) & 255,
+            (mask >>> 16) & 255,
+            (mask >>> 8) & 255,
+            mask & 255
+        ].join('.');
+        return `${ip} ${m}`;
+    }
+
+    function copyFortiGateConfig() {
+        const ta = document.getElementById('fgConfigPreview');
+        const btn = ta.closest('.fg-modal').querySelector('.fg-btn-copy');
+        const origHTML = btn.innerHTML;
+
+        function showCopied() {
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M20 6 9 17l-5-5"/></svg> Copied!';
+            setTimeout(() => { btn.innerHTML = origHTML; }, 2000);
+        }
+
+        // Try modern clipboard API first, fall back to execCommand
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(ta.value).then(showCopied).catch(() => fallbackCopy(ta, showCopied));
+        } else {
+            fallbackCopy(ta, showCopied);
+        }
+    }
+
+    function fallbackCopy(ta, onSuccess) {
+        ta.removeAttribute('readonly');
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        try {
+            document.execCommand('copy');
+            onSuccess();
+        } catch (e) {
+            alert('Copy failed. Please select the text and copy manually (Ctrl+C).');
+        }
+        ta.setAttribute('readonly', '');
+        window.getSelection().removeAllRanges();
+    }
+
+    function downloadFortiGateConfig() {
+        const config = document.getElementById('fgConfigPreview').value;
+        const prefix = document.getElementById('fgPolicyPrefix').value.trim();
+        const blob = new Blob([config], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fortigate-policy${prefix ? '-' + prefix.toLowerCase() : ''}-${new Date().toISOString().slice(0,10)}.conf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    </script>
+    {% endif %}
 </body>
 </html>

@@ -1205,9 +1205,9 @@ class ClickHouseClient:
             count() as event_count,
             min(timestamp) as first_seen,
             max(timestamp) as last_seen,
-            topK(1)(action)[1] as top_action,
-            topK(1)(policyname)[1] as top_policy,
-            topK(1)(application)[1] as top_app,
+            any(action) as top_action,
+            any(policyname) as top_policy,
+            any(application) as top_app,
             uniq(device_ip, vdom) as device_count{subnet_extra}
         FROM syslogs
         PREWHERE {prewhere_clause}
@@ -1215,6 +1215,7 @@ class ClickHouseClient:
         GROUP BY {group_cols}
         ORDER BY event_count DESC
         LIMIT {limit} OFFSET {offset}
+        SETTINGS max_threads=0
         """
 
         result = client.query(query).named_results()
@@ -1231,11 +1232,12 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
         default_hours: int = 1,
-        max_count: int = 100000,
+        max_count: int = 10000,
         subnet_rollup: bool = False,
     ) -> int:
         """
-        Count distinct groups for aggregate view. Uses capped-count pattern.
+        Count distinct groups for aggregate view.
+        Uses uniq() approximation for fast counting (~2-3% accuracy).
         Returns -1 if count exceeds max_count.
         """
         allowed = {'srcip', 'dstip', 'dstport'}
@@ -1257,17 +1259,23 @@ class ClickHouseClient:
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
-        _, group_cols, _ = cls._build_agg_columns(group_by_fields, subnet_rollup)
+        # Build uniq() column expressions (same as GROUP BY but as uniq args)
+        _, _, _ = cls._build_agg_columns(group_by_fields, subnet_rollup)
+
+        # Use uniq() for approximate count — much faster than GROUP BY subquery
+        uniq_cols = []
+        for field in group_by_fields:
+            if field == 'srcip' and subnet_rollup:
+                uniq_cols.append(cls._SUBNET24_EXPR)
+            else:
+                uniq_cols.append(field)
 
         query = f"""
-        SELECT count() as total FROM (
-            SELECT 1
-            FROM syslogs
-            PREWHERE {prewhere_clause}
-            WHERE {where_sql}
-            GROUP BY {group_cols}
-            LIMIT {max_count + 1}
-        )
+        SELECT uniq({', '.join(uniq_cols)}) as approx_groups
+        FROM syslogs
+        PREWHERE {prewhere_clause}
+        WHERE {where_sql}
+        SETTINGS max_threads=0
         """
 
         result = client.query(query).result_rows

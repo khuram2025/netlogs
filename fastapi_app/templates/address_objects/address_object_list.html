@@ -1,0 +1,574 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .stats-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .stat-card { flex: 1; min-width: 100px; }
+    .action-bar {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .action-bar input[type="text"],
+    .action-bar select { width: auto; min-width: 180px; }
+    .type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .type-host { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+    .type-subnet { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .type-range { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+    .type-fqdn { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+    .type-group { background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+    .source-badge {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        background: rgba(255,255,255,0.05);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+    }
+    /* Modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 100;
+        justify-content: center;
+        align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        width: 92%;
+        max-width: 680px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    .modal h3 { margin-bottom: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { margin-bottom: 0.375rem; display: block; font-size: 0.85rem; color: var(--text-muted); }
+    .form-group input, .form-group select, .form-group textarea {
+        background-color: var(--input-bg);
+        border: 1px solid var(--border);
+        color: white;
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        width: 100%;
+        font-size: 0.875rem;
+    }
+    .form-group textarea { min-height: 180px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.78rem; resize: vertical; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem; }
+    .btn-secondary {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+    .btn-secondary:hover { color: white; border-color: #475569; }
+    .import-result, .export-result {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .import-result.success, .export-result.success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; }
+    .import-result.error, .export-result.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+    }
+    .empty-state h3 { color: var(--text-muted); }
+    td.value-cell {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.85rem;
+    }
+    tr:hover { background: rgba(255,255,255,0.02); }
+    /* Format hints */
+    .format-hint {
+        margin-top: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: rgba(59,130,246,0.08);
+        border: 1px solid rgba(59,130,246,0.15);
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-family: monospace;
+        white-space: pre-wrap;
+        line-height: 1.5;
+    }
+    /* Dropdown button group */
+    .dropdown-wrap { position: relative; display: inline-block; }
+    .dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        min-width: 200px;
+        z-index: 60;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        padding: 0.375rem 0;
+        margin-top: 0.25rem;
+    }
+    .dropdown-wrap:hover .dropdown-menu,
+    .dropdown-wrap.open .dropdown-menu { display: block; }
+    .dropdown-menu a, .dropdown-menu button {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 1rem;
+        color: var(--text-color);
+        text-decoration: none;
+        font-size: 0.85rem;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+    .dropdown-menu a:hover, .dropdown-menu button:hover { background: rgba(255,255,255,0.05); }
+    .dropdown-menu .sep { border-top: 1px solid var(--border); margin: 0.25rem 0; }
+    /* Single export inline btn */
+    .btn-export-sm {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.7rem;
+        margin-left: 0.25rem;
+    }
+    .btn-export-sm:hover { color: white; border-color: #475569; }
+    /* Actions cell */
+    .actions-cell { display: flex; gap: 0.25rem; align-items: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+    <h1 style="margin:0;">Address Objects</h1>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-label">Total</div>
+        <div class="stat-value">{{ total }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Hosts</div>
+        <div class="stat-value">{{ hosts }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Subnets</div>
+        <div class="stat-value">{{ subnets }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Ranges</div>
+        <div class="stat-value">{{ ranges }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">FQDNs</div>
+        <div class="stat-value">{{ fqdns }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Groups</div>
+        <div class="stat-value">{{ groups }}</div>
+    </div>
+</div>
+
+<!-- Action Bar -->
+<div class="action-bar">
+    <form method="get" action="{{ url_for('address_object_list') }}" style="display:flex;gap:0.5rem;align-items:center;flex:1;">
+        <input type="text" name="search" value="{{ search }}" placeholder="Search name or value..." style="flex:1;max-width:300px;">
+        <select name="obj_type" style="min-width:130px;">
+            <option value="">All Types</option>
+            <option value="host" {% if obj_type_filter == 'host' %}selected{% endif %}>Host</option>
+            <option value="subnet" {% if obj_type_filter == 'subnet' %}selected{% endif %}>Subnet</option>
+            <option value="range" {% if obj_type_filter == 'range' %}selected{% endif %}>Range</option>
+            <option value="fqdn" {% if obj_type_filter == 'fqdn' %}selected{% endif %}>FQDN</option>
+            <option value="group" {% if obj_type_filter == 'group' %}selected{% endif %}>Group</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+    <button class="btn btn-success" onclick="openModal('addModal')">Add Object</button>
+    <button class="btn btn-primary" onclick="openModal('importModal')">Import</button>
+    {% if total > 0 %}
+    <button class="btn btn-primary" onclick="openModal('exportModal')">Export</button>
+    <button class="btn btn-primary" onclick="doDeduplicate()" id="dedupBtn" style="background:var(--warning);border-color:var(--warning);">Deduplicate</button>
+    <form method="post" action="{{ url_for('address_object_delete_all') }}" onsubmit="return confirm('Delete ALL address objects? This cannot be undone.');" style="display:inline;">
+        <button type="submit" class="btn btn-danger">Delete All</button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Table -->
+<div class="card" style="padding:0;overflow-x:auto;">
+    {% if objects %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Source</th>
+                <th>Description</th>
+                <th>Created</th>
+                <th style="width:140px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for obj in objects %}
+            <tr>
+                <td style="font-weight:500;">{{ obj.name }}</td>
+                <td><span class="type-badge type-{{ obj.obj_type }}">{{ obj.obj_type }}</span></td>
+                <td class="value-cell">{{ obj.value }}</td>
+                <td>
+                    {% if obj.source %}
+                    <span class="source-badge">{{ obj.source }}</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted text-sm">{{ obj.description or '-' }}</td>
+                <td class="text-muted text-sm">{{ obj.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <div class="actions-cell">
+                        <div class="dropdown-wrap">
+                            <button class="btn-export-sm" onclick="this.parentElement.classList.toggle('open')">Export</button>
+                            <div class="dropdown-menu">
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=fortigate">FortiGate</a>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=paloalto">Palo Alto</a>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=cisco">Cisco ASA</a>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=juniper">Juniper SRX</a>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=checkpoint">Check Point</a>
+                                <div class="sep"></div>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=csv">CSV</a>
+                                <a href="{{ url_for('address_object_export_single', obj_id=obj.id) }}?format=json">JSON</a>
+                            </div>
+                        </div>
+                        <form method="post" action="{{ url_for('address_object_delete', obj_id=obj.id) }}" style="display:inline;" onsubmit="return confirm('Delete this object?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <h3>No Address Objects</h3>
+        <p>Add objects manually or import from a firewall config.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ============ Add Object Modal ============ -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h3>Add Address Object</h3>
+        <form method="post" action="{{ url_for('address_object_add') }}">
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" name="name" required placeholder="e.g. WEB-SERVER-01">
+            </div>
+            <div class="form-group">
+                <label>Type</label>
+                <select name="obj_type" required>
+                    <option value="host">Host (single IP)</option>
+                    <option value="subnet">Subnet (CIDR)</option>
+                    <option value="range">Range (start-end)</option>
+                    <option value="fqdn">FQDN (domain)</option>
+                    <option value="group">Group</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Value</label>
+                <input type="text" name="value" required placeholder="e.g. 10.1.1.5 or 192.168.1.0/24 or 10.1.1.1-10.1.1.254">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="Optional description">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+                <button type="submit" class="btn btn-success">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============ Import Modal ============ -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal">
+        <h3>Import Address Objects</h3>
+        <div class="form-group">
+            <label>Format</label>
+            <select id="importFormat" onchange="updateFormatHint()">
+                <option value="fortigate">FortiGate (config firewall address)</option>
+                <option value="paloalto">Palo Alto (set address)</option>
+                <option value="cisco">Cisco ASA (object network)</option>
+                <option value="juniper">Juniper SRX (address-book)</option>
+                <option value="checkpoint">Check Point (mgmt_cli)</option>
+                <option value="sophos">Sophos XG (IPHost)</option>
+                <option value="csv">CSV (name, type, value, description)</option>
+                <option value="json">JSON (array of objects)</option>
+                <option value="plain">Plain IP List (one per line, auto-name)</option>
+            </select>
+        </div>
+        <div id="formatHint" class="format-hint"></div>
+        <div class="form-group" style="margin-top:1rem;">
+            <label>Paste config below</label>
+            <textarea id="importText" placeholder="Paste firewall config, CSV, JSON, or IP list here..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>Or upload a file</label>
+            <input type="file" id="importFile" accept=".txt,.csv,.conf,.cfg,.json,.log" style="padding:0.25rem;">
+        </div>
+        <div id="importResult"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="closeModal('importModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="doImport()">Import</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Export Modal ============ -->
+<div class="modal-overlay" id="exportModal">
+    <div class="modal">
+        <h3>Export Address Objects</h3>
+        <p class="text-muted text-sm" style="margin-bottom:1rem;">Export all objects (or filtered set) to a firewall-ready config format.</p>
+        <div class="form-group">
+            <label>Export Format</label>
+            <select id="exportFormat" onchange="updateExportHint()">
+                <optgroup label="Firewall Configs">
+                    <option value="fortigate">FortiGate (config firewall address)</option>
+                    <option value="paloalto">Palo Alto (set address)</option>
+                    <option value="cisco">Cisco ASA (object network)</option>
+                    <option value="juniper">Juniper SRX (address-book)</option>
+                    <option value="checkpoint">Check Point (mgmt_cli)</option>
+                </optgroup>
+                <optgroup label="Data Formats">
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                    <option value="plain">Plain IP List (values only)</option>
+                </optgroup>
+            </select>
+        </div>
+        <div id="exportHint" class="format-hint" style="margin-bottom:1rem;"></div>
+        <div class="form-group">
+            <label>Filter by Type (optional)</label>
+            <select id="exportTypeFilter">
+                <option value="">All Types</option>
+                <option value="host">Host</option>
+                <option value="subnet">Subnet</option>
+                <option value="range">Range</option>
+                <option value="fqdn">FQDN</option>
+                <option value="group">Group</option>
+            </select>
+        </div>
+        <div id="exportResult"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="closeModal('exportModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="doExportPreview()">Preview</button>
+            <button type="button" class="btn btn-success" onclick="doExportDownload()">Download</button>
+        </div>
+        <div id="exportPreviewBox" style="display:none;margin-top:1rem;">
+            <label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.25rem;display:block;">Preview:</label>
+            <textarea id="exportPreviewText" readonly style="background:var(--input-bg);border:1px solid var(--border);color:#94a3b8;border-radius:0.375rem;padding:0.5rem;width:100%;font-family:monospace;font-size:0.78rem;min-height:200px;resize:vertical;"></textarea>
+            <button type="button" class="btn btn-primary btn-sm" style="margin-top:0.5rem;" onclick="copyExportPreview()">Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openModal(id) {
+    document.getElementById(id).classList.add('active');
+    if (id === 'importModal') updateFormatHint();
+    if (id === 'exportModal') updateExportHint();
+}
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+    o.addEventListener('click', (e) => { if (e.target === o) o.classList.remove('active'); });
+});
+// Close dropdowns when clicking elsewhere
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown-wrap')) {
+        document.querySelectorAll('.dropdown-wrap.open').forEach(d => d.classList.remove('open'));
+    }
+});
+
+// ===== FORMAT HINTS =====
+const FORMAT_HINTS = {
+    fortigate: `config firewall address\n    edit "SERVER-01"\n        set subnet 10.1.1.5 255.255.255.255\n    next\n    edit "NET-OFFICE"\n        set subnet 192.168.1.0 255.255.255.0\n    next\nend`,
+    paloalto: `set address SERVER-01 ip-netmask 10.1.1.5/32\nset address NET-OFFICE ip-netmask 192.168.1.0/24\nset address DNS fqdn dns.example.com\nset address RANGE-1 ip-range 10.1.1.100-10.1.1.200`,
+    cisco: `object network SERVER-01\n host 10.1.1.5\nobject network NET-OFFICE\n subnet 192.168.1.0 255.255.255.0\nobject network RANGE-DHCP\n range 10.1.1.100 10.1.1.200`,
+    juniper: `set security address-book global address SRV-01 10.1.1.5/32\nset security address-book global address NET-OFFICE 192.168.1.0/24\nset security address-book global address DNS dns-name dns.example.com`,
+    checkpoint: `mgmt_cli add host name "SRV-01" ip-address "10.1.1.5"\nmgmt_cli add network name "NET-OFFICE" subnet "192.168.1.0" subnet-mask "255.255.255.0"\nmgmt_cli add address-range name "RANGE-1" ip-address-first "10.1.1.100" ip-address-last "10.1.1.200"`,
+    sophos: `IPHost SERVER-01 IPAddress 10.1.1.5\nIPHost NET-OFFICE Network 192.168.1.0/24\nIPHost RANGE-1 IPRange 10.1.1.100-10.1.1.200\nFQDNHost DNS FQDN dns.example.com`,
+    csv: `name,type,value,description\nSERVER-01,host,10.1.1.5,Web server\nNET-OFFICE,subnet,192.168.1.0/24,Office network`,
+    json: `[\n  {"name": "SRV-01", "obj_type": "host", "value": "10.1.1.5"},\n  {"name": "NET-OFFICE", "obj_type": "subnet", "value": "192.168.1.0/24"}\n]`,
+    plain: `# One IP/CIDR/FQDN per line (auto-names generated):\n10.1.1.5\n192.168.1.0/24\n10.1.1.100-10.1.1.200\nwww.example.com\n# Or: name,value\nSERVER-01,10.1.1.5`
+};
+const EXPORT_HINTS = {
+    fortigate: 'Generates "config firewall address" + "config firewall addrgrp" blocks',
+    paloalto: 'Generates "set address" and "set address-group" commands',
+    cisco: 'Generates "object network" and "object-group network" blocks',
+    juniper: 'Generates "set security address-book global" commands',
+    checkpoint: 'Generates "mgmt_cli add host/network/address-range" commands',
+    csv: 'Generates CSV with columns: name, type, value, description, source, members',
+    json: 'Generates JSON array of all address objects',
+    plain: 'Generates plain text with one value per line (no names/types)'
+};
+
+function updateFormatHint() {
+    const fmt = document.getElementById('importFormat').value;
+    document.getElementById('formatHint').textContent = FORMAT_HINTS[fmt] || '';
+}
+function updateExportHint() {
+    const fmt = document.getElementById('exportFormat').value;
+    document.getElementById('exportHint').textContent = EXPORT_HINTS[fmt] || '';
+}
+
+// ===== IMPORT =====
+async function doImport() {
+    const format = document.getElementById('importFormat').value;
+    const text = document.getElementById('importText').value;
+    const fileInput = document.getElementById('importFile');
+    const resultDiv = document.getElementById('importResult');
+
+    const formData = new FormData();
+    formData.append('format', format);
+
+    if (fileInput.files.length > 0) {
+        formData.append('file', fileInput.files[0]);
+    } else if (text.trim()) {
+        formData.append('config_text', text);
+    } else {
+        resultDiv.innerHTML = '<div class="import-result error">Please paste config text or upload a file.</div>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<div class="import-result" style="color:var(--text-muted);">Parsing and importing...</div>';
+
+    try {
+        const resp = await fetch('{{ url_for("address_object_import") }}', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            resultDiv.innerHTML = `<div class="import-result success">Imported <strong>${data.imported}</strong> objects (${data.skipped} duplicates skipped, ${data.total_parsed} total parsed)</div>`;
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            resultDiv.innerHTML = `<div class="import-result error">${data.error}</div>`;
+        }
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="import-result error">Import failed: ${err.message}</div>`;
+    }
+}
+
+// ===== EXPORT =====
+function buildExportUrl() {
+    const format = document.getElementById('exportFormat').value;
+    const typeFilter = document.getElementById('exportTypeFilter').value;
+    let url = `{{ url_for("address_object_export") }}?format=${format}`;
+    if (typeFilter) url += `&obj_type=${typeFilter}`;
+    {% if search %} url += `&search={{ search }}`; {% endif %}
+    return url;
+}
+
+async function doExportPreview() {
+    const resultDiv = document.getElementById('exportResult');
+    const previewBox = document.getElementById('exportPreviewBox');
+    const previewText = document.getElementById('exportPreviewText');
+
+    try {
+        const resp = await fetch(buildExportUrl());
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({detail: resp.statusText}));
+            resultDiv.innerHTML = `<div class="export-result error">${err.detail || 'Export failed'}</div>`;
+            previewBox.style.display = 'none';
+            return;
+        }
+        const content = await resp.text();
+        previewText.value = content;
+        previewBox.style.display = 'block';
+        resultDiv.innerHTML = '';
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="export-result error">Export failed: ${err.message}</div>`;
+    }
+}
+
+function doExportDownload() {
+    window.location.href = buildExportUrl();
+}
+
+function copyExportPreview() {
+    const text = document.getElementById('exportPreviewText');
+    text.select();
+    navigator.clipboard.writeText(text.value).then(() => {
+        const btn = text.nextElementSibling;
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
+}
+
+// ===== DEDUPLICATE =====
+async function doDeduplicate() {
+    if (!confirm('Remove duplicate-value objects?\n\nFor objects sharing the same value, the one with the most descriptive name (not just the IP) will be kept.')) return;
+    const btn = document.getElementById('dedupBtn');
+    btn.textContent = 'Working...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('{{ url_for("address_object_deduplicate") }}', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            if (data.deleted > 0) {
+                btn.textContent = `Removed ${data.deleted}`;
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                btn.textContent = 'No duplicates';
+                btn.disabled = false;
+                setTimeout(() => { btn.textContent = 'Deduplicate'; }, 2000);
+            }
+        }
+    } catch (err) {
+        btn.textContent = 'Error';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = 'Deduplicate'; }, 2000);
+    }
+}
+</script>
+{% endblock %}

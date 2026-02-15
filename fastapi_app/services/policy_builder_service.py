@@ -312,12 +312,59 @@ end'''
 end'''
         return cli
 
+    @staticmethod
+    def lookup_address_object(ip: str, address_objects: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
+        """
+        Look up an IP against the address objects store.
+        Returns the address object name if found, or None.
+        """
+        if not address_objects:
+            return None
+        ip_clean = ip.strip()
+
+        # 1. Exact value match
+        for obj in address_objects:
+            if obj.get('value') == ip_clean:
+                return obj.get('name')
+
+        # 2. For bare IPs, check subnet/range containment
+        if '/' not in ip_clean:
+            try:
+                lookup_addr = ipaddress.ip_address(ip_clean)
+            except ValueError:
+                return None
+            for obj in address_objects:
+                try:
+                    if obj.get('obj_type') == 'subnet' and '/' in obj.get('value', ''):
+                        net = ipaddress.ip_network(obj['value'], strict=False)
+                        if lookup_addr in net:
+                            return obj['name']
+                    elif obj.get('obj_type') == 'range' and '-' in obj.get('value', ''):
+                        start_str, end_str = obj['value'].split('-', 1)
+                        if ipaddress.ip_address(start_str.strip()) <= lookup_addr <= ipaddress.ip_address(end_str.strip()):
+                            return obj['name']
+                except (ValueError, TypeError):
+                    continue
+        else:
+            # CIDR — check normalized match
+            try:
+                net = ipaddress.ip_network(ip_clean, strict=False)
+                norm = str(net)
+                for obj in address_objects:
+                    if obj.get('obj_type') == 'subnet' and obj.get('value') == norm:
+                        return obj['name']
+            except ValueError:
+                pass
+
+        return None
+
     @classmethod
     def build_policy_cli(
         cls,
         policy_data: PolicyData,
         policy_id: Optional[int] = None,
-        zone_table: Optional[List[Dict[str, Any]]] = None
+        zone_table: Optional[List[Dict[str, Any]]] = None,
+        address_objects: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Generate complete FortiGate CLI for a firewall policy.
@@ -326,6 +373,7 @@ end'''
             policy_data: PolicyData object with all necessary info
             policy_id: Optional policy ID (use 0 for auto-assign)
             zone_table: Optional zone/interface table for IP-to-zone matching
+            address_objects: Optional list of address objects for name lookup
 
         Returns:
             Dict with 'cli' (full CLI string) and 'components' (individual parts)
@@ -402,25 +450,29 @@ end'''
         # Build CLI components
         cli_parts = []
 
-        # 1. Source Address Object
-        src_addr_name = cls.generate_address_object_name(policy_data.srcip, "src")
+        # 1. Source Address Object — use store name if known, otherwise generate
+        known_src = cls.lookup_address_object(policy_data.srcip, address_objects)
+        src_addr_name = known_src or cls.generate_address_object_name(policy_data.srcip, "src")
         src_addr_cli = cls.build_address_object_cli(policy_data.srcip, src_addr_name)
         cli_parts.append(src_addr_cli)
         result['components']['address_objects'].append({
             'name': src_addr_name,
             'ip': policy_data.srcip,
-            'cli': src_addr_cli
+            'cli': src_addr_cli,
+            'existing': bool(known_src)
         })
 
-        # 2. Destination Address Object
-        dst_addr_name = cls.generate_address_object_name(policy_data.dstip, "dst")
+        # 2. Destination Address Object — use store name if known, otherwise generate
+        known_dst = cls.lookup_address_object(policy_data.dstip, address_objects)
+        dst_addr_name = known_dst or cls.generate_address_object_name(policy_data.dstip, "dst")
         dst_addr_cli = cls.build_address_object_cli(policy_data.dstip, dst_addr_name)
         cli_parts.append(dst_addr_cli)
         result['components']['address_objects'].append({
             'name': dst_addr_name,
             'ip': policy_data.dstip,
-            'cli': dst_addr_cli
-        })
+            'cli': dst_addr_cli,
+                'existing': False
+            })
 
         # 3. Service Object (if custom port)
         service_name = cls.get_service_name(policy_data.dstport, protocol)
@@ -693,7 +745,8 @@ set rulebase security rules {policy_name} description "{description}"'''
         zone_table: Optional[List[Dict[str, Any]]] = None,
         vdom: Optional[str] = None,
         custom_name: Optional[str] = None,
-        vendor: str = "fortinet"
+        vendor: str = "fortinet",
+        address_objects: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Build firewall CLI from a log entry's parsed_data.
@@ -704,6 +757,7 @@ set rulebase security rules {policy_name} description "{description}"'''
             vdom: Optional VDOM name
             custom_name: Optional custom policy name
             vendor: Firewall vendor - 'fortinet' or 'paloalto'
+            address_objects: Optional list of address objects for name lookup
 
         Returns:
             Dict with CLI and metadata
@@ -761,7 +815,7 @@ set rulebase security rules {policy_name} description "{description}"'''
         if vendor == "paloalto":
             result = cls.build_paloalto_policy_cli(policy_data, zone_table=zone_table)
         else:
-            result = cls.build_policy_cli(policy_data, zone_table=zone_table)
+            result = cls.build_policy_cli(policy_data, zone_table=zone_table, address_objects=address_objects)
 
         # Add vendor to metadata
         result['metadata']['vendor'] = vendor

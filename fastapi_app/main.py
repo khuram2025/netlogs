@@ -30,6 +30,7 @@ from .api.threat_intel import router as threat_intel_router
 from .api.correlation import router as correlation_router
 from .api.saved_searches import router as saved_searches_router
 from .api.dashboards import router as dashboards_router
+from .api.address_objects import router as address_objects_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -230,6 +231,7 @@ app.include_router(threat_intel_router)
 app.include_router(correlation_router)
 app.include_router(saved_searches_router)
 app.include_router(dashboards_router)
+app.include_router(address_objects_router)
 
 
 @app.get("/api/health")
