@@ -1,219 +1,1541 @@
 {% extends "base.html" %}
 
-{% block title %}Correlation Rules{% endblock %}
+{% block title %}Correlation Engine - NetLogs{% endblock %}
 
 {% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .page-header h2 { margin: 0; }
-    .tab-nav { display: flex; gap: 0; margin-bottom: 1.5rem; }
-    .tab-nav a {
-        padding: 0.5rem 1.25rem; border: 1px solid var(--border); color: var(--text-muted);
-        text-decoration: none; font-size: 0.85rem; transition: all 0.2s; cursor: pointer;
+    /* ================================================================
+       CORRELATION ENGINE - TACTICAL OPERATIONS CONSOLE
+       ================================================================ */
+    :root {
+        --cr-bg: #0f172a;
+        --cr-card-bg: #1e293b;
+        --cr-text: #e2e8f0;
+        --cr-text-muted: #94a3b8;
+        --cr-primary: #3b82f6;
+        --cr-success: #22c55e;
+        --cr-danger: #ef4444;
+        --cr-warning: #f59e0b;
+        --cr-border: #334155;
+        --cr-input-bg: #020617;
     }
-    .tab-nav a:first-child { border-radius: 0.5rem 0 0 0.5rem; }
-    .tab-nav a:last-child { border-radius: 0 0.5rem 0.5rem 0; }
-    .tab-nav a.active { background: var(--primary); color: white; border-color: var(--primary); }
-    .tab-nav a:hover:not(.active) { color: white; background: rgba(255,255,255,0.05); }
 
-    .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .summary-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; }
-    .summary-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .summary-card .value { font-size: 1.75rem; font-weight: 700; color: white; margin-top: 0.25rem; }
-    .summary-card .sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
-
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 0.75rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-    td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-    tr:hover td { background: rgba(59,130,246,0.03); }
-
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; font-weight: 600; }
-    .badge-critical { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .badge-high { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .badge-medium { background: rgba(59,130,246,0.15); color: #3b82f6; }
-    .badge-low { background: rgba(148,163,184,0.15); color: #94a3b8; }
-    .badge-success { background: rgba(34,197,94,0.1); color: #22c55e; }
-    .badge-muted { background: rgba(148,163,184,0.1); color: #94a3b8; }
-
-    .btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
-    .btn-success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
-    .btn-danger { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.5rem; }
-    .status-dot.active { background: #22c55e; }
-    .status-dot.inactive { background: #94a3b8; }
-
-    .stage-chain { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .stage-pill { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd; padding: 0.2rem 0.6rem; border-radius: 0.375rem; font-size: 0.7rem; }
-    .stage-arrow { color: var(--text-muted); font-size: 0.75rem; }
-    .mitre-tag { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.2); color: #c084fc; padding: 0.15rem 0.5rem; border-radius: 0.375rem; font-size: 0.65rem; }
-
-    .card-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem; }
-    .card-section h3 { margin-top: 0; font-size: 1rem; margin-bottom: 1rem; }
-
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
-    .modal-overlay.active { display: flex; }
-    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; }
-    .modal h3 { margin-top: 0; margin-bottom: 1rem; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
-
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.375rem; }
-    .form-group input, .form-group select, .form-group textarea {
-        width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border);
-        border-radius: 0.375rem; color: var(--text-color); font-size: 0.85rem;
+    /* ================================================================
+       PAGE HEADER
+       ================================================================ */
+    .cr-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1rem;
     }
-    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
-    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.85rem; z-index: 200; display: none; }
-    .toast.show { display: block; }
-    .toast-success { background: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
-    .toast-error { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .cr-title-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
 
-    .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
-    .empty-state p { margin: 0.5rem 0; }
+    .cr-title {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 1.75rem;
+        margin: 0;
+        background: linear-gradient(135deg, #e2e8f0 0%, #3b82f6 50%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.03em;
+    }
 
-    @media (max-width: 768px) {
-        .summary-row { grid-template-columns: repeat(2, 1fr); }
-        .form-row { grid-template-columns: 1fr; }
+    .cr-subtitle {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: var(--cr-text-muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .cr-header-actions {
+        display: flex;
+        gap: 0.625rem;
+        align-items: center;
+    }
+
+    .cr-btn-mitre {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1.125rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--cr-border);
+        background: transparent;
+        color: var(--cr-text-muted);
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.25s ease;
+    }
+
+    .cr-btn-mitre:hover {
+        border-color: var(--cr-primary);
+        color: var(--cr-primary);
+        box-shadow: 0 0 16px rgba(59, 130, 246, 0.1);
+    }
+
+    .cr-btn-mitre svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .cr-btn-add {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1.25rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        box-shadow: 0 2px 12px rgba(59, 130, 246, 0.25);
+    }
+
+    .cr-btn-add:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+    }
+
+    /* ================================================================
+       TAB NAVIGATION (pill style)
+       ================================================================ */
+    .cr-tab-nav {
+        display: flex;
+        gap: 0.25rem;
+        margin-bottom: 1.75rem;
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.75rem;
+        padding: 0.25rem;
+        width: fit-content;
+    }
+
+    .cr-tab {
+        font-family: 'Outfit', sans-serif;
+        padding: 0.5rem 1.25rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: transparent;
+        color: var(--cr-text-muted);
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.25s ease;
+        user-select: none;
+    }
+
+    .cr-tab:hover:not(.active) {
+        color: var(--cr-text);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .cr-tab.active {
+        background: var(--cr-primary);
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    /* ================================================================
+       HERO METRICS
+       ================================================================ */
+    .cr-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .cr-metric-card {
+        background: linear-gradient(145deg, var(--cr-card-bg) 0%, rgba(15, 23, 42, 0.8) 100%);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.875rem;
+        padding: 1.25rem 1.375rem;
+        position: relative;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(12px);
+        animation: cr-fade-up 0.5s ease forwards;
+    }
+
+    .cr-metric-card:nth-child(1) { animation-delay: 0.05s; }
+    .cr-metric-card:nth-child(2) { animation-delay: 0.12s; }
+    .cr-metric-card:nth-child(3) { animation-delay: 0.19s; }
+    .cr-metric-card:nth-child(4) { animation-delay: 0.26s; }
+
+    .cr-metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+    }
+
+    .cr-metric-card:nth-child(1)::before {
+        background: linear-gradient(90deg, #3b82f6, #6366f1);
+    }
+
+    .cr-metric-card:nth-child(2)::before {
+        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    }
+
+    .cr-metric-card:nth-child(3)::before {
+        background: linear-gradient(90deg, #ef4444, #f97316);
+    }
+
+    .cr-metric-card:nth-child(4)::before {
+        background: linear-gradient(90deg, #f59e0b, #f97316);
+    }
+
+    .cr-metric-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--cr-text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .cr-metric-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 2rem;
+        font-weight: 600;
+        color: white;
+        line-height: 1;
+    }
+
+    .cr-metric-value.cr-danger { color: var(--cr-danger); }
+    .cr-metric-value.cr-warning { color: var(--cr-warning); }
+
+    .cr-metric-sub {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.75rem;
+        color: var(--cr-text-muted);
+        margin-top: 0.375rem;
+    }
+
+    /* Glow accent for critical/high */
+    .cr-metric-card:nth-child(3) {
+        box-shadow: inset 0 1px 0 rgba(239, 68, 68, 0.15);
+    }
+
+    .cr-metric-card:nth-child(4) {
+        box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.15);
+    }
+
+    /* ================================================================
+       ANIMATIONS
+       ================================================================ */
+    @keyframes cr-fade-up {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes cr-pulse {
+        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+        50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+    }
+
+    /* ================================================================
+       RULE CARDS
+       ================================================================ */
+    .cr-rules-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.875rem;
+    }
+
+    .cr-rule-card {
+        background: var(--cr-card-bg);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.875rem;
+        padding: 1.25rem 1.375rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.25s ease;
+        opacity: 0;
+        transform: translateY(10px);
+        animation: cr-fade-up 0.4s ease forwards;
+    }
+
+    .cr-rule-card:nth-child(1) { animation-delay: 0.05s; }
+    .cr-rule-card:nth-child(2) { animation-delay: 0.1s; }
+    .cr-rule-card:nth-child(3) { animation-delay: 0.15s; }
+    .cr-rule-card:nth-child(4) { animation-delay: 0.2s; }
+    .cr-rule-card:nth-child(5) { animation-delay: 0.25s; }
+    .cr-rule-card:nth-child(6) { animation-delay: 0.3s; }
+    .cr-rule-card:nth-child(7) { animation-delay: 0.35s; }
+    .cr-rule-card:nth-child(8) { animation-delay: 0.4s; }
+    .cr-rule-card:nth-child(9) { animation-delay: 0.45s; }
+    .cr-rule-card:nth-child(10) { animation-delay: 0.5s; }
+
+    .cr-rule-card:hover {
+        border-color: rgba(59, 130, 246, 0.3);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+        transform: translateY(-1px);
+    }
+
+    /* Left accent border by severity */
+    .cr-rule-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        border-radius: 0.875rem 0 0 0.875rem;
+    }
+
+    .cr-rule-card.severity-critical::before {
+        background: linear-gradient(180deg, #ef4444, #dc2626);
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .cr-rule-card.severity-high::before {
+        background: linear-gradient(180deg, #f59e0b, #d97706);
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+    }
+
+    .cr-rule-card.severity-medium::before {
+        background: linear-gradient(180deg, #eab308, #ca8a04);
+        box-shadow: 0 0 8px rgba(234, 179, 8, 0.2);
+    }
+
+    .cr-rule-card.severity-low::before {
+        background: linear-gradient(180deg, #22c55e, #16a34a);
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.2);
+    }
+
+    .cr-rule-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+        gap: 1rem;
+    }
+
+    .cr-rule-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cr-rule-name-row {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .cr-status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .cr-status-dot.enabled {
+        background: var(--cr-success);
+        animation: cr-pulse 2s ease-in-out infinite;
+    }
+
+    .cr-status-dot.disabled {
+        background: #475569;
+    }
+
+    .cr-rule-name {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        font-size: 1rem;
+        color: white;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cr-severity-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+    }
+
+    .cr-severity-badge.critical {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .cr-severity-badge.high {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .cr-severity-badge.medium {
+        background: rgba(234, 179, 8, 0.15);
+        color: #eab308;
+        border: 1px solid rgba(234, 179, 8, 0.25);
+    }
+
+    .cr-severity-badge.low {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .cr-rule-desc {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        color: var(--cr-text-muted);
+        line-height: 1.5;
+        margin-bottom: 0.875rem;
+    }
+
+    /* Stage chain visualization */
+    .cr-stage-chain {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.875rem;
+    }
+
+    .cr-stage-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 0.25rem 0.625rem;
+        border-radius: 0.375rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+
+    .cr-rule-card:hover .cr-stage-pill {
+        background: rgba(59, 130, 246, 0.15);
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.1);
+    }
+
+    .cr-stage-arrow {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--cr-text-muted);
+        font-size: 0.85rem;
+        opacity: 0.6;
+    }
+
+    /* MITRE ATT&CK tags */
+    .cr-tags-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .cr-mitre-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.625rem;
+        font-weight: 500;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.375rem;
+        background: rgba(168, 85, 247, 0.1);
+        border: 1px solid rgba(168, 85, 247, 0.2);
+        color: #c084fc;
+    }
+
+    .cr-rule-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 0.875rem;
+        padding-top: 0.875rem;
+        border-top: 1px solid rgba(51, 65, 85, 0.5);
+        gap: 1rem;
+    }
+
+    .cr-rule-stats {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .cr-stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+
+    .cr-stat-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.625rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-text-muted);
+    }
+
+    .cr-stat-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .cr-rule-actions {
+        display: flex;
+        gap: 0.375rem;
+        flex-shrink: 0;
+    }
+
+    .cr-btn {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--cr-border);
+        background: transparent;
+        color: var(--cr-text-muted);
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .cr-btn:hover {
+        border-color: var(--cr-primary);
+        color: var(--cr-primary);
+        background: rgba(59, 130, 246, 0.05);
+    }
+
+    .cr-btn-toggle.enabled {
+        border-color: rgba(34, 197, 94, 0.3);
+        color: var(--cr-success);
+    }
+
+    .cr-btn-toggle.enabled:hover {
+        background: rgba(34, 197, 94, 0.08);
+        border-color: var(--cr-success);
+    }
+
+    .cr-btn-toggle.disabled {
+        border-color: rgba(148, 163, 184, 0.3);
+        color: var(--cr-text-muted);
+    }
+
+    .cr-btn-toggle.disabled:hover {
+        border-color: var(--cr-primary);
+        color: var(--cr-primary);
+    }
+
+    .cr-btn-delete {
+        border-color: rgba(239, 68, 68, 0.3);
+        color: var(--cr-danger);
+    }
+
+    .cr-btn-delete:hover {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: var(--cr-danger);
+    }
+
+    /* ================================================================
+       MATCHES TABLE
+       ================================================================ */
+    .cr-matches-wrap {
+        background: var(--cr-card-bg);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.875rem;
+        overflow: hidden;
+    }
+
+    .cr-matches-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .cr-matches-table thead th {
+        font-family: 'Outfit', sans-serif;
+        text-align: left;
+        padding: 0.875rem 1rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-text-muted);
+        border-bottom: 1px solid var(--cr-border);
+        background: rgba(2, 6, 23, 0.3);
+    }
+
+    .cr-matches-table tbody td {
+        font-family: 'Outfit', sans-serif;
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+        color: var(--cr-text);
+    }
+
+    .cr-matches-table tbody tr {
+        transition: background 0.15s ease;
+    }
+
+    .cr-matches-table tbody tr:hover {
+        background: rgba(59, 130, 246, 0.04);
+    }
+
+    .cr-matches-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .cr-match-time {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        color: var(--cr-text-muted);
+        white-space: nowrap;
+    }
+
+    .cr-match-rule {
+        font-weight: 600;
+        color: white;
+    }
+
+    .cr-key-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+    }
+
+    .cr-view-btn {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.25rem 0.6rem; border-radius: 0.375rem;
+        font-family: 'Outfit', sans-serif; font-size: 0.68rem; font-weight: 600;
+        cursor: pointer; border: 1px solid rgba(59,130,246,0.3);
+        background: rgba(59,130,246,0.06); color: var(--cr-primary);
+        transition: all 0.2s; text-decoration: none; white-space: nowrap;
+    }
+    .cr-view-btn:hover {
+        background: rgba(59,130,246,0.12); border-color: var(--cr-primary);
+        box-shadow: 0 0 12px rgba(59,130,246,0.15);
+    }
+    .cr-view-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
+    a.cr-key-pill { text-decoration: none; transition: all 0.2s; }
+    a.cr-key-pill:hover { border-color: var(--cr-primary); box-shadow: 0 0 8px rgba(59,130,246,0.15); }
+
+    .cr-stage-progress {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .cr-stage-text {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .cr-mini-bar {
+        width: 48px;
+        height: 5px;
+        background: rgba(51, 65, 85, 0.6);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .cr-mini-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: linear-gradient(90deg, var(--cr-primary), #6366f1);
+        transition: width 0.5s ease;
+    }
+
+    .cr-events-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    /* ================================================================
+       EMPTY STATE
+       ================================================================ */
+    .cr-empty {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--cr-text-muted);
+    }
+
+    .cr-empty-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 1.25rem;
+        border-radius: 50%;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cr-empty-icon svg {
+        width: 26px;
+        height: 26px;
+        stroke: var(--cr-primary);
+        fill: none;
+        stroke-width: 1.5;
+        opacity: 0.7;
+    }
+
+    .cr-empty-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--cr-text);
+        margin-bottom: 0.375rem;
+    }
+
+    .cr-empty-desc {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        color: var(--cr-text-muted);
+        max-width: 360px;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       MODALS
+       ================================================================ */
+    .cr-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cr-modal-overlay.active {
+        display: flex;
+    }
+
+    .cr-modal {
+        background: var(--cr-card-bg);
+        border: 1px solid var(--cr-border);
+        border-radius: 1rem;
+        padding: 0;
+        max-width: 720px;
+        width: 92%;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        animation: cr-modal-in 0.25s ease;
+    }
+
+    @keyframes cr-modal-in {
+        from {
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+
+    .cr-modal-header {
+        padding: 1.5rem 1.75rem 1.25rem;
+        border-bottom: 1px solid var(--cr-border);
+    }
+
+    .cr-modal-title {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700;
+        font-size: 1.125rem;
+        color: white;
+        margin: 0;
+        padding-left: 0.875rem;
+        position: relative;
+    }
+
+    .cr-modal-title::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 70%;
+        border-radius: 2px;
+        background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    }
+
+    .cr-modal-body {
+        padding: 1.5rem 1.75rem;
+    }
+
+    .cr-modal-footer {
+        padding: 1rem 1.75rem 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    /* ================================================================
+       FORM STYLES
+       ================================================================ */
+    .cr-form-group {
+        margin-bottom: 1.125rem;
+    }
+
+    .cr-form-group label {
+        display: block;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .cr-form-group input,
+    .cr-form-group select,
+    .cr-form-group textarea {
+        width: 100%;
+        padding: 0.625rem 0.75rem;
+        background: var(--cr-input-bg);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.5rem;
+        color: var(--cr-text);
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+    }
+
+    .cr-form-group textarea {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        resize: vertical;
+    }
+
+    .cr-form-group input:focus,
+    .cr-form-group select:focus,
+    .cr-form-group textarea:focus {
+        outline: none;
+        border-color: var(--cr-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 0 12px rgba(59, 130, 246, 0.05);
+    }
+
+    .cr-form-group input::placeholder,
+    .cr-form-group textarea::placeholder {
+        color: #475569;
+    }
+
+    .cr-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .cr-form-hint {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        color: var(--cr-text-muted);
+        margin-top: 0.375rem;
+        line-height: 1.5;
+    }
+
+    .cr-form-hint code {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(59, 130, 246, 0.1);
+        padding: 0.1rem 0.35rem;
+        border-radius: 0.2rem;
+        font-size: 0.65rem;
+        color: #93c5fd;
+    }
+
+    .cr-btn-submit {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1.25rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+    }
+
+    .cr-btn-submit:hover {
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .cr-btn-cancel {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1.125rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--cr-border);
+        background: transparent;
+        color: var(--cr-text-muted);
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .cr-btn-cancel:hover {
+        border-color: var(--cr-text-muted);
+        color: var(--cr-text);
+    }
+
+    /* ================================================================
+       RULE DETAIL MODAL (expanded for match dashboard)
+       ================================================================ */
+    #ruleDetailModal .cr-modal {
+        max-width: 960px;
+        width: 95%;
+    }
+
+    .cd-header-row {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+    }
+
+    .cd-status-tag {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+    }
+
+    .cd-status-tag.enabled {
+        background: rgba(34, 197, 94, 0.12);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .cd-status-tag.disabled {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .cd-desc {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.825rem;
+        color: var(--cr-text-muted);
+        line-height: 1.6;
+        margin-bottom: 1rem;
+    }
+
+    /* Time range pills */
+    .cd-time-range {
+        display: flex;
+        gap: 0.25rem;
+        margin-bottom: 1.25rem;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.5rem;
+        padding: 0.2rem;
+        width: fit-content;
+    }
+
+    .cd-time-pill {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 0.3rem 0.75rem;
+        border-radius: 0.375rem;
+        border: none;
+        background: transparent;
+        color: var(--cr-text-muted);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .cd-time-pill:hover:not(.active) {
+        color: var(--cr-text);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .cd-time-pill.active {
+        background: var(--cr-primary);
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Summary row */
+    .cd-summary {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .cd-summary-card {
+        flex: 1;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.625rem;
+        padding: 0.75rem 1rem;
+        text-align: center;
+    }
+
+    .cd-summary-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .cd-summary-val.has-matches { color: var(--cr-danger); }
+    .cd-summary-val.no-matches { color: var(--cr-success); }
+
+    .cd-summary-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-text-muted);
+        margin-top: 0.2rem;
+    }
+
+    /* Section titles */
+    .cd-section-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--cr-text-muted);
+        margin-bottom: 0.75rem;
+        margin-top: 1.25rem;
+    }
+
+    .cd-section-title:first-child { margin-top: 0; }
+
+    /* Timeline bar chart */
+    .cd-timeline-bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 56px;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 0.5rem;
+        padding: 4px;
+        margin-bottom: 1.25rem;
+    }
+
+    .cd-tbar {
+        flex: 1;
+        border-radius: 2px 2px 0 0;
+        min-height: 2px;
+        background: linear-gradient(180deg, #3b82f6, #6366f1);
+        transition: height 0.6s ease;
+        position: relative;
+    }
+
+    .cd-tbar:hover { opacity: 0.8; }
+
+    .cd-tbar-tip {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #0f172a;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.3rem;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.6rem;
+        color: white;
+        white-space: nowrap;
+        z-index: 5;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .cd-tbar:hover .cd-tbar-tip { display: block; }
+
+    /* Tables */
+    .cd-table-wrap {
+        overflow-x: auto;
+        margin-bottom: 1.25rem;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.625rem;
+    }
+
+    .cd-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .cd-table thead th {
+        font-family: 'Outfit', sans-serif;
+        text-align: left;
+        padding: 0.625rem 0.75rem;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-text-muted);
+        border-bottom: 1px solid var(--cr-border);
+        background: rgba(2, 6, 23, 0.3);
+    }
+
+    .cd-table tbody td {
+        font-family: 'Outfit', sans-serif;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+        color: var(--cr-text);
+    }
+
+    .cd-table tbody tr:last-child td { border-bottom: none; }
+
+    .cd-table tbody tr {
+        transition: background 0.15s;
+    }
+
+    .cd-table tbody tr:hover {
+        background: rgba(59, 130, 246, 0.04);
+    }
+
+    .cd-ip-link {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .cd-ip-link:hover {
+        border-color: var(--cr-primary);
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+        color: white;
+    }
+
+    .cd-logs-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.68rem;
+        font-weight: 600;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.375rem;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        background: rgba(59, 130, 246, 0.06);
+        color: var(--cr-primary);
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .cd-logs-link:hover {
+        background: rgba(59, 130, 246, 0.12);
+        border-color: var(--cr-primary);
+    }
+
+    .cd-logs-link svg {
+        width: 10px; height: 10px;
+        stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    .cd-stage-mini {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .cd-stage-mini-text {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .cd-stage-mini-bar {
+        width: 40px;
+        height: 4px;
+        background: rgba(51, 65, 85, 0.6);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+
+    .cd-stage-mini-fill {
+        height: 100%;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--cr-primary), #6366f1);
+    }
+
+    .cd-empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: var(--cr-text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+    }
+
+    .cd-loading {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--cr-text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+    }
+
+    .cd-loading::after {
+        content: '';
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--cr-border);
+        border-top-color: var(--cr-primary);
+        border-radius: 50%;
+        animation: cd-spin 0.8s linear infinite;
+        margin-left: 0.5rem;
+        vertical-align: middle;
+    }
+
+    @keyframes cd-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Stage config in detail */
+    .cd-stage-config {
+        background: var(--cr-input-bg);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.625rem;
+        padding: 0.875rem 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .cd-stage-config-name {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: white;
+        margin-bottom: 0.375rem;
+    }
+
+    .cd-stage-config-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--cr-text-muted);
+        line-height: 1.75;
+    }
+
+    .cd-stage-config-meta strong {
+        color: var(--cr-text);
+    }
+
+    .cd-detail-footer-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .cd-detail-footer-row .cr-btn-cancel { margin-left: auto; }
+
+    /* ================================================================
+       TOAST
+       ================================================================ */
+    .cr-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.625rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        z-index: 2000;
+        display: none;
+        animation: cr-toast-in 0.3s ease;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .cr-toast.show {
+        display: block;
+    }
+
+    .cr-toast-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        backdrop-filter: blur(8px);
+    }
+
+    .cr-toast-error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        backdrop-filter: blur(8px);
+    }
+
+    @keyframes cr-toast-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+       ================================================================ */
+    @media (max-width: 900px) {
+        .cr-metrics {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .cr-rule-bottom {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .cr-rule-actions {
+            width: 100%;
+            justify-content: flex-end;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .cr-metrics {
+            grid-template-columns: 1fr;
+        }
+
+        .cr-page-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .cr-form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .cr-rule-top {
+            flex-direction: column;
+        }
+
+        .cr-tab-nav {
+            width: 100%;
+        }
+
+        .cr-tab {
+            flex: 1;
+            text-align: center;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h2>Correlation Engine</h2>
-        <div style="display:flex;gap:0.5rem;">
-            <a href="{{ url_for('mitre_attack_map') }}" class="btn btn-outline">MITRE ATT&CK Map</a>
-            {% if current_user and current_user.role == 'ADMIN' %}
-            <button class="btn btn-primary" onclick="showAddRuleModal()">+ Add Rule</button>
-            {% endif %}
-        </div>
+<!-- Page Header -->
+<div class="cr-page-header">
+    <div class="cr-title-group">
+        <h1 class="cr-title">Correlation Engine</h1>
+        <span class="cr-subtitle">Multi-Stage Attack Detection</span>
     </div>
-
-    <!-- Tab Navigation -->
-    <div class="tab-nav">
-        <a class="active" onclick="showTab('rules')">Rules</a>
-        <a onclick="showTab('matches')">Recent Matches</a>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="summary-row">
-        <div class="summary-card">
-            <div class="label">Total Rules</div>
-            <div class="value">{{ rules|length }}</div>
-            <div class="sub">{{ rules|selectattr('is_enabled')|list|length }} active</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Total Matches</div>
-            <div class="value">{{ match_stats.total }}</div>
-            <div class="sub">{{ match_stats.today }} today</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Critical</div>
-            <div class="value" style="color: #ef4444;">{{ match_stats.critical }}</div>
-            <div class="sub">critical severity matches</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">High</div>
-            <div class="value" style="color: #f59e0b;">{{ match_stats.high }}</div>
-            <div class="sub">high severity matches</div>
-        </div>
-    </div>
-
-    <!-- Rules Tab -->
-    <div id="tab-rules" class="card-section">
-        <h3>Correlation Rules</h3>
-        {% if rules %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Status</th>
-                    <th>Name</th>
-                    <th>Severity</th>
-                    <th>Stages</th>
-                    <th>MITRE</th>
-                    <th>Triggers</th>
-                    <th>Last Evaluated</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for rule in rules %}
-                <tr>
-                    <td>
-                        <span class="status-dot {{ 'active' if rule.is_enabled else 'inactive' }}"></span>
-                        {{ 'Enabled' if rule.is_enabled else 'Disabled' }}
-                    </td>
-                    <td>
-                        <div style="font-weight:500;">{{ rule.name }}</div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">{{ rule.description[:80] }}{{ '...' if rule.description|length > 80 else '' }}</div>
-                    </td>
-                    <td><span class="badge badge-{{ rule.severity }}">{{ rule.severity }}</span></td>
-                    <td>
-                        <div class="stage-chain">
-                            {% for stage in rule.stages %}
-                            {% if not loop.first %}<span class="stage-arrow">&#8594;</span>{% endif %}
-                            <span class="stage-pill">{{ stage.name }}</span>
-                            {% endfor %}
-                        </div>
-                    </td>
-                    <td>
-                        {% if rule.mitre_tactic %}
-                        <span class="mitre-tag">{{ rule.mitre_tactic }}</span>
-                        {% endif %}
-                        {% if rule.mitre_technique %}
-                        <span class="mitre-tag" style="margin-top:0.25rem;display:inline-block;">{{ rule.mitre_technique }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span style="font-weight:600;">{{ rule.trigger_count or 0 }}</span>
-                        {% if rule.last_triggered_at %}
-                        <div style="font-size:0.7rem;color:var(--text-muted);">{{ rule.last_triggered_at.strftime('%Y-%m-%d %H:%M') if rule.last_triggered_at else 'Never' }}</div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if rule.last_evaluated_at %}
-                        <span style="font-size:0.8rem;">{{ rule.last_evaluated_at.strftime('%H:%M:%S') }}</span>
-                        {% else %}
-                        <span style="color:var(--text-muted);">Never</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div style="display:flex;gap:0.375rem;">
-                            <button class="btn btn-sm btn-outline" onclick="toggleRule({{ rule.id }})">
-                                {{ 'Disable' if rule.is_enabled else 'Enable' }}
-                            </button>
-                            <button class="btn btn-sm btn-outline" onclick="showRuleDetail({{ rule.id }})">Detail</button>
-                            {% if current_user and current_user.role == 'ADMIN' %}
-                            <button class="btn btn-sm btn-danger" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state">
-            <p style="font-size:1.5rem;">No correlation rules</p>
-            <p>Create multi-stage correlation rules to detect complex attack patterns.</p>
-        </div>
+    <div class="cr-header-actions">
+        <a href="{{ url_for('mitre_attack_map') }}" class="cr-btn-mitre">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            MITRE ATT&CK Map
+        </a>
+        {% if current_user and current_user.role == 'ADMIN' %}
+        <button class="cr-btn-add" onclick="showAddRuleModal()">+ Add Rule</button>
         {% endif %}
     </div>
+</div>
 
-    <!-- Matches Tab -->
-    <div id="tab-matches" class="card-section" style="display:none;">
-        <h3>Recent Correlation Matches</h3>
-        {% if recent_matches %}
-        <table>
+<!-- Tab Navigation -->
+<div class="cr-tab-nav">
+    <a class="cr-tab active" onclick="showTab('rules')">Rules</a>
+    <a class="cr-tab" onclick="showTab('matches')">Recent Matches</a>
+</div>
+
+<!-- Hero Metrics -->
+<div class="cr-metrics">
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Total Rules</div>
+        <div class="cr-metric-value" data-count="{{ rules|length }}">0</div>
+        <div class="cr-metric-sub">{{ rules|selectattr('is_enabled')|list|length }} active</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Total Matches</div>
+        <div class="cr-metric-value" data-count="{{ match_stats.total }}">0</div>
+        <div class="cr-metric-sub">{{ match_stats.today }} today</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Critical</div>
+        <div class="cr-metric-value cr-danger" data-count="{{ match_stats.critical }}">0</div>
+        <div class="cr-metric-sub">critical severity matches</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">High</div>
+        <div class="cr-metric-value cr-warning" data-count="{{ match_stats.high }}">0</div>
+        <div class="cr-metric-sub">high severity matches</div>
+    </div>
+</div>
+
+<!-- Rules Tab -->
+<div id="tab-rules">
+    {% if rules %}
+    <div class="cr-rules-grid">
+        {% for rule in rules %}
+        <div class="cr-rule-card severity-{{ rule.severity }}">
+            <div class="cr-rule-top">
+                <div class="cr-rule-info">
+                    <div class="cr-rule-name-row">
+                        <span class="cr-status-dot {{ 'enabled' if rule.is_enabled else 'disabled' }}" title="{{ 'Enabled' if rule.is_enabled else 'Disabled' }}"></span>
+                        <span class="cr-rule-name">{{ rule.name }}</span>
+                        <span class="cr-severity-badge {{ rule.severity }}">{{ rule.severity }}</span>
+                    </div>
+                    <div class="cr-rule-desc">{{ rule.description[:80] }}{{ '...' if rule.description|length > 80 else '' }}</div>
+                </div>
+            </div>
+
+            <!-- Stage Chain -->
+            <div class="cr-stage-chain">
+                {% for stage in rule.stages %}
+                {% if not loop.first %}<span class="cr-stage-arrow">&rarr;</span>{% endif %}
+                <span class="cr-stage-pill">{{ stage.name }}</span>
+                {% endfor %}
+            </div>
+
+            <!-- MITRE Tags -->
+            {% if rule.mitre_tactic or rule.mitre_technique %}
+            <div class="cr-tags-row">
+                {% if rule.mitre_tactic %}
+                <span class="cr-mitre-tag">{{ rule.mitre_tactic }}</span>
+                {% endif %}
+                {% if rule.mitre_technique %}
+                <span class="cr-mitre-tag">{{ rule.mitre_technique }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="cr-rule-bottom">
+                <div class="cr-rule-stats">
+                    <div class="cr-stat-item">
+                        <span class="cr-stat-label">Matches (24h)</span>
+                        <span class="cr-stat-val" style="{% if rule_match_counts.get(rule.name, 0) > 0 %}color:var(--cr-danger);{% endif %}">{{ rule_match_counts.get(rule.name, 0) }}</span>
+                    </div>
+                    <div class="cr-stat-item">
+                        <span class="cr-stat-label">Last Triggered</span>
+                        <span class="cr-stat-val" style="font-size:0.75rem;">
+                            {% if rule.last_triggered_at %}
+                            {{ rule.last_triggered_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="cr-stat-item">
+                        <span class="cr-stat-label">Last Evaluated</span>
+                        <span class="cr-stat-val" style="font-size:0.75rem;">
+                            {% if rule.last_evaluated_at %}
+                            {{ rule.last_evaluated_at.strftime('%H:%M:%S') }}
+                            {% else %}
+                            <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="cr-rule-actions">
+                    <button class="cr-btn cr-btn-toggle {{ 'enabled' if rule.is_enabled else 'disabled' }}" onclick="toggleRule({{ rule.id }})">
+                        {{ 'Disable' if rule.is_enabled else 'Enable' }}
+                    </button>
+                    <button class="cr-btn" onclick="showRuleDetail({{ rule.id }})">Detail</button>
+                    {% if current_user and current_user.role == 'ADMIN' %}
+                    <button class="cr-btn cr-btn-delete" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="cr-empty">
+        <div class="cr-empty-icon">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><line x1="6" y1="9" x2="6" y2="15"/><path d="M6 9a9 9 0 0 1 9 9"/></svg>
+        </div>
+        <div class="cr-empty-title">No correlation rules</div>
+        <div class="cr-empty-desc">Create multi-stage correlation rules to detect complex attack patterns across your environment.</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Matches Tab -->
+<div id="tab-matches" style="display:none;">
+    {% if recent_matches %}
+    <div class="cr-matches-wrap">
+        <table class="cr-matches-table">
             <thead>
                 <tr>
                     <th>Time</th>
@@ -223,132 +1545,206 @@
                     <th>Stages</th>
                     <th>Events</th>
                     <th>MITRE</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for m in recent_matches %}
                 <tr>
-                    <td style="font-size:0.8rem;white-space:nowrap;">{{ m.timestamp }}</td>
-                    <td style="font-weight:500;">{{ m.rule_name }}</td>
-                    <td><span class="badge badge-{{ m.severity }}">{{ m.severity }}</span></td>
+                    <td><span class="cr-match-time">{{ m.timestamp }}</span></td>
+                    <td><span class="cr-match-rule">{{ m.rule_name }}</span></td>
+                    <td><span class="cr-severity-badge {{ m.severity }}">{{ m.severity }}</span></td>
                     <td>
                         {% if m.key_value %}
-                        <code style="background:rgba(59,130,246,0.1);padding:0.15rem 0.4rem;border-radius:0.25rem;font-size:0.8rem;">{{ m.key_value }}</code>
+                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-key-pill" title="Search logs for {{ m.key_value }}">{{ m.key_value }}</a>
+                        {% else %}
+                        <span style="color:var(--cr-text-muted);">&mdash;</span>
                         {% endif %}
                     </td>
-                    <td>{{ m.stages_matched }}/{{ m.total_stages }}</td>
-                    <td>{{ m.total_events }}</td>
                     <td>
-                        {% if m.mitre_tactic %}<span class="mitre-tag">{{ m.mitre_tactic }}</span>{% endif %}
+                        <div class="cr-stage-progress">
+                            <span class="cr-stage-text">{{ m.stages_matched }}/{{ m.total_stages }}</span>
+                            <div class="cr-mini-bar">
+                                <div class="cr-mini-bar-fill" style="width: {{ (m.stages_matched / m.total_stages * 100) if m.total_stages else 0 }}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="cr-events-count">{{ m.total_events }}</span></td>
+                    <td>
+                        {% if m.mitre_tactic %}
+                        <span class="cr-mitre-tag">{{ m.mitre_tactic }}</span>
+                        {% else %}
+                        <span style="color:var(--cr-text-muted);">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m.key_value %}
+                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-view-btn" title="Investigate in logs">
+                            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            Logs
+                        </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="empty-state">
-            <p style="font-size:1.5rem;">No matches yet</p>
-            <p>Correlation matches will appear here when rules detect attack patterns.</p>
-        </div>
-        {% endif %}
     </div>
+    {% else %}
+    <div class="cr-empty">
+        <div class="cr-empty-icon">
+            <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="cr-empty-title">No matches yet</div>
+        <div class="cr-empty-desc">Correlation matches will appear here when rules detect multi-stage attack patterns.</div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Rule Detail Modal -->
-<div id="ruleDetailModal" class="modal-overlay">
-    <div class="modal">
-        <h3 id="detailRuleName">Rule Detail</h3>
-        <div id="detailContent"></div>
-        <div class="modal-actions">
-            <button class="btn btn-outline" onclick="closeModal('ruleDetailModal')">Close</button>
+<div id="ruleDetailModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 id="detailRuleName" class="cr-modal-title">Rule Detail</h3>
+        </div>
+        <div class="cr-modal-body">
+            <div id="detailContent"></div>
+        </div>
+        <div class="cr-modal-footer">
+            <div class="cd-detail-footer-row">
+                <a id="detailViewAllMatches" href="#" class="cr-view-btn" style="display:none;" onclick="showTab('matches');closeModal('ruleDetailModal');">
+                    <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    View All Matches
+                </a>
+                <button class="cr-btn-cancel" onclick="closeModal('ruleDetailModal')">Close</button>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Add Rule Modal -->
-<div id="addRuleModal" class="modal-overlay">
-    <div class="modal">
-        <h3>Add Correlation Rule</h3>
+<div id="addRuleModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 class="cr-modal-title">Add Correlation Rule</h3>
+        </div>
         <form id="addRuleForm" onsubmit="return submitAddRule(event)">
-            <div class="form-group">
-                <label>Rule Name</label>
-                <input type="text" id="ruleName" required placeholder="e.g., Scan then Exploit">
-            </div>
-            <div class="form-group">
-                <label>Description</label>
-                <textarea id="ruleDesc" rows="2" placeholder="Describe what this rule detects..."></textarea>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Severity</label>
-                    <select id="ruleSeverity">
-                        <option value="critical">Critical</option>
-                        <option value="high" selected>High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
+            <div class="cr-modal-body">
+                <div class="cr-form-group">
+                    <label>Rule Name</label>
+                    <input type="text" id="ruleName" required placeholder="e.g., Scan then Exploit">
                 </div>
-                <div class="form-group">
-                    <label>Enabled</label>
-                    <select id="ruleEnabled">
-                        <option value="true" selected>Yes</option>
-                        <option value="false">No</option>
-                    </select>
+                <div class="cr-form-group">
+                    <label>Description</label>
+                    <textarea id="ruleDesc" rows="2" placeholder="Describe what this rule detects..." style="font-family: 'Outfit', sans-serif;"></textarea>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>MITRE Tactic</label>
-                    <input type="text" id="ruleMitreTactic" placeholder="e.g., Initial Access">
+                <div class="cr-form-row">
+                    <div class="cr-form-group">
+                        <label>Severity</label>
+                        <select id="ruleSeverity">
+                            <option value="critical">Critical</option>
+                            <option value="high" selected>High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div class="cr-form-group">
+                        <label>Enabled</label>
+                        <select id="ruleEnabled">
+                            <option value="true" selected>Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>MITRE Technique</label>
-                    <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1190">
+                <div class="cr-form-row">
+                    <div class="cr-form-group">
+                        <label>MITRE Tactic</label>
+                        <input type="text" id="ruleMitreTactic" placeholder="e.g., Initial Access">
+                    </div>
+                    <div class="cr-form-group">
+                        <label>MITRE Technique</label>
+                        <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1190">
+                    </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <label>Stages (JSON array)</label>
-                <textarea id="ruleStages" rows="8" required placeholder='[
+                <div class="cr-form-group">
+                    <label>Stages (JSON Array)</label>
+                    <textarea id="ruleStages" rows="8" required placeholder='[
   {"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300},
   {"name": "Stage 2", "filter": {"action": "allow", "srcip": "$stage1.srcip"}, "threshold": 1, "window": 600}
 ]'></textarea>
-                <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem;">
-                    Each stage: name, filter (field conditions), threshold (min events), window (seconds).
-                    Use <code>$stage1.field</code> for variable substitution between stages.
+                    <div class="cr-form-hint">
+                        Each stage: name, filter (field conditions), threshold (min events), window (seconds).
+                        Use <code>$stage1.field</code> for variable substitution between stages.
+                    </div>
                 </div>
             </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline" onclick="closeModal('addRuleModal')">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Rule</button>
+            <div class="cr-modal-footer">
+                <button type="button" class="cr-btn-cancel" onclick="closeModal('addRuleModal')">Cancel</button>
+                <button type="submit" class="cr-btn-submit">Create Rule</button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Toast -->
-<div id="toast" class="toast"></div>
-
+<div id="toast" class="cr-toast"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Rules data loaded via API when needed
+// ================================================================
+// ANIMATED COUNTERS
+// ================================================================
+(function() {
+    const counters = document.querySelectorAll('.cr-metric-value[data-count]');
+    const duration = 800;
 
+    counters.forEach(function(el) {
+        const target = parseInt(el.getAttribute('data-count'), 10) || 0;
+        if (target === 0) {
+            el.textContent = '0';
+            return;
+        }
+        const start = performance.now();
+        function update(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            el.textContent = Math.round(target * eased);
+            if (progress < 1) {
+                requestAnimationFrame(update);
+            } else {
+                el.textContent = target;
+            }
+        }
+        requestAnimationFrame(update);
+    });
+})();
+
+// ================================================================
+// TAB SWITCHING
+// ================================================================
 function showTab(tab) {
     document.getElementById('tab-rules').style.display = tab === 'rules' ? 'block' : 'none';
     document.getElementById('tab-matches').style.display = tab === 'matches' ? 'block' : 'none';
-    document.querySelectorAll('.tab-nav a').forEach((a, i) => {
+    document.querySelectorAll('.cr-tab').forEach(function(a, i) {
         a.classList.toggle('active', (i === 0 && tab === 'rules') || (i === 1 && tab === 'matches'));
     });
 }
 
+// ================================================================
+// TOAST
+// ================================================================
 function showToast(msg, type) {
-    const t = document.getElementById('toast');
+    var t = document.getElementById('toast');
     t.textContent = msg;
-    t.className = 'toast show toast-' + type;
-    setTimeout(() => t.classList.remove('show'), 3000);
+    t.className = 'cr-toast show cr-toast-' + type;
+    setTimeout(function() { t.classList.remove('show'); }, 3000);
 }
 
+// ================================================================
+// MODAL CONTROLS
+// ================================================================
 function closeModal(id) {
     document.getElementById(id).classList.remove('active');
 }
@@ -358,16 +1754,19 @@ function showAddRuleModal() {
     document.getElementById('addRuleModal').classList.add('active');
 }
 
+// ================================================================
+// SUBMIT ADD RULE
+// ================================================================
 async function submitAddRule(e) {
     e.preventDefault();
-    let stages;
+    var stages;
     try {
         stages = JSON.parse(document.getElementById('ruleStages').value);
     } catch (err) {
         showToast('Invalid JSON in stages: ' + err.message, 'error');
         return false;
     }
-    const data = {
+    var data = {
         name: document.getElementById('ruleName').value,
         description: document.getElementById('ruleDesc').value,
         severity: document.getElementById('ruleSeverity').value,
@@ -377,16 +1776,16 @@ async function submitAddRule(e) {
         stages: stages,
     };
     try {
-        const res = await fetch('/api/correlation/rules/', {
+        var res = await fetch('/api/correlation/rules/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data),
         });
-        const result = await res.json();
+        var result = await res.json();
         if (res.ok) {
             showToast('Rule created successfully', 'success');
             closeModal('addRuleModal');
-            setTimeout(() => location.reload(), 500);
+            setTimeout(function() { location.reload(); }, 500);
         } else {
             showToast(result.detail || 'Failed to create rule', 'error');
         }
@@ -396,12 +1795,15 @@ async function submitAddRule(e) {
     return false;
 }
 
+// ================================================================
+// TOGGLE RULE
+// ================================================================
 async function toggleRule(ruleId) {
     try {
-        const res = await fetch(`/api/correlation/rules/${ruleId}/toggle`, { method: 'POST' });
+        var res = await fetch('/api/correlation/rules/' + ruleId + '/toggle', { method: 'POST' });
         if (res.ok) {
             showToast('Rule toggled', 'success');
-            setTimeout(() => location.reload(), 500);
+            setTimeout(function() { location.reload(); }, 500);
         } else {
             showToast('Failed to toggle rule', 'error');
         }
@@ -410,13 +1812,16 @@ async function toggleRule(ruleId) {
     }
 }
 
+// ================================================================
+// DELETE RULE
+// ================================================================
 async function deleteRule(ruleId, name) {
-    if (!confirm(`Delete correlation rule "${name}"?`)) return;
+    if (!confirm('Delete correlation rule "' + name + '"?')) return;
     try {
-        const res = await fetch(`/api/correlation/rules/${ruleId}`, { method: 'DELETE' });
+        var res = await fetch('/api/correlation/rules/' + ruleId, { method: 'DELETE' });
         if (res.ok) {
             showToast('Rule deleted', 'success');
-            setTimeout(() => location.reload(), 500);
+            setTimeout(function() { location.reload(); }, 500);
         } else {
             showToast('Failed to delete rule', 'error');
         }
@@ -425,55 +1830,154 @@ async function deleteRule(ruleId, name) {
     }
 }
 
+// ================================================================
+// SHOW RULE DETAIL (full match dashboard)
+// ================================================================
+var _cdCurrentRuleId = null;
+var _cdCurrentHours = 24;
+
 function showRuleDetail(ruleId) {
-    fetch(`/api/correlation/rules/`)
-        .then(r => r.json())
-        .then(rules => {
-            const rule = rules.find(r => r.id === ruleId);
-            if (!rule) return;
+    _cdCurrentRuleId = ruleId;
+    _cdCurrentHours = 24;
+    document.getElementById('detailRuleName').textContent = 'Loading...';
+    document.getElementById('detailContent').innerHTML = '<div class="cd-loading">Loading match data</div>';
+    document.getElementById('detailViewAllMatches').style.display = 'none';
+    document.getElementById('ruleDetailModal').classList.add('active');
+    _cdFetchAndRender(ruleId, 24);
+}
+
+function _cdChangeTimeRange(hours) {
+    _cdCurrentHours = hours;
+    document.querySelectorAll('.cd-time-pill').forEach(function(p) {
+        p.classList.toggle('active', parseInt(p.dataset.hours) === hours);
+    });
+    document.getElementById('detailContent').innerHTML = '<div class="cd-loading">Loading match data</div>';
+    _cdFetchAndRender(_cdCurrentRuleId, hours);
+}
+
+function _cdFetchAndRender(ruleId, hours) {
+    fetch('/api/correlation/rules/' + ruleId + '/matches?hours=' + hours)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var rule = data.rule;
             document.getElementById('detailRuleName').textContent = rule.name;
-            let html = `
-                <div style="margin-bottom:1rem;">
-                    <span class="badge badge-${rule.severity}">${rule.severity}</span>
-                    <span style="margin-left:0.5rem;font-size:0.85rem;color:var(--text-muted);">${rule.is_enabled ? 'Enabled' : 'Disabled'}</span>
-                </div>
-                <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;">${rule.description || 'No description'}</p>
-            `;
-            if (rule.mitre_tactic || rule.mitre_technique) {
-                html += `<div style="margin-bottom:1rem;">`;
-                if (rule.mitre_tactic) html += `<span class="mitre-tag">${rule.mitre_tactic}</span> `;
-                if (rule.mitre_technique) html += `<span class="mitre-tag">${rule.mitre_technique}</span>`;
-                html += `</div>`;
-            }
-            html += `<h4 style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">STAGES</h4>`;
-            rule.stages.forEach((stage, i) => {
-                html += `
-                    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:0.5rem;padding:1rem;margin-bottom:0.75rem;">
-                        <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.5rem;">
-                            Stage ${i + 1}: ${stage.name}
-                        </div>
-                        <div style="font-size:0.8rem;color:var(--text-muted);">
-                            <div><strong>Filter:</strong> ${JSON.stringify(stage.filter || {})}</div>
-                            <div><strong>Threshold:</strong> ${stage.threshold || 1} events</div>
-                            <div><strong>Window:</strong> ${stage.window || 300}s</div>
-                        </div>
-                    </div>
-                `;
+            document.getElementById('detailViewAllMatches').style.display = data.match_count > 0 ? 'inline-flex' : 'none';
+
+            var html = '';
+
+            // Header: severity, status, MITRE tags
+            html += '<div class="cd-header-row">';
+            html += '<span class="cr-severity-badge ' + rule.severity + '">' + rule.severity + '</span>';
+            html += '<span class="cd-status-tag ' + (rule.is_enabled ? 'enabled' : 'disabled') + '">' + (rule.is_enabled ? 'Enabled' : 'Disabled') + '</span>';
+            if (rule.mitre_tactic) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_tactic) + '</span>';
+            if (rule.mitre_technique) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_technique) + '</span>';
+            html += '</div>';
+
+            // Description
+            html += '<p class="cd-desc">' + _cdEsc(rule.description || 'No description provided.') + '</p>';
+
+            // Time range selector
+            html += '<div class="cd-time-range">';
+            [1, 6, 24, 168].forEach(function(h) {
+                var label = h === 168 ? '7d' : h + 'h';
+                html += '<button class="cd-time-pill' + (h === hours ? ' active' : '') + '" data-hours="' + h + '" onclick="_cdChangeTimeRange(' + h + ')">' + label + '</button>';
             });
-            html += `
-                <div style="margin-top:1rem;font-size:0.8rem;color:var(--text-muted);">
-                    <div>Trigger count: <strong>${rule.trigger_count}</strong></div>
-                    <div>Last evaluated: ${rule.last_evaluated_at || 'Never'}</div>
-                    <div>Last triggered: ${rule.last_triggered_at || 'Never'}</div>
-                </div>
-            `;
+            html += '</div>';
+
+            // Summary cards
+            html += '<div class="cd-summary">';
+            html += '<div class="cd-summary-card"><div class="cd-summary-val ' + (data.match_count > 0 ? 'has-matches' : 'no-matches') + '">' + data.match_count + '</div><div class="cd-summary-label">Matches</div></div>';
+            html += '<div class="cd-summary-card"><div class="cd-summary-val" style="color:white;">' + (data.total_events || 0) + '</div><div class="cd-summary-label">Total Events</div></div>';
+            html += '<div class="cd-summary-card"><div class="cd-summary-val" style="color:white;">' + data.top_keys.length + '</div><div class="cd-summary-label">Unique Keys</div></div>';
+            html += '</div>';
+
+            // Top Matched IPs/Keys
+            if (data.top_keys.length > 0) {
+                html += '<div class="cd-section-title">Top Matched IPs / Keys</div>';
+                html += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>';
+                html += '<th>Key Value</th><th>Matches</th><th>Events</th><th>Last Seen</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                data.top_keys.forEach(function(k) {
+                    var ts = k.last_seen ? k.last_seen.replace('T', ' ').slice(0, 19) : '—';
+                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(k.key_value) + ',dstip:' + encodeURIComponent(k.key_value) + '&time_range=' + (hours <= 6 ? hours + 'h' : '24h');
+                    html += '<tr>';
+                    html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(k.key_value) + '</a></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + k.match_count + '</span></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;">' + k.total_events + '</span></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);">' + ts + '</span></td>';
+                    html += '<td><a href="' + logUrl + '" class="cd-logs-link"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Logs</a></td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            } else if (data.match_count === 0) {
+                html += '<div class="cd-empty-state">No matches in the selected time range. This rule has not triggered recently.</div>';
+            }
+
+            // Timeline
+            if (data.timeline.length > 0) {
+                html += '<div class="cd-section-title">Hourly Timeline</div>';
+                var maxC = Math.max.apply(null, data.timeline.map(function(t) { return t.count; }).concat([1]));
+                html += '<div class="cd-timeline-bars">';
+                data.timeline.forEach(function(t) {
+                    var h = Math.max((t.count / maxC * 100), 3);
+                    var hr = t.hour.indexOf('T') > -1 ? t.hour.split('T')[1].slice(0,5) : t.hour.slice(11,16);
+                    html += '<div class="cd-tbar" style="height:' + h + '%;"><div class="cd-tbar-tip">' + hr + ': ' + t.count + '</div></div>';
+                });
+                html += '</div>';
+            }
+
+            // Recent Matches table
+            if (data.recent_matches.length > 0) {
+                html += '<div class="cd-section-title">Recent Matches (' + data.recent_matches.length + ')</div>';
+                html += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>';
+                html += '<th>Time</th><th>Key</th><th>Stages</th><th>Events</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                data.recent_matches.forEach(function(m) {
+                    var ts = m.timestamp ? m.timestamp.replace('T', ' ').slice(0, 19) : '—';
+                    var pct = m.total_stages ? Math.round(m.stages_matched / m.total_stages * 100) : 0;
+                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(m.key_value) + ',dstip:' + encodeURIComponent(m.key_value) + '&time_range=1h';
+                    html += '<tr>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);">' + ts + '</span></td>';
+                    html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(m.key_value || '—') + '</a></td>';
+                    html += '<td><div class="cd-stage-mini"><span class="cd-stage-mini-text">' + m.stages_matched + '/' + m.total_stages + '</span><div class="cd-stage-mini-bar"><div class="cd-stage-mini-fill" style="width:' + pct + '%;"></div></div></div></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + m.total_events + '</span></td>';
+                    html += '<td><a href="' + logUrl + '" class="cd-logs-link"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Logs</a></td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            // Rule Configuration (stages)
+            html += '<div class="cd-section-title">Rule Configuration</div>';
+            rule.stages.forEach(function(stage, i) {
+                html += '<div class="cd-stage-config">';
+                html += '<div class="cd-stage-config-name">Stage ' + (i + 1) + ': ' + _cdEsc(stage.name) + '</div>';
+                html += '<div class="cd-stage-config-meta">';
+                html += '<div><strong>Filter:</strong> ' + _cdEsc(JSON.stringify(stage.filter || {})) + '</div>';
+                html += '<div><strong>Threshold:</strong> ' + (stage.threshold || 1) + ' events</div>';
+                html += '<div><strong>Window:</strong> ' + (stage.window || 300) + 's</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+
             document.getElementById('detailContent').innerHTML = html;
-            document.getElementById('ruleDetailModal').classList.add('active');
+        })
+        .catch(function(err) {
+            document.getElementById('detailContent').innerHTML = '<div class="cd-empty-state">Error loading data: ' + _cdEsc(err.message) + '</div>';
         });
 }
 
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(el => {
+function _cdEsc(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ================================================================
+// MODAL OVERLAY CLICK-TO-CLOSE
+// ================================================================
+document.querySelectorAll('.cr-modal-overlay').forEach(function(el) {
     el.addEventListener('click', function(e) {
         if (e.target === this) this.classList.remove('active');
     });

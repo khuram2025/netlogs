@@ -56,6 +56,7 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
     # Get recent matches from ClickHouse
     recent_matches = []
     match_stats = {"total": 0, "today": 0, "critical": 0, "high": 0}
+    rule_match_counts = {}
     try:
         client = ClickHouseClient.get_client()
         # Total matches
@@ -73,6 +74,16 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
                 match_stats["critical"] = row[1]
             elif row[0] == "high":
                 match_stats["high"] = row[1]
+
+        # Per-rule 24h match counts
+        r = client.query("""
+            SELECT rule_name, count()
+            FROM correlation_matches
+            WHERE timestamp > now() - INTERVAL 24 HOUR
+            GROUP BY rule_name
+        """)
+        for row in r.result_rows:
+            rule_match_counts[row[0]] = row[1]
 
         # Recent matches
         r = client.query("""
@@ -101,6 +112,7 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
         "rules": rules,
         "recent_matches": recent_matches,
         "match_stats": match_stats,
+        "rule_match_counts": rule_match_counts,
     })
 
 
@@ -255,6 +267,114 @@ async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db))
         "total_detectable": total_detectable,
         "overall_pct": overall_pct,
     })
+
+
+@router.get("/api/correlation/rules/{rule_id}/matches", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession = Depends(get_db)):
+    """Get detailed match data for a specific correlation rule."""
+    # Get rule from PostgreSQL
+    result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+
+    rule_data = {
+        "id": rule.id,
+        "name": rule.name,
+        "description": rule.description,
+        "severity": rule.severity,
+        "is_enabled": rule.is_enabled,
+        "stages": rule.stages,
+        "mitre_tactic": rule.mitre_tactic,
+        "mitre_technique": rule.mitre_technique,
+        "trigger_count": rule.trigger_count or 0,
+        "last_evaluated_at": str(rule.last_evaluated_at) if rule.last_evaluated_at else None,
+        "last_triggered_at": str(rule.last_triggered_at) if rule.last_triggered_at else None,
+    }
+
+    match_count = 0
+    total_events = 0
+    top_keys = []
+    timeline = []
+    recent_matches = []
+
+    try:
+        client = ClickHouseClient.get_client()
+        safe_name = rule.name.replace("'", "\\'")
+        interval = f"INTERVAL {int(hours)} HOUR"
+
+        # Match count + total events
+        r = client.query(f"""
+            SELECT count(), sum(total_events)
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
+        """)
+        if r.result_rows:
+            match_count = r.result_rows[0][0]
+            total_events = r.result_rows[0][1] or 0
+
+        # Top key values (IPs/entities that matched)
+        r = client.query(f"""
+            SELECT key_value, count() as cnt, sum(total_events) as evts, max(timestamp) as last_seen
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
+            GROUP BY key_value
+            ORDER BY cnt DESC
+            LIMIT 15
+        """)
+        for row in r.result_rows:
+            top_keys.append({
+                "key_value": row[0],
+                "match_count": row[1],
+                "total_events": row[2],
+                "last_seen": str(row[3]),
+            })
+
+        # Hourly timeline
+        r = client.query(f"""
+            SELECT toStartOfHour(timestamp) as hour, count() as cnt
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
+            GROUP BY hour
+            ORDER BY hour
+        """)
+        for row in r.result_rows:
+            timeline.append({
+                "hour": str(row[0]),
+                "count": row[1],
+            })
+
+        # Recent matches
+        r = client.query(f"""
+            SELECT timestamp, key_value, stages_matched, total_stages,
+                   total_events, severity, stage_details
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
+            ORDER BY timestamp DESC
+            LIMIT 30
+        """)
+        for row in r.result_rows:
+            recent_matches.append({
+                "timestamp": str(row[0]),
+                "key_value": row[1],
+                "stages_matched": row[2],
+                "total_stages": row[3],
+                "total_events": row[4],
+                "severity": row[5],
+                "stage_details": row[6],
+            })
+
+    except Exception as e:
+        logger.error(f"Error fetching rule match details: {e}")
+
+    return {
+        "rule": rule_data,
+        "match_count": match_count,
+        "total_events": total_events,
+        "top_keys": top_keys,
+        "timeline": timeline,
+        "recent_matches": recent_matches,
+    }
 
 
 @router.get("/api/correlation/matches/", dependencies=[Depends(require_min_role("ANALYST"))])
