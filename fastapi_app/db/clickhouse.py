@@ -385,12 +385,21 @@ class ClickHouseClient:
         """
         client = cls.get_client()
         columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
-        query = f"""
-        SELECT {columns}
-        FROM syslogs ORDER BY timestamp DESC LIMIT {limit}
-        """
-        result = client.query(query)
-        return list(result.named_results())
+        # Use PREWHERE on timestamp to limit scan range — without this,
+        # ClickHouse scans the entire table which takes 45+ seconds on large datasets.
+        # Try 1h first; if not enough rows, expand progressively.
+        for hours in (1, 24):
+            query = f"""
+            SELECT {columns}
+            FROM syslogs
+            PREWHERE timestamp > now() - INTERVAL {hours} HOUR
+            ORDER BY timestamp DESC
+            LIMIT {limit}
+            """
+            result = list(client.query(query).named_results())
+            if len(result) >= limit or hours == 24:
+                return result
+        return result
 
     @classmethod
     def get_log_by_id(
@@ -1338,7 +1347,7 @@ class ClickHouseClient:
         query = f"""
         SELECT severity, count() as count
         FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY severity
         ORDER BY severity
         """
@@ -1356,7 +1365,7 @@ class ClickHouseClient:
             count() as count,
             max(timestamp) as last_log
         FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY device_ip, vdom
         ORDER BY count DESC
         LIMIT 20
@@ -1371,9 +1380,13 @@ class ClickHouseClient:
         Returns VDOM-aware names: '192.168.47.1_WAN' for VDOM devices,
         '10.10.0.1' for non-VDOM devices.
 
-        Default: last 1 hour (fast) - devices sending logs are typically always active.
-        Falls back to 24h if no devices found in 1h window.
+        Cached for 60 seconds to avoid repeated queries on every page load.
         """
+        import time
+        now = time.time()
+        if cls._device_list_cache and (now - cls._device_list_cache_time) < cls._DEVICE_LIST_CACHE_TTL:
+            return cls._device_list_cache
+
         client = cls.get_client()
         # Group by (device_ip, vdom) to treat each VDOM as a separate device
         query = f"""
@@ -1394,6 +1407,8 @@ class ClickHouseClient:
             """
             result = [row[0] for row in client.query(query).result_rows]
 
+        cls._device_list_cache = result
+        cls._device_list_cache_time = now
         return result
 
     @classmethod
@@ -1443,7 +1458,7 @@ class ClickHouseClient:
             count() as log_count,
             max(timestamp) as newest_log
         FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY device_ip, vdom
         ORDER BY log_count DESC
         """
@@ -1470,21 +1485,39 @@ class ClickHouseClient:
 
     @classmethod
     def get_storage_by_time_range(cls, hours: int = 24) -> List[Dict[str, Any]]:
-        """Get storage distribution over time for visualization."""
+        """Get storage distribution over time for visualization.
+
+        Uses count-based estimation instead of sum(length(raw)) which requires
+        decompressing the entire raw column and is very slow (~2s+).
+        """
         client = cls.get_client()
+
+        # Estimate avg bytes per row from system tables (fast metadata query)
+        try:
+            size_query = """
+            SELECT sum(data_uncompressed_bytes) / greatest(sum(rows), 1) as avg_row_bytes
+            FROM system.parts WHERE table = 'syslogs' AND active = 1
+            """
+            avg_result = client.query(size_query).result_rows
+            avg_bytes = avg_result[0][0] if avg_result and avg_result[0][0] else 500
+        except Exception:
+            avg_bytes = 500
 
         query = f"""
         SELECT
             toStartOfHour(timestamp) as hour,
-            count() as log_count,
-            sum(length(raw)) as raw_bytes
+            count() as log_count
         FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY hour
         ORDER BY hour
         """
 
-        return list(client.query(query).named_results())
+        results = list(client.query(query).named_results())
+        # Estimate raw_bytes from row count
+        for r in results:
+            r['raw_bytes'] = int(r['log_count'] * avg_bytes)
+        return results
 
     @classmethod
     def delete_old_logs_for_device(cls, device_ip: str, retention_days: int) -> bool:
@@ -1515,6 +1548,7 @@ class ClickHouseClient:
         client = cls.get_client()
         device_where = cls._device_where(device_ip)
 
+        # Use PREWHERE on device_ip (part of primary key) for fast partition pruning
         query = f"""
         SELECT
             countIf(timestamp > now() - INTERVAL 1 DAY) as last_24h,
@@ -1523,7 +1557,7 @@ class ClickHouseClient:
             countIf(timestamp <= now() - INTERVAL 30 DAY) as older,
             count() as total
         FROM syslogs
-        WHERE {device_where}
+        PREWHERE {device_where}
         """
 
         result = list(client.query(query).named_results())
@@ -1539,7 +1573,7 @@ class ClickHouseClient:
             toStartOfMinute(timestamp) as minute,
             count() as count
         FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
         GROUP BY minute
         ORDER BY minute
         """
@@ -1550,15 +1584,15 @@ class ClickHouseClient:
     def get_total_logs_24h(cls) -> int:
         """Get total log count in last 24 hours."""
         client = cls.get_client()
-        query = "SELECT count() FROM syslogs WHERE timestamp > now() - INTERVAL 24 HOUR"
+        query = "SELECT count() FROM syslogs PREWHERE timestamp > now() - INTERVAL 24 HOUR"
         result = client.query(query).result_rows
         return result[0][0] if result else 0
 
     @classmethod
     def get_unique_devices_count(cls) -> int:
-        """Get count of unique devices."""
+        """Get count of unique devices (last 24h for performance)."""
         client = cls.get_client()
-        query = "SELECT uniq(device_ip, vdom) FROM syslogs"
+        query = "SELECT uniq(device_ip, vdom) FROM syslogs WHERE timestamp > now() - INTERVAL 24 HOUR"
         result = client.query(query).result_rows
         return result[0][0] if result else 0
 
@@ -1674,40 +1708,45 @@ class ClickHouseClient:
             {cls._DEVICE_DISPLAY_EXPR} as device_ip,
             severity,
             parsed_data,
-            parsed_data['action'] as action,
-            if(parsed_data['srcip'] != '', parsed_data['srcip'], parsed_data['src_ip']) as srcip,
-            if(parsed_data['dstip'] != '', parsed_data['dstip'], parsed_data['dst_ip']) as dstip,
-            if(parsed_data['srcport'] != '', parsed_data['srcport'], parsed_data['src_port']) as srcport,
-            if(parsed_data['dstport'] != '', parsed_data['dstport'], parsed_data['dst_port']) as dstport,
-            if(parsed_data['proto'] != '', parsed_data['proto'], parsed_data['protocol']) as proto,
-            if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if']) as srcintf,
-            if(parsed_data['dstintf'] != '', parsed_data['dstintf'], parsed_data['outbound_if']) as dstintf,
+            action,
+            srcip,
+            dstip,
+            toString(srcport) as srcport,
+            toString(dstport) as dstport,
+            toString(proto) as proto,
+            if(src_zone != '', src_zone, if(parsed_data['srcintf'] != '', parsed_data['srcintf'], parsed_data['inbound_if'])) as srcintf,
+            if(dst_zone != '', dst_zone, if(parsed_data['dstintf'] != '', parsed_data['dstintf'], parsed_data['outbound_if'])) as dstintf,
             parsed_data['policyid'] as policyid,
-            if(parsed_data['policyname'] != '', parsed_data['policyname'], parsed_data['rule']) as policyname,
+            policyname,
             parsed_data['service'] as service,
             if(parsed_data['duration'] != '', parsed_data['duration'], parsed_data['elapsed_time']) as duration,
             if(parsed_data['sentbyte'] != '', parsed_data['sentbyte'], parsed_data['bytes_sent']) as sentbyte,
             if(parsed_data['rcvdbyte'] != '', parsed_data['rcvdbyte'], parsed_data['bytes_recv']) as rcvdbyte,
-            parsed_data['session_end_reason'] as session_end_reason
+            session_end_reason
         FROM syslogs
+        PREWHERE timestamp BETWEEN
+            toDateTime64('{ts_str}', 3) - INTERVAL {time_window_seconds} SECOND
+            AND toDateTime64('{ts_str}', 3) + INTERVAL {time_window_seconds} SECOND
         WHERE
-            (parsed_data['srcip'] = '{safe_srcip}' OR parsed_data['src_ip'] = '{safe_srcip}')
-            AND (parsed_data['dstip'] = '{safe_dstip}' OR parsed_data['dst_ip'] = '{safe_dstip}')
-            AND (parsed_data['dstport'] = '{safe_dstport}' OR parsed_data['dst_port'] = '{safe_dstport}')
-            AND (parsed_data['proto'] = '{safe_proto}' OR parsed_data['protocol'] = '{safe_proto}')
-            AND timestamp BETWEEN
-                toDateTime64('{ts_str}', 3) - INTERVAL {time_window_seconds} SECOND
-                AND toDateTime64('{ts_str}', 3) + INTERVAL {time_window_seconds} SECOND
+            srcip = '{safe_srcip}'
+            AND dstip = '{safe_dstip}'
+            AND (toString(dstport) = '{safe_dstport}' OR parsed_data['dstport'] = '{safe_dstport}' OR parsed_data['dst_port'] = '{safe_dstport}')
+            AND (toString(proto) = '{safe_proto}' OR parsed_data['proto'] = '{safe_proto}' OR parsed_data['protocol'] = '{safe_proto}')
         ORDER BY timestamp ASC
         """
 
         result = list(client.query(query).named_results())
         return result
 
+    # Device list cache for performance (used on every log page load)
+    _device_list_cache: List[str] = []
+    _device_list_cache_time: float = 0
+    _DEVICE_LIST_CACHE_TTL: int = 60  # 60 seconds - devices rarely change
+
     # Dashboard cache for performance
     _dashboard_cache: Dict[str, Any] = {}
     _dashboard_cache_time: float = 0
-    _DASHBOARD_CACHE_TTL: int = 30  # Cache for 30 seconds
+    _DASHBOARD_CACHE_TTL: int = 120  # Cache for 2 minutes (dashboard data is 24h aggregates, doesn't need to be real-time)
 
     @classmethod
     def get_dashboard_stats(cls) -> Dict[str, Any]:

@@ -284,6 +284,35 @@
         <p>Add objects manually or import from a firewall config.</p>
     </div>
     {% endif %}
+
+    <!-- Pagination -->
+    {% if total_pages is defined and total_pages > 1 %}
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px; padding:12px 0; border-top:1px solid var(--border-color, #333);">
+        <span style="color:var(--text-muted, #888); font-size:0.85rem;">
+            Showing {{ ((page - 1) * per_page) + 1 }}-{{ [page * per_page, filtered_count] | min }} of {{ filtered_count | default(total) }} objects
+        </span>
+        <div style="display:flex; gap:4px;">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if obj_type_filter %}&obj_type={{ obj_type_filter }}{% endif %}&per_page={{ per_page }}"
+               class="btn btn-sm" style="padding:4px 10px; font-size:0.8rem;">Prev</a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="btn btn-sm" style="padding:4px 10px; font-size:0.8rem; background:var(--primary-color, #4f46e5); color:#fff;">{{ p }}</span>
+                {% elif p <= 3 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
+                <a href="?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if obj_type_filter %}&obj_type={{ obj_type_filter }}{% endif %}&per_page={{ per_page }}"
+                   class="btn btn-sm" style="padding:4px 10px; font-size:0.8rem;">{{ p }}</a>
+                {% elif p == 4 or p == total_pages - 2 %}
+                <span style="padding:4px 6px; color:var(--text-muted, #888);">...</span>
+                {% endif %}
+            {% endfor %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if obj_type_filter %}&obj_type={{ obj_type_filter }}{% endif %}&per_page={{ per_page }}"
+               class="btn btn-sm" style="padding:4px 10px; font-size:0.8rem;">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- ============ Add Object Modal ============ -->

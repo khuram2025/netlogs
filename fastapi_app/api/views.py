@@ -25,7 +25,7 @@ from ..core.permissions import require_role, require_min_role
 logger = logging.getLogger(__name__)
 
 # Thread pool for running blocking ClickHouse queries in parallel
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=8)
 
 router = APIRouter(tags=["views"])
 
@@ -128,11 +128,11 @@ async def home(request: Request):
 async def dashboard(request: Request):
     """Dashboard view with comprehensive SIEM statistics."""
     try:
-        # Get comprehensive dashboard stats
-        stats = ClickHouseClient.get_dashboard_stats()
-
-        # Get recent logs (limit to 20 for quick display)
-        logs = ClickHouseClient.get_recent_logs(limit=20)
+        # Run dashboard stats + recent logs in parallel (both are blocking ClickHouse calls)
+        loop = asyncio.get_event_loop()
+        stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
+        logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=20))
+        stats, logs = await asyncio.gather(stats_future, logs_future)
 
         # Prepare severity data for chart
         severity_data = []

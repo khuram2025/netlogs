@@ -363,19 +363,27 @@ async def get_log_stats(
 @router.get("/dashboard")
 async def get_dashboard_stats():
     """Get dashboard statistics."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
     try:
-        # Recent logs
-        recent_logs = ClickHouseClient.get_recent_logs(limit=50)
+        # Run all 4 independent ClickHouse queries in parallel
+        loop = asyncio.get_event_loop()
+        _pool = ThreadPoolExecutor(max_workers=4)
+        recent_future = loop.run_in_executor(_pool, lambda: ClickHouseClient.get_recent_logs(limit=50))
+        severity_future = loop.run_in_executor(_pool, lambda: ClickHouseClient.get_severity_distribution(hours=24))
+        traffic_future = loop.run_in_executor(_pool, lambda: ClickHouseClient.get_traffic_timeline(hours=1))
+        totals_future = loop.run_in_executor(_pool, lambda: (ClickHouseClient.get_total_logs_24h(), ClickHouseClient.get_unique_devices_count()))
 
-        # Severity distribution
-        severity_dist = ClickHouseClient.get_severity_distribution(hours=24)
+        recent_logs, severity_dist, traffic, totals = await asyncio.gather(
+            recent_future, severity_future, traffic_future, totals_future
+        )
+        total_logs_24h, unique_devices = totals
+
         severity_counts = {}
         for row in severity_dist:
             sev = row.get('severity', 6)
             severity_counts[SEVERITY_NAMES.get(sev, 'Unknown')] = row.get('count', 0)
 
-        # Traffic timeline
-        traffic = ClickHouseClient.get_traffic_timeline(hours=1)
         traffic_timeline = [
             {
                 'time': row['minute'].isoformat() if hasattr(row['minute'], 'isoformat') else str(row['minute']),
@@ -383,10 +391,6 @@ async def get_dashboard_stats():
             }
             for row in traffic
         ]
-
-        # Totals
-        total_logs_24h = ClickHouseClient.get_total_logs_24h()
-        unique_devices = ClickHouseClient.get_unique_devices_count()
 
         return DashboardStats(
             recent_logs=[format_log_entry(log) for log in recent_logs],

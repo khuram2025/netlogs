@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPExc
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 
 from fastapi_app.core.auth import get_current_user
 from fastapi_app.db.database import get_db
@@ -862,8 +862,11 @@ async def address_object_list_page(
     db: AsyncSession = Depends(get_db),
     search: Optional[str] = None,
     obj_type: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=10, le=500),
 ):
-    """Display all address objects."""
+    """Display address objects with server-side pagination."""
+    # Build base query with filters
     query = select(AddressObject)
 
     if search:
@@ -874,20 +877,39 @@ async def address_object_list_page(
     if obj_type:
         query = query.where(AddressObject.obj_type == obj_type)
 
-    query = query.order_by(AddressObject.name.asc())
+    # Get filtered count (single COUNT query, not loading all rows)
+    count_query = select(func.count(AddressObject.id))
+    if search:
+        count_query = count_query.where(
+            AddressObject.name.ilike(f"%{search}%") |
+            AddressObject.value.ilike(f"%{search}%")
+        )
+    if obj_type:
+        count_query = count_query.where(AddressObject.obj_type == obj_type)
+    filtered_count = (await db.execute(count_query)).scalar() or 0
+
+    # Paginated results
+    offset = (page - 1) * per_page
+    query = query.order_by(AddressObject.name.asc()).offset(offset).limit(per_page)
     result = await db.execute(query)
     objects = result.scalars().all()
 
-    # Stats — use counts from DB
-    all_query = select(AddressObject)
-    all_result = await db.execute(all_query)
-    all_objects = all_result.scalars().all()
-    total = len(all_objects)
-    hosts = sum(1 for o in all_objects if o.obj_type == "host")
-    subnets = sum(1 for o in all_objects if o.obj_type == "subnet")
-    ranges = sum(1 for o in all_objects if o.obj_type == "range")
-    fqdns = sum(1 for o in all_objects if o.obj_type == "fqdn")
-    groups = sum(1 for o in all_objects if o.obj_type == "group")
+    total_pages = (filtered_count + per_page - 1) // per_page if filtered_count > 0 else 1
+
+    # Stats via efficient SQL COUNT with GROUP BY (single query, no row loading)
+    stats_query = select(
+        AddressObject.obj_type,
+        func.count(AddressObject.id)
+    ).group_by(AddressObject.obj_type)
+    stats_result = await db.execute(stats_query)
+    type_counts = dict(stats_result.all())
+
+    total = sum(type_counts.values())
+    hosts = type_counts.get("host", 0)
+    subnets = type_counts.get("subnet", 0)
+    ranges = type_counts.get("range", 0)
+    fqdns = type_counts.get("fqdn", 0)
+    groups = type_counts.get("group", 0)
 
     return templates.TemplateResponse("address_objects/address_object_list.html", {
         "request": request,
@@ -902,6 +924,12 @@ async def address_object_list_page(
         "ranges": ranges,
         "fqdns": fqdns,
         "groups": groups,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "filtered_count": filtered_count,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
     })
 
 
@@ -1162,8 +1190,10 @@ async def api_address_objects(
     db: AsyncSession = Depends(get_db),
     search: Optional[str] = None,
     obj_type: Optional[str] = None,
+    limit: int = Query(500, ge=1, le=10000),
+    offset: int = Query(0, ge=0),
 ):
-    """Get all address objects as JSON."""
+    """Get address objects as JSON with pagination."""
     query = select(AddressObject)
     if search:
         query = query.where(
@@ -1173,7 +1203,7 @@ async def api_address_objects(
     if obj_type:
         query = query.where(AddressObject.obj_type == obj_type)
 
-    query = query.order_by(AddressObject.name.asc())
+    query = query.order_by(AddressObject.name.asc()).offset(offset).limit(limit)
     result = await db.execute(query)
     objects = result.scalars().all()
 
