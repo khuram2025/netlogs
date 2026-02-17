@@ -1,47 +1,56 @@
 """
 High-Performance Syslog Collector for Enterprise Firewall Log Management
 
-Migrated from Django to FastAPI with full async support.
-
-Architecture:
-- Asyncio-based UDP receiver for non-blocking I/O
-- Multi-worker processing with configurable parallelism
-- In-memory device cache with TTL to minimize DB queries
-- Large batch inserts to ClickHouse (optimized for throughput)
-- Async PostgreSQL connection pooling
-- Graceful shutdown with buffer flushing
-- Comprehensive logging and metrics
+Architecture (v2 — production-hardened):
+- Zero-allocation UDP receive path: datagram_received() only appends raw bytes
+  to a collections.deque (no asyncio.create_task, no locks, no allocations)
+- Dedicated batch worker drains the deque, parses, and inserts to ClickHouse
+- Reusable ClickHouse client (no per-batch connection overhead)
+- Retry with back-off on failed ClickHouse inserts (no silent data loss)
+- Large OS-level UDP socket buffer (26 MB) to absorb burst traffic
+- Device cache with long TTL; auto-approve unknown devices (never drop)
+- IOC matching runs on the batch path, not the per-packet hot path
 
 Performance Targets:
-- 100,000+ logs/minute sustained throughput
-- <10ms average processing latency
-- <1% CPU usage per 10k logs/minute
+- 500+ EPS sustained (>1 000 EPS burst)
+- <0.1 µs per packet in datagram_received (append-only)
+- 0% planned log loss (retry on insert failure, overflow warning)
 """
 
 import asyncio
 import signal
+import socket
 import time
 import logging
 import re
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Tuple
-from threading import Lock
 
-from sqlalchemy import select, update, cast, text
-from sqlalchemy.dialects.postgresql import INET
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
-from ..db.database import async_session_maker
+from ..db.database import get_database_url
 from ..db.clickhouse import ClickHouseClient
 from ..models.device import Device, DeviceStatus
 from .parsers import get_parser
 
 logger = logging.getLogger('syslog_collector')
 
+# Create a dedicated non-echo engine for syslog (avoids SQLAlchemy query logging)
+_syslog_engine = create_async_engine(get_database_url(), echo=False, poolclass=NullPool)
+_syslog_session_maker = async_sessionmaker(
+    _syslog_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
 @dataclass
 class CollectorConfig:
@@ -50,15 +59,21 @@ class CollectorConfig:
     port: int = 514
     batch_size: int = 5000
     flush_interval: float = 2.0
-    device_cache_ttl: int = 60
+    device_cache_ttl: int = 300       # 5 min — devices rarely change
     worker_threads: int = 4
-    max_buffer_size: int = 100000
+    max_queue_size: int = 500_000     # ~500 K packets before overflow
     metrics_interval: int = 30
+    udp_recv_buffer: int = 26_214_400  # 26 MB OS socket buffer
+    insert_retries: int = 3
+    insert_retry_delay: float = 1.0
 
+
+# ---------------------------------------------------------------------------
+# Device cache (thread-safe via dict atomic reads + TTL)
+# ---------------------------------------------------------------------------
 
 @dataclass
 class CachedDevice:
-    """Cached device information."""
     status: str
     parser: str
     cached_at: float
@@ -68,181 +83,98 @@ class CachedDevice:
 
 
 class DeviceCache:
-    """Thread-safe device cache with TTL."""
+    """Thread-safe device cache.  Uses a plain dict which is safe for
+    atomic get/set in CPython due to the GIL."""
 
-    def __init__(self, ttl: int = 60):
+    def __init__(self, ttl: int = 300):
         self.ttl = ttl
         self._cache: Dict[str, CachedDevice] = {}
-        self._lock = Lock()
-        self._stats = {'hits': 0, 'misses': 0}
+        self._hits = 0
+        self._misses = 0
 
     def get(self, ip: str) -> Optional[CachedDevice]:
-        """Get device from cache, returns None if expired or not found."""
-        with self._lock:
-            cached = self._cache.get(ip)
-            if cached and not cached.is_expired(self.ttl):
-                self._stats['hits'] += 1
-                return cached
-            self._stats['misses'] += 1
-            return None
+        cached = self._cache.get(ip)
+        if cached and not cached.is_expired(self.ttl):
+            self._hits += 1
+            return cached
+        self._misses += 1
+        return None
 
     def set(self, ip: str, status: str, parser: str):
-        """Cache device info."""
-        with self._lock:
-            self._cache[ip] = CachedDevice(
-                status=status,
-                parser=parser,
-                cached_at=time.time()
-            )
-
-    def invalidate(self, ip: str):
-        """Remove device from cache."""
-        with self._lock:
-            self._cache.pop(ip, None)
-
-    def clear(self):
-        """Clear entire cache."""
-        with self._lock:
-            self._cache.clear()
+        self._cache[ip] = CachedDevice(status=status, parser=parser, cached_at=time.time())
 
     def get_stats(self) -> dict:
-        """Get cache statistics."""
-        with self._lock:
-            total = self._stats['hits'] + self._stats['misses']
-            hit_rate = (self._stats['hits'] / total * 100) if total > 0 else 0
-            return {
-                'size': len(self._cache),
-                'hits': self._stats['hits'],
-                'misses': self._stats['misses'],
-                'hit_rate': f"{hit_rate:.1f}%"
-            }
+        total = self._hits + self._misses
+        hit_rate = (self._hits / total * 100) if total > 0 else 0
+        return {
+            'size': len(self._cache),
+            'hits': self._hits,
+            'misses': self._misses,
+            'hit_rate': f"{hit_rate:.1f}%",
+        }
 
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
 
 class MetricsCollector:
-    """Collect and report performance metrics."""
+    """Lock-free metrics (single-writer from the batch worker)."""
 
     def __init__(self):
-        self._lock = Lock()
         self.reset()
 
     def reset(self):
-        """Reset all metrics."""
-        with self._lock:
-            self._logs_received = 0
-            self._logs_processed = 0
-            self._logs_dropped = 0
-            self._batches_flushed = 0
-            self._flush_errors = 0
-            self._start_time = time.time()
-            self._logs_by_device: Dict[str, int] = defaultdict(int)
-
-    def log_received(self, ip: str):
-        with self._lock:
-            self._logs_received += 1
-            self._logs_by_device[ip] += 1
-
-    def log_processed(self):
-        with self._lock:
-            self._logs_processed += 1
-
-    def log_dropped(self):
-        with self._lock:
-            self._logs_dropped += 1
-
-    def batch_flushed(self, count: int):
-        with self._lock:
-            self._batches_flushed += 1
-
-    def flush_error(self):
-        with self._lock:
-            self._flush_errors += 1
+        self.logs_received = 0
+        self.logs_processed = 0
+        self.logs_dropped_overflow = 0
+        self.logs_dropped_parse = 0
+        self.logs_dropped_device = 0
+        self.batches_flushed = 0
+        self.flush_errors = 0
+        self.insert_retries = 0
+        self._start_time = time.time()
+        self._by_device: Dict[str, int] = defaultdict(int)
 
     def get_report(self) -> dict:
-        with self._lock:
-            elapsed = time.time() - self._start_time
-            rate = self._logs_received / elapsed if elapsed > 0 else 0
-            return {
-                'elapsed_seconds': int(elapsed),
-                'logs_received': self._logs_received,
-                'logs_processed': self._logs_processed,
-                'logs_dropped': self._logs_dropped,
-                'logs_per_second': int(rate),
-                'batches_flushed': self._batches_flushed,
-                'flush_errors': self._flush_errors,
-                'active_devices': len(self._logs_by_device),
-                'top_devices': dict(sorted(
-                    self._logs_by_device.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5])
-            }
+        elapsed = time.time() - self._start_time
+        rate = self.logs_received / elapsed if elapsed > 0 else 0
+        total_dropped = self.logs_dropped_overflow + self.logs_dropped_parse + self.logs_dropped_device
+        return {
+            'elapsed_seconds': int(elapsed),
+            'logs_received': self.logs_received,
+            'logs_processed': self.logs_processed,
+            'total_dropped': total_dropped,
+            'dropped_overflow': self.logs_dropped_overflow,
+            'dropped_parse': self.logs_dropped_parse,
+            'dropped_device': self.logs_dropped_device,
+            'drop_pct': f"{total_dropped / self.logs_received * 100:.2f}%" if self.logs_received else "0%",
+            'eps': int(rate),
+            'batches_flushed': self.batches_flushed,
+            'flush_errors': self.flush_errors,
+            'insert_retries': self.insert_retries,
+            'active_devices': len(self._by_device),
+            'top_devices': dict(sorted(self._by_device.items(), key=lambda x: x[1], reverse=True)[:5]),
+        }
 
 
-class LogBuffer:
-    """Thread-safe bounded log buffer with batch extraction."""
+# ---------------------------------------------------------------------------
+# Pre-compiled regex
+# ---------------------------------------------------------------------------
 
-    def __init__(self, max_size: int = 100000):
-        self.max_size = max_size
-        self._buffer: List[tuple] = []
-        self._lock = Lock()
-        self._device_updates: Dict[str, dict] = {}
-
-    def add(self, log_entry: tuple, device_ip: str, timestamp) -> bool:
-        """Add log to buffer. Returns False if buffer full."""
-        with self._lock:
-            if len(self._buffer) >= self.max_size:
-                return False
-            self._buffer.append(log_entry)
-
-            if device_ip not in self._device_updates:
-                self._device_updates[device_ip] = {'count': 0, 'last_time': timestamp}
-            self._device_updates[device_ip]['count'] += 1
-            self._device_updates[device_ip]['last_time'] = timestamp
-            return True
-
-    def extract_batch(self, batch_size: int) -> Tuple[List[tuple], Dict[str, dict]]:
-        """Extract a batch of logs and device updates atomically."""
-        with self._lock:
-            if not self._buffer:
-                return [], {}
-
-            batch = self._buffer[:batch_size]
-            self._buffer = self._buffer[batch_size:]
-            updates = self._device_updates.copy()
-            self._device_updates.clear()
-
-            return batch, updates
-
-    def size(self) -> int:
-        with self._lock:
-            return len(self._buffer)
-
-    def flush_all(self) -> Tuple[List[tuple], Dict[str, dict]]:
-        """Flush entire buffer."""
-        with self._lock:
-            batch = self._buffer[:]
-            self._buffer = []
-            updates = self._device_updates.copy()
-            self._device_updates.clear()
-            return batch, updates
-
-
-# Pre-compiled regex for performance
 PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 
 
 def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     """
-    Parse raw syslog message.
-    Returns: (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto,
-              action, policyname, log_type, application, src_zone, dst_zone,
-              session_end_reason, threat_id, parsed_data) or None on error
+    Parse raw syslog bytes into a structured tuple.
+    Returns None on parse failure.
     """
     try:
         decoded = data.decode('utf-8', errors='replace')
 
-        facility = 1  # user
-        severity = 6  # info
+        facility = 1
+        severity = 6
         message = decoded
 
         match = PRI_REGEX.match(decoded)
@@ -255,17 +187,11 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         parser = get_parser(device_parser)
         parsed_data = parser.parse(message)
 
-        # Extract srcip/dstip for dedicated columns
         srcip = parsed_data.get('srcip') or parsed_data.get('src_ip', '')
         dstip = parsed_data.get('dstip') or parsed_data.get('dst_ip', '')
-
-        # Extract action field
         action = parsed_data.get('action', '')
-
-        # Extract policy name (Fortinet: policyname, Palo Alto: rule)
         policyname = parsed_data.get('policyname') or parsed_data.get('rule', '')
 
-        # Parse ports as integers (default to 0)
         srcport_str = parsed_data.get('srcport') or parsed_data.get('src_port', '0')
         dstport_str = parsed_data.get('dstport') or parsed_data.get('dst_port', '0')
         try:
@@ -277,249 +203,360 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         except (ValueError, TypeError):
             dstport = 0
 
-        # Parse protocol as integer (default to 0)
         proto_str = parsed_data.get('proto') or parsed_data.get('protocol', '0')
         try:
             proto = int(proto_str) if proto_str else 0
         except (ValueError, TypeError):
             proto = 0
 
-        # Extract log type (Fortinet: type/subtype, Palo Alto: log_type)
         log_type = parsed_data.get('log_type', '')
         if not log_type:
-            # Fortinet format: type/subtype
             fgt_type = parsed_data.get('type', '')
             fgt_subtype = parsed_data.get('subtype', '')
             if fgt_type:
                 log_type = f"{fgt_type}/{fgt_subtype}" if fgt_subtype else fgt_type
 
-        # Extract application (Fortinet: app, Palo Alto: application)
         application = parsed_data.get('app') or parsed_data.get('application', '')
-
-        # Extract zones (Fortinet: srcintf/dstintf, Palo Alto: src_zone/dst_zone)
         src_zone = parsed_data.get('src_zone') or parsed_data.get('srczone') or parsed_data.get('srcintf', '')
         dst_zone = parsed_data.get('dst_zone') or parsed_data.get('dstzone') or parsed_data.get('dstintf', '')
-
-        # Extract session end reason (Palo Alto specific)
         session_end_reason = parsed_data.get('session_end_reason', '')
-
-        # Extract threat ID (Palo Alto specific for THREAT logs)
         threat_id = parsed_data.get('threat_id', '')
+        vdom = parsed_data.get('vd', '') if parsed_data else ''
 
         return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto,
                 action, policyname, log_type, application, src_zone, dst_zone,
-                session_end_reason, threat_id, parsed_data)
+                session_end_reason, threat_id, vdom, parsed_data)
     except Exception as e:
         logger.debug(f"Parse error: {e}")
         return None
 
 
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
+
 async def get_or_create_device(ip: str) -> Optional[Tuple[str, str]]:
     """
-    Get device status and parser from database.
-    Creates new device as PENDING if not exists.
-    Returns: (status, parser) or None on error
+    Get device (status, parser) from PostgreSQL.
+    Auto-creates new devices as APPROVED so logs are never dropped.
     """
     try:
-        async with async_session_maker() as session:
+        async with _syslog_session_maker() as session:
             result = await session.execute(
-                select(Device).where(Device.ip_address == cast(ip, INET))
+                text("SELECT status, parser FROM devices_device WHERE ip_address = CAST(:ip AS inet)"),
+                {"ip": ip}
             )
-            device = result.scalar_one_or_none()
+            row = result.first()
 
-            if device is None:
-                device = Device(
-                    ip_address=ip,
-                    status=DeviceStatus.PENDING
-                )
-                session.add(device)
+            if row is None:
+                # Auto-approve: new devices default to APPROVED with GENERIC parser
+                # Admin can change parser type later in the UI
+                await session.execute(text(
+                    "INSERT INTO devices_device (ip_address, status, parser, retention_days, log_count, created_at, updated_at) "
+                    "VALUES (:ip, :status, :parser, :retention, 0, now(), now()) "
+                    "ON CONFLICT (ip_address) DO NOTHING"
+                ), {
+                    'ip': ip,
+                    'status': DeviceStatus.APPROVED,
+                    'parser': 'GENERIC',
+                    'retention': 90,
+                })
                 await session.commit()
-                logger.info(f"New device detected: {ip}")
-                return (device.status, device.parser)
+                logger.info(f"New device auto-approved: {ip}")
+                return (DeviceStatus.APPROVED, 'GENERIC')
 
-            return (device.status, device.parser)
+            return (row.status, row.parser)
     except Exception as e:
-        logger.error(f"Database error for {ip}: {e}")
-        return None
+        logger.error(f"DB error for device {ip}: {e}")
+        # On DB error, STILL accept the log with generic parser
+        # rather than dropping it
+        return (DeviceStatus.APPROVED, 'GENERIC')
 
 
-async def update_device_stats(updates: Dict[str, dict]):
-    """Batch update device statistics."""
+async def batch_update_device_stats(updates: Dict[str, dict]):
+    """Batch-update device last_log_received and log_count using raw SQL to handle INET type."""
     if not updates:
         return
-
     try:
-        async with async_session_maker() as session:
+        async with _syslog_session_maker() as session:
             for ip, data in updates.items():
                 await session.execute(
-                    update(Device)
-                    .where(Device.ip_address == cast(ip, INET))
-                    .values(
-                        last_log_received=data['last_time'],
-                        log_count=Device.log_count + data['count']
-                    )
+                    text("""
+                        UPDATE devices_device
+                        SET updated_at = now(),
+                            last_log_received = :last_time,
+                            log_count = log_count + :count
+                        WHERE ip_address = CAST(:ip AS inet)
+                    """),
+                    {"last_time": data['last_time'], "count": data['count'], "ip": ip}
                 )
             await session.commit()
     except Exception as e:
-        logger.error(f"Failed to update device stats: {e}")
+        logger.error(f"Device stats update failed: {e}")
 
 
-def flush_to_clickhouse(logs: List[tuple]) -> bool:
-    """Insert logs to ClickHouse. Returns success status."""
+# ---------------------------------------------------------------------------
+# ClickHouse insert with retry
+# ---------------------------------------------------------------------------
+
+def flush_to_clickhouse(
+    client,
+    logs: List[tuple],
+    retries: int = 3,
+    retry_delay: float = 1.0,
+) -> Tuple[bool, int]:
+    """
+    Insert logs to ClickHouse with retry.
+    Returns (success, retry_count).
+    """
     if not logs:
-        return True
-    try:
-        ClickHouseClient.insert_logs(logs)
-        return True
-    except Exception as e:
-        logger.error(f"ClickHouse insert failed: {e}")
-        return False
+        return True, 0
 
+    last_err = None
+    for attempt in range(retries):
+        try:
+            client.insert('syslogs', logs, column_names=[
+                'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+                'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
+                'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
+                'threat_id', 'vdom', 'parsed_data',
+            ])
+            return True, attempt
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                logger.warning(f"ClickHouse insert attempt {attempt+1} failed: {e}, retrying...")
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                logger.error(f"ClickHouse insert FAILED after {retries} attempts: {e}")
+
+    return False, retries
+
+
+# ---------------------------------------------------------------------------
+# UDP Protocol — ultra-lightweight receive path
+# ---------------------------------------------------------------------------
 
 class SyslogProtocol(asyncio.DatagramProtocol):
-    """High-performance async UDP protocol handler."""
+    """
+    Minimal UDP handler.  datagram_received() ONLY appends raw bytes + addr
+    to a deque.  All parsing and DB work happens in the batch worker.
+    """
 
-    def __init__(self, collector: 'SyslogCollector'):
-        self.collector = collector
+    def __init__(self, raw_queue: deque, max_size: int, metrics: MetricsCollector):
+        self._queue = raw_queue
+        self._max_size = max_size
+        self._metrics = metrics
         self.transport = None
 
     def connection_made(self, transport):
         self.transport = transport
+        # Enlarge OS-level UDP receive buffer
+        sock = transport.get_extra_info('socket')
+        if sock:
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 26_214_400)
+                actual = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+                logger.info(f"UDP socket receive buffer: {actual:,} bytes")
+            except OSError as e:
+                logger.warning(f"Could not set SO_RCVBUF: {e}")
         logger.info("UDP transport ready")
 
     def datagram_received(self, data: bytes, addr: tuple):
-        """Handle incoming UDP datagram."""
-        client_ip = addr[0]
-        asyncio.create_task(self.collector.process_log(client_ip, data))
+        """
+        HOT PATH — must be as fast as possible.
+        Just append (ip, raw_bytes) to the lock-free deque.
+        """
+        self._metrics.logs_received += 1
+        if len(self._queue) < self._max_size:
+            self._queue.append((addr[0], data))
+        else:
+            self._metrics.logs_dropped_overflow += 1
 
     def error_received(self, exc):
         logger.error(f"UDP error: {exc}")
 
 
+# ---------------------------------------------------------------------------
+# Main Collector
+# ---------------------------------------------------------------------------
+
 class SyslogCollector:
     """
-    High-performance async syslog collector.
+    Production-grade async syslog collector.
 
-    Features:
-    - Async UDP receiver
-    - Device caching with TTL
-    - Batched ClickHouse inserts
-    - Background device stat updates
-    - Graceful shutdown
+    Data flow:
+      UDP socket → deque (lock-free) → batch worker → parse → ClickHouse
     """
 
     def __init__(self, config: CollectorConfig = None):
         self.config = config or CollectorConfig()
+        # Override from settings
         self.config.port = settings.syslog_port
         self.config.batch_size = settings.syslog_batch_size
         self.config.flush_interval = settings.syslog_flush_interval
-        self.config.device_cache_ttl = settings.syslog_cache_ttl
+        self.config.device_cache_ttl = max(settings.syslog_cache_ttl, 300)  # min 5 min
         self.config.worker_threads = settings.syslog_workers
-        self.config.max_buffer_size = settings.syslog_max_buffer
+        self.config.max_queue_size = settings.syslog_max_buffer
         self.config.metrics_interval = settings.syslog_metrics_interval
 
+        # Core data structures
+        self._raw_queue: deque = deque()  # (ip, raw_bytes) — lock-free in CPython
         self.device_cache = DeviceCache(ttl=self.config.device_cache_ttl)
-        self.log_buffer = LogBuffer(max_size=self.config.max_buffer_size)
         self.metrics = MetricsCollector()
-        self.executor = ThreadPoolExecutor(max_workers=self.config.worker_threads)
+        self.executor = ThreadPoolExecutor(
+            max_workers=self.config.worker_threads,
+            thread_name_prefix='ch-insert',
+        )
+
+        # Reusable ClickHouse client (created once, reused for all inserts)
+        self._ch_client = None
 
         self._running = False
-        self._loop = None
         self._transport = None
         self._flush_task = None
         self._metrics_task = None
+        self._ioc_refresh_task = None
 
-    async def process_log(self, client_ip: str, data: bytes):
-        """Process incoming log (called from protocol handler)."""
-        self.metrics.log_received(client_ip)
+        # Device stat accumulator (flushed periodically)
+        self._device_stats: Dict[str, dict] = {}
 
-        cached = self.device_cache.get(client_ip)
+    def _get_ch_client(self):
+        """Get or create a reusable ClickHouse client."""
+        if self._ch_client is None:
+            self._ch_client = ClickHouseClient.get_client()
+        return self._ch_client
 
-        if cached is None:
-            result = await get_or_create_device(client_ip)
-            if result is None:
-                self.metrics.log_dropped()
-                return
-            status, parser = result
-            self.device_cache.set(client_ip, status, parser)
-        else:
-            status, parser = cached.status, cached.parser
+    async def _process_batch(self):
+        """
+        Drain the raw queue, parse messages, and insert to ClickHouse.
+        This is the main batch processing loop.
+        """
+        # Drain up to batch_size items from the deque
+        batch_raw = []
+        for _ in range(self.config.batch_size):
+            try:
+                item = self._raw_queue.popleft()
+                batch_raw.append(item)
+            except IndexError:
+                break
 
-        if status != DeviceStatus.APPROVED:
-            self.metrics.log_dropped()
+        if not batch_raw:
             return
 
-        parsed = parse_syslog_message(data, parser)
-        if parsed is None:
-            self.metrics.log_dropped()
-            return
-
-        (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto,
-         action, policyname, log_type, application, src_zone, dst_zone,
-         session_end_reason, threat_id, parsed_data) = parsed
+        # Group by device IP for efficient cache lookup
         now = datetime.now(timezone.utc)
+        logs = []
 
-        # Real-time IOC matching (< 1ms overhead per log)
-        try:
-            from .ioc_matcher import check_and_record_matches
-            check_and_record_matches(
-                srcip=srcip or "",
-                dstip=dstip or "",
-                log_timestamp=now,
-                device_ip=client_ip,
-                srcport=srcport or 0,
-                dstport=dstport or 0,
-                action=action or "",
-            )
-        except Exception:
-            pass  # Never block the log pipeline
+        for client_ip, data in batch_raw:
+            # Device lookup (cached for 5 min)
+            cached = self.device_cache.get(client_ip)
+            if cached is None:
+                result = await get_or_create_device(client_ip)
+                if result is None:
+                    self.metrics.logs_dropped_device += 1
+                    continue
+                status, parser = result
+                self.device_cache.set(client_ip, status, parser)
+            else:
+                status, parser = cached.status, cached.parser
 
-        vdom = parsed_data.get('vd', '') if parsed_data else ''
+            if status != DeviceStatus.APPROVED:
+                self.metrics.logs_dropped_device += 1
+                continue
 
-        log_entry = (now, client_ip, facility, severity, message, raw,
-                     srcip, dstip, srcport, dstport, proto, action, policyname,
-                     log_type, application, src_zone, dst_zone, session_end_reason,
-                     threat_id, vdom, parsed_data)
+            # Parse
+            parsed = parse_syslog_message(data, parser)
+            if parsed is None:
+                self.metrics.logs_dropped_parse += 1
+                continue
 
-        if not self.log_buffer.add(log_entry, client_ip, now):
-            logger.warning("Buffer full! Dropping log")
-            self.metrics.log_dropped()
-            return
+            (facility, severity, message, raw, srcip, dstip, srcport, dstport, proto,
+             action, policyname, log_type, application, src_zone, dst_zone,
+             session_end_reason, threat_id, vdom, parsed_data) = parsed
 
-        self.metrics.log_processed()
+            logs.append((now, client_ip, facility, severity, message, raw,
+                         srcip, dstip, srcport, dstport, proto, action, policyname,
+                         log_type, application, src_zone, dst_zone, session_end_reason,
+                         threat_id, vdom, parsed_data))
 
-    async def _flush_loop(self):
-        """Background task to flush logs periodically."""
-        while self._running:
-            await asyncio.sleep(self.config.flush_interval)
-            await self._flush_batch()
+            # Accumulate device stats
+            if client_ip not in self._device_stats:
+                self._device_stats[client_ip] = {'count': 0, 'last_time': now}
+            self._device_stats[client_ip]['count'] += 1
+            self._device_stats[client_ip]['last_time'] = now
+            self.metrics._by_device[client_ip] += 1
 
-    async def _flush_batch(self):
-        """Flush a batch of logs to ClickHouse."""
-        buffer_size = self.log_buffer.size()
-        if buffer_size == 0:
-            return
-
-        logs, device_updates = self.log_buffer.extract_batch(self.config.batch_size)
         if not logs:
             return
 
+        # Run IOC matching on the batch (not per-packet)
+        try:
+            from .ioc_matcher import check_and_record_matches
+            for log in logs:
+                # log tuple: (now, ip, fac, sev, msg, raw, srcip, dstip, srcport, dstport, ...)
+                check_and_record_matches(
+                    srcip=log[6] or "",
+                    dstip=log[7] or "",
+                    log_timestamp=log[0],
+                    device_ip=log[1],
+                    srcport=log[8] or 0,
+                    dstport=log[9] or 0,
+                    action=log[11] or "",
+                )
+        except Exception:
+            pass  # Never block the pipeline
+
+        # Insert to ClickHouse in a thread (blocking I/O)
         loop = asyncio.get_event_loop()
-        success = await loop.run_in_executor(
+        ch_client = self._get_ch_client()
+        success, retries = await loop.run_in_executor(
             self.executor,
             flush_to_clickhouse,
-            logs
+            ch_client,
+            logs,
+            self.config.insert_retries,
+            self.config.insert_retry_delay,
         )
 
         if success:
-            self.metrics.batch_flushed(len(logs))
-            logger.info(f"Flushed {len(logs)} logs to ClickHouse (buffer: {self.log_buffer.size()})")
-            asyncio.create_task(update_device_stats(device_updates))
+            self.metrics.logs_processed += len(logs)
+            self.metrics.batches_flushed += 1
+            self.metrics.insert_retries += retries
+            if len(logs) >= 100:
+                logger.info(f"Flushed {len(logs):,} logs (queue: {len(self._raw_queue):,})")
         else:
-            self.metrics.flush_error()
+            self.metrics.flush_errors += 1
+            # On total failure, try to recreate the client for next batch
+            self._ch_client = None
+            logger.error(f"LOST {len(logs):,} logs after {self.config.insert_retries} retries")
+
+    async def _flush_loop(self):
+        """Background loop: drain queue and flush to ClickHouse."""
+        while self._running:
+            try:
+                queue_size = len(self._raw_queue)
+                if queue_size > 0:
+                    # Process multiple batches if queue is large
+                    batches = max(1, queue_size // self.config.batch_size)
+                    for _ in range(min(batches, 10)):  # cap at 10 batches per cycle
+                        await self._process_batch()
+                        if len(self._raw_queue) == 0:
+                            break
+
+                # Flush device stats periodically
+                if self._device_stats:
+                    stats_copy = self._device_stats.copy()
+                    self._device_stats.clear()
+                    asyncio.create_task(batch_update_device_stats(stats_copy))
+
+            except Exception as e:
+                logger.error(f"Flush loop error: {e}", exc_info=True)
+
+            await asyncio.sleep(self.config.flush_interval)
 
     async def _metrics_loop(self):
-        """Background task to log metrics periodically."""
+        """Log performance metrics periodically."""
         while self._running:
             await asyncio.sleep(self.config.metrics_interval)
             report = self.metrics.get_report()
@@ -527,89 +564,103 @@ class SyslogCollector:
 
             logger.info(
                 f"METRICS | "
-                f"rate={report['logs_per_second']}/s | "
-                f"received={report['logs_received']} | "
-                f"processed={report['logs_processed']} | "
-                f"dropped={report['logs_dropped']} | "
-                f"buffer={self.log_buffer.size()} | "
+                f"eps={report['eps']} | "
+                f"received={report['logs_received']:,} | "
+                f"processed={report['logs_processed']:,} | "
+                f"dropped={report['total_dropped']:,} ({report['drop_pct']}) | "
+                f"queue={len(self._raw_queue):,} | "
                 f"devices={report['active_devices']} | "
-                f"cache_hit={cache_stats['hit_rate']}"
+                f"cache={cache_stats['hit_rate']} | "
+                f"batches={report['batches_flushed']} | "
+                f"retries={report['insert_retries']} | "
+                f"errors={report['flush_errors']}"
             )
 
     async def _ioc_refresh_loop(self):
-        """Background task to refresh IOC matcher cache periodically."""
+        """Refresh IOC matcher cache periodically."""
         while self._running:
             try:
                 from .ioc_matcher import refresh_ioc_cache
                 await refresh_ioc_cache()
             except Exception as e:
                 logger.error(f"IOC cache refresh error: {e}")
-            await asyncio.sleep(300)  # Every 5 minutes
+            await asyncio.sleep(300)
 
     async def start(self):
         """Start the syslog collector."""
         self._running = True
-        self._loop = asyncio.get_event_loop()
 
+        # Ensure ClickHouse table exists
         try:
             ClickHouseClient.ensure_table()
         except Exception as e:
             logger.error(f"ClickHouse setup failed: {e}")
             raise
 
-        # Load IOC matcher cache for real-time matching
+        # Pre-warm ClickHouse client
+        self._ch_client = ClickHouseClient.get_client()
+        logger.info("ClickHouse client connected (reusable)")
+
+        # Load IOC cache
         try:
             from .ioc_matcher import refresh_ioc_cache
             await refresh_ioc_cache()
-            logger.info("IOC matcher cache loaded for syslog collector")
+            logger.info("IOC matcher cache loaded")
         except Exception as e:
             logger.warning(f"IOC cache initial load warning: {e}")
 
-        transport, protocol = await self._loop.create_datagram_endpoint(
-            lambda: SyslogProtocol(self),
-            local_addr=(self.config.host, self.config.port)
+        # Pre-load all devices into cache
+        try:
+            async with _syslog_session_maker() as session:
+                result = await session.execute(
+                    text("SELECT ip_address::text, status, parser FROM devices_device")
+                )
+                rows = result.all()
+                for row in rows:
+                    self.device_cache.set(row.ip_address, row.status, row.parser)
+                logger.info(f"Pre-loaded {len(rows)} devices into cache")
+        except Exception as e:
+            logger.warning(f"Device pre-load warning: {e}")
+
+        # Create UDP endpoint
+        loop = asyncio.get_event_loop()
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: SyslogProtocol(self._raw_queue, self.config.max_queue_size, self.metrics),
+            local_addr=(self.config.host, self.config.port),
         )
         self._transport = transport
 
+        # Start background workers
         self._flush_task = asyncio.create_task(self._flush_loop())
         self._metrics_task = asyncio.create_task(self._metrics_loop())
         self._ioc_refresh_task = asyncio.create_task(self._ioc_refresh_loop())
 
         logger.info(f"Syslog collector started on {self.config.host}:{self.config.port}")
-        logger.info(f"Config: batch_size={self.config.batch_size}, flush_interval={self.config.flush_interval}s, cache_ttl={self.config.device_cache_ttl}s")
+        logger.info(
+            f"Config: batch_size={self.config.batch_size}, "
+            f"flush_interval={self.config.flush_interval}s, "
+            f"cache_ttl={self.config.device_cache_ttl}s, "
+            f"max_queue={self.config.max_queue_size:,}, "
+            f"workers={self.config.worker_threads}"
+        )
 
     async def stop(self):
-        """Stop the collector gracefully."""
+        """Graceful shutdown: flush all remaining logs."""
         logger.info("Stopping syslog collector...")
         self._running = False
 
-        if self._flush_task:
-            self._flush_task.cancel()
-            try:
-                await self._flush_task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._flush_task, self._metrics_task, self._ioc_refresh_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
-        if self._metrics_task:
-            self._metrics_task.cancel()
-            try:
-                await self._metrics_task
-            except asyncio.CancelledError:
-                pass
-
-        if hasattr(self, '_ioc_refresh_task') and self._ioc_refresh_task:
-            self._ioc_refresh_task.cancel()
-            try:
-                await self._ioc_refresh_task
-            except asyncio.CancelledError:
-                pass
-
-        logger.info("Flushing remaining logs...")
-        remaining_logs, device_updates = self.log_buffer.flush_all()
-        if remaining_logs:
-            flush_to_clickhouse(remaining_logs)
-            await update_device_stats(device_updates)
-            logger.info(f"Final flush: {len(remaining_logs)} logs")
+        # Final drain
+        logger.info(f"Final drain: {len(self._raw_queue):,} packets in queue")
+        while len(self._raw_queue) > 0:
+            await self._process_batch()
 
         if self._transport:
             self._transport.close()
@@ -617,18 +668,25 @@ class SyslogCollector:
         self.executor.shutdown(wait=True)
 
         report = self.metrics.get_report()
-        logger.info(f"FINAL STATS: received={report['logs_received']}, processed={report['logs_processed']}, dropped={report['logs_dropped']}")
+        logger.info(
+            f"FINAL | received={report['logs_received']:,} | "
+            f"processed={report['logs_processed']:,} | "
+            f"dropped={report['total_dropped']:,} ({report['drop_pct']})"
+        )
 
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 async def run_syslog_collector(
     batch_size: int = None,
     flush_interval: float = None,
     cache_ttl: int = None,
-    workers: int = None
+    workers: int = None,
 ):
-    """Run the syslog collector as a standalone service."""
+    """Run the syslog collector as a standalone async service."""
     config = CollectorConfig()
-
     if batch_size:
         config.batch_size = batch_size
     if flush_interval:
@@ -657,12 +715,3 @@ async def run_syslog_collector(
         pass
     finally:
         await collector.stop()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    asyncio.run(run_syslog_collector())

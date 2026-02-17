@@ -1,0 +1,45 @@
+# Version control
+.git
+.gitignore
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Logs (runtime generated)
+logs/
+*.log
+syslog.log
+syslog_retry.log
+app.log
+
+# Screenshots and images
+*.png
+*.jpg
+*.jpeg
+
+# Documentation
+docs/
+*.md
+
+# Deploy scripts (bare metal)
+deploy/
+
+# Environment (secrets - injected at runtime)
+.env
+docker-compose*.yml
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.html
+!fastapi_app/templates/**/*.html
+cleanup_logs.py
+verify_*.py
+srv_run.txt

@@ -3,185 +3,764 @@
 {% block title %}Threat Intelligence - IOCs{% endblock %}
 
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .page-header h2 { margin: 0; }
-    .tab-nav { display: flex; gap: 0; margin-bottom: 1.5rem; }
-    .tab-nav a {
-        padding: 0.5rem 1.25rem; border: 1px solid var(--border); color: var(--text-muted);
-        text-decoration: none; font-size: 0.85rem; transition: all 0.2s;
+    /* ========== TACTICAL OPS CONSOLE - IOC REGISTRY ========== */
+    .ti-page { font-family: 'Outfit', sans-serif; }
+
+    /* --- HEADER --- */
+    .ti-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 2rem; position: relative;
     }
-    .tab-nav a:first-child { border-radius: 0.5rem 0 0 0.5rem; }
-    .tab-nav a:last-child { border-radius: 0 0.5rem 0.5rem 0; }
-    .tab-nav a.active { background: var(--primary); color: white; border-color: var(--primary); }
-    .tab-nav a:hover:not(.active) { color: white; background: rgba(255,255,255,0.05); }
-
-    .filter-bar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-    .filter-bar select, .filter-bar input {
-        padding: 0.4rem 0.6rem; background: var(--input-bg); border: 1px solid var(--border);
-        border-radius: 0.375rem; color: var(--text-color); font-size: 0.8rem;
+    .ti-header::after {
+        content: ''; position: absolute; bottom: -0.75rem; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, var(--primary), rgba(139,92,246,0.5), transparent);
     }
-    .filter-bar input { width: 220px; }
-
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 0.75rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
-    tr:hover td { background: rgba(59,130,246,0.03); }
-
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; font-weight: 600; }
-    .badge-critical { background: rgba(239,68,68,0.1); color: #ef4444; }
-    .badge-high { background: rgba(249,115,22,0.1); color: #f97316; }
-    .badge-medium { background: rgba(245,158,11,0.1); color: #f59e0b; }
-    .badge-low { background: rgba(34,197,94,0.1); color: #22c55e; }
-    .badge-info { background: rgba(59,130,246,0.1); color: #3b82f6; }
-
-    .btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.72rem; }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
-    .btn-danger { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-color); }
-
-    .pagination { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: center; align-items: center; }
-    .pagination a, .pagination span {
-        padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem;
-        color: var(--text-muted); text-decoration: none; font-size: 0.8rem;
+    .ti-title {
+        font-size: 1.6rem; font-weight: 800; letter-spacing: -0.03em; color: white; margin: 0;
+        background: linear-gradient(135deg, #fff 0%, #93c5fd 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
-    .pagination a:hover { border-color: var(--primary); color: var(--primary); }
-    .pagination .current { background: var(--primary); color: white; border-color: var(--primary); }
+    .ti-title-sub {
+        font-size: 0.7rem; font-weight: 400; letter-spacing: 0.15em; text-transform: uppercase;
+        color: var(--text-muted); margin-top: 0.15rem; display: block;
+        -webkit-text-fill-color: var(--text-muted);
+    }
+    .ti-header-actions { display: flex; gap: 0.5rem; align-items: center; }
+    .ti-add-btn {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        padding: 0.6rem 1.25rem; border-radius: 0.5rem; font-size: 0.8rem;
+        font-weight: 600; cursor: pointer; border: none; color: white;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        box-shadow: 0 0 20px rgba(59,130,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+        transition: all 0.25s; letter-spacing: 0.01em; font-family: 'Outfit', sans-serif;
+    }
+    .ti-add-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 30px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .ti-add-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .ti-outline-btn {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        padding: 0.6rem 1.25rem; border-radius: 0.5rem; font-size: 0.8rem;
+        font-weight: 600; cursor: pointer; color: var(--text-muted);
+        background: transparent; border: 1px solid var(--border);
+        transition: all 0.25s; letter-spacing: 0.01em; font-family: 'Outfit', sans-serif;
+    }
+    .ti-outline-btn:hover { border-color: var(--primary); color: white; }
+    .ti-outline-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-    .ioc-value { font-family: monospace; font-size: 0.82rem; color: white; }
+    /* --- TAB NAV --- */
+    .ti-tabs {
+        display: inline-flex; gap: 0.25rem; padding: 0.25rem;
+        background: rgba(15,23,42,0.6); border: 1px solid var(--border); border-radius: 0.75rem;
+        margin-bottom: 1.75rem; backdrop-filter: blur(8px);
+    }
+    .ti-tab {
+        padding: 0.45rem 1.2rem; border-radius: 0.5rem; font-size: 0.78rem; font-weight: 500;
+        color: var(--text-muted); text-decoration: none; transition: all 0.25s;
+        position: relative; letter-spacing: 0.01em;
+    }
+    .ti-tab:hover:not(.active) { color: var(--text-color); background: rgba(255,255,255,0.04); }
+    .ti-tab.active {
+        color: white; background: linear-gradient(135deg, rgba(59,130,246,0.25), rgba(99,102,241,0.2));
+        box-shadow: 0 0 16px rgba(59,130,246,0.2), inset 0 0 0 1px rgba(59,130,246,0.3);
+    }
 
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    /* --- HERO METRICS --- */
+    .ti-metrics {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;
+    }
+    .ti-metric {
+        position: relative; border-radius: 0.875rem; padding: 1.25rem 1.25rem 1rem;
+        background: linear-gradient(145deg, var(--card-bg) 0%, rgba(15,23,42,0.8) 100%);
+        border: 1px solid var(--border); overflow: hidden;
+        opacity: 0; animation: metricSlideIn 0.5s forwards;
+    }
+    .ti-metric:nth-child(1) { animation-delay: 0.05s; }
+    .ti-metric:nth-child(2) { animation-delay: 0.12s; }
+    .ti-metric:nth-child(3) { animation-delay: 0.19s; }
+    .ti-metric:nth-child(4) { animation-delay: 0.26s; }
+
+    @keyframes metricSlideIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .ti-metric::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .ti-metric:nth-child(1)::before { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+    .ti-metric:nth-child(2)::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .ti-metric:nth-child(3)::before { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+    .ti-metric:nth-child(4)::before { background: linear-gradient(90deg, #22c55e, #06b6d4); }
+
+    .ti-metric-glow {
+        position: absolute; top: -30px; right: -30px; width: 80px; height: 80px;
+        border-radius: 50%; filter: blur(30px); opacity: 0.12; pointer-events: none;
+    }
+    .ti-metric:nth-child(1) .ti-metric-glow { background: #3b82f6; }
+    .ti-metric:nth-child(2) .ti-metric-glow { background: #8b5cf6; }
+    .ti-metric:nth-child(3) .ti-metric-glow { background: #f59e0b; }
+    .ti-metric:nth-child(4) .ti-metric-glow { background: #22c55e; }
+
+    .ti-metric-label {
+        font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+        color: var(--text-muted); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;
+    }
+    .ti-metric-label svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; opacity: 0.7; }
+
+    .ti-metric-value {
+        font-family: 'JetBrains Mono', monospace; font-size: 1.85rem; font-weight: 700;
+        color: white; line-height: 1; margin-bottom: 0.35rem; letter-spacing: -0.03em;
+    }
+    .ti-metric-sub {
+        font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;
+    }
+    .ti-metric-sub .dot {
+        width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* --- FILTER BAR --- */
+    .ti-filter-section {
+        background: linear-gradient(145deg, var(--card-bg) 0%, rgba(15,23,42,0.8) 100%);
+        border: 1px solid var(--border); border-radius: 0.875rem; padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem; opacity: 0; animation: metricSlideIn 0.5s forwards; animation-delay: 0.3s;
+    }
+    .ti-filter-row {
+        display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
+    }
+    .ti-search-wrap {
+        position: relative; flex: 1; min-width: 200px; max-width: 320px;
+    }
+    .ti-search-wrap svg {
+        position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%);
+        width: 14px; height: 14px; stroke: var(--text-muted); fill: none; stroke-width: 2;
+        pointer-events: none;
+    }
+    .ti-search-wrap input {
+        width: 100%; padding: 0.55rem 0.75rem 0.55rem 2.25rem;
+        background: var(--input-bg); border: 1px solid var(--border);
+        border-radius: 0.5rem; color: var(--text-color); font-size: 0.82rem;
+        font-family: 'JetBrains Mono', monospace; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .ti-search-wrap input::placeholder { color: #475569; font-family: 'Outfit', sans-serif; }
+    .ti-search-wrap input:focus {
+        outline: none; border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .ti-filter-select {
+        padding: 0.55rem 2rem 0.55rem 0.75rem; background: var(--input-bg); border: 1px solid var(--border);
+        border-radius: 0.5rem; color: var(--text-color); font-size: 0.82rem;
+        font-family: 'Outfit', sans-serif; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
+        appearance: none; -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 0.6rem center;
+    }
+    .ti-filter-select:focus {
+        outline: none; border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .ti-filter-submit {
+        padding: 0.55rem 1rem; border-radius: 0.5rem; font-size: 0.78rem; font-weight: 600;
+        cursor: pointer; border: none; color: white; font-family: 'Outfit', sans-serif;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        box-shadow: 0 0 12px rgba(59,130,246,0.15);
+        transition: all 0.2s;
+    }
+    .ti-filter-submit:hover {
+        box-shadow: 0 0 20px rgba(59,130,246,0.3); transform: translateY(-1px);
+    }
+
+    /* Active filter pills */
+    .ti-active-filters {
+        display: flex; gap: 0.4rem; align-items: center; margin-top: 0.75rem; flex-wrap: wrap;
+    }
+    .ti-active-filters-label {
+        font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--text-muted); margin-right: 0.25rem;
+    }
+    .ti-filter-pill {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.2rem 0.6rem; border-radius: 1rem; font-size: 0.7rem; font-weight: 500;
+        background: rgba(59,130,246,0.1); color: var(--primary);
+        border: 1px solid rgba(59,130,246,0.2);
+    }
+    .ti-filter-pill svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+    .ti-clear-btn {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.2rem 0.55rem; border-radius: 1rem; font-size: 0.68rem; font-weight: 600;
+        background: rgba(239,68,68,0.08); color: #ef4444;
+        border: 1px solid rgba(239,68,68,0.2);
+        text-decoration: none; transition: all 0.2s; font-family: 'Outfit', sans-serif;
+    }
+    .ti-clear-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); }
+
+    /* --- RESULTS INFO BAR --- */
+    .ti-results-info {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 0.75rem; padding: 0 0.25rem;
+    }
+    .ti-results-count {
+        font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;
+    }
+    .ti-results-count strong {
+        font-family: 'JetBrains Mono', monospace; font-weight: 600; color: white;
+    }
+
+    /* --- IOC TABLE --- */
+    .ti-table-wrap {
+        background: linear-gradient(145deg, var(--card-bg) 0%, rgba(15,23,42,0.6) 100%);
+        border: 1px solid var(--border); border-radius: 0.875rem; overflow: hidden;
+        opacity: 0; animation: metricSlideIn 0.5s forwards; animation-delay: 0.35s;
+    }
+    .ti-table {
+        width: 100%; border-collapse: collapse; table-layout: fixed;
+    }
+    .ti-table thead {
+        position: relative;
+    }
+    .ti-table thead::after {
+        content: ''; position: absolute; bottom: 0; left: 1rem; right: 1rem; height: 1px;
+        background: linear-gradient(90deg, var(--primary), rgba(139,92,246,0.5), transparent);
+    }
+    .ti-table th {
+        text-align: left; padding: 0.85rem 1rem; font-size: 0.65rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);
+        border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.15);
+    }
+    .ti-table td {
+        padding: 0.7rem 1rem; border-bottom: 1px solid rgba(51,65,85,0.5);
+        font-size: 0.82rem; color: var(--text-color); vertical-align: middle;
+    }
+    .ti-table tbody tr {
+        transition: all 0.2s; position: relative;
+    }
+    .ti-table tbody tr:hover {
+        background: rgba(59,130,246,0.03);
+        box-shadow: inset 3px 0 0 0 var(--primary);
+    }
+    .ti-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Column widths */
+    .ti-col-type { width: 8%; }
+    .ti-col-value { width: 24%; }
+    .ti-col-severity { width: 9%; }
+    .ti-col-confidence { width: 11%; }
+    .ti-col-threat { width: 11%; }
+    .ti-col-source { width: 12%; }
+    .ti-col-matches { width: 8%; }
+    .ti-col-added { width: 10%; }
+    .ti-col-actions { width: 7%; }
+
+    /* IOC value */
+    .ti-ioc-value {
+        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 500;
+        color: white; word-break: break-all; line-height: 1.4;
+    }
+    a.ti-ioc-link { color: white; text-decoration: none; transition: color 0.2s; }
+    a.ti-ioc-link:hover { color: var(--primary); text-decoration: underline; }
+    .ti-logs-btn {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        padding: 0.2rem 0.5rem; border-radius: 0.375rem; font-size: 0.65rem; font-weight: 500;
+        cursor: pointer; border: 1px solid rgba(59,130,246,0.3); background: rgba(59,130,246,0.06);
+        color: var(--primary); transition: all 0.2s; text-decoration: none;
+        font-family: 'Outfit', sans-serif; white-space: nowrap;
+    }
+    .ti-logs-btn:hover { background: rgba(59,130,246,0.12); border-color: var(--primary); }
+    .ti-logs-btn svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* Type badge */
+    .ti-type-badge {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        padding: 0.15rem 0.5rem; border-radius: 0.3rem; font-size: 0.65rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        background: rgba(59,130,246,0.1); color: var(--primary);
+        border: 1px solid rgba(59,130,246,0.15);
+    }
+
+    /* Severity badge */
+    .ti-sev-badge {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.15rem 0.55rem; border-radius: 1rem; font-size: 0.68rem; font-weight: 600;
+        text-transform: capitalize; letter-spacing: 0.02em;
+    }
+    .ti-sev-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+    .ti-sev-critical { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.15); }
+    .ti-sev-critical .ti-sev-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    .ti-sev-high { background: rgba(249,115,22,0.1); color: #f97316; border: 1px solid rgba(249,115,22,0.15); }
+    .ti-sev-high .ti-sev-dot { background: #f97316; box-shadow: 0 0 6px rgba(249,115,22,0.5); }
+    .ti-sev-medium { background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.15); }
+    .ti-sev-medium .ti-sev-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+    .ti-sev-low { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.15); }
+    .ti-sev-low .ti-sev-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+    .ti-sev-info { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.15); }
+    .ti-sev-info .ti-sev-dot { background: #3b82f6; box-shadow: 0 0 6px rgba(59,130,246,0.5); }
+
+    /* Confidence bar */
+    .ti-confidence {
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+    .ti-confidence-bar-wrap {
+        flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;
+        min-width: 40px; max-width: 60px;
+    }
+    .ti-confidence-bar {
+        height: 100%; border-radius: 2px; transition: width 0.8s ease;
+    }
+    .ti-confidence-val {
+        font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 600; color: white;
+        min-width: 30px;
+    }
+
+    /* Match count */
+    .ti-match-count {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+    }
+    .ti-match-count.has-matches { color: #ef4444; }
+    .ti-match-count.no-matches { color: var(--text-muted); }
+    .ti-match-indicator {
+        width: 6px; height: 6px; border-radius: 50%; background: #ef4444;
+        animation: matchPulse 2s infinite;
+    }
+    @keyframes matchPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+        50% { box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+    }
+
+    /* Relative time */
+    .ti-time {
+        font-size: 0.75rem; color: var(--text-muted);
+    }
+    .ti-time-relative {
+        font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 500;
+    }
+
+    /* Threat type */
+    .ti-threat-type {
+        font-size: 0.78rem; color: var(--text-muted); text-transform: capitalize;
+    }
+    .ti-source {
+        font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 120px; display: block;
+    }
+
+    /* Delete button */
+    .ti-feed-btn {
+        padding: 0.3rem 0.65rem; border-radius: 0.375rem; font-size: 0.7rem; font-weight: 500;
+        cursor: pointer; border: 1px solid var(--border); background: transparent;
+        color: var(--text-muted); transition: all 0.2s; white-space: nowrap;
+        font-family: 'Outfit', sans-serif;
+    }
+    .ti-feed-btn:hover { border-color: var(--primary); color: var(--primary); background: rgba(59,130,246,0.05); }
+    .ti-feed-btn.danger { border-color: rgba(239,68,68,0.2); color: #94a3b8; }
+    .ti-feed-btn.danger:hover { border-color: rgba(239,68,68,0.5); color: #ef4444; background: rgba(239,68,68,0.05); }
+
+    /* --- EMPTY STATE --- */
+    .ti-empty {
+        text-align: center; padding: 3rem; color: var(--text-muted);
+        background: var(--card-bg); border: 1px dashed var(--border); border-radius: 0.75rem;
+    }
+    .ti-empty svg { width: 48px; height: 48px; stroke: var(--border); fill: none; stroke-width: 1.5; margin-bottom: 1rem; }
+    .ti-empty p { margin: 0.25rem 0; font-size: 0.85rem; }
+
+    /* --- PAGINATION --- */
+    .ti-pagination {
+        display: flex; gap: 0.35rem; margin-top: 1.5rem; justify-content: center; align-items: center;
+        opacity: 0; animation: metricSlideIn 0.5s forwards; animation-delay: 0.45s;
+    }
+    .ti-page-info {
+        font-size: 0.75rem; color: var(--text-muted); margin: 0 0.75rem;
+        font-family: 'Outfit', sans-serif;
+    }
+    .ti-page-info strong {
+        font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-color);
+    }
+    .ti-page-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 34px; height: 34px; padding: 0 0.5rem;
+        border-radius: 1rem; font-size: 0.78rem; font-weight: 500;
+        color: var(--text-muted); text-decoration: none; transition: all 0.25s;
+        border: 1px solid var(--border); background: transparent;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .ti-page-btn:hover {
+        border-color: var(--primary); color: white;
+        background: rgba(59,130,246,0.08);
+    }
+    .ti-page-btn.active {
+        color: white; border-color: transparent;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        box-shadow: 0 0 16px rgba(59,130,246,0.3);
+    }
+    .ti-page-btn.nav-arrow {
+        font-family: 'Outfit', sans-serif; font-weight: 600; gap: 0.25rem;
+        padding: 0 0.75rem;
+    }
+    .ti-page-btn.nav-arrow svg {
+        width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .ti-page-ellipsis {
+        min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+        font-size: 0.78rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* --- MODAL --- */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+        z-index: 100; align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+    }
     .modal-overlay.active { display: flex; }
-    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; max-width: 550px; width: 90%; max-height: 80vh; overflow-y: auto; }
-    .modal h3 { margin-top: 0; margin-bottom: 1rem; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
-
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.375rem; }
-    .form-group input, .form-group select, .form-group textarea {
-        width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border);
-        border-radius: 0.375rem; color: var(--text-color); font-size: 0.85rem;
+    .modal {
+        background: linear-gradient(145deg, var(--card-bg) 0%, #141e33 100%);
+        border: 1px solid var(--border); border-radius: 1rem; padding: 2rem;
+        max-width: 550px; width: 92%; max-height: 80vh; overflow-y: auto;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.08);
+        font-family: 'Outfit', sans-serif;
     }
-    .form-group textarea { min-height: 120px; font-family: monospace; }
+    .modal h3 {
+        margin: 0 0 1.5rem; font-size: 1.15rem; font-weight: 700; color: white;
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+    .modal h3::before {
+        content: ''; width: 3px; height: 20px; border-radius: 2px;
+        background: linear-gradient(180deg, #3b82f6, #6366f1);
+    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
 
-    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.85rem; z-index: 200; display: none; }
-    .toast.show { display: block; }
-    .toast-success { background: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
-    .toast-error { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .form-group { margin-bottom: 1.15rem; }
+    .form-group label {
+        display: block; font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+        margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%; padding: 0.6rem 0.75rem; background: var(--input-bg); border: 1px solid var(--border);
+        border-radius: 0.5rem; color: var(--text-color); font-size: 0.85rem;
+        font-family: 'Outfit', sans-serif; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        outline: none; border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .form-group textarea {
+        min-height: 120px; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;
+        resize: vertical;
+    }
+
+    /* Buttons */
+    .btn {
+        font-family: 'Outfit', sans-serif; display: inline-flex; align-items: center; gap: 0.375rem;
+        padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; border: none; transition: all 0.2s; text-decoration: none;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6, #6366f1); color: white;
+        box-shadow: 0 0 16px rgba(59,130,246,0.2);
+    }
+    .btn-primary:hover { box-shadow: 0 0 24px rgba(59,130,246,0.35); transform: translateY(-1px); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { border-color: var(--primary); color: white; }
+
+    /* --- TOAST --- */
+    .toast {
+        position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem;
+        border-radius: 0.625rem; font-size: 0.82rem; z-index: 200;
+        display: none; font-family: 'Outfit', sans-serif; font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        animation: toastIn 0.3s ease;
+    }
+    .toast.show { display: flex; align-items: center; gap: 0.5rem; }
+    .toast-success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.25); backdrop-filter: blur(8px); }
+    .toast-error { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); backdrop-filter: blur(8px); }
+    @keyframes toastIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* --- RESPONSIVE --- */
+    @media (max-width: 1024px) {
+        .ti-metrics { grid-template-columns: repeat(2, 1fr); }
+        .ti-table-wrap { overflow-x: auto; }
+        .ti-col-threat, .ti-col-source { display: none; }
+    }
+    @media (max-width: 768px) {
+        .ti-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+        .ti-header-actions { width: 100%; }
+        .ti-filter-row { flex-direction: column; }
+        .ti-search-wrap { max-width: none; }
+    }
+    @media (max-width: 640px) {
+        .ti-metrics { grid-template-columns: 1fr; }
+        .ti-col-confidence, .ti-col-matches { display: none; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h2>Indicators of Compromise</h2>
-        <div style="display:flex;gap:0.5rem;">
-            <button class="btn btn-outline" onclick="showBulkModal()">Bulk Import</button>
-            <button class="btn btn-primary" onclick="showAddModal()">+ Add IOC</button>
+<div class="ti-page">
+    <!-- HEADER -->
+    <div class="ti-header">
+        <div>
+            <h2 class="ti-title">Threat Intelligence
+                <span class="ti-title-sub">Indicators of Compromise</span>
+            </h2>
+        </div>
+        <div class="ti-header-actions">
+            <button class="ti-outline-btn" onclick="showBulkModal()">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Bulk Import
+            </button>
+            <button class="ti-add-btn" onclick="showAddModal()">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add IOC
+            </button>
         </div>
     </div>
 
-    <div class="tab-nav">
-        <a href="{{ url_for('threat_intel_feeds') }}">Feeds</a>
-        <a href="{{ url_for('threat_intel_iocs') }}" class="active">IOCs</a>
-        <a href="{{ url_for('threat_intel_matches') }}">Matches</a>
+    <!-- TAB NAV -->
+    <div class="ti-tabs">
+        <a href="{{ url_for('threat_intel_feeds') }}" class="ti-tab">Feeds</a>
+        <a href="{{ url_for('threat_intel_iocs') }}" class="ti-tab active">IOCs</a>
+        <a href="{{ url_for('threat_intel_matches') }}" class="ti-tab">Matches</a>
     </div>
 
-    <!-- Filters -->
-    <form class="filter-bar" method="get" action="{{ url_for('threat_intel_iocs') }}">
-        <input type="text" name="search" placeholder="Search IOC value..." value="{{ filters.search }}">
-        <select name="ioc_type" onchange="this.form.submit()">
-            <option value="">All Types</option>
-            <option value="ip" {{ 'selected' if filters.ioc_type == 'ip' }}>IP</option>
-            <option value="domain" {{ 'selected' if filters.ioc_type == 'domain' }}>Domain</option>
-            <option value="url" {{ 'selected' if filters.ioc_type == 'url' }}>URL</option>
-            <option value="hash_md5" {{ 'selected' if filters.ioc_type == 'hash_md5' }}>Hash MD5</option>
-            <option value="hash_sha1" {{ 'selected' if filters.ioc_type == 'hash_sha1' }}>Hash SHA1</option>
-            <option value="hash_sha256" {{ 'selected' if filters.ioc_type == 'hash_sha256' }}>Hash SHA256</option>
-        </select>
-        <select name="severity" onchange="this.form.submit()">
-            <option value="">All Severities</option>
-            <option value="critical" {{ 'selected' if filters.severity == 'critical' }}>Critical</option>
-            <option value="high" {{ 'selected' if filters.severity == 'high' }}>High</option>
-            <option value="medium" {{ 'selected' if filters.severity == 'medium' }}>Medium</option>
-            <option value="low" {{ 'selected' if filters.severity == 'low' }}>Low</option>
-        </select>
-        <select name="feed_id" onchange="this.form.submit()">
-            <option value="">All Feeds</option>
-            {% for feed in feeds %}
-            <option value="{{ feed.id }}" {{ 'selected' if filters.feed_id|string == feed.id|string }}>{{ feed.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="btn btn-outline">Search</button>
+    <!-- HERO METRICS -->
+    <div class="ti-metrics">
+        <div class="ti-metric">
+            <div class="ti-metric-glow"></div>
+            <div class="ti-metric-label">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Total IOCs
+            </div>
+            <div class="ti-metric-value" data-count="{{ total }}">0</div>
+            <div class="ti-metric-sub">
+                <span class="dot" style="background: var(--primary);"></span>
+                matching current filters
+            </div>
+        </div>
+        <div class="ti-metric">
+            <div class="ti-metric-glow"></div>
+            <div class="ti-metric-label">
+                <svg viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+                Active Feeds
+            </div>
+            <div class="ti-metric-value" data-count="{{ feeds|length }}">0</div>
+            <div class="ti-metric-sub">
+                <span class="dot" style="background: #8b5cf6;"></span>
+                feeds connected
+            </div>
+        </div>
+        <div class="ti-metric">
+            <div class="ti-metric-glow"></div>
+            <div class="ti-metric-label">
+                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Types Breakdown
+            </div>
+            <div class="ti-metric-value" id="uniqueTypesCount" data-count="0">0</div>
+            <div class="ti-metric-sub">
+                <span class="dot" style="background: #f59e0b;"></span>
+                unique types in results
+            </div>
+        </div>
+        <div class="ti-metric">
+            <div class="ti-metric-glow"></div>
+            <div class="ti-metric-label">
+                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Current Page
+            </div>
+            <div class="ti-metric-value">
+                <span data-count="{{ page }}">0</span><span style="color:var(--text-muted);font-size:1rem;font-weight:400;margin:0 0.15rem;">/</span><span data-count="{{ total_pages }}">0</span>
+            </div>
+            <div class="ti-metric-sub">
+                <span class="dot" style="background: #22c55e;"></span>
+                {{ per_page }} per page
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="ti-filter-section">
+        <form class="ti-filter-row" method="get" action="{{ url_for('threat_intel_iocs') }}" id="filterForm">
+            <div class="ti-search-wrap">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" name="search" placeholder="Search IOC value..." value="{{ filters.search }}">
+            </div>
+            <select name="ioc_type" class="ti-filter-select" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="ip" {{ 'selected' if filters.ioc_type == 'ip' }}>IP Address</option>
+                <option value="domain" {{ 'selected' if filters.ioc_type == 'domain' }}>Domain</option>
+                <option value="url" {{ 'selected' if filters.ioc_type == 'url' }}>URL</option>
+                <option value="hash_md5" {{ 'selected' if filters.ioc_type == 'hash_md5' }}>Hash MD5</option>
+                <option value="hash_sha1" {{ 'selected' if filters.ioc_type == 'hash_sha1' }}>Hash SHA1</option>
+                <option value="hash_sha256" {{ 'selected' if filters.ioc_type == 'hash_sha256' }}>Hash SHA256</option>
+            </select>
+            <select name="severity" class="ti-filter-select" onchange="this.form.submit()">
+                <option value="">All Severities</option>
+                <option value="critical" {{ 'selected' if filters.severity == 'critical' }}>Critical</option>
+                <option value="high" {{ 'selected' if filters.severity == 'high' }}>High</option>
+                <option value="medium" {{ 'selected' if filters.severity == 'medium' }}>Medium</option>
+                <option value="low" {{ 'selected' if filters.severity == 'low' }}>Low</option>
+            </select>
+            <select name="feed_id" class="ti-filter-select" onchange="this.form.submit()">
+                <option value="">All Feeds</option>
+                {% for feed in feeds %}
+                <option value="{{ feed.id }}" {{ 'selected' if filters.feed_id|string == feed.id|string }}>{{ feed.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="ti-filter-submit">Search</button>
+        </form>
+
         {% if filters.search or filters.ioc_type or filters.severity or filters.feed_id %}
-        <a href="{{ url_for('threat_intel_iocs') }}" class="btn btn-ghost" style="font-size:0.75rem;">Clear</a>
+        <div class="ti-active-filters">
+            <span class="ti-active-filters-label">Active Filters:</span>
+            {% if filters.search %}
+            <span class="ti-filter-pill">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                "{{ filters.search }}"
+            </span>
+            {% endif %}
+            {% if filters.ioc_type %}
+            <span class="ti-filter-pill">
+                <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/></svg>
+                {{ filters.ioc_type }}
+            </span>
+            {% endif %}
+            {% if filters.severity %}
+            <span class="ti-filter-pill">
+                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                {{ filters.severity }}
+            </span>
+            {% endif %}
+            {% if filters.feed_id %}
+            <span class="ti-filter-pill">
+                <svg viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+                Feed #{{ filters.feed_id }}
+            </span>
+            {% endif %}
+            <a href="{{ url_for('threat_intel_iocs') }}" class="ti-clear-btn">
+                <svg viewBox="0 0 24 24" style="width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.5;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Clear All
+            </a>
+        </div>
         {% endif %}
-    </form>
-
-    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">
-        Showing {{ iocs|length }} of {{ "{:,}".format(total) }} IOCs
     </div>
 
-    <!-- IOC Table -->
-    <div class="card" style="padding:0;overflow-x:auto;">
-        <table>
+    <!-- RESULTS INFO -->
+    <div class="ti-results-info">
+        <div class="ti-results-count">
+            Showing <strong>{{ iocs|length }}</strong> of <strong>{{ "{:,}".format(total) }}</strong> IOCs
+        </div>
+    </div>
+
+    <!-- IOC TABLE -->
+    <div class="ti-table-wrap">
+        <table class="ti-table">
             <thead>
                 <tr>
-                    <th>Type</th>
-                    <th>Value</th>
-                    <th>Severity</th>
-                    <th>Confidence</th>
-                    <th>Threat Type</th>
-                    <th>Source</th>
-                    <th>Matches</th>
-                    <th>Added</th>
-                    <th>Actions</th>
+                    <th class="ti-col-type">Type</th>
+                    <th class="ti-col-value">Value</th>
+                    <th class="ti-col-severity">Severity</th>
+                    <th class="ti-col-confidence">Confidence</th>
+                    <th class="ti-col-threat">Threat Type</th>
+                    <th class="ti-col-source">Source</th>
+                    <th class="ti-col-matches">Matches</th>
+                    <th class="ti-col-added">Added</th>
+                    <th class="ti-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for ioc in iocs %}
                 <tr>
-                    <td><span class="badge badge-info">{{ ioc.ioc_type }}</span></td>
-                    <td class="ioc-value">{{ ioc.value }}</td>
-                    <td><span class="badge badge-{{ ioc.severity }}">{{ ioc.severity }}</span></td>
-                    <td>{{ ioc.confidence }}%</td>
-                    <td>{{ ioc.threat_type or '-' }}</td>
-                    <td>{{ ioc.source or '-' }}</td>
-                    <td>{{ ioc.match_count or 0 }}</td>
-                    <td>{{ ioc.created_at.strftime('%Y-%m-%d') if ioc.created_at else '-' }}</td>
+                    <td><span class="ti-type-badge">{{ ioc.ioc_type }}</span></td>
+                    <td><a href="/logs/?q={% if ioc.ioc_type == 'ip' %}srcip:{{ ioc.value }},dstip:{{ ioc.value }}{% else %}{{ ioc.value }}{% endif %}" class="ti-ioc-link ti-ioc-value" title="Search logs for {{ ioc.value }}">{{ ioc.value }}</a></td>
                     <td>
-                        <button class="btn btn-sm btn-danger" onclick="deleteIOC({{ ioc.id }})">Remove</button>
+                        <span class="ti-sev-badge ti-sev-{{ ioc.severity }}">
+                            <span class="ti-sev-dot"></span>
+                            {{ ioc.severity }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="ti-confidence">
+                            <div class="ti-confidence-bar-wrap">
+                                <div class="ti-confidence-bar" style="width: {{ ioc.confidence }}%; background: {% if ioc.confidence >= 80 %}#22c55e{% elif ioc.confidence >= 50 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+                            </div>
+                            <span class="ti-confidence-val">{{ ioc.confidence }}%</span>
+                        </div>
+                    </td>
+                    <td><span class="ti-threat-type">{{ ioc.threat_type or '-' }}</span></td>
+                    <td><span class="ti-source" title="{{ ioc.source or '-' }}">{{ ioc.source or '-' }}</span></td>
+                    <td>
+                        {% if ioc.match_count and ioc.match_count > 0 %}
+                        <a href="{{ url_for('threat_intel_matches') }}?ioc_type={{ ioc.ioc_type }}" class="ti-match-count has-matches" style="text-decoration:none;">
+                            <span class="ti-match-indicator"></span>
+                            {{ ioc.match_count }}
+                        </a>
+                        {% else %}
+                        <span class="ti-match-count no-matches">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="ti-time">
+                            {% if ioc.created_at %}
+                            <span class="ti-time-relative ti-relative-time" data-ts="{{ ioc.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ ioc.created_at.strftime('%Y-%m-%d') }}</span>
+                            {% else %}-{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="/logs/?q={% if ioc.ioc_type == 'ip' %}srcip:{{ ioc.value }},dstip:{{ ioc.value }}{% else %}{{ ioc.value }}{% endif %}" class="ti-logs-btn" title="Search logs"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Logs</a>
+                        <button class="ti-feed-btn danger" onclick="deleteIOC({{ ioc.id }})">Remove</button>
                     </td>
                 </tr>
                 {% endfor %}
                 {% if not iocs %}
-                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">No IOCs found matching your filters.</td></tr>
+                <tr>
+                    <td colspan="9" style="text-align:center;padding:3rem;">
+                        <div class="ti-empty" style="border:none;background:transparent;padding:1rem;">
+                            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <p style="font-size:1rem;font-weight:600;color:white;">No IOCs found</p>
+                            <p>No indicators of compromise match your current filters.</p>
+                        </div>
+                    </td>
+                </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 
-    <!-- Pagination -->
+    <!-- PAGINATION -->
     {% if total_pages > 1 %}
-    <div class="pagination">
+    <div class="ti-pagination">
         {% if page > 1 %}
-        <a href="?page={{ page - 1 }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">Prev</a>
+        <a class="ti-page-btn nav-arrow" href="?page={{ page - 1 }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            Prev
+        </a>
         {% endif %}
+
         {% for p in range(1, total_pages + 1) %}
             {% if p == page %}
-            <span class="current">{{ p }}</span>
+            <span class="ti-page-btn active">{{ p }}</span>
             {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
-            <a href="?page={{ p }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">{{ p }}</a>
+            <a class="ti-page-btn" href="?page={{ p }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">{{ p }}</a>
             {% elif p == 4 or p == total_pages - 2 %}
-            <span style="color:var(--text-muted);">...</span>
+            <span class="ti-page-ellipsis">...</span>
             {% endif %}
         {% endfor %}
+
+        <div class="ti-page-info">
+            {% set start_item = (page - 1) * per_page + 1 %}
+            {% set end_item = [page * per_page, total]|min %}
+            Showing <strong>{{ start_item }}</strong>-<strong>{{ end_item }}</strong> of <strong>{{ "{:,}".format(total) }}</strong>
+        </div>
+
         {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">Next</a>
+        <a class="ti-page-btn nav-arrow" href="?page={{ page + 1 }}&ioc_type={{ filters.ioc_type }}&severity={{ filters.severity }}&feed_id={{ filters.feed_id }}&search={{ filters.search }}">
+            Next
+            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
         {% endif %}
     </div>
     {% endif %}
@@ -224,7 +803,7 @@
             <input type="text" id="addDesc" placeholder="Optional description">
         </div>
         <div class="modal-actions">
-            <button class="btn btn-ghost" onclick="closeModal('addModal')">Cancel</button>
+            <button class="btn btn-outline" onclick="closeModal('addModal')">Cancel</button>
             <button class="btn btn-primary" onclick="addIOC()">Add IOC</button>
         </div>
     </div>
@@ -263,7 +842,7 @@
             <textarea id="bulkValues" placeholder="1.2.3.4&#10;5.6.7.8&#10;evil.com"></textarea>
         </div>
         <div class="modal-actions">
-            <button class="btn btn-ghost" onclick="closeModal('bulkModal')">Cancel</button>
+            <button class="btn btn-outline" onclick="closeModal('bulkModal')">Cancel</button>
             <button class="btn btn-primary" onclick="bulkImport()">Import</button>
         </div>
     </div>
@@ -272,6 +851,61 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* ========== ANIMATED COUNTERS ========== */
+document.querySelectorAll('.ti-metric-value[data-count], .ti-metric-value span[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count) || 0;
+    if (target === 0) { el.textContent = '0'; return; }
+    const duration = 900;
+    const start = performance.now();
+    function tick(now) {
+        const p = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - p, 3); /* cubic ease-out */
+        const current = Math.floor(ease * target);
+        el.textContent = current.toLocaleString();
+        if (p < 1) requestAnimationFrame(tick);
+        else el.textContent = target.toLocaleString();
+    }
+    requestAnimationFrame(tick);
+});
+
+/* ========== COUNT UNIQUE TYPES ========== */
+(function() {
+    const types = new Set();
+    document.querySelectorAll('.ti-type-badge').forEach(el => {
+        types.add(el.textContent.trim());
+    });
+    const countEl = document.getElementById('uniqueTypesCount');
+    if (countEl) {
+        const target = types.size;
+        countEl.setAttribute('data-count', target);
+        if (target === 0) { countEl.textContent = '0'; return; }
+        const duration = 900;
+        const start = performance.now();
+        function tick(now) {
+            const p = Math.min((now - start) / duration, 1);
+            const ease = 1 - Math.pow(1 - p, 3);
+            countEl.textContent = Math.floor(ease * target).toLocaleString();
+            if (p < 1) requestAnimationFrame(tick);
+            else countEl.textContent = target.toLocaleString();
+        }
+        requestAnimationFrame(tick);
+    }
+})();
+
+/* ========== RELATIVE TIME FORMATTER ========== */
+document.querySelectorAll('.ti-relative-time').forEach(el => {
+    const ts = el.dataset.ts;
+    if (!ts) return;
+    const date = new Date(ts + 'Z');
+    const diff = (Date.now() - date.getTime()) / 1000;
+    if (diff < 60) el.textContent = 'just now';
+    else if (diff < 3600) el.textContent = Math.floor(diff / 60) + 'm ago';
+    else if (diff < 86400) el.textContent = Math.floor(diff / 3600) + 'h ago';
+    else if (diff < 604800) el.textContent = Math.floor(diff / 86400) + 'd ago';
+    else el.textContent = Math.floor(diff / 604800) + 'w ago';
+});
+
+/* ========== TOAST ========== */
 function showToast(msg, type='success') {
     const t = document.getElementById('toast');
     t.className = `toast toast-${type} show`;
@@ -279,10 +913,17 @@ function showToast(msg, type='success') {
     setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+/* ========== MODALS ========== */
 function showAddModal() { document.getElementById('addModal').classList.add('active'); }
 function showBulkModal() { document.getElementById('bulkModal').classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
+/* Close modal on overlay click */
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('active'); });
+});
+
+/* ========== ADD IOC ========== */
 async function addIOC() {
     const data = {
         ioc_type: document.getElementById('addType').value,
@@ -307,6 +948,7 @@ async function addIOC() {
     }
 }
 
+/* ========== BULK IMPORT ========== */
 async function bulkImport() {
     const data = {
         ioc_type: document.getElementById('bulkType').value,
@@ -328,6 +970,7 @@ async function bulkImport() {
     }
 }
 
+/* ========== DELETE IOC ========== */
 async function deleteIOC(id) {
     if (!confirm('Remove this IOC?')) return;
     const res = await fetch(`/api/threat-intel/iocs/${id}`, {method: 'DELETE'});

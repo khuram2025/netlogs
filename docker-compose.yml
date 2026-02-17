@@ -1,0 +1,172 @@
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL - Structured data (users, rules, devices, etc.)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netlogs}
+      POSTGRES_USER: ${POSTGRES_USER:-netlogs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMeNow!}
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netlogs} -d ${POSTGRES_DB:-netlogs}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - netlogs-net
+
+  # ---------------------------------------------------------------------------
+  # ClickHouse - Log storage and analytics
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-ChangeMeNow!}
+    ports:
+      - "${CLICKHOUSE_EXTERNAL_PORT:-8123}:8123"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - netlogs-net
+
+  # ---------------------------------------------------------------------------
+  # Web - FastAPI application (also handles DB init + seeding)
+  # ---------------------------------------------------------------------------
+  web:
+    build: .
+    image: netlogs:latest
+    restart: unless-stopped
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - TZ=${TZ:-Asia/Riyadh}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-netlogs}
+      - POSTGRES_USER=${POSTGRES_USER:-netlogs}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-default}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-ChangeMeNow!}
+      - WORKERS=${WORKERS:-4}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_FILE=logs/netlogs.log
+    volumes:
+      - netlogs-logs:/app/logs
+      - netlogs-credentials:/app/data/credentials
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/api/health/simple"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - netlogs-net
+
+  # ---------------------------------------------------------------------------
+  # Syslog - UDP collector (same image, different mode)
+  # ---------------------------------------------------------------------------
+  syslog:
+    image: netlogs:latest
+    restart: unless-stopped
+    command: ["syslog"]
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-netlogs}
+      - POSTGRES_USER=${POSTGRES_USER:-netlogs}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-default}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-ChangeMeNow!}
+      - SYSLOG_PORT=${SYSLOG_PORT:-514}
+      - SYSLOG_BATCH_SIZE=${SYSLOG_BATCH_SIZE:-5000}
+      - SYSLOG_FLUSH_INTERVAL=${SYSLOG_FLUSH_INTERVAL:-2.0}
+      - SYSLOG_CACHE_TTL=${SYSLOG_CACHE_TTL:-60}
+      - SYSLOG_WORKERS=${SYSLOG_WORKERS:-4}
+      - SYSLOG_MAX_BUFFER=${SYSLOG_MAX_BUFFER:-100000}
+      - SYSLOG_METRICS_INTERVAL=${SYSLOG_METRICS_INTERVAL:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=logs/netlogs.log
+    ports:
+      - "${SYSLOG_EXTERNAL_PORT:-514}:514/udp"
+    volumes:
+      - netlogs-logs:/app/logs
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f run_syslog"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - netlogs-net
+
+  # ---------------------------------------------------------------------------
+  # Nginx - Reverse proxy
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    entrypoint: ["/docker-entrypoint-netlogs.sh"]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx-entrypoint.sh:/docker-entrypoint-netlogs.sh:ro
+      - netlogs-certs:/etc/nginx/certs
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - netlogs-net
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  netlogs-logs:
+  netlogs-credentials:
+  netlogs-certs:
+
+networks:
+  netlogs-net:
+    driver: bridge

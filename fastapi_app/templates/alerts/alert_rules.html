@@ -1,184 +1,1082 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    .alert-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .alert-header .tabs { display: flex; gap: 0.5rem; }
-    .alert-header .tabs a { padding: 0.4rem 1rem; border-radius: 0.375rem; font-size: 0.85rem; text-decoration: none; color: var(--text-muted); border: 1px solid var(--border); }
-    .alert-header .tabs a.active, .alert-header .tabs a:hover { background: var(--primary); color: white; border-color: var(--primary); }
+    /* ================================================================
+       ALERT RULES - TACTICAL OPERATIONS CONSOLE
+       ================================================================ */
 
-    .rule-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-    .rule-card:hover { border-color: rgba(59,130,246,0.3); }
-    .rule-info { flex: 1; }
-    .rule-name { color: white; font-weight: 600; font-size: 0.95rem; }
-    .rule-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; gap: 1rem; flex-wrap: wrap; }
-    .rule-actions { display: flex; gap: 0.375rem; align-items: center; }
+    /* --- Animations --- */
+    @keyframes ar-fadeIn {
+        from { opacity: 0; transform: translateX(-16px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
 
-    .toggle-btn { width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s; }
-    .toggle-btn.on { background: var(--success); }
-    .toggle-btn.off { background: var(--border); }
-    .toggle-btn::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform 0.2s; }
-    .toggle-btn.on::after { transform: translateX(20px); }
+    @keyframes ar-modalIn {
+        from { opacity: 0; transform: translateY(-24px) scale(0.97); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
 
-    .sev-badge { display: inline-flex; padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; }
-    .sev-critical { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-    .sev-high { background: rgba(249,115,22,0.1); color: #f97316; border: 1px solid rgba(249,115,22,0.2); }
-    .sev-medium { background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); }
-    .sev-low { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
-    .sev-info { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+    @keyframes ar-overlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
 
-    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.7rem; border-radius: 0.25rem; cursor: pointer; border: none; font-weight: 500; }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-    .btn-outline:hover { background: rgba(255,255,255,0.05); color: white; }
+    @keyframes ar-pulseGlow {
+        0%, 100% { box-shadow: 0 0 12px rgba(34,197,94,0.25); }
+        50%      { box-shadow: 0 0 20px rgba(34,197,94,0.45); }
+    }
 
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 5vh; }
-    .modal-overlay.active { display: flex; }
-    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; width: 100%; max-width: 640px; max-height: 80vh; overflow-y: auto; }
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; margin-bottom: 0.375rem; font-size: 0.875rem; color: var(--text-muted); }
-    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border); border-radius: 0.375rem; color: white; font-size: 0.875rem; }
-    .form-group textarea { min-height: 60px; font-family: monospace; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
-    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; }
+    @keyframes ar-toastIn {
+        from { transform: translateY(24px) scale(0.95); opacity: 0; }
+        to   { transform: translateY(0) scale(1); opacity: 1; }
+    }
 
-    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-size: 0.875rem; z-index: 200; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; }
-    .toast.show { transform: translateY(0); opacity: 1; }
-    .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: var(--success); }
-    .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
+    @keyframes ar-shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+    /* --- Page Header --- */
+    .ar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .ar-header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .ar-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0;
+        background: linear-gradient(135deg, #e2e8f0 0%, #3b82f6 50%, #8b5cf6 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: ar-shimmer 6s linear infinite;
+    }
+
+    .ar-subtitle {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 400;
+        color: var(--text-muted);
+        letter-spacing: 0.3px;
+    }
+
+    .ar-header-right {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    /* --- Tab Pills --- */
+    .ar-tabs {
+        display: flex;
+        gap: 0.25rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 3px;
+    }
+
+    .ar-tab {
+        font-family: 'Outfit', sans-serif;
+        padding: 0.4rem 1rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: var(--text-muted);
+        transition: all 0.25s ease;
+        white-space: nowrap;
+        border: 1px solid transparent;
+    }
+
+    .ar-tab:hover {
+        color: var(--text-color);
+        background: rgba(59, 130, 246, 0.08);
+    }
+
+    .ar-tab.active {
+        background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.15));
+        color: #60a5fa;
+        border-color: rgba(59,130,246,0.25);
+        box-shadow: 0 0 12px rgba(59,130,246,0.1);
+    }
+
+    /* --- New Rule Button --- */
+    .ar-btn-new {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1.15rem;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        color: white;
+        background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+        box-shadow: 0 2px 12px rgba(59,130,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+        transition: all 0.25s ease;
+        white-space: nowrap;
+    }
+
+    .ar-btn-new:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 20px rgba(59,130,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+
+    .ar-btn-new:active {
+        transform: translateY(0);
+    }
+
+    .ar-btn-new svg {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2.5;
+    }
+
+    /* --- Rule Cards Container --- */
+    .ar-rules-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    /* --- Rule Card --- */
+    .ar-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.15rem 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity: 0;
+        animation: ar-fadeIn 0.45s ease forwards;
+    }
+
+    .ar-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        transition: all 0.3s ease;
+    }
+
+    /* Severity accent borders */
+    .ar-card[data-severity="critical"]::before {
+        background: linear-gradient(180deg, #ef4444, #dc2626);
+        box-shadow: 0 0 8px rgba(239,68,68,0.3);
+    }
+    .ar-card[data-severity="high"]::before {
+        background: linear-gradient(180deg, #f97316, #ea580c);
+        box-shadow: 0 0 8px rgba(249,115,22,0.3);
+    }
+    .ar-card[data-severity="medium"]::before {
+        background: linear-gradient(180deg, #f59e0b, #d97706);
+        box-shadow: 0 0 8px rgba(245,158,11,0.3);
+    }
+    .ar-card[data-severity="low"]::before {
+        background: linear-gradient(180deg, #3b82f6, #2563eb);
+        box-shadow: 0 0 8px rgba(59,130,246,0.3);
+    }
+    .ar-card[data-severity="info"]::before {
+        background: linear-gradient(180deg, #94a3b8, #64748b);
+        box-shadow: 0 0 8px rgba(148,163,184,0.2);
+    }
+
+    .ar-card:hover {
+        border-color: rgba(59,130,246,0.25);
+        transform: translateX(3px);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+
+    .ar-card:hover::before {
+        width: 4px;
+    }
+
+    /* Staggered entrance delays */
+    .ar-card:nth-child(1)  { animation-delay: 0.04s; }
+    .ar-card:nth-child(2)  { animation-delay: 0.08s; }
+    .ar-card:nth-child(3)  { animation-delay: 0.12s; }
+    .ar-card:nth-child(4)  { animation-delay: 0.16s; }
+    .ar-card:nth-child(5)  { animation-delay: 0.20s; }
+    .ar-card:nth-child(6)  { animation-delay: 0.24s; }
+    .ar-card:nth-child(7)  { animation-delay: 0.28s; }
+    .ar-card:nth-child(8)  { animation-delay: 0.32s; }
+    .ar-card:nth-child(9)  { animation-delay: 0.36s; }
+    .ar-card:nth-child(10) { animation-delay: 0.40s; }
+    .ar-card:nth-child(11) { animation-delay: 0.44s; }
+    .ar-card:nth-child(12) { animation-delay: 0.48s; }
+
+    /* --- Card Info --- */
+    .ar-card-info {
+        flex: 1;
+        min-width: 0;
+        padding-left: 0.75rem;
+    }
+
+    .ar-card-top {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        margin-bottom: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .ar-rule-name {
+        font-family: 'Outfit', sans-serif;
+        color: white;
+        font-weight: 600;
+        font-size: 0.95rem;
+        letter-spacing: -0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* --- Severity Badge --- */
+    .ar-sev {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 10px;
+        border-radius: 9999px;
+        font-size: 0.625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        flex-shrink: 0;
+    }
+
+    .ar-sev-critical {
+        background: rgba(239,68,68,0.12);
+        color: #f87171;
+        border: 1px solid rgba(239,68,68,0.25);
+        box-shadow: 0 0 8px rgba(239,68,68,0.08);
+    }
+    .ar-sev-high {
+        background: rgba(249,115,22,0.12);
+        color: #fb923c;
+        border: 1px solid rgba(249,115,22,0.25);
+        box-shadow: 0 0 8px rgba(249,115,22,0.08);
+    }
+    .ar-sev-medium {
+        background: rgba(245,158,11,0.12);
+        color: #fbbf24;
+        border: 1px solid rgba(245,158,11,0.25);
+        box-shadow: 0 0 8px rgba(245,158,11,0.08);
+    }
+    .ar-sev-low {
+        background: rgba(59,130,246,0.12);
+        color: #60a5fa;
+        border: 1px solid rgba(59,130,246,0.25);
+        box-shadow: 0 0 8px rgba(59,130,246,0.08);
+    }
+    .ar-sev-info {
+        background: rgba(148,163,184,0.1);
+        color: #94a3b8;
+        border: 1px solid rgba(148,163,184,0.2);
+    }
+
+    /* --- Meta Row --- */
+    .ar-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.3rem;
+    }
+
+    .ar-meta-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: rgba(15,23,42,0.6);
+        border: 1px solid rgba(51,65,85,0.5);
+        padding: 2px 8px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+    }
+
+    .ar-meta-tag svg {
+        width: 11px;
+        height: 11px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        flex-shrink: 0;
+        opacity: 0.6;
+    }
+
+    .ar-meta-tag .ar-val {
+        color: #cbd5e1;
+    }
+
+    .ar-meta-sep {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--border);
+        flex-shrink: 0;
+    }
+
+    /* --- Description --- */
+    .ar-desc {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.78rem;
+        color: #64748b;
+        line-height: 1.45;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 640px;
+    }
+
+    /* --- Card Actions --- */
+    .ar-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    /* --- Toggle Switch --- */
+    .ar-toggle {
+        width: 44px;
+        height: 24px;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        flex-shrink: 0;
+        outline: none;
+    }
+
+    .ar-toggle.on {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        box-shadow: 0 0 12px rgba(34,197,94,0.3);
+    }
+
+    .ar-toggle.on:hover {
+        animation: ar-pulseGlow 1.5s ease-in-out infinite;
+    }
+
+    .ar-toggle.off {
+        background: var(--border);
+    }
+
+    .ar-toggle.off:hover {
+        background: #475569;
+    }
+
+    .ar-toggle::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: white;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    .ar-toggle.on::after {
+        transform: translateX(20px);
+    }
+
+    /* --- Action Buttons --- */
+    .ar-btn-action {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.3rem 0.65rem;
+        font-size: 0.72rem;
+        font-weight: 500;
+        border-radius: 7px;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .ar-btn-action:hover {
+        background: rgba(255,255,255,0.05);
+        color: white;
+        border-color: rgba(59,130,246,0.3);
+    }
+
+    .ar-btn-action svg {
+        width: 13px;
+        height: 13px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .ar-btn-action.ar-btn-test:hover {
+        border-color: rgba(59,130,246,0.4);
+        color: #60a5fa;
+        background: rgba(59,130,246,0.06);
+    }
+
+    .ar-btn-action.ar-btn-edit:hover {
+        border-color: rgba(245,158,11,0.4);
+        color: #fbbf24;
+        background: rgba(245,158,11,0.06);
+    }
+
+    .ar-btn-action.ar-btn-delete {
+        color: #94a3b8;
+    }
+    .ar-btn-action.ar-btn-delete:hover {
+        border-color: rgba(239,68,68,0.4);
+        color: #f87171;
+        background: rgba(239,68,68,0.06);
+    }
+
+    /* --- Empty State --- */
+    .ar-empty {
+        background: var(--card-bg);
+        border: 1px dashed var(--border);
+        border-radius: 16px;
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text-muted);
+        font-family: 'Outfit', sans-serif;
+        animation: ar-fadeIn 0.5s ease forwards;
+    }
+
+    .ar-empty-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 1rem;
+        background: rgba(59,130,246,0.08);
+        border: 1px solid rgba(59,130,246,0.15);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ar-empty-icon svg {
+        width: 26px;
+        height: 26px;
+        stroke: #3b82f6;
+        fill: none;
+        stroke-width: 1.5;
+    }
+
+    .ar-empty-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-color);
+        margin-bottom: 0.35rem;
+    }
+
+    .ar-empty-text {
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    /* ================================================================
+       MODAL SYSTEM
+       ================================================================ */
+    .ar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.75);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        z-index: 500;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 4vh;
+    }
+
+    .ar-overlay.active {
+        display: flex;
+        animation: ar-overlayIn 0.2s ease;
+    }
+
+    .ar-modal {
+        background: linear-gradient(180deg, #1e293b 0%, #1a2332 100%);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 680px;
+        max-height: 85vh;
+        overflow-y: auto;
+        position: relative;
+        animation: ar-modalIn 0.3s ease;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.05);
+    }
+
+    /* Accent top bar */
+    .ar-modal::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6);
+        border-radius: 16px 16px 0 0;
+    }
+
+    .ar-modal-header {
+        padding: 1.5rem 1.75rem 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .ar-modal-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: white;
+        margin: 0;
+        letter-spacing: -0.3px;
+    }
+
+    .ar-modal-close {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: transparent;
+        border: 1px solid transparent;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.2s ease;
+    }
+
+    .ar-modal-close:hover {
+        background: rgba(239,68,68,0.08);
+        border-color: rgba(239,68,68,0.15);
+        color: #f87171;
+    }
+
+    .ar-modal-close svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .ar-modal-body {
+        padding: 1.25rem 1.75rem 1.75rem;
+    }
+
+    /* --- Form Elements --- */
+    .ar-form-group {
+        margin-bottom: 1rem;
+    }
+
+    .ar-form-label {
+        font-family: 'Outfit', sans-serif;
+        display: block;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        letter-spacing: 0.2px;
+    }
+
+    .ar-form-input,
+    .ar-form-select,
+    .ar-form-textarea {
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: white;
+        font-size: 0.85rem;
+        font-family: 'Outfit', sans-serif;
+        transition: all 0.2s ease;
+        outline: none;
+    }
+
+    .ar-form-input:focus,
+    .ar-form-select:focus,
+    .ar-form-textarea:focus {
+        border-color: rgba(59,130,246,0.5);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+    }
+
+    .ar-form-input::placeholder {
+        color: #475569;
+        font-weight: 400;
+    }
+
+    .ar-form-select {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2rem;
+    }
+
+    .ar-form-select option {
+        background: #0f172a;
+        color: white;
+    }
+
+    .ar-form-textarea {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        min-height: 80px;
+        resize: vertical;
+        line-height: 1.6;
+    }
+
+    .ar-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    /* --- Modal Footer --- */
+    .ar-modal-footer {
+        display: flex;
+        gap: 0.625rem;
+        justify-content: flex-end;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        margin-top: 0.5rem;
+        padding-top: 1.25rem;
+    }
+
+    .ar-btn-cancel {
+        font-family: 'Outfit', sans-serif;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 0.5rem 1.15rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .ar-btn-cancel:hover {
+        background: rgba(255,255,255,0.04);
+        color: white;
+        border-color: #475569;
+    }
+
+    .ar-btn-save {
+        font-family: 'Outfit', sans-serif;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1.35rem;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        color: white;
+        background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+        box-shadow: 0 2px 10px rgba(59,130,246,0.2);
+        transition: all 0.25s ease;
+    }
+
+    .ar-btn-save:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+    }
+
+    .ar-btn-save svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    /* --- Test Result Modal --- */
+    .ar-test-result {
+        font-family: 'Outfit', sans-serif;
+    }
+
+    .ar-test-loading {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        padding: 1rem 0;
+    }
+
+    .ar-test-loading .ar-spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: ar-spin 0.7s linear infinite;
+    }
+
+    @keyframes ar-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .ar-test-code {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        border-radius: 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #cbd5e1;
+        max-height: 300px;
+        overflow-y: auto;
+        line-height: 1.7;
+    }
+
+    /* ================================================================
+       TOAST NOTIFICATIONS
+       ================================================================ */
+    .ar-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 10px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        z-index: 1000;
+        transform: translateY(24px);
+        opacity: 0;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 400px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .ar-toast.show {
+        transform: translateY(0);
+        opacity: 1;
+        animation: ar-toastIn 0.35s ease;
+    }
+
+    .ar-toast-success {
+        background: rgba(34,197,94,0.12);
+        border: 1px solid rgba(34,197,94,0.25);
+        color: #4ade80;
+    }
+
+    .ar-toast-error {
+        background: rgba(239,68,68,0.12);
+        border: 1px solid rgba(239,68,68,0.25);
+        color: #f87171;
+    }
+
+    .ar-toast svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        flex-shrink: 0;
+    }
+
+    /* ================================================================
+       RESPONSIVE
+       ================================================================ */
+    @media (max-width: 768px) {
+        .ar-header {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .ar-header-right {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .ar-tabs {
+            justify-content: center;
+        }
+        .ar-card {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .ar-card-actions {
+            width: 100%;
+            justify-content: flex-end;
+        }
+        .ar-form-row {
+            grid-template-columns: 1fr;
+        }
+        .ar-desc {
+            max-width: 100%;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="alert-header">
-    <h2>Alert Rules</h2>
-    <div style="display:flex;gap:0.5rem;align-items:center;">
-        <div class="tabs">
-            <a href="{{ url_for('alert_dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('alert_rules_page') }}" class="active">Rules</a>
-            <a href="{{ url_for('notification_channels_page') }}">Channels</a>
+<!-- ============ PAGE HEADER ============ -->
+<div class="ar-header">
+    <div class="ar-header-left">
+        <h1 class="ar-title">Alert Rules</h1>
+        <span class="ar-subtitle">Detection & Response Configuration</span>
+    </div>
+    <div class="ar-header-right">
+        <div class="ar-tabs">
+            <a href="{{ url_for('alert_dashboard') }}" class="ar-tab">Dashboard</a>
+            <a href="{{ url_for('alert_rules_page') }}" class="ar-tab active">Rules</a>
+            <a href="{{ url_for('notification_channels_page') }}" class="ar-tab">Channels</a>
         </div>
-        <button class="btn btn-primary" onclick="openCreateRule()">+ New Rule</button>
+        <button class="ar-btn-new" onclick="openCreateRule()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Rule
+        </button>
     </div>
 </div>
 
-{% for rule in rules %}
-<div class="rule-card" id="rule-{{ rule.id }}">
-    <div class="rule-info">
-        <div class="rule-name">{{ rule.name }}</div>
-        <div class="rule-meta">
-            <span class="sev-badge sev-{{ rule.severity }}">{{ rule.severity }}</span>
-            <span>Type: {{ rule.condition_type }}</span>
-            {% if rule.category %}<span>Category: {{ rule.category }}</span>{% endif %}
-            <span>Cooldown: {{ rule.cooldown_minutes }}m</span>
-            <span>Triggered: {{ trigger_counts.get(rule.id, 0) }}x</span>
-            {% if rule.last_triggered_at %}
-            <span>Last: {{ rule.last_triggered_at.strftime('%m/%d %H:%M') }}</span>
+<!-- ============ RULE CARDS ============ -->
+{% if rules %}
+<div class="ar-rules-list">
+    {% for rule in rules %}
+    <div class="ar-card" id="rule-{{ rule.id }}" data-severity="{{ rule.severity }}">
+        <div class="ar-card-info">
+            <div class="ar-card-top">
+                <span class="ar-rule-name">{{ rule.name }}</span>
+                <span class="ar-sev ar-sev-{{ rule.severity }}">{{ rule.severity }}</span>
+            </div>
+            <div class="ar-meta">
+                <span class="ar-meta-tag">
+                    <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    <span class="ar-val">{{ rule.condition_type }}</span>
+                </span>
+                {% if rule.category %}
+                <span class="ar-meta-sep"></span>
+                <span class="ar-meta-tag">
+                    <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                    <span class="ar-val">{{ rule.category }}</span>
+                </span>
+                {% endif %}
+                <span class="ar-meta-sep"></span>
+                <span class="ar-meta-tag">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span class="ar-val">{{ rule.cooldown_minutes }}m</span>
+                </span>
+                <span class="ar-meta-sep"></span>
+                <span class="ar-meta-tag">
+                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span class="ar-val">{{ trigger_counts.get(rule.id, 0) }}x triggered</span>
+                </span>
+                {% if rule.last_triggered_at %}
+                <span class="ar-meta-sep"></span>
+                <span class="ar-meta-tag">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span class="ar-val">{{ rule.last_triggered_at.strftime('%m/%d %H:%M') }}</span>
+                </span>
+                {% endif %}
+            </div>
+            {% if rule.description %}
+            <div class="ar-desc">{{ rule.description[:150] }}</div>
             {% endif %}
         </div>
-        {% if rule.description %}
-        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.375rem;">{{ rule.description[:120] }}</div>
-        {% endif %}
+        <div class="ar-card-actions">
+            <button class="ar-toggle {{ 'on' if rule.is_enabled else 'off' }}" onclick="toggleRule({{ rule.id }}, this)" title="{{ 'Enabled' if rule.is_enabled else 'Disabled' }}"></button>
+            <a href="/logs/?time_range=1h&q={% if rule.category == 'exfiltration' %}action:accept dstport:>1024{% elif rule.category == 'brute_force' %}action:deny{% elif rule.category == 'port_scan' %}action:deny{% elif rule.category == 'ddos' %}action:deny{% elif rule.category == 'threshold' %}severity:<4{% else %}action:deny|accept{% endif %}" class="ar-btn-action" style="text-decoration:none;color:var(--primary);" title="View related logs">
+                <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-right:2px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Logs
+            </a>
+            <button class="ar-btn-action ar-btn-test" onclick="testRule({{ rule.id }})">
+                <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Test
+            </button>
+            <button class="ar-btn-action ar-btn-edit" onclick="editRule({{ rule.id }})">
+                <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit
+            </button>
+            <button class="ar-btn-action ar-btn-delete" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">
+                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+            </button>
+        </div>
     </div>
-    <div class="rule-actions">
-        <button class="toggle-btn {{ 'on' if rule.is_enabled else 'off' }}" onclick="toggleRule({{ rule.id }}, this)" title="{{ 'Enabled' if rule.is_enabled else 'Disabled' }}"></button>
-        <button class="btn-xs btn-outline" onclick="testRule({{ rule.id }})">Test</button>
-        <button class="btn-xs btn-outline" onclick="editRule({{ rule.id }})">Edit</button>
-        <button class="btn-xs btn-outline" style="color:var(--danger);" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
-    </div>
-</div>
-{% endfor %}
-
-{% if not rules %}
-<div class="card" style="text-align:center;padding:3rem;color:var(--text-muted);">
-    No alert rules configured. Click "+ New Rule" to create one.
+    {% endfor %}
 </div>
 {% endif %}
 
-<!-- Create/Edit Rule Modal -->
-<div class="modal-overlay" id="ruleModal">
-    <div class="modal">
-        <h3 id="ruleModalTitle">Create Alert Rule</h3>
-        <input type="hidden" id="ruleId">
-        <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="ruleName" placeholder="e.g., Brute Force Detection">
+<!-- ============ EMPTY STATE ============ -->
+{% if not rules %}
+<div class="ar-empty">
+    <div class="ar-empty-icon">
+        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/></svg>
+    </div>
+    <div class="ar-empty-title">No alert rules configured</div>
+    <div class="ar-empty-text">Click "+ New Rule" to create your first detection rule.</div>
+</div>
+{% endif %}
+
+<!-- ============ CREATE/EDIT RULE MODAL ============ -->
+<div class="ar-overlay" id="ruleModal">
+    <div class="ar-modal">
+        <div class="ar-modal-header">
+            <h3 class="ar-modal-title" id="ruleModalTitle">Create Alert Rule</h3>
+            <button class="ar-modal-close" onclick="document.getElementById('ruleModal').classList.remove('active')">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
-        <div class="form-group">
-            <label>Description</label>
-            <input type="text" id="ruleDescription" placeholder="Optional description">
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Severity</label>
-                <select id="ruleSeverity">
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="low">Low</option>
-                    <option value="info">Info</option>
-                </select>
+        <div class="ar-modal-body">
+            <input type="hidden" id="ruleId">
+
+            <div class="ar-form-group">
+                <label class="ar-form-label">Rule Name</label>
+                <input type="text" id="ruleName" class="ar-form-input" placeholder="e.g., Brute Force Detection">
             </div>
-            <div class="form-group">
-                <label>Category</label>
-                <input type="text" id="ruleCategory" placeholder="e.g., brute_force">
+
+            <div class="ar-form-group">
+                <label class="ar-form-label">Description</label>
+                <input type="text" id="ruleDescription" class="ar-form-input" placeholder="Brief description of what this rule detects">
             </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Condition Type</label>
-                <select id="ruleConditionType">
-                    <option value="threshold">Threshold</option>
-                    <option value="pattern">Pattern</option>
-                    <option value="absence">Absence</option>
-                    <option value="anomaly">Anomaly</option>
-                </select>
+
+            <div class="ar-form-row">
+                <div class="ar-form-group">
+                    <label class="ar-form-label">Severity</label>
+                    <select id="ruleSeverity" class="ar-form-select">
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="low">Low</option>
+                        <option value="info">Info</option>
+                    </select>
+                </div>
+                <div class="ar-form-group">
+                    <label class="ar-form-label">Category</label>
+                    <input type="text" id="ruleCategory" class="ar-form-input" placeholder="e.g., brute_force">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Cooldown (minutes)</label>
-                <input type="number" id="ruleCooldown" value="15" min="1">
+
+            <div class="ar-form-row">
+                <div class="ar-form-group">
+                    <label class="ar-form-label">Condition Type</label>
+                    <select id="ruleConditionType" class="ar-form-select">
+                        <option value="threshold">Threshold</option>
+                        <option value="pattern">Pattern</option>
+                        <option value="absence">Absence</option>
+                        <option value="anomaly">Anomaly</option>
+                    </select>
+                </div>
+                <div class="ar-form-group">
+                    <label class="ar-form-label">Cooldown (minutes)</label>
+                    <input type="number" id="ruleCooldown" class="ar-form-input" value="15" min="1">
+                </div>
             </div>
-        </div>
-        <div class="form-group">
-            <label>Condition Config (JSON)</label>
-            <textarea id="ruleConfig" placeholder='{"field":"action","value":"deny","threshold":100,"window_minutes":5,"group_by":"srcip"}'></textarea>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>MITRE Tactic</label>
-                <input type="text" id="ruleMitreTactic" placeholder="e.g., Initial Access">
+
+            <div class="ar-form-group">
+                <label class="ar-form-label">Condition Config (JSON)</label>
+                <textarea id="ruleConfig" class="ar-form-textarea" placeholder='{"field":"action","value":"deny","threshold":100,"window_minutes":5,"group_by":"srcip"}'></textarea>
             </div>
-            <div class="form-group">
-                <label>MITRE Technique</label>
-                <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1110">
+
+            <div class="ar-form-row">
+                <div class="ar-form-group">
+                    <label class="ar-form-label">MITRE Tactic</label>
+                    <input type="text" id="ruleMitreTactic" class="ar-form-input" placeholder="e.g., Initial Access">
+                </div>
+                <div class="ar-form-group">
+                    <label class="ar-form-label">MITRE Technique</label>
+                    <input type="text" id="ruleMitreTechnique" class="ar-form-input" placeholder="e.g., T1110">
+                </div>
             </div>
-        </div>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="document.getElementById('ruleModal').classList.remove('active')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+
+            <div class="ar-modal-footer">
+                <button class="ar-btn-cancel" onclick="document.getElementById('ruleModal').classList.remove('active')">Cancel</button>
+                <button class="ar-btn-save" onclick="saveRule()">
+                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Save Rule
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Test Result Modal -->
-<div class="modal-overlay" id="testModal">
-    <div class="modal">
-        <h3>Rule Test Result</h3>
-        <div id="testResult"></div>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="document.getElementById('testModal').classList.remove('active')">Close</button>
+<!-- ============ TEST RESULT MODAL ============ -->
+<div class="ar-overlay" id="testModal">
+    <div class="ar-modal">
+        <div class="ar-modal-header">
+            <h3 class="ar-modal-title">Rule Test Result</h3>
+            <button class="ar-modal-close" onclick="document.getElementById('testModal').classList.remove('active')">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="ar-modal-body">
+            <div id="testResult"></div>
+            <div class="ar-modal-footer">
+                <button class="ar-btn-cancel" onclick="document.getElementById('testModal').classList.remove('active')">Close</button>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- ============ TOAST ============ -->
+<div class="ar-toast" id="toast"></div>
 
 <script>
 function showToast(msg, type='success') {
     const t = document.getElementById('toast');
-    t.className = `toast toast-${type} show`;
-    t.textContent = msg;
-    setTimeout(() => t.classList.remove('show'), 3000);
+    const icon = type === 'success'
+        ? '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+        : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    t.className = `ar-toast ar-toast-${type} show`;
+    t.innerHTML = icon + '<span>' + msg + '</span>';
+    setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 function openCreateRule() {
@@ -242,21 +1140,29 @@ async function saveRule() {
 
     const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
     const data = await res.json();
-    if (data.success) { showToast(data.message); document.getElementById('ruleModal').classList.remove('active'); setTimeout(() => location.reload(), 500); }
-    else showToast(data.error, 'error');
+    if (data.success) {
+        showToast(data.message);
+        document.getElementById('ruleModal').classList.remove('active');
+        setTimeout(() => location.reload(), 600);
+    } else {
+        showToast(data.error, 'error');
+    }
 }
 
 async function toggleRule(id, btn) {
     const res = await fetch(`/api/alert-rules/${id}/toggle`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-        btn.className = `toggle-btn ${data.is_enabled ? 'on' : 'off'}`;
+        btn.className = `ar-toggle ${data.is_enabled ? 'on' : 'off'}`;
+        btn.title = data.is_enabled ? 'Enabled' : 'Disabled';
         showToast(data.message);
-    } else showToast(data.error, 'error');
+    } else {
+        showToast(data.error, 'error');
+    }
 }
 
 async function testRule(id) {
-    document.getElementById('testResult').innerHTML = '<span style="color:var(--text-muted);">Running test...</span>';
+    document.getElementById('testResult').innerHTML = '<div class="ar-test-loading"><div class="ar-spinner"></div><span>Running rule evaluation...</span></div>';
     document.getElementById('testModal').classList.add('active');
 
     const res = await fetch(`/api/alert-rules/${id}/test`, { method: 'POST' });
@@ -264,23 +1170,68 @@ async function testRule(id) {
 
     let html = '';
     if (data.success) {
-        html += `<div style="margin-bottom:1rem;font-size:0.9rem;">Rule: <strong>${data.rule_name}</strong> (${data.severity})</div>`;
-        html += `<div style="margin-bottom:1rem;font-size:0.9rem;">Would trigger: <strong style="color:${data.would_trigger ? 'var(--danger)' : 'var(--success)'}">${data.would_trigger ? 'YES' : 'NO'}</strong></div>`;
+        const triggerColor = data.would_trigger ? 'var(--danger)' : 'var(--success)';
+        const triggerIcon = data.would_trigger
+            ? '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#ef4444;fill:none;stroke-width:2;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+            : '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#22c55e;fill:none;stroke-width:2;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+
+        html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;padding:0.85rem 1rem;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:10px;">';
+        html += triggerIcon;
+        html += '<div>';
+        html += '<div style="font-family:Outfit,sans-serif;font-weight:600;color:white;font-size:0.9rem;">' + data.rule_name + '</div>';
+        html += '<div style="font-family:Outfit,sans-serif;font-size:0.8rem;color:var(--text-muted);">Severity: <span style="font-family:JetBrains Mono,monospace;color:' + triggerColor + ';">' + data.severity + '</span></div>';
+        html += '</div>';
+        html += '<div style="margin-left:auto;font-family:Outfit,sans-serif;font-weight:700;font-size:0.85rem;color:' + triggerColor + ';">';
+        html += data.would_trigger ? 'WOULD TRIGGER' : 'NO TRIGGER';
+        html += '</div>';
+        html += '</div>';
+
         if (data.details && Object.keys(data.details).length) {
-            html += `<div style="background:var(--input-bg);padding:0.75rem;border-radius:0.375rem;font-family:monospace;font-size:0.75rem;white-space:pre-wrap;">${JSON.stringify(data.details, null, 2)}</div>`;
+            html += '<div class="ar-test-code">' + JSON.stringify(data.details, null, 2) + '</div>';
         }
     } else {
-        html = `<span style="color:var(--danger);">${data.error}</span>`;
+        html = '<div style="display:flex;align-items:center;gap:0.5rem;color:#f87171;font-family:Outfit,sans-serif;font-size:0.9rem;">';
+        html += '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        html += data.error;
+        html += '</div>';
     }
     document.getElementById('testResult').innerHTML = html;
 }
 
 async function deleteRule(id, name) {
-    if (!confirm(`Delete rule "${name}"? This will also delete all associated alerts.`)) return;
+    if (!confirm('Delete rule "' + name + '"? This will also delete all associated alerts.')) return;
     const res = await fetch(`/api/alert-rules/${id}`, { method: 'DELETE' });
     const data = await res.json();
-    if (data.success) { showToast(data.message); document.getElementById(`rule-${id}`).remove(); }
-    else showToast(data.error, 'error');
+    if (data.success) {
+        showToast(data.message);
+        const card = document.getElementById('rule-' + id);
+        if (card) {
+            card.style.transition = 'all 0.35s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-20px)';
+            setTimeout(() => card.remove(), 350);
+        }
+    } else {
+        showToast(data.error, 'error');
+    }
 }
+
+/* Close modals on overlay click */
+document.querySelectorAll('.ar-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            overlay.classList.remove('active');
+        }
+    });
+});
+
+/* Close modals on Escape key */
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.ar-overlay.active').forEach(function(m) {
+            m.classList.remove('active');
+        });
+    }
+});
 </script>
 {% endblock %}

@@ -88,10 +88,9 @@ http://10.12.50.77:8002/logs/
 just go through this one and then me what your suggestion  about this is it right approach 
 
 
+http://10.12.50.77:8002/correlation/
 
+her in rules we have Total Matches how to know which one match as per the below rules 
+and also we shoud have drll down to these further for each below rule what u u suggest 
 
-http://10.12.50.77:8002/dashboard/
-
-here we have storage being 100% used so we need to make sure that this drive never reach again  more then 90% 
-we need to automate this process then also build the UI  http://10.12.50.77:8002/system/ which should show the 
-usage of the drive  which one taking and how much 
+this should be real data based on the time rang filter defaut is 24 Hour

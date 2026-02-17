@@ -1,164 +1,558 @@
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3345s ago] ('IP',)
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3345s ago] (1, 6)
-2026-02-15 14:02:59 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3369s ago] ('IP',)
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3369s ago] (1, 6)
-2026-02-15 14:03:23 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3633s ago] ('IP',)
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3633s ago] (1, 6)
-2026-02-15 14:07:47 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3807s ago] ('IP',)
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3807s ago] (1, 6)
-2026-02-15 14:10:42 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3926s ago] ('IP',)
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3926s ago] (1, 6)
-2026-02-15 14:12:40 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4251s ago] ('IP',)
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4251s ago] (1, 6)
-2026-02-15 14:18:05 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4299s ago] ('IP',)
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
-FROM edl_entries 
-WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4299s ago] (1, 6)
-2026-02-15 14:18:53 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
-FROM edl_lists 
-WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4439s ago] ('HASH',)
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1740s ago] ('DOMAIN',)
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER)
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4439s ago] (5,)
-2026-02-15 14:21:13 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1740s ago] (4,)
+2026-02-17 12:08:58 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4494s ago] ('IP',)
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1956s ago] ('IP',)
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4494s ago] (1, 6)
-2026-02-15 14:22:09 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1956s ago] (1, 6)
+2026-02-17 12:12:34 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4530s ago] ('IP',)
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2130s ago] ('IP',)
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4530s ago] (1, 6)
-2026-02-15 14:22:44 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2130s ago] (1, 6)
+2026-02-17 12:15:27 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4538s ago] ('IP',)
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2206s ago] ('IP',)
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4538s ago] (1, 6)
-2026-02-15 14:22:52 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2206s ago] (1, 6)
+2026-02-17 12:16:44 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4538s ago] ('IP',)
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2250s ago] ('IP',)
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4538s ago] (1, 6)
-2026-02-15 14:22:53 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:24:52 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:24:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
-FROM users 
-WHERE users.id = $1::INTEGER AND users.is_active = true
-2026-02-15 14:24:52 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4818s ago] (1,)
-2026-02-15 14:24:52 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2250s ago] (1, 6)
+2026-02-17 12:17:28 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4739s ago] ('HASH',)
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2290s ago] ('IP',)
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2290s ago] (1, 6)
+2026-02-17 12:18:08 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2327s ago] ('IP',)
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2327s ago] (1, 6)
+2026-02-17 12:18:45 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2670s ago] ('DOMAIN',)
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER)
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4739s ago] (5,)
-2026-02-15 14:26:13 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2670s ago] (4,)
+2026-02-17 12:24:28 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4786s ago] ('IP',)
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2684s ago] ('IP',)
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4786s ago] (1, 6)
-2026-02-15 14:27:00 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2684s ago] (1, 6)
+2026-02-17 12:24:42 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
 FROM edl_lists 
 WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4841s ago] ('IP',)
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2702s ago] ('IP',)
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
 FROM edl_entries 
 WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4841s ago] (1, 6)
-2026-02-15 14:27:55 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
-2026-02-15 14:29:47 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
-2026-02-15 14:29:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2702s ago] (1, 6)
+2026-02-17 12:24:59 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2887s ago] ('IP',)
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2887s ago] (1, 6)
+2026-02-17 12:28:05 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2980s ago] ('IP',)
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 2980s ago] (1, 6)
+2026-02-17 12:29:38 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3287s ago] ('IP',)
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3287s ago] (1, 6)
+2026-02-17 12:34:45 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3306s ago] ('IP',)
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3306s ago] (1, 6)
+2026-02-17 12:35:03 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3410s ago] ('HASH',)
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3410s ago] (5,)
+2026-02-17 12:36:48 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3608s ago] ('IP',)
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3608s ago] (1, 6)
+2026-02-17 12:40:06 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3729s ago] ('IP',)
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3729s ago] (1, 6)
+2026-02-17 12:42:07 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3793s ago] ('IP',)
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 3793s ago] (1, 6)
+2026-02-17 12:43:11 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4220s ago] ('DOMAIN',)
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4220s ago] (4,)
+2026-02-17 12:50:18 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4426s ago] ('IP',)
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4426s ago] (1, 6)
+2026-02-17 12:53:44 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4543s ago] ('IP',)
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4543s ago] (1, 6)
+2026-02-17 12:55:41 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4728s ago] ('IP',)
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4728s ago] (1, 6)
+2026-02-17 12:58:45 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4840s ago] ('DOMAIN',)
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4840s ago] (4,)
+2026-02-17 13:00:38 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4924s ago] ('IP',)
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4924s ago] (1, 6)
+2026-02-17 13:02:02 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5150s ago] ('DOMAIN',)
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5150s ago] (4,)
+2026-02-17 13:05:48 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5226s ago] ('IP',)
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5226s ago] (1, 6)
+2026-02-17 13:07:04 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5448s ago] ('IP',)
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5448s ago] (1, 6)
+2026-02-17 13:10:45 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5528s ago] ('IP',)
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5528s ago] (1, 6)
+2026-02-17 13:12:06 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5540s ago] ('IP',)
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5540s ago] (1, 6)
+2026-02-17 13:12:18 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5915s ago] ('IP',)
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5915s ago] (1, 6)
+2026-02-17 13:18:32 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6235s ago] ('IP',)
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6235s ago] (1, 6)
+2026-02-17 13:23:53 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6605s ago] ('IP',)
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6605s ago] (1, 6)
+2026-02-17 13:30:03 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT system_settings.id, system_settings.key, system_settings.value, system_settings.updated_at 
+FROM system_settings 
+WHERE system_settings.key = $1::VARCHAR
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6720s ago] ('setup_completed',)
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
 FROM users 
 WHERE users.id = $1::INTEGER AND users.is_active = true
-2026-02-15 14:29:47 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 5113s ago] (1,)
-2026-02-15 14:29:47 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
-2026-02-15 14:35:58 - fastapi_app.main - INFO - lifespan:177 - Shutting down NetLogs...
-2026-02-15 14:35:58 - fastapi_app.main - INFO - lifespan:180 - Database connections closed
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00050s] (1,)
+2026-02-17 13:30:14 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6736s ago] ('IP',)
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6736s ago] (1, 6)
+2026-02-17 13:32:14 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6780s ago] ('IP',)
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6780s ago] (1, 6)
+2026-02-17 13:32:58 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6820s ago] ('HASH',)
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6820s ago] (5,)
+2026-02-17 13:33:38 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6907s ago] ('IP',)
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6907s ago] (1, 6)
+2026-02-17 13:35:05 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6957s ago] ('IP',)
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 6957s ago] (1, 6)
+2026-02-17 13:35:54 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7122s ago] ('IP',)
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7122s ago] (1, 6)
+2026-02-17 13:38:40 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+FROM users 
+WHERE users.id = $1::INTEGER AND users.is_active = true
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 514s ago] (1,)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7130s ago] ('HASH',)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7130s ago] (5,)
+2026-02-17 13:38:48 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:40:58 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:40:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+FROM users 
+WHERE users.id = $1::INTEGER AND users.is_active = true
+2026-02-17 13:40:58 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 644s ago] (1,)
+2026-02-17 13:40:58 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7349s ago] ('IP',)
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7349s ago] (1, 6)
+2026-02-17 13:42:26 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7384s ago] ('IP',)
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7384s ago] (1, 6)
+2026-02-17 13:43:02 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7450s ago] ('IP',)
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7450s ago] (1, 6)
+2026-02-17 13:44:08 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7510s ago] ('IP',)
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7510s ago] (1, 6)
+2026-02-17 13:45:08 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7642s ago] ('IP',)
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7642s ago] (1, 6)
+2026-02-17 13:47:20 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7717s ago] ('IP',)
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7717s ago] (1, 6)
+2026-02-17 13:48:35 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7727s ago] ('IP',)
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7727s ago] (1, 6)
+2026-02-17 13:48:45 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7750s ago] ('HASH',)
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 7750s ago] (5,)
+2026-02-17 13:49:08 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.list_type = $1::edltype AND edl_lists.is_active = true
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 8054s ago] ('IP',)
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER, $2::INTEGER)
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 8054s ago] (1, 6)
+2026-02-17 13:54:11 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+FROM users 
+WHERE users.id = $1::INTEGER AND users.is_active = true
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1472s ago] (1,)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.id = $1::INTEGER
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00022s] (5,)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 8089s ago] (5,)
+2026-02-17 13:54:46 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+FROM users 
+WHERE users.id = $1::INTEGER AND users.is_active = true
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1480s ago] (1,)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.id = $1::INTEGER
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00021s] (5,)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 8199s ago] (5,)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.value 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id = $1::INTEGER
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [generated in 0.00018s] (5,)
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1844 - INSERT INTO edl_entries (edl_list_id, value, description, is_active, expires_at, created_at, updated_at, source) SELECT p0::INTEGER, p1::VARCHAR, p2::VARCHAR, p3::BOOLEAN, p4::TIMESTAMP WITHOUT TIME ZONE, p5::TIMESTAMP WITHOUT TIME ZONE, p6::TIMESTAM ... 4604 characters truncated ...  p4, p5, p6, p7, sen_counter) ORDER BY sen_counter RETURNING edl_entries.id, edl_entries.id AS id__1
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _execute_context:1844 - [generated in 0.00030s (insertmanyvalues) 1/1 (ordered)] (5, '1b6bb4a4f26b636fbfd26d24ebd2304a', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220920), datetime.datetime(2026, 2, 17, 13, 54, 54, 220925), 'import', 5, '15ef60737a7200285964b3cac3e8e663', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220927), datetime.datetime(2026, 2, 17, 13, 54, 54, 220928), 'import', 5, '7366345af36b175737695b4b8d09d688', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220929), datetime.datetime(2026, 2, 17, 13, 54, 54, 220930), 'import', 5, '8dbb41ccb9190dfcc3d37f18208cc1a6', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220931), datetime.datetime(2026, 2, 17, 13, 54, 54, 220932), 'import', 5, '0358de10f41146a515ff76715604c22c', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220933), datetime.datetime(2026, 2, 17, 13, 54, 54, 220934), 'import', 5, '91e617733af6fe6f685e3a81690d981f', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220935), datetime.datetime(2026, 2, 17, 13, 54, 54, 220936), 'import', 5, 'c5b5ab94999f1409975d40fdcb26e43f' ... 100 parameters truncated ... datetime.datetime(2026, 2, 17, 13, 54, 54, 220962), 'import', 5, '078163d5c16f64caa5a14784323fd51451b8c831c73396b967b4e35e6879937b', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220963), datetime.datetime(2026, 2, 17, 13, 54, 54, 220964), 'import', 5, '088f2aced9ed60c2ce853b065f57691403459e1e0d167891d6849e1b58228173', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220965), datetime.datetime(2026, 2, 17, 13, 54, 54, 220966), 'import', 5, '6784e652f304bf8e43b42c29ad8dd146dd384fa9536b9c6640dfbc370c3e78de', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220967), datetime.datetime(2026, 2, 17, 13, 54, 54, 220968), 'import', 5, '6e2c39d0c00a6a8eef33f9670f941a88c957d3c1e9496392beedc98af14269a2', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220970), datetime.datetime(2026, 2, 17, 13, 54, 54, 220970), 'import', 5, '996e68f2fe1c8bb091f34e9bf39fd34d95c3e21508def1f54098a1874bfb825e', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220972), datetime.datetime(2026, 2, 17, 13, 54, 54, 220973), 'import', 5, 'e451287843b3927c6046eaabd3e22b929bc1f445eec23a73b1398b115d02e4fb', '', True, None, datetime.datetime(2026, 2, 17, 13, 54, 54, 220974), datetime.datetime(2026, 2, 17, 13, 54, 54, 220975), 'import')
+2026-02-17 13:54:54 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT users.id, users.username, users.email, users.password_hash, users.role, users.is_active, users.last_login, users.failed_login_attempts, users.locked_until, users.created_at, users.updated_at 
+FROM users 
+WHERE users.id = $1::INTEGER AND users.is_active = true
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 1482s ago] (1,)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_lists.id, edl_lists.name, edl_lists.description, edl_lists.list_type, edl_lists.access_token, edl_lists.is_active, edl_lists.created_at, edl_lists.updated_at 
+FROM edl_lists 
+WHERE edl_lists.id = $1::INTEGER
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 9.168s ago] (5,)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT edl_entries.edl_list_id AS edl_entries_edl_list_id, edl_entries.id AS edl_entries_id, edl_entries.value AS edl_entries_value, edl_entries.description AS edl_entries_description, edl_entries.is_active AS edl_entries_is_active, edl_entries.expires_at AS edl_entries_expires_at, edl_entries.created_at AS edl_entries_created_at, edl_entries.updated_at AS edl_entries_updated_at, edl_entries.source AS edl_entries_source 
+FROM edl_entries 
+WHERE edl_entries.edl_list_id IN ($1::INTEGER)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 8098s ago] (5,)
+2026-02-17 13:54:55 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT

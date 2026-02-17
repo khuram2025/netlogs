@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}NetLogs - SOAR/SIEM{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -753,6 +754,10 @@
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
                         <span class="sb-item-label">Audit Log</span>
                     </a>
+                    <a href="{{ url_for('backups_page') }}" class="sb-item" data-tip="Backups" data-path="/system/backups">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+                        <span class="sb-item-label">Backups</span>
+                    </a>
                 </div>
                 {% endif %}
             </div>
@@ -787,6 +792,7 @@
                 <div class="topbar-status">
                     <div class="topbar-dot"></div>
                     <span>System Online</span>
+                    <span style="margin-left:4px;opacity:0.5">v{{ app_version }}</span>
                 </div>
             </header>
 
@@ -803,6 +809,53 @@
             </div>
         </div>
     </div>
+
+    <script>
+    /* ============================================================
+       CSRF Protection — auto-inject token into fetch() and forms
+       ============================================================ */
+    (function() {
+        function getCsrfToken() {
+            var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+
+        // Patch window.fetch so every unsafe request gets the header
+        var _origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            opts = opts || {};
+            var method = (opts.method || 'GET').toUpperCase();
+            if (['POST','PUT','DELETE','PATCH'].indexOf(method) !== -1) {
+                if (opts.headers instanceof Headers) {
+                    if (!opts.headers.has('X-CSRF-Token')) {
+                        opts.headers.set('X-CSRF-Token', getCsrfToken());
+                    }
+                } else {
+                    opts.headers = opts.headers || {};
+                    if (!opts.headers['X-CSRF-Token']) {
+                        opts.headers['X-CSRF-Token'] = getCsrfToken();
+                    }
+                }
+            }
+            return _origFetch.call(this, url, opts);
+        };
+
+        // Auto-add hidden csrf_token field to every <form> on the page
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('form').forEach(function(f) {
+                if (!f.querySelector('input[name="csrf_token"]')) {
+                    var inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.name = 'csrf_token';
+                    inp.value = getCsrfToken();
+                    f.appendChild(inp);
+                }
+            });
+        });
+
+        window.getCsrfToken = getCsrfToken;
+    })();
+    </script>
 
     <script>
     (function() {

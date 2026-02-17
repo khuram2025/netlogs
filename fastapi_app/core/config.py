@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     log_file: str = Field(default="logs/netlogs.log", alias="LOG_FILE")
     log_max_size: int = Field(default=10485760, alias="LOG_MAX_SIZE")  # 10MB
     log_backup_count: int = Field(default=5, alias="LOG_BACKUP_COUNT")
+    log_format: str = Field(default="text", alias="LOG_FORMAT")  # "text" or "json"
 
     # Timezone
     timezone: str = Field(default="Asia/Riyadh", alias="TZ")

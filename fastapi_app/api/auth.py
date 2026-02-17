@@ -14,6 +14,9 @@ from ..core.auth import (
     set_session_cookie,
     clear_session_cookie,
     get_current_user,
+    decode_session_token,
+    revoke_token,
+    SESSION_COOKIE_NAME,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +33,11 @@ async def login_page(
     error: Optional[str] = Query(None),
 ):
     """Render the login page."""
+    # Redirect to setup wizard if first-run setup is needed
+    from ..services.setup_service import is_setup_needed
+    if await is_setup_needed():
+        return RedirectResponse(url="/setup", status_code=303)
+
     # If already logged in, redirect to dashboard
     user = await get_current_user(request)
     if user is not None:
@@ -106,8 +114,17 @@ async def login_post(
 @router.get("/logout", name="logout")
 @router.post("/logout", name="logout_post")
 async def logout(request: Request):
-    """Log out the current user."""
+    """Log out the current user and revoke the session token."""
     user = await get_current_user(request)
+
+    # Revoke the JWT so it can't be reused
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        payload = decode_session_token(token)
+        if payload and payload.get("jti"):
+            exp = payload.get("exp", 0)
+            revoke_token(payload["jti"], exp)
+
     if user:
         from ..services.audit_service import log_action
         log_action(

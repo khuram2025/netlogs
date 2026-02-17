@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetLogs — Authenticate</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -537,5 +538,23 @@
         </div>
     </div>
 
+<script>
+/* CSRF — auto-inject into forms */
+(function() {
+    function getCsrfToken() {
+        var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form').forEach(function(f) {
+            if (!f.querySelector('input[name="csrf_token"]')) {
+                var inp = document.createElement('input');
+                inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = getCsrfToken();
+                f.appendChild(inp);
+            }
+        });
+    });
+})();
+</script>
 </body>
 </html>

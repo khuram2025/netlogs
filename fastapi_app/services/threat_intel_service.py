@@ -154,6 +154,76 @@ def get_ioc_match_stats(hours: int = 24) -> dict:
         return {"total_matches": 0, "by_severity": [], "by_type": [], "recent_matches": []}
 
 
+def get_feed_match_stats(feed_name: str, hours: int = 24) -> dict:
+    """Get match statistics filtered by feed_name for feed detail dashboard."""
+    try:
+        client = ClickHouseClient.get_client()
+        escaped = feed_name.replace("'", "\\'")
+
+        total = client.command(f"""
+            SELECT count() FROM ioc_matches
+            WHERE timestamp > now() - INTERVAL {hours} HOUR
+              AND feed_name = '{escaped}'
+        """)
+
+        by_severity = client.query(f"""
+            SELECT severity, count() as cnt FROM ioc_matches
+            WHERE timestamp > now() - INTERVAL {hours} HOUR
+              AND feed_name = '{escaped}'
+            GROUP BY severity ORDER BY cnt DESC
+        """)
+
+        by_type = client.query(f"""
+            SELECT ioc_type, count() as cnt FROM ioc_matches
+            WHERE timestamp > now() - INTERVAL {hours} HOUR
+              AND feed_name = '{escaped}'
+            GROUP BY ioc_type ORDER BY cnt DESC
+        """)
+
+        # Hourly timeline for sparkline (last 24h)
+        timeline = client.query(f"""
+            SELECT toStartOfHour(timestamp) as hour, count() as cnt
+            FROM ioc_matches
+            WHERE timestamp > now() - INTERVAL {hours} HOUR
+              AND feed_name = '{escaped}'
+            GROUP BY hour ORDER BY hour
+        """)
+
+        # Recent matches with network context
+        recent = client.query(f"""
+            SELECT timestamp, ioc_type, ioc_value, severity, srcip, dstip, dstport
+            FROM ioc_matches
+            WHERE timestamp > now() - INTERVAL {hours} HOUR
+              AND feed_name = '{escaped}'
+            ORDER BY timestamp DESC LIMIT 20
+        """)
+
+        return {
+            "total_matches": total,
+            "by_severity": [{"severity": r[0], "count": r[1]} for r in by_severity.result_rows],
+            "by_type": [{"ioc_type": r[0], "count": r[1]} for r in by_type.result_rows],
+            "timeline": [
+                {"hour": r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0]), "count": r[1]}
+                for r in timeline.result_rows
+            ],
+            "recent_matches": [
+                {
+                    "timestamp": r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0]),
+                    "ioc_type": r[1],
+                    "ioc_value": r[2],
+                    "severity": r[3],
+                    "srcip": r[4],
+                    "dstip": r[5],
+                    "dstport": r[6],
+                }
+                for r in recent.result_rows
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Failed to get feed match stats for '{feed_name}': {e}")
+        return {"total_matches": 0, "by_severity": [], "by_type": [], "timeline": [], "recent_matches": []}
+
+
 def get_ioc_matches_paginated(
     page: int = 1,
     per_page: int = 50,

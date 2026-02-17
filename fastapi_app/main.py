@@ -14,7 +14,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .core.config import settings
 from .core.logging import setup_logging
+from .__version__ import __version__
 from .core.auth import is_public_path, get_current_user, authenticate_api_key, SESSION_COOKIE_NAME
+from .core.csrf import CSRFMiddleware
 from .db.database import init_db, close_db
 from .db.clickhouse import ClickHouseClient
 from .api.devices import router as devices_api_router
@@ -31,6 +33,9 @@ from .api.correlation import router as correlation_router
 from .api.saved_searches import router as saved_searches_router
 from .api.dashboards import router as dashboards_router
 from .api.address_objects import router as address_objects_router
+from .api.setup import router as setup_router
+from .api.health import router as health_router
+from .api.backup import router as backup_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -49,6 +54,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if is_public_path(path):
             response = await call_next(request)
             return response
+
+        # Redirect to setup wizard if first-run setup is needed
+        if not path.startswith("/setup") and not path.startswith("/api/setup"):
+            from .services.setup_service import is_setup_needed
+            if await is_setup_needed():
+                return RedirectResponse(url="/setup", status_code=303)
 
         # Check for session cookie
         token = request.cookies.get(SESSION_COOKIE_NAME)
@@ -113,12 +124,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize PostgreSQL: {e}")
 
+    # Run Alembic migrations (stamp if fresh install, upgrade if pending)
+    try:
+        from .db.migrate import run_pg_migrations
+        await run_pg_migrations()
+    except Exception as e:
+        logger.warning(f"Alembic migration check: {e}")
+
     # Initialize ClickHouse table
     try:
         ClickHouseClient.ensure_table()
         logger.info("ClickHouse table verified")
     except Exception as e:
         logger.warning(f"ClickHouse setup warning: {e}")
+
+    # Run ClickHouse migrations
+    try:
+        from .db.clickhouse_migrations.runner import run_clickhouse_migrations
+        applied = await run_clickhouse_migrations()
+        if applied:
+            logger.info(f"Applied {applied} ClickHouse migration(s)")
+    except Exception as e:
+        logger.warning(f"ClickHouse migration check: {e}")
 
     # Initialize ClickHouse audit logs table
     try:
@@ -184,7 +211,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="Enterprise Firewall Log Management and SIEM Platform",
-    version="2.0.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -201,7 +228,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Authentication middleware - must be added AFTER CORS
+# CSRF middleware - validates tokens on state-changing requests
+app.add_middleware(CSRFMiddleware)
+
+# Authentication middleware - must be added AFTER CORS and CSRF
 app.add_middleware(AuthenticationMiddleware)
 
 
@@ -212,6 +242,9 @@ except RuntimeError:
     # Static directory doesn't exist
     pass
 
+
+# Include setup wizard (must be before auth routes)
+app.include_router(setup_router)
 
 # Include auth routes (must be before other routes)
 app.include_router(auth_router)
@@ -233,15 +266,11 @@ app.include_router(saved_searches_router)
 app.include_router(dashboards_router)
 app.include_router(address_objects_router)
 
+# Include health check routes (public, no auth)
+app.include_router(health_router)
 
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "app": settings.app_name,
-        "version": "2.0.0"
-    }
+# Include backup management routes
+app.include_router(backup_router)
 
 
 @app.get("/api/")
@@ -249,7 +278,7 @@ async def api_root():
     """API root endpoint."""
     return {
         "message": "NetLogs SOAR/SIEM API",
-        "version": "2.0.0",
+        "version": __version__,
         "endpoints": {
             "devices": "/api/devices/",
             "logs": "/api/logs/",

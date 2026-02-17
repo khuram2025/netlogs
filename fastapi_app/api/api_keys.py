@@ -134,18 +134,17 @@ async def api_create_key(
     if not user:
         return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
 
-    body = await request.json()
-    name = body.get("name", "").strip()
-    permissions = body.get("permissions", ["read"])
-    expires_in_days = body.get("expires_in_days")
+    from ..schemas import CreateAPIKeyRequest
+    from pydantic import ValidationError
+    try:
+        body = CreateAPIKeyRequest(**(await request.json()))
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        return JSONResponse({"success": False, "error": msg}, status_code=400)
 
-    if not name:
-        return JSONResponse({"success": False, "error": "Key name is required"}, status_code=400)
-
-    # Validate permissions
-    valid_permissions = {"read", "write", "admin"}
-    if not all(p in valid_permissions for p in permissions):
-        return JSONResponse({"success": False, "error": f"Invalid permissions. Allowed: {', '.join(valid_permissions)}"}, status_code=400)
+    name = body.name.strip()
+    permissions = [p.value for p in body.permissions]
+    expires_in_days = body.expires_in_days
 
     # Non-admin users cannot create admin-permission keys
     if "admin" in permissions and user.role != "ADMIN":

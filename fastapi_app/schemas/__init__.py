@@ -18,6 +18,19 @@ from .logs import (
     PerDeviceStorage,
 )
 
+from .auth import (
+    CreateUserRequest,
+    UpdateUserRequest,
+    ResetPasswordRequest,
+    ChangePasswordRequest,
+    CreateAPIKeyRequest,
+    UpdateAPIKeyRequest,
+    AlertRuleRequest,
+    NotificationChannelRequest,
+    SetupStep1Request,
+    SetupStep2Request,
+)
+
 __all__ = [
     "DeviceBase",
     "DeviceCreate",
@@ -33,4 +46,14 @@ __all__ = [
     "DashboardStats",
     "StorageStats",
     "PerDeviceStorage",
+    "CreateUserRequest",
+    "UpdateUserRequest",
+    "ResetPasswordRequest",
+    "ChangePasswordRequest",
+    "CreateAPIKeyRequest",
+    "UpdateAPIKeyRequest",
+    "AlertRuleRequest",
+    "NotificationChannelRequest",
+    "SetupStep1Request",
+    "SetupStep2Request",
 ]

@@ -17,6 +17,7 @@ from ..models.threat_intel import ThreatFeed, IOC, FeedType
 from ..core.permissions import require_min_role
 from ..services.threat_intel_service import (
     fetch_feed, get_ioc_match_stats, get_ioc_matches_paginated,
+    get_feed_match_stats,
 )
 from ..services.ioc_matcher import get_matcher
 
@@ -200,6 +201,95 @@ async def api_list_feeds(db: AsyncSession = Depends(get_db)):
             }
             for f in feeds
         ],
+    }
+
+
+@router.get("/api/threat-intel/feeds/{feed_id}",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_feed_detail(feed_id: int, db: AsyncSession = Depends(get_db)):
+    """Get comprehensive feed detail for the feed dashboard modal."""
+    result = await db.execute(select(ThreatFeed).where(ThreatFeed.id == feed_id))
+    feed = result.scalar_one_or_none()
+    if not feed:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Feed not found"})
+
+    # IOC breakdown by type
+    type_rows = await db.execute(
+        select(IOC.ioc_type, func.count(IOC.id))
+        .where(IOC.feed_id == feed_id, IOC.is_active == True)
+        .group_by(IOC.ioc_type)
+    )
+    ioc_by_type = [{"ioc_type": r[0], "count": r[1]} for r in type_rows.all()]
+
+    # IOC breakdown by severity
+    sev_rows = await db.execute(
+        select(IOC.severity, func.count(IOC.id))
+        .where(IOC.feed_id == feed_id, IOC.is_active == True)
+        .group_by(IOC.severity)
+    )
+    ioc_by_severity = [{"severity": r[0], "count": r[1]} for r in sev_rows.all()]
+
+    # Top matched IOCs
+    top_matched_rows = await db.execute(
+        select(IOC.value, IOC.ioc_type, IOC.match_count, IOC.severity)
+        .where(IOC.feed_id == feed_id, IOC.match_count > 0)
+        .order_by(desc(IOC.match_count))
+        .limit(10)
+    )
+    top_matched = [
+        {"value": r[0], "ioc_type": r[1], "match_count": r[2], "severity": r[3]}
+        for r in top_matched_rows.all()
+    ]
+
+    # Recent IOCs
+    recent_ioc_rows = await db.execute(
+        select(IOC.value, IOC.ioc_type, IOC.severity, IOC.confidence, IOC.created_at)
+        .where(IOC.feed_id == feed_id, IOC.is_active == True)
+        .order_by(desc(IOC.created_at))
+        .limit(10)
+    )
+    recent_iocs = [
+        {
+            "value": r[0], "ioc_type": r[1], "severity": r[2],
+            "confidence": r[3],
+            "created_at": r[4].isoformat() if r[4] else None,
+        }
+        for r in recent_ioc_rows.all()
+    ]
+
+    # Active IOC count for this feed
+    active_count_result = await db.execute(
+        select(func.count(IOC.id)).where(IOC.feed_id == feed_id, IOC.is_active == True)
+    )
+    active_ioc_count = active_count_result.scalar() or 0
+
+    # Match stats from ClickHouse
+    match_stats = get_feed_match_stats(feed.name, hours=24)
+
+    return {
+        "success": True,
+        "feed": {
+            "id": feed.id,
+            "name": feed.name,
+            "feed_type": feed.feed_type,
+            "url": feed.url,
+            "is_enabled": feed.is_enabled,
+            "update_interval_minutes": feed.update_interval_minutes,
+            "parser_config": feed.parser_config,
+            "ioc_types": feed.ioc_types,
+            "ioc_count": feed.ioc_count,
+            "active_ioc_count": active_ioc_count,
+            "last_fetched_at": feed.last_fetched_at.isoformat() if feed.last_fetched_at else None,
+            "last_fetch_status": feed.last_fetch_status,
+            "last_fetch_message": feed.last_fetch_message,
+            "created_at": feed.created_at.isoformat() if feed.created_at else None,
+            "updated_at": feed.updated_at.isoformat() if feed.updated_at else None,
+        },
+        "ioc_by_type": ioc_by_type,
+        "ioc_by_severity": ioc_by_severity,
+        "top_matched": top_matched,
+        "recent_iocs": recent_iocs,
+        "match_stats": match_stats,
     }
 
 

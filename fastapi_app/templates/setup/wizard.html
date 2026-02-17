@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetLogs — Setup Wizard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #e2e8f0;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --border: #334155;
+            --input-bg: #020617;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --glow: rgba(59, 130, 246, 0.15);
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 48px 48px;
+            z-index: 0;
+        }
+
+        .bg-sweep {
+            position: fixed;
+            width: 900px;
+            height: 900px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                transparent 0deg,
+                transparent 340deg,
+                rgba(59, 130, 246, 0.06) 355deg,
+                transparent 360deg
+            );
+            animation: sweep 6s linear infinite;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        @keyframes sweep {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .bg-rings {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px solid rgba(59, 130, 246, 0.06);
+            z-index: 0;
+            pointer-events: none;
+        }
+        .bg-rings::before,
+        .bg-rings::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid rgba(59, 130, 246, 0.04);
+        }
+        .bg-rings::before { inset: 60px; }
+        .bg-rings::after { inset: 140px; }
+
+        /* ── Wizard wrapper ── */
+        .wizard-wrapper {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 640px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            animation: cardIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+        }
+
+        .wizard-card {
+            background: linear-gradient(170deg, rgba(30, 41, 59, 0.92) 0%, rgba(15, 23, 42, 0.96) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.25rem 2.25rem 1.75rem;
+            backdrop-filter: blur(20px);
+            box-shadow:
+                0 0 0 1px rgba(59, 130, 246, 0.05),
+                0 24px 48px -12px rgba(0, 0, 0, 0.5),
+                0 0 80px -20px rgba(59, 130, 246, 0.08);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wizard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+        }
+
+        /* ── Brand header ── */
+        .brand-header {
+            text-align: center;
+            margin-bottom: 1.75rem;
+        }
+
+        .brand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.04));
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            margin-bottom: 1rem;
+            animation: iconPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes iconPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1); }
+            50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+        }
+
+        .brand-icon svg {
+            width: 28px;
+            height: 28px;
+            color: var(--primary);
+        }
+
+        .brand-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: 0.375rem;
+        }
+        .brand-name span { color: var(--primary); }
+
+        .brand-sub {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--text-muted);
+        }
+
+        /* ── Step progress ── */
+        .step-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 2rem;
+        }
+
+        .step-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: 2px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text-muted);
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .step-dot.active {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--primary);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.25);
+        }
+
+        .step-dot.done {
+            border-color: var(--success);
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .step-line {
+            width: 48px;
+            height: 2px;
+            background: var(--border);
+            transition: background 0.3s;
+        }
+
+        .step-line.done {
+            background: var(--success);
+        }
+
+        /* ── Step sections ── */
+        .step-section {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .step-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.25rem;
+        }
+
+        .step-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
+        /* ── Form elements ── */
+        .form-group {
+            margin-bottom: 1.125rem;
+        }
+
+        .form-label {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.675rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper svg {
+            position: absolute;
+            left: 0.875rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: #475569;
+            transition: color 0.2s;
+            pointer-events: none;
+        }
+
+        .form-input {
+            display: block;
+            width: 100%;
+            padding: 0.7rem 0.875rem 0.7rem 2.625rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: white;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input.no-icon {
+            padding-left: 0.875rem;
+        }
+
+        .form-input::placeholder { color: #334155; }
+
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+        }
+
+        .input-wrapper:focus-within svg {
+            color: var(--primary);
+        }
+
+        /* ── Error / success banners ── */
+        .msg-banner {
+            display: none;
+            align-items: flex-start;
+            gap: 0.625rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.25rem;
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+
+        .msg-banner.error {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .msg-banner.success {
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .msg-banner.visible {
+            display: flex;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+            border: none;
+            border-radius: 9px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px -8px rgba(59, 130, 246, 0.45);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--text-muted);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #16a34a);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px -8px rgba(34, 197, 94, 0.45);
+        }
+
+        .btn-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.75rem;
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ── Channel type cards ── */
+        .channel-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .channel-card {
+            padding: 1rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--input-bg);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .channel-card:hover {
+            border-color: var(--text-muted);
+        }
+
+        .channel-card.selected {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.08);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+        }
+
+        .channel-card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .channel-card-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .channel-card.selected .channel-card-label {
+            color: var(--primary);
+        }
+
+        /* ── Dynamic config form ── */
+        .channel-config {
+            display: none;
+        }
+
+        .channel-config.visible {
+            display: block;
+        }
+
+        /* ── Syslog step ── */
+        .syslog-info {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .syslog-port {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .syslog-port-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+
+        .cmd-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+            border-radius: 6px;
+            padding: 0.625rem 0.875rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+            position: relative;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .cmd-block .copy-btn {
+            position: absolute;
+            right: 4px;
+            top: 4px;
+            background: rgba(51, 65, 85, 0.8);
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .cmd-block .copy-btn:hover {
+            color: white;
+        }
+
+        .syslog-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .syslog-status.receiving {
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .syslog-status.waiting {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .status-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .syslog-status.receiving .status-icon {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .syslog-status.waiting .status-icon {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .status-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .status-text-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .status-text-detail {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Summary step ── */
+        .summary-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.625rem;
+            background: var(--input-bg);
+        }
+
+        .summary-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .summary-icon.done {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .summary-icon.skipped {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .summary-icon svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .summary-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: white;
+        }
+
+        .summary-detail {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .summary-badge {
+            margin-left: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        .summary-badge.done {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+        }
+
+        .summary-badge.skipped {
+            background: rgba(245, 158, 11, 0.08);
+            color: var(--warning);
+        }
+
+        /* ── Spinner ── */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ── Footer ── */
+        .wizard-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid rgba(51, 65, 85, 0.4);
+        }
+
+        .wizard-footer p {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #22c55e;
+            margin-right: 0.375rem;
+            animation: blink 2s ease-in-out infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        @media (max-width: 640px) {
+            .wizard-wrapper { padding: 1rem; }
+            .wizard-card { padding: 1.5rem 1.25rem 1.25rem; }
+            .channel-cards { grid-template-columns: 1fr; }
+            .bg-sweep, .bg-rings { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-grid"></div>
+    <div class="bg-sweep"></div>
+    <div class="bg-rings"></div>
+
+    <div class="wizard-wrapper">
+        <div class="wizard-card">
+
+            <!-- Brand -->
+            <div class="brand-header">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M9 12l2 2 4-4" opacity="0.7"/>
+                    </svg>
+                </div>
+                <div class="brand-name">Net<span>Logs</span></div>
+                <div class="brand-sub">Initial Setup</div>
+            </div>
+
+            <!-- Step progress indicator -->
+            <div class="step-progress">
+                <div class="step-dot active" id="dot-1">1</div>
+                <div class="step-line" id="line-1"></div>
+                <div class="step-dot" id="dot-2">2</div>
+                <div class="step-line" id="line-2"></div>
+                <div class="step-dot" id="dot-3">3</div>
+                <div class="step-line" id="line-3"></div>
+                <div class="step-dot" id="dot-4">4</div>
+            </div>
+
+            <!-- ==================== STEP 1: Account Security ==================== -->
+            <div class="step-section active" id="step-1">
+                <div class="step-title">Account Security</div>
+                <div class="step-desc">Change the default admin password and set your email address.</div>
+
+                <div id="step1-msg" class="msg-banner error"></div>
+
+                <div class="form-group">
+                    <label class="form-label">Current Password</label>
+                    <div class="input-wrapper">
+                        <input id="current-password" type="password" class="form-input" placeholder="Enter current password" value="changeme">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <div class="input-wrapper">
+                        <input id="new-password" type="password" class="form-input" placeholder="Min 8 characters" autocomplete="new-password">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <div class="input-wrapper">
+                        <input id="confirm-password" type="password" class="form-input" placeholder="Re-enter new password" autocomplete="new-password">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Admin Email (optional)</label>
+                    <div class="input-wrapper">
+                        <input id="admin-email" type="email" class="form-input" placeholder="admin@company.com">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="4" width="20" height="16" rx="2"/>
+                            <path d="M22 7l-10 6L2 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="submitStep1()">
+                        Continue
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 2: Notifications ==================== -->
+            <div class="step-section" id="step-2">
+                <div class="step-title">Notification Channel</div>
+                <div class="step-desc">Configure how NetLogs sends alert notifications. You can skip this and set it up later.</div>
+
+                <div id="step2-msg" class="msg-banner"></div>
+
+                <div class="channel-cards">
+                    <div class="channel-card" onclick="selectChannel('email')" id="card-email">
+                        <div class="channel-card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                <path d="M22 7l-10 6L2 7"/>
+                            </svg>
+                        </div>
+                        <div class="channel-card-label">Email</div>
+                    </div>
+                    <div class="channel-card" onclick="selectChannel('telegram')" id="card-telegram">
+                        <div class="channel-card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 5L2 12.5l7 1.5M21 5l-5 15-6-8.5M21 5L9 14"/>
+                            </svg>
+                        </div>
+                        <div class="channel-card-label">Telegram</div>
+                    </div>
+                    <div class="channel-card" onclick="selectChannel('webhook')" id="card-webhook">
+                        <div class="channel-card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                        </div>
+                        <div class="channel-card-label">Webhook</div>
+                    </div>
+                </div>
+
+                <!-- Email config -->
+                <div class="channel-config" id="config-email">
+                    <div class="form-group">
+                        <label class="form-label">SMTP Host</label>
+                        <input id="smtp-host" type="text" class="form-input no-icon" placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="form-group" style="display:flex;gap:0.75rem;">
+                        <div style="flex:1">
+                            <label class="form-label">SMTP Port</label>
+                            <input id="smtp-port" type="number" class="form-input no-icon" placeholder="587" value="587">
+                        </div>
+                        <div style="flex:1">
+                            <label class="form-label">Use TLS</label>
+                            <select id="smtp-tls" class="form-input no-icon" style="padding:0.7rem 0.875rem">
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SMTP Username</label>
+                        <input id="smtp-user" type="text" class="form-input no-icon" placeholder="user@gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SMTP Password</label>
+                        <input id="smtp-pass" type="password" class="form-input no-icon" placeholder="App password or SMTP password">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Recipient Email</label>
+                        <input id="smtp-to" type="email" class="form-input no-icon" placeholder="alerts@company.com">
+                    </div>
+                </div>
+
+                <!-- Telegram config -->
+                <div class="channel-config" id="config-telegram">
+                    <div class="form-group">
+                        <label class="form-label">Bot Token</label>
+                        <input id="tg-token" type="text" class="form-input no-icon" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Chat ID</label>
+                        <input id="tg-chatid" type="text" class="form-input no-icon" placeholder="-1001234567890">
+                    </div>
+                </div>
+
+                <!-- Webhook config -->
+                <div class="channel-config" id="config-webhook">
+                    <div class="form-group">
+                        <label class="form-label">Webhook URL</label>
+                        <input id="wh-url" type="url" class="form-input no-icon" placeholder="https://hooks.slack.com/services/...">
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(3)">
+                        Skip
+                    </button>
+                    <button class="btn btn-primary" onclick="submitStep2()" id="btn-step2" disabled>
+                        Save & Continue
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 3: Syslog Verification ==================== -->
+            <div class="step-section" id="step-3">
+                <div class="step-title">Syslog Verification</div>
+                <div class="step-desc">Verify that NetLogs is receiving syslog data from your devices.</div>
+
+                <div class="syslog-info">
+                    <div class="syslog-port">UDP/{{ syslog_port }}</div>
+                    <div class="syslog-port-label">Syslog Listener Port</div>
+
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.75rem;">
+                        Point your firewall or network device syslog to this server on the port above. Test with:
+                    </div>
+
+                    <div class="cmd-block">
+                        <span>echo "&lt;14&gt;Test log from setup wizard" | nc -u -w1 <span id="server-ip">YOUR_SERVER_IP</span> {{ syslog_port }}</span>
+                        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+                    </div>
+                </div>
+
+                <div id="syslog-status" class="syslog-status waiting" style="display:none;"></div>
+
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(4)">
+                        Skip
+                    </button>
+                    <button class="btn btn-primary" onclick="checkSyslog()" id="btn-check-syslog">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        Check for Logs
+                    </button>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 4: Summary ==================== -->
+            <div class="step-section" id="step-4">
+                <div class="step-title">Setup Complete</div>
+                <div class="step-desc">Here's a summary of your configuration.</div>
+
+                <ul class="summary-list" id="summary-list"></ul>
+
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="finishSetup()" id="btn-launch" style="width:100%;padding:0.85rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        Launch NetLogs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="wizard-footer">
+                <p><span class="status-dot"></span>System Online &mdash; First-Run Configuration</p>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+    /* CSRF — auto-inject token into fetch() calls */
+    (function() {
+        function getCsrfToken() {
+            var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+        var _origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            opts = opts || {};
+            var method = (opts.method || 'GET').toUpperCase();
+            if (['POST','PUT','DELETE','PATCH'].indexOf(method) !== -1) {
+                opts.headers = opts.headers || {};
+                if (!opts.headers['X-CSRF-Token']) {
+                    opts.headers['X-CSRF-Token'] = getCsrfToken();
+                }
+            }
+            return _origFetch.call(this, url, opts);
+        };
+        window.getCsrfToken = getCsrfToken;
+    })();
+</script>
+<script>
+    // ── State ──
+    let currentStep = 1;
+    const state = {
+        passwordChanged: false,
+        emailSet: false,
+        channelConfigured: false,
+        channelType: null,
+        syslogReceiving: false,
+        syslogCount: 0,
+    };
+
+    let selectedChannel = null;
+
+    // ── Step navigation ──
+    function goToStep(step) {
+        // Hide all steps
+        document.querySelectorAll('.step-section').forEach(s => s.classList.remove('active'));
+        // Show target
+        document.getElementById('step-' + step).classList.add('active');
+
+        // Update dots
+        for (let i = 1; i <= 4; i++) {
+            const dot = document.getElementById('dot-' + i);
+            dot.classList.remove('active', 'done');
+            if (i < step) {
+                dot.classList.add('done');
+                dot.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            } else if (i === step) {
+                dot.classList.add('active');
+                dot.textContent = i;
+            } else {
+                dot.textContent = i;
+            }
+        }
+
+        // Update lines
+        for (let i = 1; i <= 3; i++) {
+            const line = document.getElementById('line-' + i);
+            if (i < step) {
+                line.classList.add('done');
+            } else {
+                line.classList.remove('done');
+            }
+        }
+
+        // Build summary on step 4
+        if (step === 4) buildSummary();
+
+        currentStep = step;
+    }
+
+    // ── Helpers ──
+    function showMsg(id, text, type) {
+        const el = document.getElementById(id);
+        el.className = 'msg-banner ' + type + ' visible';
+        el.textContent = text;
+    }
+
+    function hideMsg(id) {
+        document.getElementById(id).classList.remove('visible');
+    }
+
+    function setLoading(btn, loading) {
+        if (loading) {
+            btn.disabled = true;
+            btn._origHTML = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner"></span> Please wait...';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = btn._origHTML || btn.innerHTML;
+        }
+    }
+
+    // ── Step 1: Account Security ──
+    async function submitStep1() {
+        hideMsg('step1-msg');
+        const currentPw = document.getElementById('current-password').value;
+        const newPw = document.getElementById('new-password').value;
+        const confirmPw = document.getElementById('confirm-password').value;
+        const email = document.getElementById('admin-email').value.trim();
+
+        if (!currentPw) { showMsg('step1-msg', 'Enter your current password.', 'error'); return; }
+        if (newPw.length < 8) { showMsg('step1-msg', 'New password must be at least 8 characters.', 'error'); return; }
+        if (newPw === 'changeme') { showMsg('step1-msg', 'Please choose a different password.', 'error'); return; }
+        if (newPw !== confirmPw) { showMsg('step1-msg', 'Passwords do not match.', 'error'); return; }
+
+        const btn = document.querySelector('#step-1 .btn-primary');
+        setLoading(btn, true);
+
+        try {
+            const res = await fetch('/api/setup/step1', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    current_password: currentPw,
+                    new_password: newPw,
+                    email: email
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                showMsg('step1-msg', data.error || 'Failed to update password', 'error');
+                setLoading(btn, false);
+                return;
+            }
+
+            state.passwordChanged = true;
+            state.emailSet = !!email;
+            goToStep(2);
+        } catch (e) {
+            showMsg('step1-msg', 'Network error. Please try again.', 'error');
+        }
+        setLoading(btn, false);
+    }
+
+    // ── Step 2: Notifications ──
+    function selectChannel(type) {
+        selectedChannel = type;
+        document.querySelectorAll('.channel-card').forEach(c => c.classList.remove('selected'));
+        document.getElementById('card-' + type).classList.add('selected');
+
+        document.querySelectorAll('.channel-config').forEach(c => c.classList.remove('visible'));
+        document.getElementById('config-' + type).classList.add('visible');
+
+        document.getElementById('btn-step2').disabled = false;
+    }
+
+    async function submitStep2() {
+        hideMsg('step2-msg');
+        if (!selectedChannel) return;
+
+        let name = '';
+        let config = {};
+
+        if (selectedChannel === 'email') {
+            const host = document.getElementById('smtp-host').value.trim();
+            const port = parseInt(document.getElementById('smtp-port').value) || 587;
+            const tls = document.getElementById('smtp-tls').value === 'true';
+            const user = document.getElementById('smtp-user').value.trim();
+            const pass = document.getElementById('smtp-pass').value;
+            const to = document.getElementById('smtp-to').value.trim();
+            if (!host || !to) { showMsg('step2-msg', 'SMTP host and recipient email are required.', 'error'); return; }
+            name = 'Email Alerts';
+            config = { smtp_host: host, smtp_port: port, use_tls: tls, smtp_username: user, smtp_password: pass, recipients: [to] };
+        } else if (selectedChannel === 'telegram') {
+            const token = document.getElementById('tg-token').value.trim();
+            const chatId = document.getElementById('tg-chatid').value.trim();
+            if (!token || !chatId) { showMsg('step2-msg', 'Bot token and chat ID are required.', 'error'); return; }
+            name = 'Telegram Alerts';
+            config = { bot_token: token, chat_id: chatId };
+        } else if (selectedChannel === 'webhook') {
+            const url = document.getElementById('wh-url').value.trim();
+            if (!url) { showMsg('step2-msg', 'Webhook URL is required.', 'error'); return; }
+            name = 'Webhook Alerts';
+            config = { url: url };
+        }
+
+        const btn = document.getElementById('btn-step2');
+        setLoading(btn, true);
+
+        try {
+            const res = await fetch('/api/setup/step2', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel_type: selectedChannel,
+                    name: name,
+                    config: config,
+                    test: false
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                showMsg('step2-msg', data.error || 'Failed to save channel', 'error');
+                setLoading(btn, false);
+                return;
+            }
+
+            state.channelConfigured = true;
+            state.channelType = selectedChannel;
+            goToStep(3);
+        } catch (e) {
+            showMsg('step2-msg', 'Network error. Please try again.', 'error');
+        }
+        setLoading(btn, false);
+    }
+
+    // ── Step 3: Syslog ──
+    async function checkSyslog() {
+        const btn = document.getElementById('btn-check-syslog');
+        setLoading(btn, true);
+
+        try {
+            const res = await fetch('/api/setup/step3', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+
+            const statusEl = document.getElementById('syslog-status');
+            statusEl.style.display = 'flex';
+
+            if (data.receiving) {
+                statusEl.className = 'syslog-status receiving';
+                statusEl.innerHTML = `
+                    <div class="status-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="status-text-title">Receiving Logs</div>
+                        <div class="status-text-detail">${data.log_count.toLocaleString()} events in the last 10 minutes</div>
+                    </div>`;
+                state.syslogReceiving = true;
+                state.syslogCount = data.log_count;
+            } else {
+                statusEl.className = 'syslog-status waiting';
+                statusEl.innerHTML = `
+                    <div class="status-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="status-text-title">No Logs Yet</div>
+                        <div class="status-text-detail">No events received in the last 10 minutes. Check your device configuration.</div>
+                    </div>`;
+            }
+        } catch (e) {
+            // ignore
+        }
+        setLoading(btn, false);
+    }
+
+    // ── Step 4: Summary ──
+    function buildSummary() {
+        const list = document.getElementById('summary-list');
+
+        const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        const skipSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>';
+
+        let html = '';
+
+        // Password
+        html += `<li class="summary-item">
+            <div class="summary-icon done">${checkSvg}</div>
+            <div>
+                <div class="summary-label">Admin Password</div>
+                <div class="summary-detail">Changed from default</div>
+            </div>
+            <span class="summary-badge done">Done</span>
+        </li>`;
+
+        // Email
+        html += `<li class="summary-item">
+            <div class="summary-icon ${state.emailSet ? 'done' : 'skipped'}">${state.emailSet ? checkSvg : skipSvg}</div>
+            <div>
+                <div class="summary-label">Admin Email</div>
+                <div class="summary-detail">${state.emailSet ? 'Configured' : 'Not set'}</div>
+            </div>
+            <span class="summary-badge ${state.emailSet ? 'done' : 'skipped'}">${state.emailSet ? 'Done' : 'Skipped'}</span>
+        </li>`;
+
+        // Notification channel
+        html += `<li class="summary-item">
+            <div class="summary-icon ${state.channelConfigured ? 'done' : 'skipped'}">${state.channelConfigured ? checkSvg : skipSvg}</div>
+            <div>
+                <div class="summary-label">Notifications</div>
+                <div class="summary-detail">${state.channelConfigured ? state.channelType.charAt(0).toUpperCase() + state.channelType.slice(1) + ' channel configured' : 'No channel configured'}</div>
+            </div>
+            <span class="summary-badge ${state.channelConfigured ? 'done' : 'skipped'}">${state.channelConfigured ? 'Done' : 'Skipped'}</span>
+        </li>`;
+
+        // Syslog
+        html += `<li class="summary-item">
+            <div class="summary-icon ${state.syslogReceiving ? 'done' : 'skipped'}">${state.syslogReceiving ? checkSvg : skipSvg}</div>
+            <div>
+                <div class="summary-label">Syslog Ingestion</div>
+                <div class="summary-detail">${state.syslogReceiving ? state.syslogCount.toLocaleString() + ' events detected' : 'Not yet receiving'}</div>
+            </div>
+            <span class="summary-badge ${state.syslogReceiving ? 'done' : 'skipped'}">${state.syslogReceiving ? 'Done' : 'Pending'}</span>
+        </li>`;
+
+        list.innerHTML = html;
+    }
+
+    // ── Finish ──
+    async function finishSetup() {
+        const btn = document.getElementById('btn-launch');
+        setLoading(btn, true);
+
+        try {
+            const res = await fetch('/api/setup/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            }
+        } catch (e) {
+            setLoading(btn, false);
+        }
+    }
+
+    // ── Utilities ──
+    function copyCmd(btn) {
+        const text = btn.parentElement.querySelector('span').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = 'copied';
+            setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+        });
+    }
+
+    // Allow Enter key to submit on step 1
+    document.querySelectorAll('#step-1 .form-input').forEach(input => {
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') submitStep1();
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -3,6 +3,9 @@ Authentication utilities - JWT session tokens, login/logout, middleware.
 """
 
 import logging
+import re
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -25,9 +28,62 @@ REMEMBER_ME_DAYS = 30
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
+# ============================================================
+# Token revocation (in-memory, per-process)
+# ============================================================
+# Maps jti -> expiry timestamp so we can prune expired entries
+_revoked_tokens: dict[str, float] = {}
+_REVOKE_CLEANUP_INTERVAL = 300  # cleanup every 5 minutes
+_last_revoke_cleanup: float = 0.0
+
+
+def revoke_token(jti: str, exp_timestamp: float) -> None:
+    """Mark a JWT ID as revoked (e.g. on logout)."""
+    _revoked_tokens[jti] = exp_timestamp
+    _cleanup_revoked()
+
+
+def is_token_revoked(jti: str) -> bool:
+    """Check if a JWT ID has been revoked."""
+    return jti in _revoked_tokens
+
+
+def _cleanup_revoked() -> None:
+    """Prune expired entries from the revocation list."""
+    global _last_revoke_cleanup
+    now = time.time()
+    if now - _last_revoke_cleanup < _REVOKE_CLEANUP_INTERVAL:
+        return
+    _last_revoke_cleanup = now
+    expired = [jti for jti, exp in _revoked_tokens.items() if exp < now]
+    for jti in expired:
+        del _revoked_tokens[jti]
+
+
+# ============================================================
+# Password complexity
+# ============================================================
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_RULES = "at least 8 characters, with uppercase, lowercase, and a digit"
+
+
+def validate_password_strength(password: str) -> Optional[str]:
+    """Return an error message if password is too weak, or None if OK."""
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters."
+    if not re.search(r"[A-Z]", password):
+        return "Password must contain at least one uppercase letter."
+    if not re.search(r"[a-z]", password):
+        return "Password must contain at least one lowercase letter."
+    if not re.search(r"[0-9]", password):
+        return "Password must contain at least one digit."
+    return None
+
 # Paths that don't require authentication
 PUBLIC_PATHS = {
     "/auth/login",
+    "/setup",
+    "/api/setup",
     "/api/health",
     "/api/docs",
     "/api/redoc",
@@ -38,7 +94,7 @@ PUBLIC_PATHS = {
 
 
 def create_session_token(user_id: int, username: str, role: str, remember_me: bool = False) -> str:
-    """Create a JWT session token."""
+    """Create a JWT session token with a unique JTI for revocation support."""
     if remember_me:
         expire = datetime.now(timezone.utc) + timedelta(days=REMEMBER_ME_DAYS)
     else:
@@ -50,14 +106,20 @@ def create_session_token(user_id: int, username: str, role: str, remember_me: bo
         "role": role,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
+        "jti": uuid.uuid4().hex,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
 def decode_session_token(token: str) -> Optional[dict]:
-    """Decode and validate a JWT session token."""
+    """Decode and validate a JWT session token.
+    Returns None if expired, invalid signature, or revoked."""
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        # Check if this specific token has been revoked (e.g. logout)
+        jti = payload.get("jti")
+        if jti and is_token_revoked(jti):
+            return None
         return payload
     except JWTError:
         return None
@@ -167,7 +229,7 @@ def set_session_cookie(response: Response, token: str, remember_me: bool = False
         max_age=max_age,
         httponly=True,
         samesite="lax",
-        secure=False,  # Set to True in production with HTTPS
+        secure=not settings.debug,
     )
 
 

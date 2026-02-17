@@ -99,19 +99,18 @@ async def api_create_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new user."""
-    body = await request.json()
+    from ..schemas import CreateUserRequest
+    from pydantic import ValidationError
+    try:
+        body = CreateUserRequest(**(await request.json()))
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        return JSONResponse({"success": False, "error": msg}, status_code=400)
 
-    username = body.get("username", "").strip()
-    email = body.get("email", "").strip() or None
-    password = body.get("password", "")
-    role = body.get("role", "VIEWER").upper()
-
-    if not username:
-        return JSONResponse({"success": False, "error": "Username is required"}, status_code=400)
-    if not password or len(password) < 6:
-        return JSONResponse({"success": False, "error": "Password must be at least 6 characters"}, status_code=400)
-    if role not in ("ADMIN", "ANALYST", "VIEWER"):
-        return JSONResponse({"success": False, "error": "Invalid role"}, status_code=400)
+    username = body.username.strip()
+    email = body.email
+    password = body.password
+    role = body.role.value
 
     # Check for duplicate username
     existing = await db.execute(select(User).where(User.username == username))
@@ -272,11 +271,15 @@ async def api_reset_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Reset a user's password (admin only)."""
-    body = await request.json()
-    new_password = body.get("password", "")
+    from ..schemas import ResetPasswordRequest
+    from pydantic import ValidationError
+    try:
+        body = ResetPasswordRequest(**(await request.json()))
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        return JSONResponse({"success": False, "error": msg}, status_code=400)
 
-    if not new_password or len(new_password) < 6:
-        return JSONResponse({"success": False, "error": "Password must be at least 6 characters"}, status_code=400)
+    new_password = body.password
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -354,12 +357,16 @@ async def api_change_password(
     if not user:
         return JSONResponse({"success": False, "error": "Not authenticated"}, status_code=401)
 
-    body = await request.json()
-    current_password = body.get("current_password", "")
-    new_password = body.get("new_password", "")
+    from ..schemas import ChangePasswordRequest
+    from pydantic import ValidationError
+    try:
+        body = ChangePasswordRequest(**(await request.json()))
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        return JSONResponse({"success": False, "error": msg}, status_code=400)
 
-    if not new_password or len(new_password) < 6:
-        return JSONResponse({"success": False, "error": "New password must be at least 6 characters"}, status_code=400)
+    current_password = body.current_password
+    new_password = body.new_password
 
     # Re-fetch user from DB to verify current password
     result = await db.execute(select(User).where(User.id == user.id))

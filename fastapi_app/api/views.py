@@ -34,7 +34,8 @@ templates = Jinja2Templates(directory="fastapi_app/templates")
 
 def _base_context(request: Request) -> dict:
     """Build base template context with current user info."""
-    ctx = {"request": request}
+    from ..__version__ import __version__
+    ctx = {"request": request, "app_version": __version__}
     user = getattr(request.state, "current_user", None)
     ctx["current_user"] = user
     # Alert count is set async in _render_async or defaults to 0

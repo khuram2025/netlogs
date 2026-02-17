@@ -1,265 +1,1141 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    .alert-header {
+    /* ================================================================
+       ALERT CENTER - Tactical Operations Console
+       ================================================================ */
+
+    /* CSS Variables */
+    .al-page {
+        --al-bg: #0f172a;
+        --al-card-bg: #1e293b;
+        --al-text: #e2e8f0;
+        --al-text-muted: #94a3b8;
+        --al-primary: #3b82f6;
+        --al-success: #22c55e;
+        --al-danger: #ef4444;
+        --al-warning: #f59e0b;
+        --al-border: #334155;
+        --al-input-bg: #020617;
+        font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ================================================================
+       ANIMATIONS
+       ================================================================ */
+    @keyframes al-fadeInUp {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes al-countUp {
+        from { opacity: 0; transform: scale(0.5); }
+        to   { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes al-pulse-glow {
+        0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.3); }
+        50%      { box-shadow: 0 0 20px rgba(34, 197, 94, 0.6); }
+    }
+
+    @keyframes al-shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+    @keyframes al-slideDown {
+        from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes al-modalIn {
+        from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    @keyframes al-overlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    @keyframes al-borderGlow {
+        0%, 100% { border-left-color: rgba(59, 130, 246, 0.3); }
+        50%      { border-left-color: rgba(59, 130, 246, 0.8); }
+    }
+
+    .al-stagger-1 { animation-delay: 0.05s; }
+    .al-stagger-2 { animation-delay: 0.1s; }
+    .al-stagger-3 { animation-delay: 0.15s; }
+    .al-stagger-4 { animation-delay: 0.2s; }
+    .al-stagger-5 { animation-delay: 0.25s; }
+    .al-stagger-6 { animation-delay: 0.3s; }
+
+    /* ================================================================
+       PAGE HEADER
+       ================================================================ */
+    .al-page-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1.5rem;
+        margin-bottom: 2rem;
+        animation: al-fadeInUp 0.4s ease-out both;
     }
-    .alert-header .tabs {
+
+    .al-page-header-left {
         display: flex;
-        gap: 0.5rem;
+        flex-direction: column;
+        gap: 4px;
     }
-    .alert-header .tabs a {
-        padding: 0.4rem 1rem;
-        border-radius: 0.375rem;
-        font-size: 0.85rem;
+
+    .al-page-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0;
+        background: linear-gradient(135deg, #ffffff 0%, #3b82f6 50%, #6366f1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .al-page-subtitle {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: var(--al-text-muted);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+
+    .al-tabs {
+        display: flex;
+        gap: 6px;
+        background: rgba(2, 6, 23, 0.5);
+        padding: 4px;
+        border-radius: 10px;
+        border: 1px solid var(--al-border);
+    }
+
+    .al-tab {
+        padding: 0.45rem 1.1rem;
+        border-radius: 7px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 500;
         text-decoration: none;
-        color: var(--text-muted);
-        border: 1px solid var(--border);
+        color: var(--al-text-muted);
+        transition: all 0.2s ease;
+        position: relative;
     }
-    .alert-header .tabs a.active,
-    .alert-header .tabs a:hover {
-        background: var(--primary);
+
+    .al-tab:hover {
+        color: var(--al-text);
+        background: rgba(59, 130, 246, 0.08);
+    }
+
+    .al-tab.active {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
         color: white;
-        border-color: var(--primary);
+        font-weight: 600;
+        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.35);
     }
-    .summary-row {
+
+    /* ================================================================
+       HERO METRICS
+       ================================================================ */
+    .al-metrics-grid {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
         gap: 1rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.75rem;
     }
-    @media (max-width: 768px) {
-        .summary-row { grid-template-columns: repeat(3, 1fr); }
+
+    @media (max-width: 1100px) {
+        .al-metrics-grid { grid-template-columns: repeat(3, 1fr); }
     }
-    .summary-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        padding: 1rem;
+
+    @media (max-width: 520px) {
+        .al-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .al-metric-card {
+        background: linear-gradient(145deg, var(--al-card-bg) 0%, rgba(15, 23, 42, 0.9) 100%);
+        border: 1px solid var(--al-border);
+        border-radius: 12px;
+        padding: 1.15rem 1rem;
         text-align: center;
+        position: relative;
+        overflow: hidden;
+        animation: al-fadeInUp 0.5s ease-out both;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .summary-card .count {
-        font-size: 1.75rem;
-        font-weight: 700;
+
+    .al-metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .al-metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .al-metric-card::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40%;
+        height: 1px;
+        opacity: 0.4;
+    }
+
+    /* Severity accent borders */
+    .al-metric-new::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .al-metric-new::after  { background: linear-gradient(90deg, transparent, #22c55e, transparent); }
+
+    .al-metric-critical::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .al-metric-critical::after  { background: linear-gradient(90deg, transparent, #ef4444, transparent); }
+
+    .al-metric-high::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+    .al-metric-high::after  { background: linear-gradient(90deg, transparent, #f97316, transparent); }
+
+    .al-metric-medium::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .al-metric-medium::after  { background: linear-gradient(90deg, transparent, #f59e0b, transparent); }
+
+    .al-metric-low::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .al-metric-low::after  { background: linear-gradient(90deg, transparent, #3b82f6, transparent); }
+
+    .al-metric-info::before { background: linear-gradient(90deg, #64748b, #94a3b8); }
+    .al-metric-info::after  { background: linear-gradient(90deg, transparent, #94a3b8, transparent); }
+
+    .al-metric-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 2rem;
+        font-weight: 600;
         color: white;
+        line-height: 1.1;
+        animation: al-countUp 0.6s ease-out both;
     }
-    .summary-card .label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        margin-top: 0.25rem;
-    }
-    .sev-critical .count { color: #ef4444; }
-    .sev-high .count { color: #f97316; }
-    .sev-medium .count { color: #f59e0b; }
-    .sev-low .count { color: #3b82f6; }
-    .sev-info .count { color: #94a3b8; }
-    .sev-new .count { color: #22c55e; }
 
-    .sev-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 6px;
-    }
-    .sev-dot-critical { background: #ef4444; }
-    .sev-dot-high { background: #f97316; }
-    .sev-dot-medium { background: #f59e0b; }
-    .sev-dot-low { background: #3b82f6; }
-    .sev-dot-info { background: #94a3b8; }
+    .al-metric-new .al-metric-count    { color: #4ade80; }
+    .al-metric-critical .al-metric-count { color: #f87171; }
+    .al-metric-high .al-metric-count   { color: #fb923c; }
+    .al-metric-medium .al-metric-count { color: #fbbf24; }
+    .al-metric-low .al-metric-count    { color: #60a5fa; }
+    .al-metric-info .al-metric-count   { color: #94a3b8; }
 
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 9999px;
+    .al-metric-label {
+        font-family: 'Outfit', sans-serif;
         font-size: 0.7rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--al-text-muted);
+        margin-top: 6px;
     }
-    .status-new { background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); }
-    .status-acknowledged { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
-    .status-investigating { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
-    .status-resolved { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
-    .status-false_positive { background: rgba(148, 163, 184, 0.05); color: #64748b; border: 1px solid rgba(148, 163, 184, 0.1); }
 
-    .filters-bar {
+    /* Pulse glow on New card if count > 0 */
+    .al-metric-new.al-has-alerts {
+        animation: al-fadeInUp 0.5s ease-out both, al-pulse-glow 2.5s ease-in-out infinite;
+    }
+
+    /* ================================================================
+       FILTER BAR
+       ================================================================ */
+    .al-filters {
         display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        padding: 0.875rem 1.25rem;
+        background: linear-gradient(145deg, rgba(2, 6, 23, 0.7) 0%, rgba(30, 41, 59, 0.4) 100%);
+        border: 1px solid var(--al-border);
+        border-radius: 12px;
         flex-wrap: wrap;
+        align-items: center;
+        animation: al-fadeInUp 0.5s ease-out 0.15s both;
     }
-    .filters-bar select {
-        padding: 0.375rem 0.75rem;
+
+    .al-filter-icon {
+        display: flex;
+        align-items: center;
+        color: var(--al-text-muted);
+        margin-right: 0.25rem;
+    }
+
+    .al-filter-icon svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .al-filter-select {
+        background: var(--al-input-bg);
+        border: 1px solid var(--al-border);
+        color: var(--al-text);
+        border-radius: 8px;
+        padding: 0.45rem 0.85rem;
+        font-family: 'Outfit', sans-serif;
         font-size: 0.8rem;
-        min-width: 120px;
-    }
-
-    .alert-row { cursor: pointer; }
-    .alert-row:hover { background: rgba(59, 130, 246, 0.05); }
-
-    .alert-actions { display: flex; gap: 0.25rem; }
-
-    .btn-xs {
-        padding: 0.2rem 0.5rem;
-        font-size: 0.7rem;
-        border-radius: 0.25rem;
-        cursor: pointer;
-        border: none;
         font-weight: 500;
+        min-width: 145px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        appearance: auto;
     }
-    .btn-outline {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--text-muted);
-    }
-    .btn-outline:hover { background: rgba(255,255,255,0.05); color: white; }
 
-    /* Detail modal */
-    .modal-overlay {
+    .al-filter-select:focus {
+        outline: none;
+        border-color: var(--al-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .al-filter-select:hover {
+        border-color: #475569;
+    }
+
+    /* ================================================================
+       ALERTS TABLE
+       ================================================================ */
+    .al-table-wrapper {
+        background: linear-gradient(145deg, var(--al-card-bg) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border: 1px solid var(--al-border);
+        border-radius: 14px;
+        overflow: hidden;
+        animation: al-fadeInUp 0.5s ease-out 0.25s both;
+    }
+
+    .al-table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--al-border);
+    }
+
+    .al-table-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .al-table-title svg {
+        width: 18px;
+        height: 18px;
+        stroke: var(--al-primary);
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .al-table-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--al-primary);
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .al-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .al-table thead th {
+        font-family: 'Outfit', sans-serif;
+        text-align: left;
+        padding: 0.75rem 1.25rem;
+        color: var(--al-text-muted);
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid var(--al-border);
+        background: rgba(2, 6, 23, 0.3);
+    }
+
+    .al-table tbody td {
+        padding: 0.8rem 1.25rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .al-table-row {
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border-left: 3px solid transparent;
+    }
+
+    .al-table-row:hover {
+        background: rgba(59, 130, 246, 0.04);
+        border-left-color: var(--al-primary);
+        animation: al-borderGlow 1.5s ease-in-out infinite;
+    }
+
+    .al-table-row:last-child td {
+        border-bottom: none;
+    }
+
+    /* Severity column */
+    .al-sev-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .al-sev-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        position: relative;
+    }
+
+    .al-sev-dot::after {
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 50%;
+        opacity: 0.25;
+    }
+
+    .al-sev-dot-critical       { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+    .al-sev-dot-critical::after { background: #ef4444; }
+    .al-sev-dot-high            { background: #f97316; box-shadow: 0 0 8px rgba(249, 115, 22, 0.5); }
+    .al-sev-dot-high::after     { background: #f97316; }
+    .al-sev-dot-medium          { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
+    .al-sev-dot-medium::after   { background: #f59e0b; }
+    .al-sev-dot-low             { background: #3b82f6; box-shadow: 0 0 6px rgba(59, 130, 246, 0.4); }
+    .al-sev-dot-low::after      { background: #3b82f6; }
+    .al-sev-dot-info            { background: #94a3b8; }
+    .al-sev-dot-info::after     { background: #94a3b8; }
+
+    .al-sev-text {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .al-sev-text-critical { color: #f87171; }
+    .al-sev-text-high     { color: #fb923c; }
+    .al-sev-text-medium   { color: #fbbf24; }
+    .al-sev-text-low      { color: #60a5fa; }
+    .al-sev-text-info     { color: #94a3b8; }
+
+    /* Title link */
+    .al-alert-link {
+        color: white;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.15s ease;
+    }
+
+    .al-alert-link:hover {
+        color: var(--al-primary);
+    }
+
+    /* Status badges */
+    .al-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: capitalize;
+        letter-spacing: 0.02em;
+    }
+
+    .al-status::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .al-status-new {
+        background: rgba(34, 197, 94, 0.1);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+    .al-status-new::before { background: #22c55e; }
+
+    .al-status-acknowledged {
+        background: rgba(59, 130, 246, 0.1);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+    .al-status-acknowledged::before { background: #3b82f6; }
+
+    .al-status-investigating {
+        background: rgba(245, 158, 11, 0.1);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .al-status-investigating::before { background: #f59e0b; }
+
+    .al-status-resolved {
+        background: rgba(148, 163, 184, 0.08);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .al-status-resolved::before { background: #94a3b8; }
+
+    .al-status-false_positive {
+        background: rgba(148, 163, 184, 0.04);
+        color: #64748b;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .al-status-false_positive::before { background: #475569; }
+
+    /* Triggered time */
+    .al-time {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        color: var(--al-text-muted);
+    }
+
+    /* Actions */
+    .al-actions {
+        display: flex;
+        gap: 5px;
+    }
+
+    .al-btn-action {
+        font-family: 'Outfit', sans-serif;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        border: 1px solid var(--al-border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--al-text-muted);
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+
+    .al-btn-action:hover {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: rgba(59, 130, 246, 0.3);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .al-btn-ack:hover {
+        background: rgba(59, 130, 246, 0.15);
+        border-color: rgba(59, 130, 246, 0.4);
+        color: #60a5fa;
+    }
+
+    .al-btn-resolve:hover {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: #4ade80;
+    }
+
+    .al-btn-fp:hover {
+        background: rgba(148, 163, 184, 0.1);
+        border-color: rgba(148, 163, 184, 0.3);
+        color: #94a3b8;
+    }
+
+    /* Empty state */
+    .al-empty {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--al-text-muted);
+    }
+
+    .al-empty-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 1rem;
+        opacity: 0.3;
+    }
+
+    .al-empty-icon svg {
+        width: 100%;
+        height: 100%;
+        stroke: var(--al-text-muted);
+        fill: none;
+        stroke-width: 1.5;
+    }
+
+    .al-empty-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--al-text);
+        margin-bottom: 0.35rem;
+    }
+
+    .al-empty-desc {
+        font-size: 0.8rem;
+    }
+
+    /* ================================================================
+       MODALS
+       ================================================================ */
+    .al-modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.6);
-        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
         justify-content: center;
         align-items: flex-start;
-        padding-top: 5vh;
+        padding-top: 4vh;
     }
-    .modal-overlay.active { display: flex; }
-    .modal {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        padding: 1.5rem;
+
+    .al-modal-overlay.active {
+        display: flex;
+        animation: al-overlayIn 0.2s ease-out;
+    }
+
+    .al-modal {
+        background: linear-gradient(170deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid var(--al-border);
+        border-radius: 16px;
+        padding: 0;
         width: 100%;
-        max-width: 800px;
-        max-height: 85vh;
-        overflow-y: auto;
-        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        max-width: 840px;
+        max-height: 88vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.6), 0 0 40px rgba(59, 130, 246, 0.08);
+        animation: al-modalIn 0.3s ease-out;
     }
-    .modal h3 { margin-bottom: 1rem; }
-    .detail-row {
+
+    .al-modal-head {
+        padding: 1.25rem 1.75rem;
+        border-bottom: 1px solid var(--al-border);
         display: flex;
         justify-content: space-between;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.875rem;
+        align-items: center;
+        background: rgba(2, 6, 23, 0.4);
+        flex-shrink: 0;
     }
-    .detail-row .label { color: var(--text-muted); }
-    .detail-row .value { color: white; text-align: right; max-width: 60%; word-break: break-word; }
-    .detail-json {
-        background: var(--input-bg);
-        padding: 0.75rem;
-        border-radius: 0.375rem;
-        font-family: monospace;
-        font-size: 0.75rem;
-        max-height: 200px;
-        overflow: auto;
-        margin-top: 0.75rem;
-        white-space: pre-wrap;
-        word-break: break-all;
+
+    .al-modal-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: white;
+        margin: 0;
+        max-width: 85%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .detail-section { margin-top: 1rem; }
-    .detail-section h4 { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
-    .detail-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .detail-table th { text-align: left; padding: 0.35rem 0.5rem; color: var(--text-muted); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; background: rgba(255,255,255,0.02); }
-    .detail-table td { padding: 0.35rem 0.5rem; border-top: 1px solid rgba(255,255,255,0.04); }
-    .detail-table .ip-cell { font-family: monospace; color: var(--primary); font-weight: 500; }
-    .detail-table .count-cell { font-weight: 600; color: white; text-align: right; }
-    .detail-table .port-cell { font-family: monospace; color: #f59e0b; }
-    .detail-table .device-cell { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); }
-    .btn-drill { padding: 0.15rem 0.5rem; font-size: 0.65rem; background: rgba(59,130,246,0.1); color: var(--primary); border: 1px solid rgba(59,130,246,0.2); border-radius: 0.25rem; cursor: pointer; text-decoration: none; white-space: nowrap; }
-    .btn-drill:hover { background: rgba(59,130,246,0.2); }
-    .btn-investigate { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: white; border: none; border-radius: 0.375rem; cursor: pointer; text-decoration: none; margin-top: 0.5rem; }
-    .btn-investigate:hover { opacity: 0.85; }
-    .incident-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
-    .incident-stat { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem 0.75rem; }
-    .incident-stat .stat-value { font-size: 1.1rem; font-weight: 700; color: white; }
-    .incident-stat .stat-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
-    .modal-actions {
+
+    .al-modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid var(--al-border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--al-text-muted);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+    }
+
+    .al-modal-close:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #f87171;
+    }
+
+    .al-modal-close svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .al-modal-body {
+        padding: 1.5rem 1.75rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .al-modal-foot {
+        padding: 1rem 1.75rem;
+        border-top: 1px solid var(--al-border);
         display: flex;
         gap: 0.5rem;
         justify-content: flex-end;
-        margin-top: 1rem;
+        background: rgba(2, 6, 23, 0.4);
+        flex-shrink: 0;
     }
-    .btn-ghost {
-        background: transparent;
-        color: var(--text-muted);
-        border: 1px solid var(--border);
-        padding: 0.5rem 1rem;
-        border-radius: 0.375rem;
-        cursor: pointer;
-        font-size: 0.875rem;
-    }
-    .btn-ghost:hover { background: rgba(255,255,255,0.05); color: white; }
 
-    .toast {
+    /* Detail rows */
+    .al-detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+        font-size: 0.85rem;
+    }
+
+    .al-detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .al-detail-label {
+        color: var(--al-text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+
+    .al-detail-value {
+        color: white;
+        text-align: right;
+        max-width: 60%;
+        word-break: break-word;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 500;
+    }
+
+    /* Detail sections */
+    .al-detail-section {
+        margin-top: 1.25rem;
+    }
+
+    .al-detail-section h4 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--al-text);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 0.75rem 0;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        background: rgba(59, 130, 246, 0.06);
+        border-left: 3px solid var(--al-primary);
+    }
+
+    /* Incident summary cards */
+    .al-incident-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 0.65rem;
+        margin-top: 0.5rem;
+    }
+
+    .al-incident-card {
+        background: rgba(2, 6, 23, 0.5);
+        border: 1px solid var(--al-border);
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+        text-align: center;
+    }
+
+    .al-incident-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .al-incident-lbl {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--al-text-muted);
+        margin-top: 2px;
+    }
+
+    /* Detail tables */
+    .al-dtable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        background: rgba(2, 6, 23, 0.3);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(51, 65, 85, 0.4);
+    }
+
+    .al-dtable th {
+        text-align: left;
+        padding: 0.45rem 0.65rem;
+        color: var(--al-text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(2, 6, 23, 0.5);
+        border-bottom: 1px solid var(--al-border);
+    }
+
+    .al-dtable td {
+        padding: 0.45rem 0.65rem;
+        border-top: 1px solid rgba(51, 65, 85, 0.3);
+    }
+
+    .al-dtable tr:first-child td {
+        border-top: none;
+    }
+
+    .al-dtable .al-ip {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--al-primary);
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+
+    .al-dtable .al-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: white;
+        text-align: right;
+    }
+
+    .al-dtable .al-port {
+        font-family: 'JetBrains Mono', monospace;
+        color: #fbbf24;
+        font-weight: 500;
+    }
+
+    .al-dtable .al-device {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        color: var(--al-text-muted);
+    }
+
+    /* Drill-down button */
+    .al-btn-drill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0.2rem 0.55rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        background: rgba(59, 130, 246, 0.08);
+        color: var(--al-primary);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 5px;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+    }
+
+    .al-btn-drill:hover {
+        background: rgba(59, 130, 246, 0.18);
+        border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    /* Investigate button */
+    .al-btn-investigate {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.5rem 1rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 600;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+        margin-top: 0.75rem;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .al-btn-investigate:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+
+    .al-btn-investigate svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    /* Time range text in detail */
+    .al-detail-meta {
+        margin-top: 0.5rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.75rem;
+        color: var(--al-text-muted);
+    }
+
+    .al-detail-meta span {
+        font-family: 'JetBrains Mono', monospace;
+        color: white;
+        font-weight: 500;
+    }
+
+    /* ================================================================
+       MODAL BUTTONS
+       ================================================================ */
+    .al-btn-ghost {
+        font-family: 'Outfit', sans-serif;
+        background: transparent;
+        color: var(--al-text-muted);
+        border: 1px solid var(--al-border);
+        padding: 0.5rem 1.1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 500;
+        transition: all 0.15s ease;
+    }
+
+    .al-btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+        border-color: #475569;
+    }
+
+    .al-btn-primary {
+        font-family: 'Outfit', sans-serif;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: white;
+        border: none;
+        padding: 0.5rem 1.25rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .al-btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+
+    .al-btn-success {
+        font-family: 'Outfit', sans-serif;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        border: none;
+        padding: 0.5rem 1.25rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+    }
+
+    .al-btn-success:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+    }
+
+    /* ================================================================
+       RESOLVE MODAL FORM
+       ================================================================ */
+    .al-resolve-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--al-text-muted);
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .al-resolve-textarea {
+        width: 100%;
+        min-height: 100px;
+        background: var(--al-input-bg);
+        border: 1px solid var(--al-border);
+        color: white;
+        border-radius: 10px;
+        padding: 0.75rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        resize: vertical;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .al-resolve-textarea:focus {
+        outline: none;
+        border-color: var(--al-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .al-resolve-textarea::placeholder {
+        color: #475569;
+    }
+
+    /* ================================================================
+       TOAST
+       ================================================================ */
+    .al-toast {
         position: fixed;
         bottom: 1.5rem;
         right: 1.5rem;
-        padding: 0.75rem 1.25rem;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-        z-index: 200;
+        padding: 0.8rem 1.35rem;
+        border-radius: 10px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        z-index: 2000;
         transform: translateY(100px);
         opacity: 0;
-        transition: all 0.3s ease;
+        transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
-    .toast.show { transform: translateY(0); opacity: 1; }
-    .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: var(--success); }
-    .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
 
-    .text-xs { font-size: 0.75rem; }
+    .al-toast.show {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    .al-toast-success {
+        background: rgba(34, 197, 94, 0.12);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #4ade80;
+    }
+
+    .al-toast-error {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+    }
+
+    /* ================================================================
+       RESPONSIVE
+       ================================================================ */
+    @media (max-width: 768px) {
+        .al-page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .al-table thead th:nth-child(4),
+        .al-table tbody td:nth-child(4) {
+            display: none;
+        }
+
+        .al-filters {
+            flex-direction: column;
+        }
+
+        .al-filter-select {
+            width: 100%;
+        }
+
+        .al-modal {
+            margin: 0 0.75rem;
+            max-height: 92vh;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="alert-header">
-    <h2>Alerts</h2>
-    <div class="tabs">
-        <a href="{{ url_for('alert_dashboard') }}" class="active">Dashboard</a>
-        <a href="{{ url_for('alert_rules_page') }}">Rules</a>
-        <a href="{{ url_for('notification_channels_page') }}">Channels</a>
-    </div>
-</div>
+<div class="al-page">
 
-<!-- Summary Cards -->
-<div class="summary-row">
-    <div class="summary-card sev-new">
-        <div class="count">{{ summary.new_count }}</div>
-        <div class="label">New</div>
+    <!-- ============ PAGE HEADER ============ -->
+    <div class="al-page-header">
+        <div class="al-page-header-left">
+            <h1 class="al-page-title">Alert Center</h1>
+            <span class="al-page-subtitle">Real-Time Threat Monitoring</span>
+        </div>
+        <div class="al-tabs">
+            <a href="{{ url_for('alert_dashboard') }}" class="al-tab active">
+                <svg style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:-1px;margin-right:4px;" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                Dashboard
+            </a>
+            <a href="{{ url_for('alert_rules_page') }}" class="al-tab">
+                <svg style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:-1px;margin-right:4px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Rules
+            </a>
+            <a href="{{ url_for('notification_channels_page') }}" class="al-tab">
+                <svg style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:-1px;margin-right:4px;" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                Channels
+            </a>
+        </div>
     </div>
-    <div class="summary-card sev-critical">
-        <div class="count">{{ summary.critical }}</div>
-        <div class="label">Critical</div>
-    </div>
-    <div class="summary-card sev-high">
-        <div class="count">{{ summary.high }}</div>
-        <div class="label">High</div>
-    </div>
-    <div class="summary-card sev-medium">
-        <div class="count">{{ summary.medium }}</div>
-        <div class="label">Medium</div>
-    </div>
-    <div class="summary-card sev-low">
-        <div class="count">{{ summary.low }}</div>
-        <div class="label">Low</div>
-    </div>
-    <div class="summary-card sev-info">
-        <div class="count">{{ summary.info }}</div>
-        <div class="label">Info</div>
-    </div>
-</div>
 
-<!-- Filters -->
-<div class="card">
-    <div class="filters-bar">
-        <select id="filterSeverity" onchange="filterAlerts()">
+    <!-- ============ HERO METRICS ============ -->
+    <div class="al-metrics-grid">
+        <div class="al-metric-card al-metric-new al-stagger-1 {% if summary.new_count > 0 %}al-has-alerts{% endif %}">
+            <div class="al-metric-count">{{ summary.new_count }}</div>
+            <div class="al-metric-label">New</div>
+        </div>
+        <div class="al-metric-card al-metric-critical al-stagger-2">
+            <div class="al-metric-count">{{ summary.critical }}</div>
+            <div class="al-metric-label">Critical</div>
+        </div>
+        <div class="al-metric-card al-metric-high al-stagger-3">
+            <div class="al-metric-count">{{ summary.high }}</div>
+            <div class="al-metric-label">High</div>
+        </div>
+        <div class="al-metric-card al-metric-medium al-stagger-4">
+            <div class="al-metric-count">{{ summary.medium }}</div>
+            <div class="al-metric-label">Medium</div>
+        </div>
+        <div class="al-metric-card al-metric-low al-stagger-5">
+            <div class="al-metric-count">{{ summary.low }}</div>
+            <div class="al-metric-label">Low</div>
+        </div>
+        <div class="al-metric-card al-metric-info al-stagger-6">
+            <div class="al-metric-count">{{ summary.info }}</div>
+            <div class="al-metric-label">Info</div>
+        </div>
+    </div>
+
+    <!-- ============ FILTER BAR ============ -->
+    <div class="al-filters">
+        <div class="al-filter-icon">
+            <svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </div>
+        <select id="filterSeverity" class="al-filter-select" onchange="filterAlerts()">
             <option value="">All Severities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
@@ -267,7 +1143,7 @@
             <option value="low">Low</option>
             <option value="info">Info</option>
         </select>
-        <select id="filterStatus" onchange="filterAlerts()">
+        <select id="filterStatus" class="al-filter-select" onchange="filterAlerts()">
             <option value="">All Statuses</option>
             <option value="new">New</option>
             <option value="acknowledged">Acknowledged</option>
@@ -275,7 +1151,7 @@
             <option value="resolved">Resolved</option>
             <option value="false_positive">False Positive</option>
         </select>
-        <select id="filterRule" onchange="filterAlerts()">
+        <select id="filterRule" class="al-filter-select" onchange="filterAlerts()">
             <option value="">All Rules</option>
             {% for rule in rules %}
             <option value="{{ rule.id }}">{{ rule.name }}</option>
@@ -283,86 +1159,121 @@
         </select>
     </div>
 
-    <!-- Alerts Table -->
-    <table>
-        <thead>
-            <tr>
-                <th>Severity</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Triggered</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="alertTableBody">
-            {% for alert in alerts %}
-            <tr class="alert-row" data-severity="{{ alert.severity }}" data-status="{{ alert.status }}" data-rule="{{ alert.rule_id or '' }}">
-                <td>
-                    <span class="sev-dot sev-dot-{{ alert.severity }}"></span>
-                    <span class="text-xs" style="text-transform:uppercase;">{{ alert.severity }}</span>
-                </td>
-                <td>
-                    <a href="#" onclick="showDetail({{ alert.id }}); return false;" style="color:white;text-decoration:none;">
-                        {{ alert.title[:80] }}{% if alert.title|length > 80 %}...{% endif %}
-                    </a>
-                </td>
-                <td><span class="status-badge status-{{ alert.status }}">{{ alert.status.replace('_', ' ') }}</span></td>
-                <td class="text-xs" style="color:var(--text-muted);">
-                    {{ alert.triggered_at.strftime('%m/%d %H:%M') if alert.triggered_at else '' }}
-                </td>
-                <td>
-                    <div class="alert-actions">
-                        {% if alert.status == 'new' %}
-                        <button class="btn-xs btn-outline" onclick="ackAlert({{ alert.id }}); event.stopPropagation();">Ack</button>
-                        {% endif %}
-                        {% if alert.status in ('new', 'acknowledged', 'investigating') %}
-                        <button class="btn-xs btn-outline" onclick="resolveAlert({{ alert.id }}); event.stopPropagation();">Resolve</button>
-                        <button class="btn-xs btn-outline" onclick="fpAlert({{ alert.id }}); event.stopPropagation();" style="color:var(--text-muted);">FP</button>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-            {% if not alerts %}
-            <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No alerts found.</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+    <!-- ============ ALERTS TABLE ============ -->
+    <div class="al-table-wrapper">
+        <div class="al-table-header">
+            <div class="al-table-title">
+                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Active Alerts
+            </div>
+            <span class="al-table-badge">{{ alerts|length }} total</span>
+        </div>
+        <table class="al-table">
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Triggered</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="alertTableBody">
+                {% for alert in alerts %}
+                <tr class="al-table-row" data-severity="{{ alert.severity }}" data-status="{{ alert.status }}" data-rule="{{ alert.rule_id or '' }}">
+                    <td>
+                        <div class="al-sev-cell">
+                            <span class="al-sev-dot al-sev-dot-{{ alert.severity }}"></span>
+                            <span class="al-sev-text al-sev-text-{{ alert.severity }}">{{ alert.severity }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="#" onclick="showDetail({{ alert.id }}); return false;" class="al-alert-link">
+                            {{ alert.title[:80] }}{% if alert.title|length > 80 %}...{% endif %}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="al-status al-status-{{ alert.status }}">{{ alert.status.replace('_', ' ') }}</span>
+                    </td>
+                    <td>
+                        <span class="al-time">{{ alert.triggered_at.strftime('%m/%d %H:%M') if alert.triggered_at else '' }}</span>
+                    </td>
+                    <td>
+                        <div class="al-actions">
+                            {% if alert.status == 'new' %}
+                            <button class="al-btn-action al-btn-ack" onclick="ackAlert({{ alert.id }}); event.stopPropagation();">Ack</button>
+                            {% endif %}
+                            {% if alert.status in ('new', 'acknowledged', 'investigating') %}
+                            <button class="al-btn-action al-btn-resolve" onclick="resolveAlert({{ alert.id }}); event.stopPropagation();">Resolve</button>
+                            <button class="al-btn-action al-btn-fp" onclick="fpAlert({{ alert.id }}); event.stopPropagation();">FP</button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not alerts %}
+                <tr>
+                    <td colspan="5">
+                        <div class="al-empty">
+                            <div class="al-empty-icon">
+                                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            </div>
+                            <div class="al-empty-title">No alerts found</div>
+                            <div class="al-empty-desc">Your environment is clean. No threats detected.</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
 </div>
 
-<!-- Alert Detail Modal -->
-<div class="modal-overlay" id="detailModal">
-    <div class="modal">
-        <h3 id="detailTitle">Alert Detail</h3>
-        <div id="detailContent"></div>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="closeModal()">Close</button>
+<!-- ============ ALERT DETAIL MODAL ============ -->
+<div class="al-modal-overlay" id="detailModal">
+    <div class="al-modal">
+        <div class="al-modal-head">
+            <h3 class="al-modal-title" id="detailTitle">Alert Detail</h3>
+            <button class="al-modal-close" onclick="closeModal()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="al-modal-body" id="detailContent"></div>
+        <div class="al-modal-foot">
+            <button class="al-btn-ghost" onclick="closeModal()">Close</button>
         </div>
     </div>
 </div>
 
-<!-- Resolve Modal -->
-<div class="modal-overlay" id="resolveModal">
-    <div class="modal">
-        <h3>Resolve Alert</h3>
-        <input type="hidden" id="resolveAlertId">
-        <div style="margin-bottom:1rem;">
-            <label>Resolution Notes</label>
-            <textarea id="resolveNotes" style="width:100%;min-height:80px;background:var(--input-bg);border:1px solid var(--border);color:white;border-radius:0.375rem;padding:0.5rem;font-size:0.875rem;" placeholder="Describe how this was resolved..."></textarea>
+<!-- ============ RESOLVE MODAL ============ -->
+<div class="al-modal-overlay" id="resolveModal">
+    <div class="al-modal" style="max-width:520px;">
+        <div class="al-modal-head">
+            <h3 class="al-modal-title">Resolve Alert</h3>
+            <button class="al-modal-close" onclick="document.getElementById('resolveModal').classList.remove('active')">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="document.getElementById('resolveModal').classList.remove('active')">Cancel</button>
-            <button class="btn btn-success" onclick="submitResolve()">Resolve</button>
+        <div class="al-modal-body">
+            <input type="hidden" id="resolveAlertId">
+            <label class="al-resolve-label">Resolution Notes</label>
+            <textarea id="resolveNotes" class="al-resolve-textarea" placeholder="Describe how this alert was resolved..."></textarea>
+        </div>
+        <div class="al-modal-foot">
+            <button class="al-btn-ghost" onclick="document.getElementById('resolveModal').classList.remove('active')">Cancel</button>
+            <button class="al-btn-success" onclick="submitResolve()">Resolve</button>
         </div>
     </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- Toast -->
+<div class="al-toast" id="toast"></div>
 
 <script>
 function showToast(msg, type='success') {
     const t = document.getElementById('toast');
-    t.className = `toast toast-${type} show`;
+    t.className = `al-toast al-toast-${type} show`;
     t.textContent = msg;
     setTimeout(() => t.classList.remove('show'), 3000);
 }
@@ -376,7 +1287,7 @@ function filterAlerts() {
     const status = document.getElementById('filterStatus').value;
     const rule = document.getElementById('filterRule').value;
 
-    document.querySelectorAll('.alert-row').forEach(row => {
+    document.querySelectorAll('.al-table-row').forEach(row => {
         let show = true;
         if (sev && row.dataset.severity !== sev) show = false;
         if (status && row.dataset.status !== status) show = false;
@@ -407,17 +1318,17 @@ async function showDetail(id) {
         const d = a.details || {};
         let html = '';
 
-        // Header row: severity + status + rule
-        html += `<div class="detail-row"><span class="label">Severity</span><span class="value"><span class="sev-dot sev-dot-${a.severity}"></span>${a.severity.toUpperCase()}</span></div>`;
-        html += `<div class="detail-row"><span class="label">Status</span><span class="value"><span class="status-badge status-${a.status}">${a.status.replace('_', ' ')}</span></span></div>`;
-        if (a.rule_name) html += `<div class="detail-row"><span class="label">Rule</span><span class="value">${a.rule_name} <span style="color:var(--text-muted);font-size:0.7rem;">(${a.rule_type || ''})</span></span></div>`;
-        html += `<div class="detail-row"><span class="label">Triggered</span><span class="value">${fmtTime(a.triggered_at)}</span></div>`;
-        if (a.description) html += `<div class="detail-row"><span class="label">Description</span><span class="value" style="white-space:pre-line;text-align:left;max-width:70%;">${a.description}</span></div>`;
+        // Header rows: severity, status, rule, triggered time, description
+        html += `<div class="al-detail-row"><span class="al-detail-label">Severity</span><span class="al-detail-value"><span class="al-sev-dot al-sev-dot-${a.severity}" style="display:inline-block;vertical-align:middle;margin-right:6px;"></span><span class="al-sev-text al-sev-text-${a.severity}">${a.severity.toUpperCase()}</span></span></div>`;
+        html += `<div class="al-detail-row"><span class="al-detail-label">Status</span><span class="al-detail-value"><span class="al-status al-status-${a.status}">${a.status.replace('_', ' ')}</span></span></div>`;
+        if (a.rule_name) html += `<div class="al-detail-row"><span class="al-detail-label">Rule</span><span class="al-detail-value">${a.rule_name} <span style="color:var(--al-text-muted);font-size:0.7rem;">(${a.rule_type || ''})</span></span></div>`;
+        html += `<div class="al-detail-row"><span class="al-detail-label">Triggered</span><span class="al-detail-value" style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">${fmtTime(a.triggered_at)}</span></div>`;
+        if (a.description) html += `<div class="al-detail-row"><span class="al-detail-label">Description</span><span class="al-detail-value" style="white-space:pre-line;text-align:left;max-width:70%;">${a.description}</span></div>`;
 
         // MITRE info from description
-        if (a.acknowledged_at) html += `<div class="detail-row"><span class="label">Acknowledged</span><span class="value">${fmtTime(a.acknowledged_at)}</span></div>`;
-        if (a.resolved_at) html += `<div class="detail-row"><span class="label">Resolved</span><span class="value">${fmtTime(a.resolved_at)}</span></div>`;
-        if (a.resolution_notes) html += `<div class="detail-row"><span class="label">Notes</span><span class="value">${a.resolution_notes}</span></div>`;
+        if (a.acknowledged_at) html += `<div class="al-detail-row"><span class="al-detail-label">Acknowledged</span><span class="al-detail-value" style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">${fmtTime(a.acknowledged_at)}</span></div>`;
+        if (a.resolved_at) html += `<div class="al-detail-row"><span class="al-detail-label">Resolved</span><span class="al-detail-value" style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">${fmtTime(a.resolved_at)}</span></div>`;
+        if (a.resolution_notes) html += `<div class="al-detail-row"><span class="al-detail-label">Notes</span><span class="al-detail-value">${a.resolution_notes}</span></div>`;
 
         // === Incident Summary ===
         const total = d.total_events || d.count || 0;
@@ -425,26 +1336,26 @@ async function showDetail(id) {
         const devices = d.devices || [];
 
         if (total || timeRange.first || devices.length) {
-            html += `<div class="detail-section"><h4>Incident Summary</h4>`;
-            html += `<div class="incident-summary">`;
-            if (total) html += `<div class="incident-stat"><div class="stat-value">${total.toLocaleString()}</div><div class="stat-label">Total Events</div></div>`;
-            if (d.window_minutes) html += `<div class="incident-stat"><div class="stat-value">${d.window_minutes}m</div><div class="stat-label">Time Window</div></div>`;
-            if (d.threshold) html += `<div class="incident-stat"><div class="stat-value">${d.threshold.toLocaleString()}</div><div class="stat-label">Threshold</div></div>`;
-            if (devices.length) html += `<div class="incident-stat"><div class="stat-value">${devices.length}</div><div class="stat-label">Device${devices.length > 1 ? 's' : ''}</div></div>`;
+            html += `<div class="al-detail-section"><h4>Incident Summary</h4>`;
+            html += `<div class="al-incident-grid">`;
+            if (total) html += `<div class="al-incident-card"><div class="al-incident-val">${total.toLocaleString()}</div><div class="al-incident-lbl">Total Events</div></div>`;
+            if (d.window_minutes) html += `<div class="al-incident-card"><div class="al-incident-val">${d.window_minutes}m</div><div class="al-incident-lbl">Time Window</div></div>`;
+            if (d.threshold) html += `<div class="al-incident-card"><div class="al-incident-val">${d.threshold.toLocaleString()}</div><div class="al-incident-lbl">Threshold</div></div>`;
+            if (devices.length) html += `<div class="al-incident-card"><div class="al-incident-val">${devices.length}</div><div class="al-incident-lbl">Device${devices.length > 1 ? 's' : ''}</div></div>`;
             html += `</div>`;
 
             if (timeRange.first) {
-                html += `<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">Time range: ${fmtTime(timeRange.first)} &mdash; ${fmtTime(timeRange.last)}</div>`;
+                html += `<div class="al-detail-meta">Time range: <span>${fmtTime(timeRange.first)}</span> &mdash; <span>${fmtTime(timeRange.last)}</span></div>`;
             }
             if (devices.length) {
-                html += `<div style="margin-top:0.35rem;font-size:0.75rem;color:var(--text-muted);">Devices: <span style="font-family:monospace;color:white;">${devices.join(', ')}</span></div>`;
+                html += `<div class="al-detail-meta">Devices: <span>${devices.join(', ')}</span></div>`;
             }
 
             // Investigate All button
             const topSrc = (d.top_sources || [])[0];
             if (topSrc) {
                 const logUrl = buildLogUrl({srcip: topSrc.ip, time_range: (d.window_minutes || 5) + 'm'});
-                html += `<a href="${logUrl}" target="_blank" class="btn-investigate">Investigate Logs</a>`;
+                html += `<a href="${logUrl}" target="_blank" class="al-btn-investigate"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Investigate Logs</a>`;
             }
             html += `</div>`;
         }
@@ -452,16 +1363,16 @@ async function showDetail(id) {
         // === Top Source IPs ===
         const topSources = d.top_sources || [];
         if (topSources.length) {
-            html += `<div class="detail-section"><h4>Top Source IPs</h4>`;
-            html += `<table class="detail-table"><thead><tr><th>Source IP</th><th>Events</th><th>Device(s)</th><th></th></tr></thead><tbody>`;
+            html += `<div class="al-detail-section"><h4>Top Source IPs</h4>`;
+            html += `<table class="al-dtable"><thead><tr><th>Source IP</th><th>Events</th><th>Device(s)</th><th></th></tr></thead><tbody>`;
             topSources.forEach(s => {
                 const devs = (s.devices || []).join(', ') || '-';
                 const logUrl = buildLogUrl({srcip: s.ip, time_range: (d.window_minutes || 60) + 'm'});
                 html += `<tr>
-                    <td class="ip-cell">${s.ip}</td>
-                    <td class="count-cell">${s.count.toLocaleString()}</td>
-                    <td class="device-cell">${devs}</td>
-                    <td><a href="${logUrl}" target="_blank" class="btn-drill">View Logs</a></td>
+                    <td class="al-ip">${s.ip}</td>
+                    <td class="al-count">${s.count.toLocaleString()}</td>
+                    <td class="al-device">${devs}</td>
+                    <td><a href="${logUrl}" target="_blank" class="al-btn-drill">View Logs</a></td>
                 </tr>`;
             });
             html += `</tbody></table></div>`;
@@ -470,15 +1381,15 @@ async function showDetail(id) {
         // === Top Destination IPs ===
         const topDests = d.top_destinations || [];
         if (topDests.length) {
-            html += `<div class="detail-section"><h4>Top Destinations</h4>`;
-            html += `<table class="detail-table"><thead><tr><th>Destination IP</th><th>Port</th><th>Events</th><th></th></tr></thead><tbody>`;
+            html += `<div class="al-detail-section"><h4>Top Destinations</h4>`;
+            html += `<table class="al-dtable"><thead><tr><th>Destination IP</th><th>Port</th><th>Events</th><th></th></tr></thead><tbody>`;
             topDests.forEach(dst => {
                 const logUrl = buildLogUrl({dstip: dst.ip, dstport: dst.port || '', time_range: (d.window_minutes || 60) + 'm'});
                 html += `<tr>
-                    <td class="ip-cell">${dst.ip}</td>
-                    <td class="port-cell">${dst.port || '-'}</td>
-                    <td class="count-cell">${dst.count.toLocaleString()}</td>
-                    <td><a href="${logUrl}" target="_blank" class="btn-drill">View Logs</a></td>
+                    <td class="al-ip">${dst.ip}</td>
+                    <td class="al-port">${dst.port || '-'}</td>
+                    <td class="al-count">${dst.count.toLocaleString()}</td>
+                    <td><a href="${logUrl}" target="_blank" class="al-btn-drill">View Logs</a></td>
                 </tr>`;
             });
             html += `</tbody></table></div>`;
@@ -487,44 +1398,44 @@ async function showDetail(id) {
         // === Top Ports ===
         const topPorts = d.top_ports || [];
         if (topPorts.length) {
-            html += `<div class="detail-section"><h4>Top Destination Ports</h4>`;
-            html += `<table class="detail-table"><thead><tr><th>Port</th><th>Events</th></tr></thead><tbody>`;
+            html += `<div class="al-detail-section"><h4>Top Destination Ports</h4>`;
+            html += `<table class="al-dtable"><thead><tr><th>Port</th><th>Events</th></tr></thead><tbody>`;
             topPorts.forEach(p => {
-                html += `<tr><td class="port-cell">${p.port}</td><td class="count-cell">${p.count.toLocaleString()}</td></tr>`;
+                html += `<tr><td class="al-port">${p.port}</td><td class="al-count">${p.count.toLocaleString()}</td></tr>`;
             });
             html += `</tbody></table></div>`;
         }
 
         // === Anomaly details ===
         if (a.rule_type === 'anomaly' && d.current_eps !== undefined) {
-            html += `<div class="detail-section"><h4>Anomaly Metrics</h4>`;
-            html += `<div class="incident-summary">`;
-            html += `<div class="incident-stat"><div class="stat-value">${d.current_eps}</div><div class="stat-label">Current EPS</div></div>`;
-            html += `<div class="incident-stat"><div class="stat-value">${d.baseline_eps}</div><div class="stat-label">Baseline EPS</div></div>`;
-            html += `<div class="incident-stat"><div class="stat-value">${d.ratio}x</div><div class="stat-label">Ratio</div></div>`;
-            html += `<div class="incident-stat"><div class="stat-value">${d.multiplier}x</div><div class="stat-label">Threshold</div></div>`;
+            html += `<div class="al-detail-section"><h4>Anomaly Metrics</h4>`;
+            html += `<div class="al-incident-grid">`;
+            html += `<div class="al-incident-card"><div class="al-incident-val">${d.current_eps}</div><div class="al-incident-lbl">Current EPS</div></div>`;
+            html += `<div class="al-incident-card"><div class="al-incident-val">${d.baseline_eps}</div><div class="al-incident-lbl">Baseline EPS</div></div>`;
+            html += `<div class="al-incident-card"><div class="al-incident-val">${d.ratio}x</div><div class="al-incident-lbl">Ratio</div></div>`;
+            html += `<div class="al-incident-card"><div class="al-incident-val">${d.multiplier}x</div><div class="al-incident-lbl">Threshold</div></div>`;
             html += `</div></div>`;
         }
 
         // === Absence details ===
         if (a.rule_type === 'absence') {
-            html += `<div class="detail-section"><h4>Device Status</h4>`;
-            html += `<div class="incident-summary">`;
-            if (d.device_ip) html += `<div class="incident-stat"><div class="stat-value" style="font-size:0.9rem;font-family:monospace;">${d.device_ip}</div><div class="stat-label">Device IP</div></div>`;
-            if (d.minutes_since_last) html += `<div class="incident-stat"><div class="stat-value">${Math.round(d.minutes_since_last)}m</div><div class="stat-label">Since Last Log</div></div>`;
-            if (d.timeout_minutes) html += `<div class="incident-stat"><div class="stat-value">${d.timeout_minutes}m</div><div class="stat-label">Timeout</div></div>`;
+            html += `<div class="al-detail-section"><h4>Device Status</h4>`;
+            html += `<div class="al-incident-grid">`;
+            if (d.device_ip) html += `<div class="al-incident-card"><div class="al-incident-val" style="font-size:0.9rem;font-family:'JetBrains Mono',monospace;">${d.device_ip}</div><div class="al-incident-lbl">Device IP</div></div>`;
+            if (d.minutes_since_last) html += `<div class="al-incident-card"><div class="al-incident-val">${Math.round(d.minutes_since_last)}m</div><div class="al-incident-lbl">Since Last Log</div></div>`;
+            if (d.timeout_minutes) html += `<div class="al-incident-card"><div class="al-incident-val">${d.timeout_minutes}m</div><div class="al-incident-lbl">Timeout</div></div>`;
             html += `</div>`;
-            if (d.last_log) html += `<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">Last log: ${fmtTime(d.last_log)}</div>`;
+            if (d.last_log) html += `<div class="al-detail-meta">Last log: <span>${fmtTime(d.last_log)}</span></div>`;
             html += `</div>`;
         }
 
         // === Raw matches fallback (for old alerts without enrichment) ===
         const matches = d.matches || [];
         if (matches.length && !topSources.length) {
-            html += `<div class="detail-section"><h4>Matches</h4>`;
-            html += `<table class="detail-table"><thead><tr><th>Group</th><th>Events</th></tr></thead><tbody>`;
+            html += `<div class="al-detail-section"><h4>Matches</h4>`;
+            html += `<table class="al-dtable"><thead><tr><th>Group</th><th>Events</th></tr></thead><tbody>`;
             matches.forEach(m => {
-                html += `<tr><td class="ip-cell">${m.group || 'N/A'}</td><td class="count-cell">${m.count.toLocaleString()}</td></tr>`;
+                html += `<tr><td class="al-ip">${m.group || 'N/A'}</td><td class="al-count">${m.count.toLocaleString()}</td></tr>`;
             });
             html += `</tbody></table></div>`;
         }
@@ -571,6 +1482,22 @@ async function fpAlert(id) {
     if (data.success) { showToast('Marked as false positive'); setTimeout(() => location.reload(), 500); }
     else showToast(data.error, 'error');
 }
+
+// Close modals on overlay click
+document.querySelectorAll('.al-modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.remove('active');
+        }
+    });
+});
+
+// Close modals on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.al-modal-overlay.active').forEach(m => m.classList.remove('active'));
+    }
+});
 
 // Auto-refresh every 30 seconds
 setInterval(() => { location.reload(); }, 30000);
