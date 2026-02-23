@@ -81,6 +81,7 @@ async def init_db() -> None:
     from ..models import dashboard  # noqa: F401
     from ..models import address_object  # noqa: F401
     from ..models import system_settings  # noqa: F401
+    from ..models import llm_config  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

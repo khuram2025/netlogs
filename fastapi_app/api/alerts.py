@@ -200,6 +200,53 @@ async def api_alert_detail(alert_id: int, db: AsyncSession = Depends(get_db)):
     })
 
 
+@router.get("/api/alerts/{alert_id}/ai-summary", name="api_alert_ai_summary",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_alert_ai_summary(alert_id: int, db: AsyncSession = Depends(get_db)):
+    """Get AI-generated summary for an alert."""
+    from ..services.ai.alert_summarizer import summarize_alert as ai_summarize_alert
+
+    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    alert = result.scalar_one_or_none()
+
+    if not alert:
+        return JSONResponse({"success": False, "error": "Alert not found"}, status_code=404)
+
+    # Fetch associated rule for context
+    rule = None
+    if alert.rule_id:
+        rule_result = await db.execute(select(AlertRule).where(AlertRule.id == alert.rule_id))
+        rule = rule_result.scalar_one_or_none()
+
+    # Build alert data dict
+    alert_data = {
+        "title": alert.title,
+        "severity": alert.severity,
+        "description": alert.description,
+        "rule_name": rule.name if rule else "Unknown",
+        "category": rule.category if rule else "unknown",
+        "mitre_tactic": rule.mitre_tactic if rule else "",
+        "mitre_technique": rule.mitre_technique if rule else "",
+    }
+
+    # Get enrichment data from alert details
+    enrichment_data = alert.details if alert.details else {}
+
+    # Generate AI summary
+    try:
+        ai_summary = await ai_summarize_alert(alert_data, enrichment_data)
+        return JSONResponse({
+            "success": True,
+            "ai_summary": ai_summary,
+        })
+    except Exception as e:
+        logger.error(f"AI summarization failed for alert {alert_id}: {e}", exc_info=True)
+        return JSONResponse({
+            "success": False,
+            "error": f"AI summarization failed: {str(e)}",
+        }, status_code=500)
+
+
 @router.post("/api/alerts/{alert_id}/acknowledge", name="api_acknowledge_alert",
              dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_acknowledge_alert(alert_id: int, request: Request, db: AsyncSession = Depends(get_db)):

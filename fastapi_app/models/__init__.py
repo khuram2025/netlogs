@@ -6,6 +6,7 @@ from .routing import (
     RouteType, ChangeType
 )
 from .zone import ZoneSnapshot, ZoneEntry, InterfaceEntry
+from .llm_config import LLMConfig, LLMProvider
 
 __all__ = [
     "Device", "DeviceStatus", "ParserType", "RetentionDays",
@@ -13,4 +14,5 @@ __all__ = [
     "RoutingTableSnapshot", "RoutingEntry", "RouteChange",
     "RouteType", "ChangeType",
     "ZoneSnapshot", "ZoneEntry", "InterfaceEntry",
+    "LLMConfig", "LLMProvider",
 ]

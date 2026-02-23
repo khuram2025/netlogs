@@ -36,6 +36,7 @@ from .api.address_objects import router as address_objects_router
 from .api.setup import router as setup_router
 from .api.health import router as health_router
 from .api.backup import router as backup_router
+from .api.llm_config import router as llm_config_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -271,6 +272,9 @@ app.include_router(health_router)
 
 # Include backup management routes
 app.include_router(backup_router)
+
+# Include LLM configuration routes
+app.include_router(llm_config_router)
 
 
 @app.get("/api/")

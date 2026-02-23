@@ -88,9 +88,3 @@ http://10.12.50.77:8002/logs/
 just go through this one and then me what your suggestion  about this is it right approach 
 
 
-http://10.12.50.77:8002/correlation/
-
-her in rules we have Total Matches how to know which one match as per the below rules 
-and also we shoud have drll down to these further for each below rule what u u suggest 
-
-this should be real data based on the time rang filter defaut is 24 Hour

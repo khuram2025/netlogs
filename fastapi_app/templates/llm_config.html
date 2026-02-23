@@ -1,0 +1,588 @@
+{% extends "base.html" %}
+
+{% block title %}AI Settings — NetLogs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ai-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+    }
+    .ai-header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-color);
+        margin: 0;
+    }
+    .ai-header .subtitle {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }
+    .btn-add-config {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1.2rem;
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-add-config:hover { background: #2563eb; }
+    .btn-add-config svg { width: 16px; height: 16px; }
+
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .config-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.25rem;
+        position: relative;
+        transition: border-color 0.2s;
+    }
+    .config-card.active {
+        border-color: var(--success);
+        background: rgba(34, 197, 94, 0.03);
+    }
+    .config-card .active-badge {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        background: var(--success);
+        color: white;
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 999px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .config-card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-color);
+        margin: 0 0 0.5rem 0;
+    }
+    .config-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .config-meta-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .config-meta-item strong {
+        color: var(--text-color);
+    }
+    .config-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    .config-actions button {
+        flex: 1;
+        padding: 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        transition: all 0.2s;
+    }
+    .btn-activate {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    .btn-test {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .btn-delete {
+        background: transparent;
+        color: var(--danger);
+        border-color: var(--danger);
+    }
+    .btn-activate:hover, .btn-test:hover { opacity: 0.9; }
+    .btn-delete:hover { background: var(--danger); color: white; }
+
+    /* Modal styles */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+        background: var(--card-bg);
+        border-radius: 12px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+    }
+    .modal-header {
+        padding: 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        color: var(--text-color);
+    }
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-close:hover { color: var(--text-color); }
+    .modal-body {
+        padding: 1.25rem;
+    }
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-bottom: 0.375rem;
+        font-weight: 500;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text-color);
+        border-radius: 6px;
+        padding: 0.6rem;
+        font-size: 0.875rem;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+    .form-group .hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+    .modal-footer {
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+    .modal-footer button {
+        padding: 0.6rem 1.2rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+    }
+    .btn-cancel {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+    }
+    .btn-cancel:hover { color: var(--text-color); }
+    .btn-save {
+        background: var(--primary);
+        color: white;
+    }
+    .btn-save:hover { background: #2563eb; }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-muted);
+    }
+    .empty-state svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+    }
+    .empty-state h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
+        color: var(--text-color);
+    }
+    .empty-state p {
+        margin: 0 0 1.5rem 0;
+        font-size: 0.875rem;
+    }
+
+    .alert {
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        border: 1px solid;
+    }
+    .alert-info {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: rgba(59, 130, 246, 0.3);
+        color: #60a5fa;
+    }
+    .alert-success {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: var(--success);
+    }
+    .alert-error {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: var(--danger);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="ai-header">
+        <div>
+            <h1>AI Settings</h1>
+            <div class="subtitle">Configure LLM providers for AI-powered features</div>
+        </div>
+        <button class="btn-add-config" onclick="openAddConfigModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add LLM Provider
+        </button>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    {% if configs %}
+    <div class="config-grid">
+        {% for config in configs %}
+        <div class="config-card {% if config.is_active %}active{% endif %}" data-config-id="{{ config.id }}">
+            {% if config.is_active %}
+            <div class="active-badge">Active</div>
+            {% endif %}
+            <h3>{{ config.provider.value|upper }}</h3>
+            <div class="config-meta">
+                <div class="config-meta-item">
+                    <span>Model:</span>
+                    <strong>{{ config.model_name }}</strong>
+                </div>
+                <div class="config-meta-item">
+                    <span>API Key:</span>
+                    <strong>{% if config.api_key %}✓ Configured{% else %}Not set{% endif %}</strong>
+                </div>
+                {% if config.api_base_url %}
+                <div class="config-meta-item">
+                    <span>Base URL:</span>
+                    <strong>{{ config.api_base_url[:40] }}...</strong>
+                </div>
+                {% endif %}
+                <div class="config-meta-item">
+                    <span>Max Tokens:</span>
+                    <strong>{{ config.max_tokens }}</strong>
+                </div>
+                <div class="config-meta-item">
+                    <span>Temperature:</span>
+                    <strong>{{ config.temperature / 100.0 }}</strong>
+                </div>
+            </div>
+            <div class="config-actions">
+                {% if not config.is_active %}
+                <button class="btn-activate" onclick="activateConfig({{ config.id }})">Activate</button>
+                {% endif %}
+                <button class="btn-test" onclick="testConfig({{ config.id }})">Test</button>
+                <button class="btn-delete" onclick="deleteConfig({{ config.id }})">Delete</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v6m5.66-14.66l-4.24 4.24m-2.83 2.83l-4.24 4.24M23 12h-6m-6 0H1m14.66 5.66l-4.24-4.24m-2.83-2.83l-4.24-4.24"></path>
+            </svg>
+            <h3>No LLM Providers Configured</h3>
+            <p>Add an LLM provider to enable AI-powered features like alert summarization and natural language queries.</p>
+            <button class="btn-add-config" onclick="openAddConfigModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Your First Provider
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h3 style="margin-top:0;">About AI Features</h3>
+        <p style="font-size:0.875rem;color:var(--text-muted);line-height:1.6;">
+            NetLogs uses AI/LLM providers to power intelligent security analysis features. Once configured, you can use:
+        </p>
+        <ul style="font-size:0.875rem;color:var(--text-muted);line-height:1.8;">
+            <li><strong>Alert Summarization:</strong> Get AI-generated executive summaries, risk assessments, and recommended actions for alerts</li>
+            <li><strong>Natural Language Queries:</strong> Search logs using plain English instead of query syntax (coming soon)</li>
+            <li><strong>IOC Extraction:</strong> Automatically extract indicators of compromise from threat reports (coming soon)</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Add/Edit Config Modal -->
+<div id="configModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add LLM Provider</h2>
+            <button class="modal-close" onclick="closeConfigModal()">&times;</button>
+        </div>
+        <form id="configForm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="provider">Provider</label>
+                    <select id="provider" name="provider" required onchange="updateProviderFields()">
+                        <option value="">Select a provider...</option>
+                        <option value="claude">Claude (Anthropic)</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="ollama">Ollama (Local)</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="azure_openai">Azure OpenAI</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="model_name">Model Name</label>
+                    <select id="model_name" name="model_name" required>
+                        <option value="">Select a model...</option>
+                    </select>
+                    <div class="hint">Choose the specific model version to use</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="api_key">API Key</label>
+                    <input type="password" id="api_key" name="api_key" placeholder="sk-...">
+                    <div class="hint" id="api_key_hint">Your provider's API key (leave empty for Ollama)</div>
+                </div>
+
+                <div class="form-group" id="base_url_group" style="display:none;">
+                    <label for="api_base_url">Base URL</label>
+                    <input type="text" id="api_base_url" name="api_base_url" placeholder="http://localhost:11434">
+                    <div class="hint">Custom API endpoint (required for Ollama and Azure)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_tokens">Max Tokens</label>
+                    <input type="number" id="max_tokens" name="max_tokens" value="2048" min="100" max="8192" required>
+                    <div class="hint">Maximum response length (100-8192)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="temperature">Temperature (0-100)</label>
+                    <input type="number" id="temperature" name="temperature" value="0" min="0" max="100" required>
+                    <div class="hint">0 = deterministic, 100 = very creative</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeConfigModal()">Cancel</button>
+                <button type="submit" class="btn-save">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const providerModels = {{ provider_models|tojson }};
+
+function updateProviderFields() {
+    const provider = document.getElementById('provider').value;
+    const modelSelect = document.getElementById('model_name');
+    const apiKeyHint = document.getElementById('api_key_hint');
+    const baseUrlGroup = document.getElementById('base_url_group');
+    const apiKeyInput = document.getElementById('api_key');
+
+    // Update model options
+    modelSelect.innerHTML = '<option value="">Select a model...</option>';
+    if (provider && providerModels[provider]) {
+        providerModels[provider].forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelSelect.appendChild(option);
+        });
+    }
+
+    // Update field requirements based on provider
+    if (provider === 'ollama') {
+        apiKeyHint.textContent = 'Not required for Ollama';
+        apiKeyInput.required = false;
+        baseUrlGroup.style.display = 'block';
+        document.getElementById('api_base_url').required = true;
+        document.getElementById('api_base_url').value = 'http://localhost:11434';
+    } else if (provider === 'azure_openai') {
+        apiKeyHint.textContent = 'Your Azure OpenAI API key';
+        apiKeyInput.required = true;
+        baseUrlGroup.style.display = 'block';
+        document.getElementById('api_base_url').required = true;
+        document.getElementById('api_base_url').placeholder = 'https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT/chat/completions?api-version=2024-02-01';
+    } else {
+        apiKeyHint.textContent = 'Your provider\'s API key';
+        apiKeyInput.required = true;
+        baseUrlGroup.style.display = 'none';
+        document.getElementById('api_base_url').required = false;
+    }
+}
+
+function openAddConfigModal() {
+    document.getElementById('configModal').classList.add('active');
+    document.getElementById('configForm').reset();
+}
+
+function closeConfigModal() {
+    document.getElementById('configModal').classList.remove('active');
+}
+
+function showAlert(message, type = 'info') {
+    const container = document.getElementById('alertContainer');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+}
+
+// Handle form submission
+document.getElementById('configForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = {
+        provider: formData.get('provider'),
+        model_name: formData.get('model_name'),
+        api_key: formData.get('api_key') || null,
+        api_base_url: formData.get('api_base_url') || null,
+        max_tokens: parseInt(formData.get('max_tokens')),
+        temperature: parseInt(formData.get('temperature')),
+    };
+
+    try {
+        const response = await fetch('/api/llm-config/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+            showAlert('LLM configuration saved successfully!', 'success');
+            closeConfigModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showAlert(`Error: ${error.detail || 'Failed to save configuration'}`, 'error');
+        }
+    } catch (err) {
+        showAlert('Network error. Please try again.', 'error');
+    }
+});
+
+async function activateConfig(configId) {
+    try {
+        const response = await fetch(`/api/llm-config/activate/${configId}/`, {
+            method: 'POST',
+        });
+
+        if (response.ok) {
+            showAlert('Configuration activated!', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showAlert('Failed to activate configuration', 'error');
+        }
+    } catch (err) {
+        showAlert('Network error. Please try again.', 'error');
+    }
+}
+
+async function deleteConfig(configId) {
+    if (!confirm('Are you sure you want to delete this LLM configuration?')) return;
+
+    try {
+        const response = await fetch(`/api/llm-config/${configId}/`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            showAlert('Configuration deleted!', 'success');
+            document.querySelector(`[data-config-id="${configId}"]`).remove();
+        } else {
+            showAlert('Failed to delete configuration', 'error');
+        }
+    } catch (err) {
+        showAlert('Network error. Please try again.', 'error');
+    }
+}
+
+async function testConfig(configId) {
+    const testPrompt = 'Explain what a port scan is in one sentence.';
+
+    try {
+        const response = await fetch('/api/llm-config/test/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ test_prompt: testPrompt }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(`✅ Test successful!\n\nPrompt: ${testPrompt}\n\nResponse: ${data.response}`);
+        } else {
+            alert(`❌ Test failed:\n\n${data.detail}`);
+        }
+    } catch (err) {
+        alert(`❌ Network error:\n\n${err.message}`);
+    }
+}
+
+// Close modal on outside click
+document.getElementById('configModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeConfigModal();
+});
+</script>
+{% endblock %}

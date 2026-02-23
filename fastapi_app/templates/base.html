@@ -758,6 +758,12 @@
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
                         <span class="sb-item-label">Backups</span>
                     </a>
+                    {% if current_user and current_user.role == 'ADMIN' %}
+                    <a href="{{ url_for('llm_config_page') }}" class="sb-item" data-tip="AI Settings" data-path="/system/ai-settings">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m5.66-14.66l-4.24 4.24m-2.83 2.83l-4.24 4.24M23 12h-6m-6 0H1m14.66 5.66l-4.24-4.24m-2.83-2.83l-4.24-4.24"/></svg></span>
+                        <span class="sb-item-label">AI Settings</span>
+                    </a>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
