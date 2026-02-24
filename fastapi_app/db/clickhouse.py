@@ -538,6 +538,91 @@ class ClickHouseClient:
 
         return terms
 
+    # ── Indexed column mappings for PREWHERE / bloom_filter optimization ──
+    # These columns have dedicated bloom_filter or minmax indexes on the syslogs table.
+    # When filtering by these fields with '=' operator, use the raw column directly
+    # (NOT wrapped in lower()/if()) so ClickHouse can leverage data-skipping indexes.
+    _INDEXED_STRING_COLUMNS = {
+        'policyname': 'policyname',
+        'rule': 'policyname',
+        'action': 'action',
+        'application': 'application',
+        'app': 'application',
+        'log_type': 'log_type',
+        'session_end_reason': 'session_end_reason',
+        'threat_id': 'threat_id',
+        'src_zone': 'src_zone',
+        'srczone': 'src_zone',
+        'dst_zone': 'dst_zone',
+        'dstzone': 'dst_zone',
+    }
+
+    # Numeric indexed columns (minmax indexes)
+    _INDEXED_NUMERIC_COLUMNS = {
+        'srcport': 'srcport',
+        'dstport': 'dstport',
+        'src_port': 'srcport',
+        'dst_port': 'dstport',
+    }
+
+    @classmethod
+    def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
+        """
+        Extract conditions for indexed columns from query_text for PREWHERE.
+        Returns list of SQL conditions that use direct column references,
+        enabling ClickHouse bloom_filter / minmax indexes to skip granules.
+        """
+        if not query_text:
+            return []
+
+        terms = cls._parse_advanced_query(query_text)
+        conditions = []
+
+        for term in terms:
+            if term['type'] != 'field':
+                continue
+            field = term['field']
+            operator = term.get('operator', '=')
+            value = term['value']
+            negated = term['negated']
+
+            # String indexed columns (bloom_filter)
+            if field in cls._INDEXED_STRING_COLUMNS and operator == '=':
+                col = cls._INDEXED_STRING_COLUMNS[field]
+                safe_val = value.replace("'", "''")
+
+                if '|' in value:
+                    or_vals = [v.strip().replace("'", "''") for v in value.split('|')]
+                    cond = "(" + " OR ".join(f"{col} = '{v}'" for v in or_vals) + ")"
+                else:
+                    cond = f"{col} = '{safe_val}'"
+
+                if negated:
+                    cond = f"NOT ({cond})"
+                conditions.append(cond)
+
+            # Numeric indexed columns (minmax)
+            elif field in cls._INDEXED_NUMERIC_COLUMNS and operator in ('=', '>', '>=', '<', '<='):
+                col = cls._INDEXED_NUMERIC_COLUMNS[field]
+                # Handle port ranges and single values
+                if operator == '=' and '-' in value:
+                    parts = value.split('-')
+                    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                        cond = f"({col} >= {parts[0]} AND {col} <= {parts[1]})"
+                        if negated:
+                            cond = f"NOT {cond}"
+                        conditions.append(cond)
+                elif value.isdigit():
+                    num_val = int(value)
+                    if operator == '=' and not negated:
+                        conditions.append(f"{col} = {num_val}")
+                    elif operator == '=' and negated:
+                        conditions.append(f"{col} != {num_val}")
+                    else:
+                        conditions.append(f"{col} {operator} {num_val}")
+
+        return conditions
+
     @classmethod
     def _is_multi_ip(cls, value: str) -> bool:
         """Check if value contains multiple comma-separated IPs or ranges."""
@@ -664,6 +749,62 @@ class ClickHouseClient:
             if negated:
                 return f"{col} != '{safe_value}'"
             return f"{col} = '{safe_value}'"
+
+        # ── Fast-path: indexed string columns (bloom_filter) ──
+        # Use direct column comparison so ClickHouse data-skipping indexes work.
+        if field in cls._INDEXED_STRING_COLUMNS:
+            col = cls._INDEXED_STRING_COLUMNS[field]
+
+            # Handle OR logic (e.g., action:accept|allow|close)
+            if '|' in value and operator == '=':
+                or_values = [v.strip().replace("'", "''") for v in value.split('|')]
+                or_conditions = [f"{col} = '{v}'" for v in or_values]
+                combined = f"({' OR '.join(or_conditions)})"
+                if negated:
+                    return f"NOT {combined}"
+                return combined
+
+            # Handle contains/like operator (~)
+            if operator == '~':
+                like_value = safe_value.replace('*', '%')
+                if '%' not in like_value:
+                    like_value = f"%{like_value}%"
+                if negated:
+                    return f"{col} NOT ILIKE '{like_value}'"
+                return f"{col} ILIKE '{like_value}'"
+
+            # Handle comparison operators
+            if operator in ('>', '>=', '<', '<='):
+                return f"{col} {operator} '{safe_value}'"
+
+            # Standard equality — case-sensitive for index utilization
+            if negated:
+                return f"{col} != '{safe_value}'"
+            return f"{col} = '{safe_value}'"
+
+        # ── Fast-path: indexed numeric columns (minmax) ──
+        if field in cls._INDEXED_NUMERIC_COLUMNS:
+            col = cls._INDEXED_NUMERIC_COLUMNS[field]
+
+            # Handle port ranges (e.g., 80-443)
+            if operator == '=' and '-' in value:
+                parts = value.split('-')
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                    cond = f"({col} >= {parts[0]} AND {col} <= {parts[1]})"
+                    if negated:
+                        return f"NOT {cond}"
+                    return cond
+
+            # Numeric comparison
+            try:
+                num_val = int(value)
+                if operator in ('>', '>=', '<', '<='):
+                    return f"{col} {operator} {num_val}"
+                if negated:
+                    return f"{col} != {num_val}"
+                return f"{col} = {num_val}"
+            except ValueError:
+                pass  # Fall through to field_mapping for non-numeric values
 
         # Field mapping for normalized and vendor-specific fields
         # Uses indexed columns where available, with fallback to parsed_data
@@ -1040,7 +1181,7 @@ class ClickHouseClient:
         """
         client = cls.get_client()
 
-        # Build time filter separately for PREWHERE optimization
+        # Build time filter + indexed field conditions for PREWHERE optimization
         prewhere_parts = []
 
         if start_time is None and end_time is None:
@@ -1053,10 +1194,13 @@ class ClickHouseClient:
                 end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
                 prewhere_parts.append(f"timestamp <= '{end_str}'")
 
+        # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
 
-        # Use PREWHERE for time filter (allows skipping data blocks early)
+        # Use PREWHERE for time + indexed fields (allows skipping data blocks early)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         # Use light columns by default for performance (excludes raw, parsed_data)
@@ -1094,7 +1238,7 @@ class ClickHouseClient:
         """
         client = cls.get_client()
 
-        # Build time filter separately for PREWHERE optimization
+        # Build time filter + indexed field conditions for PREWHERE optimization
         prewhere_parts = []
 
         if start_time is None and end_time is None:
@@ -1107,10 +1251,13 @@ class ClickHouseClient:
                 end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
                 prewhere_parts.append(f"timestamp <= '{end_str}'")
 
+        # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
 
-        # Use PREWHERE for time filter
+        # Use PREWHERE for time + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         # Use LIMIT to cap counting for performance (avoids counting millions of rows)
@@ -1193,7 +1340,7 @@ class ClickHouseClient:
 
         client = cls.get_client()
 
-        # Build PREWHERE time filter
+        # Build PREWHERE: time filter + indexed field conditions for data-skipping
         prewhere_parts = []
         if start_time is None and end_time is None:
             prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
@@ -1202,6 +1349,9 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
             if end_time:
                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+
+        # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
 
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
@@ -1224,7 +1374,6 @@ class ClickHouseClient:
         GROUP BY {group_cols}
         ORDER BY event_count DESC
         LIMIT {limit} OFFSET {offset}
-        SETTINGS max_threads=0
         """
 
         result = client.query(query).named_results()
@@ -1265,6 +1414,9 @@ class ClickHouseClient:
             if end_time:
                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
 
+        # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
@@ -1284,7 +1436,6 @@ class ClickHouseClient:
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
-        SETTINGS max_threads=0
         """
 
         result = client.query(query).result_rows
@@ -1305,7 +1456,7 @@ class ClickHouseClient:
         """Get summary statistics for logs matching the current filters."""
         client = cls.get_client()
 
-        # Build time filter separately for PREWHERE optimization
+        # Build time filter + indexed field conditions for PREWHERE optimization
         prewhere_parts = []
 
         if start_time is None and end_time is None:
@@ -1318,10 +1469,13 @@ class ClickHouseClient:
                 end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
                 prewhere_parts.append(f"timestamp <= '{end_str}'")
 
+        # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, None, None, None, query_text, None)
 
-        # Use PREWHERE for time filter
+        # Use PREWHERE for time filter + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         query = f"""
