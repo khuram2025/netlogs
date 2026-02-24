@@ -879,6 +879,76 @@ async def policy_builder(
         })
 
 
+@router.get("/policy-lookup/", response_class=HTMLResponse, name="policy_lookup")
+async def policy_lookup_page(
+    request: Request,
+    dstip: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
+    srcip: Optional[str] = Query(None),
+    time_range: Optional[str] = Query("24h"),
+):
+    """Policy lookup — find existing allow/deny policies for a destination."""
+    results = None
+    error = None
+
+    dstip_clean = dstip.strip() if dstip and dstip.strip() else None
+    dstport_clean = dstport.strip() if dstport and dstport.strip() else None
+    srcip_clean = srcip.strip() if srcip and srcip.strip() else None
+
+    if dstip_clean and dstport_clean:
+        try:
+            port_int = int(dstport_clean)
+
+            # Parse time range
+            start_time = None
+            end_time = None
+            now = datetime.now()
+            effective = (time_range or "24h").strip().lower()
+
+            if effective.endswith('h'):
+                try:
+                    start_time = now - timedelta(hours=int(effective[:-1]))
+                except ValueError:
+                    pass
+            elif effective.endswith('d'):
+                try:
+                    start_time = now - timedelta(days=int(effective[:-1]))
+                except ValueError:
+                    pass
+
+            default_hours = 24
+            if start_time:
+                default_hours = max(1, int((now - start_time).total_seconds() / 3600))
+
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.policy_lookup(
+                    dstip=dstip_clean,
+                    dstport=port_int,
+                    srcip=srcip_clean,
+                    start_time=start_time,
+                    end_time=end_time,
+                    default_hours=default_hours,
+                )
+            )
+        except ValueError as ve:
+            error = str(ve)
+        except Exception as e:
+            logger.error(f"Policy lookup error: {e}")
+            error = str(e)
+
+    return _render("logs/policy_lookup.html", request, {
+        "results": results,
+        "current_dstip": dstip_clean,
+        "current_dstport": dstport_clean,
+        "current_srcip": srcip_clean,
+        "current_time_range": (time_range or "24h").strip().lower(),
+        "error": error,
+        "format_number": format_number,
+    })
+
+
 @router.get("/devices/", response_class=HTMLResponse, name="device_list")
 async def device_list(
     request: Request,

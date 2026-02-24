@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+
+{% block title %}NetLogs - Policy Lookup{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ================================================================
+       POLICY LOOKUP — Firewall Policy Discovery Console
+       ================================================================ */
+    .pl-page {
+        --pl-bg: #0f172a;
+        --pl-card: #1e293b;
+        --pl-card-alt: #0f172a;
+        --pl-text: #e2e8f0;
+        --pl-muted: #94a3b8;
+        --pl-dim: #64748b;
+        --pl-border: #334155;
+        --pl-input: #020617;
+        --pl-blue: #3b82f6;
+        --pl-green: #22c55e;
+        --pl-red: #ef4444;
+        --pl-amber: #f59e0b;
+        --pl-purple: #8b5cf6;
+        padding: 1.25rem 1.5rem;
+        color: var(--pl-text);
+    }
+
+    /* ── Page Header ── */
+    .pl-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 1.25rem;
+    }
+    .pl-header-icon {
+        width: 40px; height: 40px;
+        background: linear-gradient(135deg, rgba(59,130,246,.15), rgba(139,92,246,.15));
+        border: 1px solid rgba(59,130,246,.25);
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--pl-blue);
+    }
+    .pl-header-icon svg { width: 22px; height: 22px; }
+    .pl-title { font-size: 18px; font-weight: 700; color: #fff; }
+    .pl-subtitle { font-size: 12px; color: var(--pl-muted); margin-top: 1px; }
+
+    /* ── Search Form ── */
+    .pl-form-card {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+    }
+    .pl-form-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .pl-field { display: flex; flex-direction: column; gap: 4px; }
+    .pl-field label {
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .06em; color: var(--pl-muted);
+    }
+    .pl-field input {
+        background: var(--pl-input);
+        border: 1px solid var(--pl-border);
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: var(--pl-text);
+        font-size: 13px;
+        font-family: 'JetBrains Mono', monospace;
+        outline: none;
+        transition: border-color .15s;
+    }
+    .pl-field input:focus { border-color: var(--pl-blue); }
+    .pl-field input::placeholder { color: var(--pl-dim); }
+
+    /* Time pills */
+    .pl-time-pills { display: flex; gap: 4px; }
+    .pl-pill {
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-size: 12px; font-weight: 600;
+        background: var(--pl-input);
+        border: 1px solid var(--pl-border);
+        color: var(--pl-muted);
+        cursor: pointer;
+        transition: all .15s;
+    }
+    .pl-pill:hover { border-color: var(--pl-blue); color: var(--pl-text); }
+    .pl-pill.active {
+        background: rgba(59,130,246,.15);
+        border-color: var(--pl-blue);
+        color: var(--pl-blue);
+    }
+
+    .pl-btn {
+        padding: 8px 24px;
+        border-radius: 6px;
+        font-size: 13px; font-weight: 600;
+        border: none; cursor: pointer;
+        display: flex; align-items: center; gap: 6px;
+        transition: all .15s;
+    }
+    .pl-btn-primary {
+        background: var(--pl-blue); color: #fff;
+    }
+    .pl-btn-primary:hover { background: #2563eb; }
+    .pl-btn svg { width: 16px; height: 16px; }
+
+    /* ── Summary Cards ── */
+    .pl-summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 1.25rem;
+    }
+    @media (max-width: 1100px) { .pl-summary { grid-template-columns: repeat(2, 1fr); } }
+
+    .pl-kpi {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .pl-kpi::before {
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .pl-kpi.blue::before   { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .pl-kpi.green::before  { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .pl-kpi.amber::before  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .pl-kpi.red::before    { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .pl-kpi.purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .pl-kpi.cyan::before   { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+
+    .pl-kpi-label {
+        font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+        color: var(--pl-muted); font-weight: 600; margin-bottom: 4px;
+    }
+    .pl-kpi-value { font-size: 28px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .pl-kpi-sub { font-size: 11px; color: var(--pl-dim); margin-top: 4px; }
+    .pl-kpi-icon {
+        position: absolute; top: 1rem; right: 1rem;
+        width: 36px; height: 36px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px;
+    }
+    .pl-kpi.blue .pl-kpi-icon   { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .pl-kpi.green .pl-kpi-icon  { background: rgba(34,197,94,.15); color: #4ade80; }
+    .pl-kpi.amber .pl-kpi-icon  { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pl-kpi.red .pl-kpi-icon    { background: rgba(239,68,68,.15); color: #f87171; }
+
+    /* ── Section Headers ── */
+    .pl-section-hdr {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: .75rem; margin-top: .5rem;
+    }
+    .pl-section-hdr h3 {
+        font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .pl-section-badge {
+        font-size: 10px; font-weight: 700;
+        padding: 2px 8px; border-radius: 10px;
+    }
+    .pl-badge-green  { background: rgba(34,197,94,.15); color: #4ade80; }
+    .pl-badge-red    { background: rgba(239,68,68,.15); color: #f87171; }
+    .pl-badge-amber  { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+    /* ── Tables ── */
+    .pl-table-wrap {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 1.25rem;
+    }
+    .pl-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .pl-table th {
+        background: rgba(0,0,0,.25);
+        padding: 10px 14px;
+        text-align: left;
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .06em; color: var(--pl-muted);
+        border-bottom: 1px solid var(--pl-border);
+        white-space: nowrap;
+    }
+    .pl-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(51,65,85,.4);
+        color: var(--pl-text);
+        vertical-align: top;
+    }
+    .pl-table tbody tr:hover { background: rgba(59,130,246,.04); }
+    .pl-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Row accent borders */
+    .pl-row-allow { border-left: 3px solid var(--pl-green); }
+    .pl-row-deny  { border-left: 3px solid var(--pl-red); }
+
+    /* ── Badges ── */
+    .pl-spec-badge {
+        display: inline-block;
+        padding: 2px 8px; border-radius: 10px;
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .pl-spec-specific      { background: rgba(34,197,94,.15); color: #4ade80; }
+    .pl-spec-narrow        { background: rgba(34,197,94,.1); color: #86efac; }
+    .pl-spec-service-group { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pl-spec-broad         { background: rgba(239,68,68,.1); color: #fca5a5; }
+    .pl-spec-any           { background: rgba(239,68,68,.15); color: #f87171; }
+    .pl-spec-unknown       { background: rgba(100,116,139,.15); color: #94a3b8; }
+
+    .pl-src-ok  { color: var(--pl-green); font-weight: 600; }
+    .pl-src-no  { color: var(--pl-red); font-weight: 600; }
+    .pl-src-na  { color: var(--pl-dim); }
+
+    .pl-mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .pl-dim  { color: var(--pl-dim); }
+    .pl-small { font-size: 10px; color: var(--pl-dim); margin-top: 2px; }
+
+    /* ── Gap Analysis ── */
+    .pl-gap-card {
+        background: linear-gradient(135deg, rgba(245,158,11,.08), rgba(245,158,11,.02));
+        border: 1px solid rgba(245,158,11,.25);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+    }
+    .pl-gap-title {
+        font-size: 14px; font-weight: 700; color: #fbbf24;
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: .75rem;
+    }
+    .pl-gap-title svg { width: 18px; height: 18px; }
+    .pl-gap-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pl-gap-item {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 8px;
+        padding: 8px 14px;
+    }
+    .pl-gap-device {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px; font-weight: 600; color: var(--pl-text);
+    }
+    .pl-gap-link {
+        font-size: 11px; font-weight: 600;
+        color: var(--pl-blue); text-decoration: none;
+        padding: 3px 10px; border-radius: 4px;
+        background: rgba(59,130,246,.1);
+        transition: all .15s;
+    }
+    .pl-gap-link:hover { background: rgba(59,130,246,.2); }
+
+    /* ── Empty State ── */
+    .pl-empty {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--pl-muted);
+    }
+    .pl-empty-icon {
+        width: 64px; height: 64px; margin: 0 auto 1rem;
+        background: rgba(59,130,246,.1);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--pl-blue);
+    }
+    .pl-empty-icon svg { width: 32px; height: 32px; }
+    .pl-empty h3 { font-size: 16px; color: var(--pl-text); margin-bottom: .5rem; }
+    .pl-empty p { font-size: 13px; max-width: 400px; margin: 0 auto; }
+
+    /* ── Error ── */
+    .pl-error {
+        background: rgba(239,68,68,.1);
+        border: 1px solid rgba(239,68,68,.3);
+        border-radius: 8px;
+        padding: 12px 16px;
+        color: #fca5a5;
+        font-size: 13px;
+        margin-bottom: 1rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+        .pl-form-row { flex-direction: column; }
+        .pl-summary { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pl-page">
+    <!-- Header -->
+    <div class="pl-header">
+        <div class="pl-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+        </div>
+        <div>
+            <div class="pl-title">Policy Lookup</div>
+            <div class="pl-subtitle">Check which firewalls already allow or deny traffic to a destination</div>
+        </div>
+    </div>
+
+    <!-- Search Form -->
+    <form class="pl-form-card" method="get" action="{{ url_for('policy_lookup') }}" id="plForm">
+        <div class="pl-form-row">
+            <div class="pl-field">
+                <label>Destination IP *</label>
+                <input type="text" name="dstip" value="{{ current_dstip or '' }}"
+                       placeholder="10.10.122.31" required
+                       pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
+            </div>
+            <div class="pl-field">
+                <label>Destination Port *</label>
+                <input type="number" name="dstport" value="{{ current_dstport or '' }}"
+                       placeholder="443" required min="0" max="65535" style="width:110px">
+            </div>
+            <div class="pl-field">
+                <label>Source IP (optional)</label>
+                <input type="text" name="srcip" value="{{ current_srcip or '' }}"
+                       placeholder="192.168.1.100"
+                       pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
+            </div>
+            <div class="pl-field">
+                <label>Time Range</label>
+                <div class="pl-time-pills">
+                    <button type="button" class="pl-pill{% if current_time_range == '1h' %} active{% endif %}" data-range="1h">1H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '24h' %} active{% endif %}" data-range="24h">24H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '7d' %} active{% endif %}" data-range="7d">7D</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '30d' %} active{% endif %}" data-range="30d">30D</button>
+                </div>
+                <input type="hidden" name="time_range" id="plTimeRange" value="{{ current_time_range or '24h' }}">
+            </div>
+            <div class="pl-field">
+                <label>&nbsp;</label>
+                <button type="submit" class="pl-btn pl-btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Lookup
+                </button>
+            </div>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="pl-error">{{ error }}</div>
+    {% endif %}
+
+    {% if results %}
+    <!-- Summary Cards -->
+    <div class="pl-summary">
+        <div class="pl-kpi blue">
+            <div class="pl-kpi-label">Devices Checked</div>
+            <div class="pl-kpi-value">{{ results.summary.total_devices_checked }}</div>
+            <div class="pl-kpi-sub">{{ results.summary.devices_with_allow }} with allow rules</div>
+            <div class="pl-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+            </div>
+        </div>
+        <div class="pl-kpi green">
+            <div class="pl-kpi-label">Allow Policies</div>
+            <div class="pl-kpi-value">{{ results.summary.total_allow_policies }}</div>
+            <div class="pl-kpi-sub">{{ format_number(results.summary.total_allowed_events) }} events</div>
+            <div class="pl-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+        </div>
+        <div class="pl-kpi {% if results.summary.devices_with_deny_only > 0 %}red{% else %}amber{% endif %}">
+            <div class="pl-kpi-label">Devices with Gap</div>
+            <div class="pl-kpi-value">{{ results.summary.devices_with_deny_only }}</div>
+            <div class="pl-kpi-sub">{{ format_number(results.summary.total_denied_events) }} denied events</div>
+            <div class="pl-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+        </div>
+        <div class="pl-kpi {% if results.summary.source_already_covered == true %}green{% elif results.summary.source_already_covered == false %}red{% else %}blue{% endif %}">
+            <div class="pl-kpi-label">Source Covered</div>
+            <div class="pl-kpi-value">
+                {% if results.summary.source_already_covered == true %}
+                    Yes
+                {% elif results.summary.source_already_covered == false %}
+                    No
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+            <div class="pl-kpi-sub">
+                {% if current_srcip %}
+                    {{ current_srcip }}
+                {% else %}
+                    No source IP specified
+                {% endif %}
+            </div>
+            <div class="pl-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Allowed Policies Table -->
+    {% if results.allowed %}
+    <div class="pl-section-hdr">
+        <h3>Allowed Policies</h3>
+        <span class="pl-section-badge pl-badge-green">{{ results.allowed|length }} results</span>
+    </div>
+    <div class="pl-table-wrap">
+        <table class="pl-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Policy</th>
+                    <th>Action</th>
+                    <th>Sources</th>
+                    <th>Events</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                    <th>Port Specificity</th>
+                    <th>Application</th>
+                    <th>Zones</th>
+                    {% if current_srcip %}<th>Src Covered</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in results.allowed %}
+                <tr class="pl-row-allow">
+                    <td>
+                        <div class="pl-mono" style="font-weight:600">{{ row.device_display }}</div>
+                        {% if row.vdom %}<div class="pl-small">vdom: {{ row.vdom }}</div>{% endif %}
+                    </td>
+                    <td><span class="pl-mono">{{ row.policyname or '-' }}</span></td>
+                    <td><span style="color:var(--pl-green);font-weight:600;text-transform:uppercase;font-size:11px">{{ row.action }}</span></td>
+                    <td>
+                        <div style="font-weight:600">{{ row.unique_src_count }} unique</div>
+                        {% if row.sample_sources %}
+                        <div class="pl-small">{{ row.sample_sources[:5]|join(', ') }}{% if row.unique_src_count > 5 %} ...{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td style="font-weight:600">{{ format_number(row.event_count) }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</td>
+                    <td>
+                        <span class="pl-spec-badge pl-spec-{{ row.specificity_label }}">{{ row.specificity_label }}</span>
+                    </td>
+                    <td class="pl-mono">{{ row.application or '-' }}</td>
+                    <td>
+                        {% if row.src_zone or row.dst_zone %}
+                        <span class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    {% if current_srcip %}
+                    <td>
+                        {% if row.source_covered == true %}
+                            <span class="pl-src-ok">&#10003; Yes</span>
+                        {% elif row.source_covered == false %}
+                            <span class="pl-src-no">&#10007; No</span>
+                        {% else %}
+                            <span class="pl-src-na">-</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Denied Traffic Table -->
+    {% if results.denied %}
+    <div class="pl-section-hdr">
+        <h3>Denied Traffic</h3>
+        <span class="pl-section-badge pl-badge-red">{{ results.denied|length }} results</span>
+    </div>
+    <div class="pl-table-wrap" style="border-color:rgba(239,68,68,.25)">
+        <table class="pl-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Policy</th>
+                    <th>Action</th>
+                    <th>Sources</th>
+                    <th>Events</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                    <th>Application</th>
+                    <th>Zones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in results.denied %}
+                <tr class="pl-row-deny">
+                    <td>
+                        <div class="pl-mono" style="font-weight:600">{{ row.device_display }}</div>
+                        {% if row.vdom %}<div class="pl-small">vdom: {{ row.vdom }}</div>{% endif %}
+                    </td>
+                    <td><span class="pl-mono">{{ row.policyname or '-' }}</span></td>
+                    <td><span style="color:var(--pl-red);font-weight:600;text-transform:uppercase;font-size:11px">{{ row.action }}</span></td>
+                    <td>
+                        <div style="font-weight:600">{{ row.unique_src_count }} unique</div>
+                        {% if row.sample_sources %}
+                        <div class="pl-small">{{ row.sample_sources[:3]|join(', ') }}{% if row.unique_src_count > 3 %} ...{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td style="font-weight:600">{{ format_number(row.event_count) }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</td>
+                    <td class="pl-mono">{{ row.application or '-' }}</td>
+                    <td>
+                        {% if row.src_zone or row.dst_zone %}
+                        <span class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Gap Analysis -->
+    {% if results.gap_devices %}
+    <div class="pl-gap-card">
+        <div class="pl-gap-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Gap Analysis &mdash; {{ results.gap_devices|length }} device{{ 's' if results.gap_devices|length != 1 }} deny-only (no allow rule found)
+        </div>
+        <div class="pl-gap-list">
+            {% for dev in results.gap_devices %}
+            <div class="pl-gap-item">
+                <span class="pl-gap-device">{{ dev }}</span>
+                <a class="pl-gap-link" href="{{ url_for('policy_builder') }}?dstip={{ current_dstip }}&dstport={{ current_dstport }}&device={{ dev }}">
+                    Build Policy &rarr;
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- No results with query -->
+    {% if results and not results.allowed and not results.denied %}
+    <div class="pl-empty">
+        <div class="pl-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </div>
+        <h3>No Traffic Found</h3>
+        <p>No allowed or denied traffic to {{ current_dstip }}:{{ current_dstport }} in the selected time range. Try expanding the time range or check the destination.</p>
+    </div>
+    {% endif %}
+
+    {% elif not error %}
+    <!-- Initial empty state -->
+    <div class="pl-empty">
+        <div class="pl-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+        </div>
+        <h3>Search for Existing Policies</h3>
+        <p>Enter a destination IP and port to discover which firewalls already allow or deny that traffic, grouped by device and policy name.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const pills = document.querySelectorAll('.pl-pill');
+    const hidden = document.getElementById('plTimeRange');
+    pills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            pills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            hidden.value = pill.dataset.range;
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -2588,6 +2588,225 @@ class ClickHouseClient:
 
         return 0
 
+    @staticmethod
+    def _build_time_prewhere(start_time: Optional[datetime] = None,
+                             end_time: Optional[datetime] = None,
+                             default_hours: int = 24) -> str:
+        """Build the timestamp portion of a PREWHERE clause."""
+        parts = []
+        if start_time is None and end_time is None:
+            parts.append(f"timestamp > now() - INTERVAL {int(default_hours)} HOUR")
+        else:
+            if start_time:
+                parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if end_time:
+                parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+        return " AND ".join(parts) if parts else "1=1"
+
+    @staticmethod
+    def _compute_specificity(distinct_port_count: int) -> Tuple[str, int]:
+        """Map port diversity to a human label and numeric score."""
+        if distinct_port_count <= 1:
+            return ("specific", 100)
+        elif distinct_port_count <= 5:
+            return ("narrow", 80)
+        elif distinct_port_count <= 15:
+            return ("service-group", 50)
+        elif distinct_port_count <= 50:
+            return ("broad", 20)
+        else:
+            return ("any", 5)
+
+    @classmethod
+    def policy_lookup(
+        cls,
+        dstip: str,
+        dstport: int,
+        srcip: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        default_hours: int = 24,
+    ) -> Dict[str, Any]:
+        """
+        Look up existing firewall policies for a destination IP:port.
+
+        Runs 4 sequential queries against indexed columns (PREWHERE) for
+        sub-second performance even on 250M+ row tables.
+        """
+        # --- Input validation ---
+        ip_re = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+        if not ip_re.match(dstip):
+            raise ValueError(f"Invalid destination IP: {dstip}")
+        dstport = int(dstport)
+        if not (0 <= dstport <= 65535):
+            raise ValueError(f"Invalid port: {dstport}")
+        if srcip and not ip_re.match(srcip):
+            raise ValueError(f"Invalid source IP: {srcip}")
+
+        # Escape single quotes for SQL safety
+        dstip_safe = dstip.replace("'", "")
+        srcip_safe = srcip.replace("'", "") if srcip else None
+
+        client = cls.get_client()
+        time_clause = cls._build_time_prewhere(start_time, end_time, default_hours)
+        device_expr = cls._DEVICE_DISPLAY_EXPR
+
+        # ── Query 1: Allowed traffic ──
+        srcip_where = f"AND srcip = '{srcip_safe}'" if srcip_safe else ""
+        q_allowed = f"""
+        SELECT
+            {device_expr} as device_display,
+            toString(device_ip) as device_ip_str,
+            vdom,
+            policyname,
+            action,
+            application,
+            src_zone,
+            dst_zone,
+            count()               as event_count,
+            uniq(srcip)           as unique_src_count,
+            groupUniqArray(10)(toString(srcip)) as sample_sources,
+            min(timestamp)        as first_seen,
+            max(timestamp)        as last_seen
+        FROM syslogs
+        PREWHERE {time_clause}
+            AND dstip = '{dstip_safe}'
+            AND dstport = {dstport}
+            AND action IN ('accept','allow','pass','close','client-rst','server-rst')
+        WHERE 1=1 {srcip_where}
+        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        ORDER BY event_count DESC
+        LIMIT 200
+        """
+        allowed_rows = list(client.query(q_allowed).named_results())
+
+        # ── Query 2: Denied traffic (never filtered by srcip — show ALL denies) ──
+        q_denied = f"""
+        SELECT
+            {device_expr} as device_display,
+            toString(device_ip) as device_ip_str,
+            vdom,
+            policyname,
+            action,
+            application,
+            src_zone,
+            dst_zone,
+            count()               as event_count,
+            uniq(srcip)           as unique_src_count,
+            groupUniqArray(5)(toString(srcip)) as sample_sources,
+            min(timestamp)        as first_seen,
+            max(timestamp)        as last_seen
+        FROM syslogs
+        PREWHERE {time_clause}
+            AND dstip = '{dstip_safe}'
+            AND dstport = {dstport}
+            AND action IN ('deny','drop','block','reject','blocked','reset-both')
+        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        ORDER BY event_count DESC
+        LIMIT 100
+        """
+        denied_rows = list(client.query(q_denied).named_results())
+
+        # ── Query 3: Port specificity per policy ──
+        # For each allowed policy, how many distinct ports does it serve?
+        policy_keys = set()
+        for r in allowed_rows:
+            policy_keys.add((r['device_ip_str'], r['vdom'], r['policyname']))
+
+        specificity_map: Dict[tuple, Tuple[str, int]] = {}
+        if policy_keys:
+            # Build an IN clause for the (device_ip, vdom, policyname) tuples
+            in_values = ", ".join(
+                f"(toIPv4('{k[0]}'), '{k[1].replace(chr(39), '')}', '{k[2].replace(chr(39), '')}')"
+                for k in policy_keys
+            )
+            q_specificity = f"""
+            SELECT
+                toString(device_ip) as device_ip_str,
+                vdom,
+                policyname,
+                uniq(dstport) as distinct_ports
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND dstip = '{dstip_safe}'
+                AND action IN ('accept','allow','pass','close','client-rst','server-rst')
+            WHERE (device_ip, vdom, policyname) IN ({in_values})
+            GROUP BY device_ip, vdom, policyname
+            """
+            for row in client.query(q_specificity).named_results():
+                key = (row['device_ip_str'], row['vdom'], row['policyname'])
+                specificity_map[key] = cls._compute_specificity(row['distinct_ports'])
+
+        # ── Query 4: Source coverage (only when srcip provided) ──
+        source_coverage: Dict[tuple, bool] = {}
+        if srcip_safe and policy_keys:
+            q_source = f"""
+            SELECT
+                toString(device_ip) as device_ip_str,
+                vdom,
+                policyname,
+                count() as src_events
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND dstip = '{dstip_safe}'
+                AND action IN ('accept','allow','pass','close','client-rst','server-rst')
+            WHERE srcip = '{srcip_safe}'
+                AND (device_ip, vdom, policyname) IN ({in_values})
+            GROUP BY device_ip, vdom, policyname
+            """
+            for row in client.query(q_source).named_results():
+                key = (row['device_ip_str'], row['vdom'], row['policyname'])
+                source_coverage[key] = row['src_events'] > 0
+
+        # ── Post-processing ──
+        allowed_devices = set()
+        denied_devices = set()
+
+        for r in allowed_rows:
+            key = (r['device_ip_str'], r['vdom'], r['policyname'])
+            label, score = specificity_map.get(key, ("unknown", 0))
+            r['specificity_label'] = label
+            r['specificity_score'] = score
+            r['source_covered'] = source_coverage.get(key, None)
+            # Convert datetime objects to strings for template
+            r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
+            r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
+            r['sample_sources'] = list(r.get('sample_sources', []))
+            allowed_devices.add(r['device_display'])
+
+        for r in denied_rows:
+            r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
+            r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
+            r['sample_sources'] = list(r.get('sample_sources', []))
+            denied_devices.add(r['device_display'])
+
+        gap_devices = sorted(denied_devices - allowed_devices)
+
+        total_allowed = sum(r['event_count'] for r in allowed_rows)
+        total_denied = sum(r['event_count'] for r in denied_rows)
+
+        source_already_covered = None
+        if srcip_safe:
+            source_already_covered = any(
+                source_coverage.get((r['device_ip_str'], r['vdom'], r['policyname']), False)
+                for r in allowed_rows
+            )
+
+        return {
+            "allowed": allowed_rows,
+            "denied": denied_rows,
+            "gap_devices": gap_devices,
+            "summary": {
+                "total_devices_checked": len(allowed_devices | denied_devices),
+                "devices_with_allow": len(allowed_devices),
+                "devices_with_deny_only": len(gap_devices),
+                "total_allow_policies": len(allowed_rows),
+                "total_allowed_events": total_allowed,
+                "total_denied_events": total_denied,
+                "source_already_covered": source_already_covered,
+            },
+        }
+
     @classmethod
     def optimize_syslogs_table(cls) -> Dict[str, Any]:
         """
