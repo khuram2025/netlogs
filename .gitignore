@@ -39,8 +39,10 @@ staticfiles/
 refrence Images/
 
 # Backup files
+backups/
 *.backup
 *.bak
+*.tar.gz
 
 # Temporary files
 tmp/
