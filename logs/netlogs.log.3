@@ -8351,3 +8351,42 @@ WHERE alert_rules.is_enabled = true
 2026-02-24 12:36:41 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] ()
 2026-02-24 12:36:41 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
 2026-02-24 12:36:41 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Evaluate alert rules against log data (trigger: interval[0:00:30], next run at: 2026-02-24 12:37:11 UTC)" executed successfully
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Evaluate alert rules against log data (trigger: interval[0:00:30], next run at: 2026-02-24 12:37:41 UTC)" (scheduled at 2026-02-24 12:37:11.507513+00:00)
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Evaluate multi-stage correlation rules (trigger: interval[0:01:00], next run at: 2026-02-24 12:38:11 UTC)" (scheduled at 2026-02-24 12:37:11.507825+00:00)
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:179 - Running job "Process auto-block EDL queue from IOC matches (trigger: interval[0:00:30], next run at: 2026-02-24 12:37:41 UTC)" (scheduled at 2026-02-24 12:37:11.507983+00:00)
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Process auto-block EDL queue from IOC matches (trigger: interval[0:00:30], next run at: 2026-02-24 12:37:41 UTC)" executed successfully
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT alert_rules.id, alert_rules.name, alert_rules.description, alert_rules.severity, alert_rules.category, alert_rules.is_enabled, alert_rules.condition_type, alert_rules.condition_config, alert_rules.cooldown_minutes, alert_rules.last_triggered_at, alert_rules.mitre_tactic, alert_rules.mitre_technique, alert_rules.created_by, alert_rules.created_at, alert_rules.updated_at 
+FROM alert_rules 
+WHERE alert_rules.is_enabled = true
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4050s ago] ()
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT correlation_rules.id, correlation_rules.name, correlation_rules.description, correlation_rules.severity, correlation_rules.is_enabled, correlation_rules.stages, correlation_rules.mitre_tactic, correlation_rules.mitre_technique, correlation_rules.last_evaluated_at, correlation_rules.last_triggered_at, correlation_rules.trigger_count, correlation_rules.created_at, correlation_rules.updated_at 
+FROM correlation_rules 
+WHERE correlation_rules.is_enabled = true
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] ()
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT count(alerts.id) AS count_1 
+FROM alerts 
+WHERE (alerts.title LIKE '%' || $1::VARCHAR || '%') AND alerts.triggered_at > $2::TIMESTAMP WITH TIME ZONE
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] ('Multi-Firewall Scan', datetime.datetime(2026, 2, 24, 12, 32, 11, 639086, tzinfo=datetime.timezone.utc))
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_begin_impl:2702 - BEGIN (implicit)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - SELECT count(alerts.id) AS count_1 
+FROM alerts 
+WHERE (alerts.title LIKE '%' || $1::VARCHAR || '%') AND alerts.triggered_at > $2::TIMESTAMP WITH TIME ZONE
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] ('High Volume Outbound Traffic', datetime.datetime(2026, 2, 24, 12, 32, 11, 805359, tzinfo=datetime.timezone.utc))
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Evaluate alert rules against log data (trigger: interval[0:00:30], next run at: 2026-02-24 12:37:41 UTC)" executed successfully
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_rollback_impl:2705 - ROLLBACK
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE correlation_rules SET last_evaluated_at=$1::TIMESTAMP WITH TIME ZONE, updated_at=$2::TIMESTAMP WITH TIME ZONE WHERE correlation_rules.id = $3::INTEGER
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] [(datetime.datetime(2026, 2, 24, 12, 37, 11, 924318, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 2, 24, 12, 37, 11, 963515, tzinfo=datetime.timezone.utc), 1), (datetime.datetime(2026, 2, 24, 12, 37, 11, 963152, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 2, 24, 12, 37, 11, 963517, tzinfo=datetime.timezone.utc), 2)]
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE correlation_rules SET last_evaluated_at=$1::TIMESTAMP WITH TIME ZONE, last_triggered_at=$2::TIMESTAMP WITH TIME ZONE, trigger_count=$3::INTEGER, updated_at=$4::TIMESTAMP WITH TIME ZONE WHERE correlation_rules.id = $5::INTEGER
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] (datetime.datetime(2026, 2, 24, 12, 37, 11, 695856, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 2, 24, 12, 37, 11, 695833, tzinfo=datetime.timezone.utc), 10352, datetime.datetime(2026, 2, 24, 12, 37, 11, 965011, tzinfo=datetime.timezone.utc), 3)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE correlation_rules SET last_evaluated_at=$1::TIMESTAMP WITH TIME ZONE, updated_at=$2::TIMESTAMP WITH TIME ZONE WHERE correlation_rules.id = $3::INTEGER
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] (datetime.datetime(2026, 2, 24, 12, 37, 11, 760071, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 2, 24, 12, 37, 11, 965882, tzinfo=datetime.timezone.utc), 4)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - UPDATE correlation_rules SET last_evaluated_at=$1::TIMESTAMP WITH TIME ZONE, last_triggered_at=$2::TIMESTAMP WITH TIME ZONE, trigger_count=$3::INTEGER, updated_at=$4::TIMESTAMP WITH TIME ZONE WHERE correlation_rules.id = $5::INTEGER
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _execute_context:1846 - [cached since 4020s ago] (datetime.datetime(2026, 2, 24, 12, 37, 11, 873024, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 2, 24, 12, 37, 11, 873005, tzinfo=datetime.timezone.utc), 10124, datetime.datetime(2026, 2, 24, 12, 37, 11, 966591, tzinfo=datetime.timezone.utc), 5)
+2026-02-24 12:37:11 - sqlalchemy.engine.Engine - INFO - _connection_commit_impl:2708 - COMMIT
+2026-02-24 12:37:11 - fastapi_app.services.correlation_engine - INFO - evaluate_all_correlation_rules:315 - Correlation engine: 2 rules triggered out of 5
+2026-02-24 12:37:11 - apscheduler.executors.default - INFO - run_coroutine_job:203 - Job "Evaluate multi-stage correlation rules (trigger: interval[0:01:00], next run at: 2026-02-24 12:38:11 UTC)" executed successfully
