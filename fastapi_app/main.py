@@ -204,6 +204,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down NetLogs...")
     stop_scheduler()
+    ClickHouseClient.close_client()
     await close_db()
     logger.info("Database connections closed")
 

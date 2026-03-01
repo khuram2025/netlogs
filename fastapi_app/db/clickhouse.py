@@ -5,6 +5,7 @@ Migrated from Django to FastAPI with async support.
 
 import re
 import logging
+import threading
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
@@ -21,35 +22,76 @@ class ClickHouseClient:
     High-performance ClickHouse client optimized for log ingestion.
 
     Features:
-    - Connection pooling (via clickhouse_connect)
+    - Thread-local connection reuse (one client per thread, no leaks)
     - Optimized table schema with partitioning
     - Batch insert support
     - Compression settings for storage efficiency
     """
 
-    _client: Optional[Client] = None
+    _local = threading.local()
+    _all_clients: list = []      # track for shutdown cleanup
+    _all_clients_lock = threading.Lock()
+
+    @classmethod
+    def _create_client(cls) -> Client:
+        """Create a new clickhouse_connect client."""
+        client = clickhouse_connect.get_client(
+            host=settings.clickhouse_host,
+            port=settings.clickhouse_port,
+            username=settings.clickhouse_user,
+            password=settings.clickhouse_password,
+            database=settings.clickhouse_db,
+            compress=True,
+            settings={
+                'async_insert': 1,
+                'wait_for_async_insert': 0,
+                'async_insert_max_data_size': 10000000,  # 10MB
+                'async_insert_busy_timeout_ms': 2000,
+            }
+        )
+        with cls._all_clients_lock:
+            cls._all_clients.append(client)
+        return client
 
     @classmethod
     def get_client(cls) -> Client:
-        """Create a new client instance for thread safety."""
+        """Return a thread-local reusable client.
+
+        Each thread gets its own client (avoids "concurrent queries
+        within the same session" errors).  Clients are reused within
+        the same thread to prevent connection leaks that previously
+        exhausted the ephemeral port range ([Errno 99]).
+        """
+        client = getattr(cls._local, 'client', None)
+        if client is not None:
+            try:
+                client.ping()
+                return client
+            except Exception:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                cls._local.client = None
+
         try:
-            return clickhouse_connect.get_client(
-                host=settings.clickhouse_host,
-                port=settings.clickhouse_port,
-                username=settings.clickhouse_user,
-                password=settings.clickhouse_password,
-                database=settings.clickhouse_db,
-                compress=True,
-                settings={
-                    'async_insert': 1,
-                    'wait_for_async_insert': 0,
-                    'async_insert_max_data_size': 10000000,  # 10MB
-                    'async_insert_busy_timeout_ms': 2000,
-                }
-            )
+            cls._local.client = cls._create_client()
+            return cls._local.client
         except Exception as e:
             logger.error(f"Failed to connect to ClickHouse: {e}")
             raise
+
+    @classmethod
+    def close_client(cls) -> None:
+        """Close all tracked clients (call during shutdown)."""
+        with cls._all_clients_lock:
+            for client in cls._all_clients:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            cls._all_clients.clear()
+        cls._local = threading.local()
 
     @classmethod
     def ensure_table(cls) -> None:
