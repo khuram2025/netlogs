@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# NetLogs SOAR/SIEM Platform — One-Command Installer
+# Zentryc SOAR/SIEM Platform — One-Command Installer
 # Usage: sudo ./install.sh
 # =============================================================================
 set -euo pipefail
@@ -22,7 +22,7 @@ cd "$SCRIPT_DIR"
 # =============================================================================
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║       NetLogs SOAR/SIEM Platform Installer      ║${NC}"
+echo -e "${BOLD}║       Zentryc SOAR/SIEM Platform Installer      ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -124,7 +124,7 @@ fi
 # Step 4: Build & Start
 # =============================================================================
 echo ""
-info "Building NetLogs Docker image..."
+info "Building Zentryc Docker image..."
 docker compose build --quiet
 
 info "Starting all services..."
@@ -174,7 +174,7 @@ SERVER_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || host
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║          NetLogs Installation Complete!          ║${NC}"
+echo -e "${BOLD}║          Zentryc Installation Complete!          ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${BOLD}Web UI:${NC}       https://${SERVER_IP}"

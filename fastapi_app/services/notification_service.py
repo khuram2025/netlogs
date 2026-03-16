@@ -87,7 +87,7 @@ async def _send_email(channel, alert, rule=None) -> bool:
     smtp_port = config.get("smtp_port", 587)
     username = config.get("username", "")
     password = config.get("password", "")
-    from_addr = config.get("from_addr", "netlogs@localhost")
+    from_addr = config.get("from_addr", "zentryc@localhost")
     to_addrs = config.get("to_addrs", [])
     use_tls = config.get("use_tls", True)
 
@@ -96,7 +96,7 @@ async def _send_email(channel, alert, rule=None) -> bool:
         return False
 
     severity = alert.severity.upper()
-    subject = f"[NetLogs {severity}] {alert.title}"
+    subject = f"[Zentryc {severity}] {alert.title}"
 
     html_body = f"""
     <html>
@@ -122,7 +122,7 @@ async def _send_email(channel, alert, rule=None) -> bool:
             {f'<p style="color: #94a3b8;">{alert.description}</p>' if alert.description else ''}
             <hr style="border-color: #334155;">
             <p style="font-size: 12px; color: #64748b;">
-                This is an automated alert from NetLogs SIEM Platform.
+                This is an automated alert from Zentryc SIEM Platform.
             </p>
         </div>
     </body>
@@ -168,7 +168,7 @@ async def _send_telegram(channel, alert, rule=None) -> bool:
 
     emoji = _severity_emoji(alert.severity)
     text = (
-        f"{emoji} *NetLogs Alert: {alert.severity.upper()}*\n\n"
+        f"{emoji} *Zentryc Alert: {alert.severity.upper()}*\n\n"
         f"*{alert.title}*\n"
     )
     if alert.description:
@@ -223,7 +223,7 @@ async def _send_webhook(channel, alert, rule=None) -> bool:
             "name": rule.name,
             "category": rule.category,
         } if rule else None,
-        "source": "netlogs",
+        "source": "zentryc",
     }
 
     headers.setdefault("Content-Type", "application/json")
@@ -259,9 +259,9 @@ async def send_test_notification(channel) -> Dict:
 
     class FakeAlert:
         id = 0
-        title = "Test Alert - NetLogs Notification Test"
+        title = "Test Alert - Zentryc Notification Test"
         severity = "info"
-        description = "This is a test notification from NetLogs SIEM Platform. If you received this, your notification channel is configured correctly."
+        description = "This is a test notification from Zentryc SIEM Platform. If you received this, your notification channel is configured correctly."
         status = "new"
         triggered_at = datetime.now(timezone.utc)
         details = {"test": True}

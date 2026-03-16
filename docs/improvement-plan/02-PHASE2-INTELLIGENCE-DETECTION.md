@@ -396,7 +396,7 @@ Correlate events across multiple log sources to detect complex attack patterns t
 
 ### Tasks
 
-#### Task 2.4.1: NetLogs Query Language (NQL) Parser
+#### Task 2.4.1: Zentryc Query Language (NQL) Parser
 **Description:** Implement a structured query language for advanced log searching.
 
 **Syntax Specification:**

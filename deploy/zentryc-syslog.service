@@ -1,6 +1,6 @@
 [Unit]
-Description=NetLogs High-Performance Syslog Collector
-Documentation=https://github.com/your-org/netlogs
+Description=Zentryc High-Performance Syslog Collector
+Documentation=https://github.com/your-org/zentryc
 After=network.target postgresql.service clickhouse-server.service
 Wants=postgresql.service clickhouse-server.service
 
@@ -8,11 +8,11 @@ Wants=postgresql.service clickhouse-server.service
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/home/net/net-logs
-Environment="PATH=/home/net/net-logs/venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/home/net/zentryc
+Environment="PATH=/home/net/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 # High-performance syslog collector with tuned parameters
-ExecStart=/home/net/net-logs/venv/bin/python /home/net/net-logs/run_syslog.py \
+ExecStart=/home/net/zentryc/venv/bin/python /home/net/zentryc/run_syslog.py \
     --batch-size=5000 \
     --flush-interval=2.0 \
     --cache-ttl=60 \
@@ -34,12 +34,12 @@ LimitNPROC=4096
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=netlogs-syslog
+SyslogIdentifier=zentryc-syslog
 
 # Security hardening (optional, comment out if issues)
 # PrivateTmp=true
 # ProtectSystem=strict
-# ReadWritePaths=/home/net/net-logs
+# ReadWritePaths=/home/net/zentryc
 
 [Install]
 WantedBy=multi-user.target

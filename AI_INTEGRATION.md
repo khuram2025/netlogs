@@ -1,8 +1,8 @@
-# NetLogs AI Integration
+# Zentryc AI Integration
 
 ## Overview
 
-NetLogs now includes AI-powered features using Large Language Models (LLMs) to enhance security analysis capabilities. The platform supports multiple LLM providers, allowing you to choose the best solution for your environment.
+Zentryc now includes AI-powered features using Large Language Models (LLMs) to enhance security analysis capabilities. The platform supports multiple LLM providers, allowing you to choose the best solution for your environment.
 
 ## Supported LLM Providers
 
@@ -80,7 +80,7 @@ NetLogs now includes AI-powered features using Large Language Models (LLMs) to e
   ```
 
 ### 2. **Natural Language Search** 🚧 Coming Soon
-- Convert plain English queries to NetLogs Query Language (NQL)
+- Convert plain English queries to Zentryc Query Language (NQL)
 - Example: *"Show me all blocked traffic from China to my database servers in the last hour"*
 - Automatically generates: `country:CN AND action:deny AND dstip:10.50.0.0/24 AND timestamp > now-1h`
 
@@ -123,7 +123,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 # 2. Pull a model
 ollama pull llama3.2:8b
 
-# 3. Configure in NetLogs
+# 3. Configure in Zentryc
 Provider: Ollama (Local)
 Model: llama3.2:8b
 Base URL: http://localhost:11434
@@ -428,7 +428,7 @@ Content-Type: application/json
 
 - **Documentation**: This file
 - **Issues**: https://github.com/anthropics/claude-code/issues (if using Claude)
-- **Feature Requests**: Submit to NetLogs project repository
+- **Feature Requests**: Submit to Zentryc project repository
 
 ---
 

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Application
-    app_name: str = "NetLogs SOAR/SIEM Platform"
+    app_name: str = "Zentryc SOAR/SIEM Platform"
     debug: bool = Field(default=False, alias="DEBUG")
     secret_key: str = Field(default="change-me-in-production", alias="SECRET_KEY")
     allowed_hosts: str = Field(default="*", alias="ALLOWED_HOSTS")

@@ -1,4 +1,4 @@
-# NetLogs Platform - Current System Evaluation
+# Zentryc Platform - Current System Evaluation
 
 ## Overall Score: 6.5 / 10
 
@@ -169,7 +169,7 @@
 
 ## Comparison with Industry Leaders
 
-| Feature | NetLogs | Splunk | FortiSIEM | Elastic SIEM | QRadar |
+| Feature | Zentryc | Splunk | FortiSIEM | Elastic SIEM | QRadar |
 |---------|---------|--------|-----------|-------------|--------|
 | Log Collection | Yes | Yes | Yes | Yes | Yes |
 | Multi-vendor Parse | Partial | Full | Full | Full | Full |

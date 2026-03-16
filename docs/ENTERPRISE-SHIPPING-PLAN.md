@@ -1,4 +1,4 @@
-# NetLogs Enterprise Appliance — Final Shipping Plan
+# Zentryc Enterprise Appliance — Final Shipping Plan
 
 **Version:** 3.0
 **Date:** February 2026
@@ -72,7 +72,7 @@
 **Tasks:**
 
 - [x] **2.1.1** HTTPS server block in `docker/nginx.conf` — TLSv1.2+1.3, strong ciphers, HSTS, security headers
-- [x] **2.1.2** Certificate volume mount (`netlogs-certs`) in `docker-compose.yml`
+- [x] **2.1.2** Certificate volume mount (`zentryc-certs`) in `docker-compose.yml`
 - [x] **2.1.3** Auto-cert generation in `docker/nginx-entrypoint.sh` (10-year self-signed if none found)
 - [x] **2.1.4** Session cookie `secure` flag: `secure=not settings.debug`
 - [x] **2.1.5** Security headers: HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
@@ -150,7 +150,7 @@
 - [ ] **2.6.2** Create dedicated database users with minimal privileges
   - Web app: SELECT, INSERT, UPDATE, DELETE on app tables only
   - Syslog collector: INSERT only on ClickHouse syslogs
-- [ ] **2.6.3** Remove default ClickHouse `default` user; create dedicated `netlogs` user with password
+- [ ] **2.6.3** Remove default ClickHouse `default` user; create dedicated `zentryc` user with password
 
 ---
 
@@ -260,13 +260,13 @@
 
 - [x] **4.2.1** Enhanced `/api/health` endpoint — returns status (healthy/degraded/unhealthy), version, uptime, per-component checks (PostgreSQL latency, ClickHouse latency + row count, scheduler job count, syslog EPS). Plus `/api/health/simple` for fast Docker/LB probes. Returns 503 when unhealthy.
 - [ ] **4.2.2** Add `/api/metrics` Prometheus endpoint
-  - `netlogs_events_total` (counter) — total syslog events ingested
-  - `netlogs_events_per_second` (gauge) — current EPS
-  - `netlogs_alerts_total` (counter by severity)
-  - `netlogs_active_sessions` (gauge)
-  - `netlogs_clickhouse_query_duration_seconds` (histogram)
-  - `netlogs_syslog_buffer_usage` (gauge, 0-1)
-  - `netlogs_db_connection_pool` (gauge)
+  - `zentryc_events_total` (counter) — total syslog events ingested
+  - `zentryc_events_per_second` (gauge) — current EPS
+  - `zentryc_alerts_total` (counter by severity)
+  - `zentryc_active_sessions` (gauge)
+  - `zentryc_clickhouse_query_duration_seconds` (histogram)
+  - `zentryc_syslog_buffer_usage` (gauge, 0-1)
+  - `zentryc_db_connection_pool` (gauge)
 - [ ] **4.2.3** Add internal alerts for operational issues
   - Syslog buffer > 80% → warning alert
   - Database connection failure → critical alert
@@ -354,7 +354,7 @@
 - [x] **5.2.3** Rollback procedure — `scripts/rollback.sh` stops services, restores from latest (or specified) backup via `restore.sh --confirm`, restarts services, waits for health check.
 - [ ] **5.2.4** Add upgrade notification in UI
   - Check for new versions via optional update API (configurable, off by default)
-  - Show banner: "NetLogs v3.1.0 is available" in admin dashboard
+  - Show banner: "Zentryc v3.1.0 is available" in admin dashboard
   - System → Settings: `UPDATE_CHECK_ENABLED=false`
 
 ### 5.3 Configuration Migration
@@ -467,7 +467,7 @@
 | QW-09 | Keyboard shortcuts (g+d=dashboard, g+l=logs, /=search) | 1 day | Low | Open |
 | QW-10 | Dark/light theme toggle | 1-2 days | Low | Open |
 | QW-11 | Login page: show last login time | 2 hours | Low | Open |
-| QW-12 | Add "Powered by NetLogs v3.0" footer with version | 1 hour | Low | **DONE** |
+| QW-12 | Add "Powered by Zentryc v3.0" footer with version | 1 hour | Low | **DONE** |
 
 ---
 

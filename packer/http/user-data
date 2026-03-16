@@ -1,0 +1,31 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: zentryc
+    username: packer
+    # Password: packer (used only during build, user removed after)
+    password: "$6$rounds=4096$xyz$RzJP9.8w5MhHlXf3X0EZSM5bTvGo.EfcBJR3AOuG3.5xR2qJXsQd4n8YfKr0qlm5e07u5nVOJzLPE4LT5HEm0"
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+  packages:
+    - openssh-server
+    - sudo
+    - curl
+    - wget
+  late-commands:
+    # Enable password SSH for packer provisioning
+    - echo 'packer ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/packer
+    - chmod 440 /target/etc/sudoers.d/packer
+    - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
+  user-data:
+    disable_root: true
+    timezone: UTC

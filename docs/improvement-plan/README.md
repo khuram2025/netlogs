@@ -1,4 +1,4 @@
-# NetLogs SOAR/SIEM Platform - Improvement Plan
+# Zentryc SOAR/SIEM Platform - Improvement Plan
 
 ## Document Index
 
@@ -17,7 +17,7 @@
 **Current System Score: 6.5/10**
 **Target System Score: 9.5/10**
 
-NetLogs is a functional enterprise-grade SIEM/SOAR platform with strong log ingestion, firewall parsing, EDL management, and policy automation capabilities. This improvement plan outlines the roadmap to transform it into a best-in-class security observability and automation platform for firewalls.
+Zentryc is a functional enterprise-grade SIEM/SOAR platform with strong log ingestion, firewall parsing, EDL management, and policy automation capabilities. This improvement plan outlines the roadmap to transform it into a best-in-class security observability and automation platform for firewalls.
 
 ## Phase Summary
 
@@ -45,7 +45,7 @@ NetLogs is a functional enterprise-grade SIEM/SOAR platform with strong log inge
 
 ```
 +-------------------------------------------------------------------+
-|                        NetLogs Platform                             |
+|                        Zentryc Platform                             |
 +-------------------------------------------------------------------+
 |  UI Layer      | Dashboards | Log Viewer | Incidents | Playbooks  |
 +----------------+------------+------------+-----------+------------+

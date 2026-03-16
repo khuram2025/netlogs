@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NetLogs FastAPI Application Runner
+Zentryc FastAPI Application Runner
 
 Usage:
     python run_fastapi.py                    # Run with default settings
@@ -14,7 +14,7 @@ import uvicorn
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run NetLogs FastAPI Application')
+    parser = argparse.ArgumentParser(description='Run Zentryc FastAPI Application')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload')
@@ -25,7 +25,7 @@ def main():
 
     print(f"""
 ╔═══════════════════════════════════════════════════════════╗
-║          NetLogs SOAR/SIEM Platform - FastAPI             ║
+║          Zentryc SOAR/SIEM Platform - FastAPI             ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Web UI:     http://{args.host}:{args.port}/                         ║
 ║  API Docs:   http://{args.host}:{args.port}/api/docs                 ║

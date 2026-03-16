@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# NetLogs Restore Script
+# Zentryc Restore Script
 # Restores PostgreSQL, ClickHouse data, and configuration from a backup archive.
 #
 # Usage:
@@ -24,7 +24,7 @@ fi
 
 PG_HOST="${POSTGRES_HOST:-localhost}"
 PG_PORT="${POSTGRES_PORT:-5432}"
-PG_DB="${POSTGRES_DB:-netlogs}"
+PG_DB="${POSTGRES_DB:-zentryc}"
 PG_USER="${POSTGRES_USER:-read}"
 PG_PASS="${POSTGRES_PASSWORD:-Read@123}"
 
@@ -86,8 +86,8 @@ if [ "$CONFIRM" != "--confirm" ]; then
     log "The following would be restored:"
     echo ""
 
-    if [ -f "$WORK_DIR/pg/netlogs.pgdump" ]; then
-        PG_SIZE=$(du -sh "$WORK_DIR/pg/netlogs.pgdump" | cut -f1)
+    if [ -f "$WORK_DIR/pg/zentryc.pgdump" ]; then
+        PG_SIZE=$(du -sh "$WORK_DIR/pg/zentryc.pgdump" | cut -f1)
         log "  PostgreSQL: $PG_SIZE dump → $PG_DB"
     fi
 
@@ -111,14 +111,14 @@ fi
 # -------------------------------------------------------------------------
 # Restore PostgreSQL
 # -------------------------------------------------------------------------
-if [ -f "$WORK_DIR/pg/netlogs.pgdump" ]; then
+if [ -f "$WORK_DIR/pg/zentryc.pgdump" ]; then
     log "Restoring PostgreSQL database..."
     export PGPASSWORD="$PG_PASS"
 
     # Restore with --clean to drop and recreate
     if pg_restore -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" \
         --clean --if-exists --no-owner --no-privileges \
-        "$WORK_DIR/pg/netlogs.pgdump" 2>/dev/null; then
+        "$WORK_DIR/pg/zentryc.pgdump" 2>/dev/null; then
         log "PostgreSQL restore complete"
     else
         # pg_restore returns non-zero even on warnings, check if DB is usable
@@ -181,6 +181,6 @@ fi
 log ""
 log "=== Restore Complete ==="
 log "Next steps:"
-log "  1. Restart the NetLogs services: docker compose restart"
+log "  1. Restart the Zentryc services: docker compose restart"
 log "  2. Verify the application: curl http://localhost/api/health"
 log "  3. Check the dashboard for data integrity"

@@ -15,7 +15,7 @@ import logging
 import sys
 
 # Add parent directory to path
-sys.path.insert(0, '/home/net/net-logs')
+sys.path.insert(0, '/home/net/zentryc')
 
 from fastapi_app.services.syslog_collector import run_syslog_collector
 

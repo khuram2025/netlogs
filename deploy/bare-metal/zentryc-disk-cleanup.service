@@ -1,0 +1,20 @@
+[Unit]
+Description=Zentryc ClickHouse Disk Cleanup
+After=network.target clickhouse-server.service
+
+[Service]
+Type=oneshot
+User=zentryc
+WorkingDirectory=/opt/zentryc
+EnvironmentFile=/opt/zentryc/.env
+Environment="PATH=/opt/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/zentryc/venv/bin/python -m fastapi_app.cli.disk_cleanup --threshold 90 --retention 60
+StandardOutput=append:/opt/zentryc/logs/disk_cleanup.log
+StandardError=append:/opt/zentryc/logs/disk_cleanup.log
+
+# Restart on failure after 5 minutes
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=multi-user.target

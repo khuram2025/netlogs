@@ -9,7 +9,7 @@
 ## 4.1 AI/ML Analytics
 
 ### Description
-Add machine learning capabilities for behavioral baselining, anomaly detection, and intelligent triage. These features move NetLogs from rule-based detection to adaptive, intelligent threat detection.
+Add machine learning capabilities for behavioral baselining, anomaly detection, and intelligent triage. These features move Zentryc from rule-based detection to adaptive, intelligent threat detection.
 
 ### Tasks
 

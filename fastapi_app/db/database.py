@@ -106,7 +106,7 @@ async def _create_default_admin() -> None:
             if existing is None:
                 admin = User(
                     username="admin",
-                    email="admin@netlogs.local",
+                    email="admin@zentryc.local",
                     role=UserRole.ADMIN.value,
                     is_active=True,
                 )

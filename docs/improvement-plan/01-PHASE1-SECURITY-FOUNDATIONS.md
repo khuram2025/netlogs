@@ -173,7 +173,7 @@ CREATE TABLE users (
 ## 1.3 Real-Time Alerting Engine
 
 ### Description
-Build a rule-based alerting engine that monitors incoming logs and triggers notifications when conditions are met. This transforms NetLogs from a passive log viewer into an active threat detection platform.
+Build a rule-based alerting engine that monitors incoming logs and triggers notifications when conditions are met. This transforms Zentryc from a passive log viewer into an active threat detection platform.
 
 ### Tasks
 
@@ -333,7 +333,7 @@ CREATE TABLE alert_rule_notifications (
 - [x] Rate limiting prevents notification flood
 - [x] Failed notifications are logged (not silently dropped)
 - [x] Test notification button works for each channel type
-- [x] Notification includes link back to alert in NetLogs
+- [x] Notification includes link back to alert in Zentryc
 
 ---
 

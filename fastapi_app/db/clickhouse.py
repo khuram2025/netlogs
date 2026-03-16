@@ -393,6 +393,269 @@ class ClickHouseClient:
             logger.error(f"Policyname backfill failed: {e}")
             return {'status': 'error', 'message': str(e)}
 
+    # ── Palo Alto Threat/URL Dedicated Table ────────────────────────────
+    # Column order for insert_threat_logs() — must match CREATE TABLE order
+    PA_THREAT_COLUMNS = [
+        'timestamp', 'receive_time', 'generated_time',
+        'serial_number', 'device_name', 'vsys', 'vsys_name', 'device_ip',
+        'log_subtype', 'severity', 'direction', 'action',
+        'src_ip', 'dest_ip', 'src_port', 'dest_port', 'transport',
+        'src_translated_ip', 'dest_translated_ip', 'src_translated_port', 'dest_translated_port',
+        'src_zone', 'dest_zone', 'src_interface', 'dest_interface',
+        'src_user', 'dest_user', 'application',
+        'rule', 'rule_uuid', 'log_forwarding_profile',
+        'threat_id', 'threat_name', 'threat_numeric_id', 'threat_category', 'category',
+        'url', 'content_type', 'user_agent', 'http_method', 'xff', 'xff_ip',
+        'referrer', 'reason', 'justification',
+        'file_name', 'file_hash', 'file_type', 'cloud_address', 'report_id',
+        'sender', 'subject', 'recipient',
+        'session_id', 'repeat_count', 'pcap_id',
+        'src_location', 'dest_location',
+        'sequence_number', 'action_flags', 'content_version',
+        'tunnel_id', 'tunnel_type',
+        'src_edl', 'dest_edl',
+        'dynusergroup_name', 'src_dag', 'dest_dag',
+        'subcategory_of_app', 'category_of_app', 'technology_of_app',
+        'risk_of_app', 'is_saas', 'sanctioned_state',
+        'src_dvc_category', 'src_dvc_model', 'src_dvc_vendor', 'src_dvc_os',
+        'src_hostname', 'src_mac',
+        'dest_dvc_category', 'dest_dvc_model', 'dest_dvc_vendor', 'dest_dvc_os',
+        'dest_hostname', 'dest_mac',
+        'url_category_list',
+        'http2_connection',
+    ]
+
+    @classmethod
+    def ensure_pa_threat_table(cls) -> None:
+        """Create the dedicated pa_threat_logs table for Palo Alto threat/URL logs."""
+        client = cls.get_client()
+
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS pa_threat_logs (
+            -- Timestamps
+            timestamp           DateTime64(3) CODEC(DoubleDelta, LZ4),
+            receive_time        DateTime64(3) CODEC(DoubleDelta, LZ4),
+            generated_time      DateTime64(3) CODEC(DoubleDelta, LZ4),
+
+            -- Device Identity
+            serial_number       String CODEC(ZSTD(1)),
+            device_name         LowCardinality(String),
+            vsys                LowCardinality(String),
+            vsys_name           LowCardinality(String),
+            device_ip           String CODEC(ZSTD(1)),
+
+            -- Log Classification
+            log_subtype         LowCardinality(String),
+            severity            LowCardinality(String),
+            direction           LowCardinality(String),
+            action              LowCardinality(String),
+
+            -- Network 5-Tuple
+            src_ip              String CODEC(ZSTD(1)),
+            dest_ip             String CODEC(ZSTD(1)),
+            src_port            UInt16 CODEC(T64, LZ4),
+            dest_port           UInt16 CODEC(T64, LZ4),
+            transport           LowCardinality(String),
+
+            -- NAT
+            src_translated_ip   String DEFAULT '' CODEC(ZSTD(1)),
+            dest_translated_ip  String DEFAULT '' CODEC(ZSTD(1)),
+            src_translated_port UInt16 DEFAULT 0 CODEC(T64, LZ4),
+            dest_translated_port UInt16 DEFAULT 0 CODEC(T64, LZ4),
+
+            -- Zones & Interfaces
+            src_zone            LowCardinality(String),
+            dest_zone           LowCardinality(String),
+            src_interface       LowCardinality(String),
+            dest_interface      LowCardinality(String),
+
+            -- Identity
+            src_user            String DEFAULT '' CODEC(ZSTD(1)),
+            dest_user           String DEFAULT '' CODEC(ZSTD(1)),
+            application         LowCardinality(String),
+
+            -- Policy
+            rule                LowCardinality(String),
+            rule_uuid           String DEFAULT '' CODEC(ZSTD(1)),
+            log_forwarding_profile LowCardinality(String),
+
+            -- Threat Details
+            threat_id           String CODEC(ZSTD(1)),
+            threat_name         String CODEC(ZSTD(1)),
+            threat_numeric_id   UInt64 DEFAULT 0 CODEC(T64, LZ4),
+            threat_category     LowCardinality(String),
+            category            LowCardinality(String),
+
+            -- URL Filtering Fields (populated when log_subtype = 'url')
+            url                 String DEFAULT '' CODEC(ZSTD(3)),
+            content_type        LowCardinality(String),
+            user_agent          String DEFAULT '' CODEC(ZSTD(3)),
+            http_method         LowCardinality(String),
+            xff                 String DEFAULT '' CODEC(ZSTD(1)),
+            xff_ip              String DEFAULT '' CODEC(ZSTD(1)),
+            referrer            String DEFAULT '' CODEC(ZSTD(3)),
+            reason              String DEFAULT '' CODEC(ZSTD(1)),
+            justification       String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- File & WildFire Fields
+            file_name           String DEFAULT '' CODEC(ZSTD(1)),
+            file_hash           String DEFAULT '' CODEC(ZSTD(1)),
+            file_type           LowCardinality(String),
+            cloud_address       String DEFAULT '' CODEC(ZSTD(1)),
+            report_id           String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Email Fields (WildFire)
+            sender              String DEFAULT '' CODEC(ZSTD(1)),
+            subject             String DEFAULT '' CODEC(ZSTD(1)),
+            recipient           String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Session
+            session_id          UInt64 DEFAULT 0 CODEC(T64, LZ4),
+            repeat_count        UInt16 DEFAULT 0 CODEC(T64, LZ4),
+            pcap_id             String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Geo Location
+            src_location        LowCardinality(String),
+            dest_location       LowCardinality(String),
+
+            -- Sequence & Versioning
+            sequence_number     UInt64 DEFAULT 0 CODEC(T64, LZ4),
+            action_flags        String DEFAULT '' CODEC(ZSTD(1)),
+            content_version     String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Tunnel
+            tunnel_id           String DEFAULT '' CODEC(ZSTD(1)),
+            tunnel_type         LowCardinality(String),
+
+            -- EDL (PAN-OS 10.0+)
+            src_edl             String DEFAULT '' CODEC(ZSTD(1)),
+            dest_edl            String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Dynamic Groups (PAN-OS 10.0+)
+            dynusergroup_name   String DEFAULT '' CODEC(ZSTD(1)),
+            src_dag             String DEFAULT '' CODEC(ZSTD(1)),
+            dest_dag            String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- App Metadata (PAN-OS 10.2+)
+            subcategory_of_app  LowCardinality(String),
+            category_of_app     LowCardinality(String),
+            technology_of_app   LowCardinality(String),
+            risk_of_app         UInt8 DEFAULT 0,
+            is_saas             UInt8 DEFAULT 0,
+            sanctioned_state    UInt8 DEFAULT 0,
+
+            -- Device-ID (PAN-OS 10.2+)
+            src_dvc_category    LowCardinality(String),
+            src_dvc_model       String DEFAULT '' CODEC(ZSTD(1)),
+            src_dvc_vendor      LowCardinality(String),
+            src_dvc_os          LowCardinality(String),
+            src_hostname        String DEFAULT '' CODEC(ZSTD(1)),
+            src_mac             String DEFAULT '' CODEC(ZSTD(1)),
+            dest_dvc_category   LowCardinality(String),
+            dest_dvc_model      String DEFAULT '' CODEC(ZSTD(1)),
+            dest_dvc_vendor     LowCardinality(String),
+            dest_dvc_os         LowCardinality(String),
+            dest_hostname       String DEFAULT '' CODEC(ZSTD(1)),
+            dest_mac            String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- URL Category List (PAN-OS 10.0+, up to 4 categories)
+            url_category_list   String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- HTTP/2
+            http2_connection    UInt32 DEFAULT 0,
+
+            -- Materialized for performance
+            log_date            Date MATERIALIZED toDate(timestamp),
+            log_hour            UInt8 MATERIALIZED toHour(timestamp),
+
+            -- Indexes
+            INDEX idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dest_ip dest_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_threat_name threat_name TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_url url TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
+            INDEX idx_category category TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_rule rule TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_severity severity TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_subtype log_subtype TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_src_user src_user TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_application application TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_file_hash file_hash TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_src_zone src_zone TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dest_zone dest_zone TYPE bloom_filter(0.01) GRANULARITY 4
+        ) ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (log_subtype, severity, timestamp)
+        TTL timestamp + INTERVAL 6 MONTH DELETE
+        SETTINGS
+            index_granularity = 8192,
+            min_bytes_for_wide_part = 10485760,
+            merge_with_ttl_timeout = 86400
+        """
+
+        try:
+            client.command(create_table_query)
+            logger.info("ClickHouse table 'pa_threat_logs' created/verified")
+        except Exception as e:
+            logger.warning(f"pa_threat_logs table creation issue: {e}")
+
+        # Create materialized view for hourly aggregates
+        hourly_mv_query = """
+        CREATE MATERIALIZED VIEW IF NOT EXISTS pa_threat_hourly_mv
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(hour)
+        ORDER BY (hour, log_subtype, severity, action, category)
+        TTL hour + INTERVAL 12 MONTH DELETE
+        AS SELECT
+            toStartOfHour(timestamp) AS hour,
+            log_subtype,
+            severity,
+            action,
+            category,
+            count() AS event_count,
+            uniqExact(src_ip) AS unique_sources,
+            uniqExact(dest_ip) AS unique_destinations,
+            uniqExact(threat_name) AS unique_threats
+        FROM pa_threat_logs
+        GROUP BY hour, log_subtype, severity, action, category
+        """
+        try:
+            client.command(hourly_mv_query)
+            logger.info("Materialized view 'pa_threat_hourly_mv' created/verified")
+        except Exception as e:
+            logger.debug(f"pa_threat_hourly_mv view: {e}")
+
+        # Create materialized view for top threat sources
+        top_sources_mv_query = """
+        CREATE MATERIALIZED VIEW IF NOT EXISTS pa_threat_top_sources_mv
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(day)
+        ORDER BY (day, src_ip, log_subtype)
+        TTL day + INTERVAL 3 MONTH DELETE
+        AS SELECT
+            toDate(timestamp) AS day,
+            src_ip,
+            log_subtype,
+            count() AS event_count,
+            uniqExact(threat_name) AS unique_threats,
+            uniqExact(dest_ip) AS targets_count
+        FROM pa_threat_logs
+        GROUP BY day, src_ip, log_subtype
+        """
+        try:
+            client.command(top_sources_mv_query)
+            logger.info("Materialized view 'pa_threat_top_sources_mv' created/verified")
+        except Exception as e:
+            logger.debug(f"pa_threat_top_sources_mv view: {e}")
+
+    @classmethod
+    def insert_threat_logs(cls, logs: List[tuple]) -> None:
+        """Insert Palo Alto threat/URL logs into the dedicated pa_threat_logs table."""
+        if not logs:
+            return
+        client = cls.get_client()
+        client.insert('pa_threat_logs', logs, column_names=cls.PA_THREAT_COLUMNS)
+
     @classmethod
     def insert_logs(cls, logs: List[Tuple]) -> None:
         """

@@ -1,5 +1,5 @@
 [Unit]
-Description=Run NetLogs disk cleanup every 15 minutes
+Description=Run Zentryc disk cleanup every 15 minutes
 
 [Timer]
 # Run every 15 minutes

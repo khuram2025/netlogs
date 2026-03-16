@@ -354,7 +354,7 @@ tests/
 # locust load test example
 from locust import HttpUser, task, between
 
-class NetLogsUser(HttpUser):
+class ZentrycUser(HttpUser):
     wait_time = between(1, 3)
 
     @task(10)
@@ -425,8 +425,8 @@ After each phase deployment, run this checklist:
 
 - [ ] All systemd services start without errors
 - [ ] Database migrations applied successfully
-- [ ] No errors in `journalctl -u netlogs-web -n 100`
-- [ ] No errors in `journalctl -u netlogs-syslog -n 100`
+- [ ] No errors in `journalctl -u zentryc-web -n 100`
+- [ ] No errors in `journalctl -u zentryc-syslog -n 100`
 - [ ] Dashboard loads within 3 seconds
 - [ ] Syslog collector receiving logs (check log count increasing)
 - [ ] Disk usage under 80%

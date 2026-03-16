@@ -1,0 +1,21 @@
+[Unit]
+Description=Zentryc First-Boot Configuration Wizard
+ConditionPathExists=!/opt/zentryc/.configured
+Before=zentryc-web.service zentryc-syslog.service
+After=postgresql.service clickhouse-server.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/zentryc/venv/bin/python -m fastapi_app.cli.firstboot.wizard
+WorkingDirectory=/opt/zentryc
+Environment=ZENTRYC_DIR=/opt/zentryc
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

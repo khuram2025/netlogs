@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Global scheduler instance
 _scheduler: Optional[AsyncIOScheduler] = None
 _lock_file = None  # File handle for scheduler lock
-SCHEDULER_LOCK_PATH = '/tmp/netlogs_scheduler.lock'
+SCHEDULER_LOCK_PATH = '/tmp/zentryc_scheduler.lock'
 
 
 async def fetch_all_routing_tables():

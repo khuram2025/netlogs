@@ -1,0 +1,43 @@
+[Unit]
+Description=Zentryc High-Performance Syslog Collector
+Documentation=https://github.com/your-org/zentryc
+After=network.target postgresql.service clickhouse-server.service zentryc-web.service
+Wants=postgresql.service clickhouse-server.service
+Requires=zentryc-web.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/zentryc
+EnvironmentFile=/opt/zentryc/.env
+Environment="PATH=/opt/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# High-performance syslog collector with tuned parameters
+ExecStart=/opt/zentryc/venv/bin/python /opt/zentryc/run_syslog.py \
+    --batch-size=5000 \
+    --flush-interval=2.0 \
+    --cache-ttl=60 \
+    --workers=4
+
+# Graceful shutdown (allow time to flush buffers)
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Resource limits for high-volume log processing
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zentryc-syslog
+
+[Install]
+WantedBy=multi-user.target

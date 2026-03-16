@@ -1,5 +1,5 @@
 """
-Alembic migration environment - configured for NetLogs async PostgreSQL.
+Alembic migration environment - configured for Zentryc async PostgreSQL.
 """
 
 import asyncio

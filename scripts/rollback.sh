@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# NetLogs Rollback Script
+# Zentryc Rollback Script
 # Restores from the most recent backup and restarts services.
 #
 # Usage:
@@ -38,7 +38,7 @@ BACKUP_DIR="${BACKUP_PATH:-$PROJECT_DIR/backups}"
 if [ $# -ge 1 ]; then
     BACKUP_FILE="$1"
 else
-    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/netlogs-backup-*.tar.gz 2>/dev/null | head -1)
+    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/zentryc-backup-*.tar.gz 2>/dev/null | head -1)
     if [ -z "$BACKUP_FILE" ]; then
         error "No backup files found in $BACKUP_DIR"
         exit 1
@@ -51,7 +51,7 @@ if [ ! -f "$BACKUP_FILE" ]; then
 fi
 
 echo "==========================================="
-echo "   NetLogs Rollback"
+echo "   Zentryc Rollback"
 echo "   Backup: $(basename "$BACKUP_FILE")"
 echo "==========================================="
 echo ""

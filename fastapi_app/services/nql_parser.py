@@ -1,5 +1,5 @@
 """
-NetLogs Query Language (NQL) Parser
+Zentryc Query Language (NQL) Parser
 
 Converts NQL queries into ClickHouse SQL for the syslogs table.
 

@@ -164,6 +164,9 @@ class MetricsCollector:
 
 PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 
+# Regex to decompose PA threat_id: "HTTP Trojan.Gen(30001)" → name + numeric id
+_THREAT_ID_RE = re.compile(r'^(.*?)\((\d+)\)\s*$')
+
 
 def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     """
@@ -229,6 +232,196 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
     except Exception as e:
         logger.debug(f"Parse error: {e}")
         return None
+
+
+# ---------------------------------------------------------------------------
+# Palo Alto Threat Log Row Builder
+# ---------------------------------------------------------------------------
+
+def _safe_uint(val, default=0):
+    """Convert to unsigned int, returning default on failure."""
+    if not val:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_uint8(val, default=0):
+    """Convert to UInt8 (0-255), clamped."""
+    n = _safe_uint(val, default)
+    return max(0, min(255, n))
+
+
+def _parse_pa_timestamp(ts_str: str) -> Optional[datetime]:
+    """Parse Palo Alto timestamp format '2024/03/15 14:30:22' to datetime."""
+    if not ts_str:
+        return None
+    try:
+        return datetime.strptime(ts_str.strip(), '%Y/%m/%d %H:%M:%S').replace(tzinfo=timezone.utc)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _decompose_threat_id(raw_threat_id: str) -> tuple:
+    """Decompose 'HTTP Trojan.Gen(30001)' → ('HTTP Trojan.Gen', 30001)."""
+    if not raw_threat_id:
+        return ('', 0)
+    m = _THREAT_ID_RE.match(raw_threat_id)
+    if m:
+        return (m.group(1).strip(), int(m.group(2)))
+    return (raw_threat_id, 0)
+
+
+def build_threat_row(now: datetime, client_ip: str, parsed_data: dict) -> tuple:
+    """
+    Build a tuple for pa_threat_logs table from parsed_data dict.
+
+    The parser already extracts all CSV positional fields into parsed_data.
+    This function maps them to the dedicated table columns.
+
+    Returns a tuple matching ClickHouseClient.PA_THREAT_COLUMNS order.
+    """
+    g = parsed_data.get  # shorthand
+
+    # Timestamps
+    receive_time = _parse_pa_timestamp(g('receive_time', '')) or now
+    generated_time = _parse_pa_timestamp(g('generated_time', '')) or now
+
+    # Threat ID decomposition
+    raw_tid = g('threat_id', '')
+    threat_name, threat_numeric_id = _decompose_threat_id(raw_tid)
+
+    # Subtype determines how to route 'misc' field
+    subtype = g('subtype', '').lower()
+    misc = g('misc', '')
+    if subtype == 'url':
+        url = misc
+        file_name = ''
+    else:
+        url = ''
+        file_name = misc
+
+    # Protocol number → name
+    proto_raw = g('protocol', '') or g('proto', '')
+    proto_map = {'6': 'tcp', '17': 'udp', '1': 'icmp', '58': 'icmpv6'}
+    transport = proto_map.get(proto_raw, proto_raw.lower() if proto_raw else '')
+
+    return (
+        now,                                                    # timestamp
+        receive_time,                                           # receive_time
+        generated_time,                                         # generated_time
+        g('serial_number', '') or g('serial', ''),              # serial_number
+        g('device_name', ''),                                   # device_name
+        g('vsys', ''),                                          # vsys
+        g('vsys_name', ''),                                     # vsys_name
+        client_ip,                                              # device_ip
+        subtype,                                                # log_subtype
+        g('severity', ''),                                      # severity
+        g('direction', ''),                                     # direction
+        g('action', ''),                                        # action
+        g('src_ip', '') or g('srcip', ''),                      # src_ip
+        g('dst_ip', '') or g('dstip', ''),                      # dest_ip
+        _safe_uint(g('src_port', '') or g('srcport', '')),      # src_port
+        _safe_uint(g('dst_port', '') or g('dstport', '')),      # dest_port
+        transport,                                              # transport
+        g('nat_src_ip', ''),                                    # src_translated_ip
+        g('nat_dst_ip', ''),                                    # dest_translated_ip
+        _safe_uint(g('nat_src_port', '')),                      # src_translated_port
+        _safe_uint(g('nat_dst_port', '')),                      # dest_translated_port
+        g('src_zone', ''),                                      # src_zone
+        g('dst_zone', ''),                                      # dest_zone
+        g('inbound_if', ''),                                    # src_interface
+        g('outbound_if', ''),                                   # dest_interface
+        g('src_user', ''),                                      # src_user
+        g('dst_user', ''),                                      # dest_user
+        g('application', '') or g('app', ''),                   # application
+        g('rule', ''),                                          # rule
+        g('rule_uuid', ''),                                     # rule_uuid
+        g('log_action', ''),                                    # log_forwarding_profile
+        raw_tid,                                                # threat_id (original)
+        threat_name,                                            # threat_name
+        threat_numeric_id,                                      # threat_numeric_id
+        g('threat_category', ''),                               # threat_category
+        g('category', ''),                                      # category
+        url,                                                    # url
+        g('content_type', ''),                                  # content_type
+        g('user_agent', ''),                                    # user_agent
+        g('http_method', ''),                                   # http_method
+        g('xff', ''),                                           # xff
+        g('xff_ip', ''),                                        # xff_ip
+        g('referer', '') or g('referrer', ''),                  # referrer
+        g('reason', ''),                                        # reason
+        g('justification', ''),                                 # justification
+        file_name,                                              # file_name
+        g('file_digest', ''),                                   # file_hash
+        g('file_type', ''),                                     # file_type
+        g('cloud', ''),                                         # cloud_address
+        g('report_id', ''),                                     # report_id
+        g('sender', ''),                                        # sender
+        g('subject', ''),                                       # subject
+        g('recipient', ''),                                     # recipient
+        _safe_uint(g('session_id', '')),                        # session_id
+        _safe_uint(g('repeat_count', '')),                      # repeat_count
+        g('pcap_id', ''),                                       # pcap_id
+        g('src_location', ''),                                  # src_location
+        g('dst_location', ''),                                  # dest_location
+        _safe_uint(g('seq_no', '')),                            # sequence_number
+        g('action_flags', ''),                                  # action_flags
+        g('content_ver', ''),                                   # content_version
+        g('tunnel_id', ''),                                     # tunnel_id
+        g('tunnel_type', ''),                                   # tunnel_type
+        g('src_edl', ''),                                       # src_edl
+        g('dst_edl', ''),                                       # dest_edl
+        g('dynusergroup_name', ''),                             # dynusergroup_name
+        g('src_dag', ''),                                       # src_dag
+        g('dst_dag', ''),                                       # dest_dag
+        g('subcategory_of_app', ''),                            # subcategory_of_app
+        g('category_of_app', ''),                               # category_of_app
+        g('tech_of_app', '') or g('technology_of_app', ''),     # technology_of_app
+        _safe_uint8(g('risk_of_app', '')),                      # risk_of_app
+        _safe_uint8(g('is_saas_of_app', '')),                   # is_saas
+        _safe_uint8(g('sanctioned_state_of_app', '')),          # sanctioned_state
+        g('src_dvc_category', ''),                              # src_dvc_category
+        g('src_dvc_model', ''),                                 # src_dvc_model
+        g('src_dvc_vendor', ''),                                # src_dvc_vendor
+        g('src_dvc_os_family', '') or g('src_dvc_os', ''),      # src_dvc_os
+        g('src_hostname', ''),                                  # src_hostname
+        g('src_mac', ''),                                       # src_mac
+        g('dst_dvc_category', ''),                              # dest_dvc_category
+        g('dst_dvc_model', ''),                                 # dest_dvc_model
+        g('dst_dvc_vendor', ''),                                # dest_dvc_vendor
+        g('dst_dvc_os_family', '') or g('dst_dvc_os', ''),      # dest_dvc_os
+        g('dst_hostname', ''),                                  # dest_hostname
+        g('dst_mac', ''),                                       # dest_mac
+        g('url_category_list', ''),                             # url_category_list
+        _safe_uint(g('http2_connection', '')),                   # http2_connection
+    )
+
+
+def flush_threat_logs(
+    client,
+    logs: List[tuple],
+    retries: int = 3,
+    retry_delay: float = 1.0,
+) -> Tuple[bool, int]:
+    """Insert threat logs to pa_threat_logs with retry."""
+    if not logs:
+        return True, 0
+
+    for attempt in range(retries):
+        try:
+            client.insert('pa_threat_logs', logs, column_names=ClickHouseClient.PA_THREAT_COLUMNS)
+            return True, attempt
+        except Exception as e:
+            if attempt < retries - 1:
+                logger.warning(f"PA threat insert attempt {attempt+1} failed: {e}, retrying...")
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                logger.error(f"PA threat insert FAILED after {retries} attempts: {e}")
+
+    return False, retries
 
 
 # ---------------------------------------------------------------------------
@@ -525,6 +718,36 @@ class SyslogCollector:
             self.metrics.insert_retries += retries
             if len(logs) >= 100:
                 logger.info(f"Flushed {len(logs):,} logs (queue: {len(self._raw_queue):,})")
+
+            # ── Dual-write: insert threat logs into dedicated pa_threat_logs ──
+            # Filter for Palo Alto THREAT log types and build dedicated rows.
+            # log tuple index 13 = log_type, index 20 = parsed_data
+            threat_rows = []
+            for log in logs:
+                log_type_val = (log[13] or '').upper()
+                if log_type_val == 'THREAT':
+                    try:
+                        row = build_threat_row(log[0], log[1], log[20])
+                        threat_rows.append(row)
+                    except Exception as e:
+                        logger.debug(f"Threat row build error: {e}")
+
+            if threat_rows:
+                try:
+                    t_success, t_retries = await loop.run_in_executor(
+                        self.executor,
+                        flush_threat_logs,
+                        ch_client,
+                        threat_rows,
+                        self.config.insert_retries,
+                        self.config.insert_retry_delay,
+                    )
+                    if t_success:
+                        logger.info(f"Dual-write: {len(threat_rows)} threat logs → pa_threat_logs")
+                    else:
+                        logger.error(f"Dual-write FAILED for {len(threat_rows)} threat logs")
+                except Exception as e:
+                    logger.error(f"Threat dual-write error: {e}")
         else:
             self.metrics.flush_errors += 1
             # On total failure, try to recreate the client for next batch
@@ -590,9 +813,10 @@ class SyslogCollector:
         """Start the syslog collector."""
         self._running = True
 
-        # Ensure ClickHouse table exists
+        # Ensure ClickHouse tables exist
         try:
             ClickHouseClient.ensure_table()
+            ClickHouseClient.ensure_pa_threat_table()
         except Exception as e:
             logger.error(f"ClickHouse setup failed: {e}")
             raise

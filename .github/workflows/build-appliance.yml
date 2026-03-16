@@ -1,0 +1,150 @@
+name: Build Appliance
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_vm:
+        description: 'Skip Packer VM build'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build:
+    name: Build & Package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep '__version__' fastapi_app/__version__.py | cut -d'"' -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install build dependencies
+        run: |
+          pip install -r build/requirements-build.txt
+          pip install -r fastapi_app/requirements.txt
+
+      - name: Compile with Cython
+        run: bash build/build_appliance.sh
+
+      - name: Upload compiled tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: zentryc-${{ steps.version.outputs.version }}-compiled
+          path: build/output/zentryc-${{ steps.version.outputs.version }}-compiled.tar.gz
+
+  build-vm:
+    name: Build VM Image
+    needs: build
+    runs-on: ubuntu-24.04
+    if: ${{ github.event.inputs.skip_vm != 'true' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep '__version__' fastapi_app/__version__.py | cut -d'"' -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download compiled tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: zentryc-${{ steps.version.outputs.version }}-compiled
+          path: build/output/
+
+      - name: Install Packer
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq packer qemu-system-x86 qemu-utils
+
+      - name: Initialize Packer
+        working-directory: packer
+        run: packer init .
+
+      - name: Build VM image
+        working-directory: packer
+        run: |
+          packer build \
+            -var "version=${{ steps.version.outputs.version }}" \
+            -var "compiled_tarball=../build/output/zentryc-${{ steps.version.outputs.version }}-compiled.tar.gz" \
+            -var "output_dir=output" \
+            .
+
+      - name: Upload VM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zentryc-${{ steps.version.outputs.version }}-vm
+          path: |
+            packer/output/release/*.ova
+            packer/output/release/*.qcow2
+
+  release:
+    name: Create Release
+    needs: [build, build-vm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Read version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release
+        run: |
+          mkdir -p release
+          find artifacts/ -type f \( -name "*.tar.gz" -o -name "*.ova" -o -name "*.qcow2" \) -exec cp {} release/ \;
+          cd release && sha256sum * > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Zentryc ${{ steps.version.outputs.version }}
+          body: |
+            ## Zentryc ${{ steps.version.outputs.version }}
+
+            ### Artifacts
+            - **OVA**: VMware ESXi/Workstation, VirtualBox
+            - **QCOW2**: Proxmox VE, KVM/libvirt
+            - **Compiled tarball**: Bare-metal offline install
+
+            ### Quick Start
+            1. Import OVA/QCOW2 into your hypervisor
+            2. Boot → first-boot wizard configures network, hostname, admin password
+            3. Access `https://<IP>/`
+            4. SSH → appliance CLI for management
+          files: release/*
+          generate_release_notes: true

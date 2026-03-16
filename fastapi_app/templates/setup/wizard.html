@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NetLogs — Setup Wizard</title>
+    <title>Zentryc — Setup Wizard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -732,7 +732,7 @@
                         <path d="M9 12l2 2 4-4" opacity="0.7"/>
                     </svg>
                 </div>
-                <div class="brand-name">Net<span>Logs</span></div>
+                <div class="brand-name">Zen<span>tryc</span></div>
                 <div class="brand-sub">Initial Setup</div>
             </div>
 
@@ -811,7 +811,7 @@
             <!-- ==================== STEP 2: Notifications ==================== -->
             <div class="step-section" id="step-2">
                 <div class="step-title">Notification Channel</div>
-                <div class="step-desc">Configure how NetLogs sends alert notifications. You can skip this and set it up later.</div>
+                <div class="step-desc">Configure how Zentryc sends alert notifications. You can skip this and set it up later.</div>
 
                 <div id="step2-msg" class="msg-banner"></div>
 
@@ -913,7 +913,7 @@
             <!-- ==================== STEP 3: Syslog Verification ==================== -->
             <div class="step-section" id="step-3">
                 <div class="step-title">Syslog Verification</div>
-                <div class="step-desc">Verify that NetLogs is receiving syslog data from your devices.</div>
+                <div class="step-desc">Verify that Zentryc is receiving syslog data from your devices.</div>
 
                 <div class="syslog-info">
                     <div class="syslog-port">UDP/{{ syslog_port }}</div>
@@ -958,7 +958,7 @@
                             <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
                             <polyline points="22 4 12 14.01 9 11.01"/>
                         </svg>
-                        Launch NetLogs
+                        Launch Zentryc
                     </button>
                 </div>
             </div>
@@ -975,7 +975,7 @@
     /* CSRF — auto-inject token into fetch() calls */
     (function() {
         function getCsrfToken() {
-            var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+            var m = document.cookie.match(/zentryc_csrf=([^;]+)/);
             return m ? decodeURIComponent(m[1]) : '';
         }
         var _origFetch = window.fetch;

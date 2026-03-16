@@ -1,13 +1,13 @@
 #!/bin/bash
 # =============================================================================
-# NetLogs Backup Script
+# Zentryc Backup Script
 # Creates a compressed backup archive of PostgreSQL, ClickHouse, and config.
 #
 # Usage:
 #   ./scripts/backup.sh [backup_dir]
 #
 # Default backup directory: ./backups/
-# Output: netlogs-backup-YYYYMMDD-HHMMSS.tar.gz
+# Output: zentryc-backup-YYYYMMDD-HHMMSS.tar.gz
 # =============================================================================
 
 set -euo pipefail
@@ -17,7 +17,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="${1:-${BACKUP_PATH:-$PROJECT_DIR/backups}}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 WORK_DIR="$(mktemp -d)"
-ARCHIVE_NAME="netlogs-backup-${TIMESTAMP}.tar.gz"
+ARCHIVE_NAME="zentryc-backup-${TIMESTAMP}.tar.gz"
 
 # Load environment from .env if present
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -29,7 +29,7 @@ fi
 # Database defaults (can be overridden by env)
 PG_HOST="${POSTGRES_HOST:-localhost}"
 PG_PORT="${POSTGRES_PORT:-5432}"
-PG_DB="${POSTGRES_DB:-netlogs}"
+PG_DB="${POSTGRES_DB:-zentryc}"
 PG_USER="${POSTGRES_USER:-read}"
 PG_PASS="${POSTGRES_PASSWORD:-Read@123}"
 
@@ -57,7 +57,7 @@ error() {
 mkdir -p "$BACKUP_DIR"
 mkdir -p "$WORK_DIR/pg" "$WORK_DIR/ch" "$WORK_DIR/config"
 
-log "Starting NetLogs backup..."
+log "Starting Zentryc backup..."
 log "Backup directory: $BACKUP_DIR"
 log "Working directory: $WORK_DIR"
 
@@ -69,8 +69,8 @@ export PGPASSWORD="$PG_PASS"
 
 if pg_dump -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" \
     --format=custom --no-owner --no-privileges \
-    -f "$WORK_DIR/pg/netlogs.pgdump" 2>/dev/null; then
-    PG_SIZE=$(du -sh "$WORK_DIR/pg/netlogs.pgdump" | cut -f1)
+    -f "$WORK_DIR/pg/zentryc.pgdump" 2>/dev/null; then
+    PG_SIZE=$(du -sh "$WORK_DIR/pg/zentryc.pgdump" | cut -f1)
     log "PostgreSQL backup complete ($PG_SIZE)"
 else
     error "PostgreSQL backup failed"
@@ -182,12 +182,12 @@ log "Backup complete: $BACKUP_DIR/$ARCHIVE_NAME ($ARCHIVE_SIZE)"
 # 5. Retention cleanup (keep last N backups)
 # -------------------------------------------------------------------------
 RETENTION_COUNT="${BACKUP_RETENTION_COUNT:-30}"
-BACKUP_COUNT=$(find "$BACKUP_DIR" -name "netlogs-backup-*.tar.gz" -type f | wc -l)
+BACKUP_COUNT=$(find "$BACKUP_DIR" -name "zentryc-backup-*.tar.gz" -type f | wc -l)
 
 if [ "$BACKUP_COUNT" -gt "$RETENTION_COUNT" ]; then
     EXCESS=$((BACKUP_COUNT - RETENTION_COUNT))
     log "Cleaning up $EXCESS old backup(s) (keeping $RETENTION_COUNT)..."
-    find "$BACKUP_DIR" -name "netlogs-backup-*.tar.gz" -type f -printf '%T+ %p\n' \
+    find "$BACKUP_DIR" -name "zentryc-backup-*.tar.gz" -type f -printf '%T+ %p\n' \
         | sort | head -n "$EXCESS" | cut -d' ' -f2- \
         | xargs rm -f
 fi

@@ -13,7 +13,7 @@ These items are self-contained improvements that deliver visible value quickly w
 Fix the 404 error on `/favicon.ico` that appears in browser console on every page load.
 
 ### Tasks
-- [ ] Create or obtain a NetLogs favicon (shield/lock icon in dark theme colors)
+- [ ] Create or obtain a Zentryc favicon (shield/lock icon in dark theme colors)
 - [ ] Save as `fastapi_app/static/favicon.ico` (16x16 and 32x32)
 - [ ] Add `<link rel="icon" href="/static/favicon.ico">` to base template
 - [ ] Add SVG favicon for modern browsers
@@ -83,7 +83,7 @@ Simple email notification when critical events occur (bridge to Phase 1 alerting
   SMTP_PORT=587
   SMTP_USER=
   SMTP_PASSWORD=
-  SMTP_FROM=netlogs@company.com
+  SMTP_FROM=zentryc@company.com
   ALERT_EMAIL_TO=security-team@company.com
   ```
 - [ ] Create `fastapi_app/services/email_service.py`
@@ -91,7 +91,7 @@ Simple email notification when critical events occur (bridge to Phase 1 alerting
   - Device goes offline (no logs for 10 min)
   - Disk usage exceeds 85%
   - Emergency cleanup triggered
-- [ ] HTML email template with NetLogs branding
+- [ ] HTML email template with Zentryc branding
 - [ ] Rate limit: Max 1 email per event type per 15 minutes
 - [ ] Add email configuration section to System page
 

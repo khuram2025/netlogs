@@ -1,0 +1,21 @@
+# /etc/sudoers.d/zentryc-cli
+# Sudoers rules for the Zentryc appliance CLI shell
+# Allows the zentryc user to run specific management commands without a password
+
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart zentryc-*
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop zentryc-*
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl status *
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/systemctl poweroff
+zentryc ALL=(ALL) NOPASSWD: /usr/sbin/netplan apply
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/hostnamectl set-hostname *
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/timedatectl set-timezone *
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/netplan/01-zentryc.yaml
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/systemd/timesyncd.conf
+zentryc ALL=(ALL) NOPASSWD: /opt/zentryc/scripts/backup.sh
+zentryc ALL=(ALL) NOPASSWD: /usr/local/bin/zentryc-upgrade *
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/find /opt/zentryc/logs -type f -delete
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/rm -f /opt/zentryc/.configured
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/rm -f /opt/zentryc/.env
+zentryc ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /opt/zentryc/backups

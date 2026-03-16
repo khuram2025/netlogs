@@ -1,5 +1,5 @@
 # =============================================================================
-# NetLogs SOAR/SIEM Platform - Docker Image
+# Zentryc SOAR/SIEM Platform - Docker Image
 # Multi-stage build for minimal runtime image
 # =============================================================================
 
@@ -35,8 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN groupadd -g 1000 netlogs && \
-    useradd -u 1000 -g netlogs -m -s /bin/bash netlogs
+RUN groupadd -g 1000 zentryc && \
+    useradd -u 1000 -g zentryc -m -s /bin/bash zentryc
 
 WORKDIR /app
 
@@ -55,9 +55,9 @@ RUN chmod +x /app/docker/entrypoint.sh
 
 # Create runtime directories
 RUN mkdir -p /app/logs /app/data/credentials && \
-    chown -R netlogs:netlogs /app
+    chown -R zentryc:zentryc /app
 
-USER netlogs
+USER zentryc
 
 EXPOSE 8000
 EXPOSE 514/udp

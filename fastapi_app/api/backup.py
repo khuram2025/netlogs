@@ -43,9 +43,9 @@ def _list_backups() -> list[dict]:
         return []
 
     backups = []
-    for f in sorted(BACKUP_DIR.glob("netlogs-backup-*.tar.gz"), reverse=True):
+    for f in sorted(BACKUP_DIR.glob("zentryc-backup-*.tar.gz"), reverse=True):
         stat = f.stat()
-        # Parse timestamp from filename: netlogs-backup-YYYYMMDD-HHMMSS.tar.gz
+        # Parse timestamp from filename: zentryc-backup-YYYYMMDD-HHMMSS.tar.gz
         name_parts = f.stem.replace(".tar", "").split("-")
         try:
             date_str = f"{name_parts[2]}-{name_parts[3]}"

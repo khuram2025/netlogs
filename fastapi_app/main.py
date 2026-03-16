@@ -1,5 +1,5 @@
 """
-NetLogs SOAR/SIEM Platform - FastAPI Application
+Zentryc SOAR/SIEM Platform - FastAPI Application
 Main application entry point.
 """
 
@@ -37,6 +37,7 @@ from .api.setup import router as setup_router
 from .api.health import router as health_router
 from .api.backup import router as backup_router
 from .api.llm_config import router as llm_config_router
+from .api.threat_dashboard import router as threat_dashboard_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -116,7 +117,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown."""
     # Startup
-    logger.info("Starting NetLogs SOAR/SIEM Platform...")
+    logger.info("Starting Zentryc SOAR/SIEM Platform...")
 
     # Initialize PostgreSQL database
     try:
@@ -132,12 +133,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Alembic migration check: {e}")
 
-    # Initialize ClickHouse table
+    # Initialize ClickHouse tables
     try:
         ClickHouseClient.ensure_table()
         logger.info("ClickHouse table verified")
     except Exception as e:
         logger.warning(f"ClickHouse setup warning: {e}")
+
+    # Initialize Palo Alto threat/URL dedicated table + materialized views
+    try:
+        ClickHouseClient.ensure_pa_threat_table()
+        logger.info("ClickHouse pa_threat_logs table verified")
+    except Exception as e:
+        logger.warning(f"PA threat table setup warning: {e}")
 
     # Run ClickHouse migrations
     try:
@@ -202,7 +210,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down NetLogs...")
+    logger.info("Shutting down Zentryc...")
     stop_scheduler()
     ClickHouseClient.close_client()
     await close_db()
@@ -277,12 +285,15 @@ app.include_router(backup_router)
 # Include LLM configuration routes
 app.include_router(llm_config_router)
 
+# Include Palo Alto threat/URL dashboard routes
+app.include_router(threat_dashboard_router)
+
 
 @app.get("/api/")
 async def api_root():
     """API root endpoint."""
     return {
-        "message": "NetLogs SOAR/SIEM API",
+        "message": "Zentryc SOAR/SIEM API",
         "version": __version__,
         "endpoints": {
             "devices": "/api/devices/",

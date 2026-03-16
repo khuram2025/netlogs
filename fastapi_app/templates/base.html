@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}NetLogs - SOAR/SIEM{% endblock %}</title>
+    <title>{% block title %}Zentryc - SOAR/SIEM{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -663,7 +663,7 @@
                 <div class="sb-brand-icon">
                     <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
-                <span class="sb-brand-text">NetLogs</span>
+                <span class="sb-brand-text">Zentryc</span>
             </a>
             <div class="sb-toggle" id="sidebarToggle" title="Toggle sidebar">
                 <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -695,6 +695,14 @@
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
                         <span class="sb-item-label">Alerts</span>
                         {% if unread_alert_count %}<span class="sb-item-badge">{{ unread_alert_count }}</span>{% endif %}
+                    </a>
+                    <a href="{{ url_for('threat_dashboard') }}" class="sb-item" data-tip="Threats" data-path="/threats">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                        <span class="sb-item-label">Threats</span>
+                    </a>
+                    <a href="{{ url_for('url_dns_logs') }}" class="sb-item" data-tip="URL & DNS" data-path="/threats/url-dns">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+                        <span class="sb-item-label">URL & DNS</span>
                     </a>
                     <a href="{{ url_for('threat_intel_feeds') }}" class="sb-item" data-tip="Threat Intel" data-path="/threat-intel">
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></span>
@@ -826,7 +834,7 @@
        ============================================================ */
     (function() {
         function getCsrfToken() {
-            var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+            var m = document.cookie.match(/zentryc_csrf=([^;]+)/);
             return m ? decodeURIComponent(m[1]) : '';
         }
 
@@ -871,7 +879,7 @@
     (function() {
         const sidebar = document.getElementById('sidebar');
         const toggle = document.getElementById('sidebarToggle');
-        const KEY = 'netlogs_sidebar_collapsed';
+        const KEY = 'zentryc_sidebar_collapsed';
 
         // Restore state
         if (localStorage.getItem(KEY) === '1') {

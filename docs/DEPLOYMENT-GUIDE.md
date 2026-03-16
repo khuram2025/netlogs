@@ -1,4 +1,4 @@
-# NetLogs SOAR/SIEM Platform — Deployment Guide
+# Zentryc SOAR/SIEM Platform — Deployment Guide
 
 **Version:** 3.0.0
 **Last Updated:** February 2026
@@ -44,8 +44,8 @@
 On a fresh Ubuntu server with internet access:
 
 ```bash
-git clone <repository-url> /opt/netlogs
-cd /opt/netlogs
+git clone <repository-url> /opt/zentryc
+cd /opt/zentryc
 sudo ./install.sh
 ```
 
@@ -91,8 +91,8 @@ docker compose version  # Should be v2.20+
 ### Step 2 — Clone the Repository
 
 ```bash
-git clone <repository-url> /opt/netlogs
-cd /opt/netlogs
+git clone <repository-url> /opt/zentryc
+cd /opt/zentryc
 ```
 
 ### Step 3 — Configure Environment
@@ -174,18 +174,18 @@ On your firewalls/switches/routers, configure syslog forwarding:
 # Fortinet FortiGate
 config log syslogd setting
     set status enable
-    set server <netlogs-server-ip>
+    set server <zentryc-server-ip>
     set port 514
     set format default
 end
 
 # Cisco ASA
 logging enable
-logging host inside <netlogs-server-ip>
+logging host inside <zentryc-server-ip>
 logging trap informational
 
 # Palo Alto
-set shared log-settings syslog <profile-name> server <name> server <netlogs-server-ip>
+set shared log-settings syslog <profile-name> server <name> server <zentryc-server-ip>
 set shared log-settings syslog <profile-name> server <name> transport UDP
 set shared log-settings syslog <profile-name> server <name> port 514
 ```
@@ -216,7 +216,7 @@ cp /path/to/your/key.pem certs/server.key
 docker compose restart nginx
 ```
 
-The certificate volume (`netlogs-certs`) persists across restarts.
+The certificate volume (`zentryc-certs`) persists across restarts.
 
 ---
 
@@ -225,11 +225,11 @@ The certificate volume (`netlogs-certs`) persists across restarts.
 ### Manual Backup
 
 ```bash
-cd /opt/netlogs
+cd /opt/zentryc
 ./scripts/backup.sh
 ```
 
-Output: `backups/netlogs-backup-YYYYMMDD-HHMMSS.tar.gz`
+Output: `backups/zentryc-backup-YYYYMMDD-HHMMSS.tar.gz`
 
 Backups include:
 - PostgreSQL full dump (users, rules, devices, settings)
@@ -240,10 +240,10 @@ Backups include:
 
 ```bash
 # Dry-run (preview what will be restored):
-./scripts/restore.sh backups/netlogs-backup-20260216-140139.tar.gz
+./scripts/restore.sh backups/zentryc-backup-20260216-140139.tar.gz
 
 # Execute restore:
-./scripts/restore.sh backups/netlogs-backup-20260216-140139.tar.gz --confirm
+./scripts/restore.sh backups/zentryc-backup-20260216-140139.tar.gz --confirm
 
 # Restart services after restore:
 docker compose restart
@@ -258,7 +258,7 @@ Login as admin → sidebar → **Backups** → Click "Create Backup"
 ## 7. Upgrading
 
 ```bash
-cd /opt/netlogs
+cd /opt/zentryc
 git pull origin main
 ./scripts/upgrade.sh
 ```
@@ -376,4 +376,4 @@ All services run as Docker containers on a single server.
 
 ---
 
-*For questions or support, contact the NetLogs development team.*
+*For questions or support, contact the Zentryc development team.*

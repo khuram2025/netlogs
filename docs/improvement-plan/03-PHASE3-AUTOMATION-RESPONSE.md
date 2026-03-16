@@ -9,7 +9,7 @@
 ## 3.1 Playbook Engine
 
 ### Description
-Build a visual playbook engine that automates incident response workflows. Playbooks define a sequence of actions (notifications, enrichment, blocking, ticketing) triggered by alerts or manual invocation. This is the core SOAR capability that transforms NetLogs from detection-only to detection-and-response.
+Build a visual playbook engine that automates incident response workflows. Playbooks define a sequence of actions (notifications, enrichment, blocking, ticketing) triggered by alerts or manual invocation. This is the core SOAR capability that transforms Zentryc from detection-only to detection-and-response.
 
 ### Tasks
 

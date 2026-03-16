@@ -10,7 +10,7 @@ Usage:
     python -m fastapi_app.cli.cleanup_logs --device 192.168.1.1 --execute  # Single device
 
 This should be run via cron:
-    0 2 * * * cd /home/net/net-logs && /path/to/venv/bin/python -m fastapi_app.cli.cleanup_logs --execute
+    0 2 * * * cd /home/net/zentryc && /path/to/venv/bin/python -m fastapi_app.cli.cleanup_logs --execute
 """
 
 import asyncio
@@ -22,7 +22,7 @@ from datetime import datetime
 from sqlalchemy import select
 
 # Add parent directory to path
-sys.path.insert(0, '/home/net/net-logs')
+sys.path.insert(0, '/home/net/zentryc')
 
 from fastapi_app.db.database import async_session_maker
 from fastapi_app.db.clickhouse import ClickHouseClient

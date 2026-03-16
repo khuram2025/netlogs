@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to NetLogs SOAR/SIEM Platform will be documented in this file.
+All notable changes to Zentryc SOAR/SIEM Platform will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -33,7 +33,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Threat intelligence: 4 built-in feeds, real-time IOC matching, auto-block EDL
 - Correlation engine: 5 pre-built multi-stage rules, MITRE ATT&CK mapping
 - Custom dashboard builder: 6 widget types
-- NQL (NetLogs Query Language) parser with aggregation pipelines
+- NQL (Zentryc Query Language) parser with aggregation pipelines
 - Saved searches with sharing and use-count tracking
 
 ## [1.0.0] - 2026-02-08

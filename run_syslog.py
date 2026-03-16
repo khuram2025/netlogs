@@ -60,7 +60,7 @@ def main():
 
     print("""
 ╔═══════════════════════════════════════════════════════════╗
-║           NetLogs High-Performance Syslog Collector       ║
+║           Zentryc High-Performance Syslog Collector       ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Listening on UDP port 514                                ║
 ║  Press Ctrl+C to stop                                     ║

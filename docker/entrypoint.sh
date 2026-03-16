@@ -4,7 +4,7 @@ set -e
 MODE="${1:-web}"
 
 echo "============================================"
-echo " NetLogs SOAR/SIEM Platform"
+echo " Zentryc SOAR/SIEM Platform"
 echo " Mode: ${MODE}"
 echo "============================================"
 

@@ -22,7 +22,7 @@ from ..models.user import User
 logger = logging.getLogger(__name__)
 
 ALGORITHM = "HS256"
-SESSION_COOKIE_NAME = "netlogs_session"
+SESSION_COOKIE_NAME = "zentryc_session"
 SESSION_EXPIRY_HOURS = 8
 REMEMBER_ME_DAYS = 30
 MAX_FAILED_ATTEMPTS = 5

@@ -13,7 +13,7 @@ if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout "$KEY_FILE" \
         -out "$CERT_FILE" \
-        -subj "/CN=netlogs/O=NetLogs/OU=SIEM" \
+        -subj "/CN=zentryc/O=Zentryc/OU=SIEM" \
         2>/dev/null
     echo "[nginx-entrypoint] Self-signed certificate generated (replace with real cert for production)"
 else

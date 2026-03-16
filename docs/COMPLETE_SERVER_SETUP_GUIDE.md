@@ -1,4 +1,4 @@
-# NetLogs SOAR/SIEM Platform - Complete Server Setup Guide
+# Zentryc SOAR/SIEM Platform - Complete Server Setup Guide
 
 **Version:** 1.0
 **Date:** December 2024
@@ -28,7 +28,7 @@
 
 ## 1. System Overview
 
-NetLogs is a high-performance SOAR/SIEM platform for collecting, parsing, and analyzing firewall logs from multiple vendors including:
+Zentryc is a high-performance SOAR/SIEM platform for collecting, parsing, and analyzing firewall logs from multiple vendors including:
 - **Fortinet FortiGate**
 - **Palo Alto Networks**
 - **Generic Syslog devices**
@@ -63,7 +63,7 @@ NetLogs is a high-performance SOAR/SIEM platform for collecting, parsing, and an
                                                    │ UDP Syslog (Port 514)
                                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                              NETLOGS SERVER                                          │
+│                              ZENTRYC SERVER                                          │
 │                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐    │
 │  │                    SYSLOG COLLECTOR (run_syslog.py)                         │    │
@@ -203,16 +203,16 @@ sudo systemctl enable postgresql
 ```bash
 sudo -u postgres psql << 'EOF'
 -- Create database
-CREATE DATABASE netlogs;
+CREATE DATABASE zentryc;
 
 -- Create user with password
 CREATE USER read WITH PASSWORD 'Read@123';
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE netlogs TO read;
+GRANT ALL PRIVILEGES ON DATABASE zentryc TO read;
 
--- Connect to netlogs database
-\c netlogs
+-- Connect to zentryc database
+\c zentryc
 
 -- Grant schema privileges
 GRANT ALL ON SCHEMA public TO read;
@@ -239,7 +239,7 @@ sudo systemctl restart postgresql
 
 ### 5.6 Verify Connection
 ```bash
-psql -h localhost -U read -d netlogs -c "SELECT 1;"
+psql -h localhost -U read -d zentryc -c "SELECT 1;"
 # Enter password: Read@123
 ```
 
@@ -362,19 +362,19 @@ clickhouse-client --password password -q "SELECT 'ClickHouse is working!' AS sta
 sudo su - net
 
 # Create application directory
-mkdir -p /home/net/net-logs
-cd /home/net/net-logs
+mkdir -p /home/net/zentryc
+cd /home/net/zentryc
 
 # If copying from another server:
-# scp -r user@source-server:/home/net/net-logs/* /home/net/net-logs/
+# scp -r user@source-server:/home/net/zentryc/* /home/net/zentryc/
 
 # Or clone from git:
-# git clone https://github.com/your-org/netlogs.git .
+# git clone https://github.com/your-org/zentryc.git .
 ```
 
 ### 7.2 Create Python Virtual Environment
 ```bash
-cd /home/net/net-logs
+cd /home/net/zentryc
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -422,7 +422,7 @@ gunicorn>=21.2.0
 
 ### 7.4 Create Environment Configuration
 ```bash
-cat > /home/net/net-logs/.env << 'EOF'
+cat > /home/net/zentryc/.env << 'EOF'
 # Application Settings
 DEBUG=False
 SECRET_KEY=your-secure-random-key-change-this-in-production
@@ -431,7 +431,7 @@ ALLOWED_HOSTS=*
 # PostgreSQL Database
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_DB=netlogs
+POSTGRES_DB=zentryc
 POSTGRES_USER=read
 POSTGRES_PASSWORD=Read@123
 
@@ -453,22 +453,22 @@ SYSLOG_METRICS_INTERVAL=30
 
 # Logging
 LOG_LEVEL=INFO
-LOG_FILE=logs/netlogs.log
+LOG_FILE=logs/zentryc.log
 EOF
 
 # Secure the .env file
-chmod 600 /home/net/net-logs/.env
+chmod 600 /home/net/zentryc/.env
 ```
 
 ### 7.5 Create Log Directory
 ```bash
-mkdir -p /home/net/net-logs/logs
-chmod 755 /home/net/net-logs/logs
+mkdir -p /home/net/zentryc/logs
+chmod 755 /home/net/zentryc/logs
 ```
 
 ### 7.6 Initialize PostgreSQL Schema
 ```bash
-cd /home/net/net-logs
+cd /home/net/zentryc
 source venv/bin/activate
 
 # Run Python to create tables
@@ -483,7 +483,7 @@ EOF
 
 ### 7.7 Verify ClickHouse Table
 ```bash
-cd /home/net/net-logs
+cd /home/net/zentryc
 source venv/bin/activate
 
 python3 << 'EOF'
@@ -497,7 +497,7 @@ EOF
 ### 7.8 Test Application Startup
 ```bash
 # Test FastAPI
-cd /home/net/net-logs
+cd /home/net/zentryc
 source venv/bin/activate
 python run_fastapi.py --port 8001 &
 sleep 5
@@ -506,7 +506,7 @@ kill %1
 
 # Test Syslog Collector (requires root for port 514)
 exit  # Exit net user
-sudo /home/net/net-logs/venv/bin/python /home/net/net-logs/run_syslog.py &
+sudo /home/net/zentryc/venv/bin/python /home/net/zentryc/run_syslog.py &
 sleep 5
 sudo kill %1
 ```
@@ -522,7 +522,7 @@ sudo apt install -y nginx
 
 ### 8.2 Create Nginx Configuration
 ```bash
-sudo nano /etc/nginx/sites-available/netlogs
+sudo nano /etc/nginx/sites-available/zentryc
 ```
 
 Add the following content:
@@ -550,7 +550,7 @@ server {
     }
 
     location /static/ {
-        alias /home/net/net-logs/fastapi_app/static/;
+        alias /home/net/zentryc/fastapi_app/static/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
@@ -564,7 +564,7 @@ server {
 
 ### 8.3 Enable Site
 ```bash
-sudo ln -s /etc/nginx/sites-available/netlogs /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/zentryc /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 ```
 
@@ -581,14 +581,14 @@ sudo systemctl enable nginx
 
 ### 9.1 Create Syslog Collector Service
 ```bash
-sudo nano /etc/systemd/system/netlogs-syslog.service
+sudo nano /etc/systemd/system/zentryc-syslog.service
 ```
 
 Add the following content:
 ```ini
 [Unit]
-Description=NetLogs High-Performance Syslog Collector
-Documentation=https://github.com/your-org/netlogs
+Description=Zentryc High-Performance Syslog Collector
+Documentation=https://github.com/your-org/zentryc
 After=network.target postgresql.service clickhouse-server.service
 Wants=postgresql.service clickhouse-server.service
 
@@ -596,12 +596,12 @@ Wants=postgresql.service clickhouse-server.service
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/home/net/net-logs
-Environment="PATH=/home/net/net-logs/venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/home/net/zentryc
+Environment="PATH=/home/net/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 
 # High-performance syslog collector with tuned parameters
-ExecStart=/home/net/net-logs/venv/bin/python run_syslog.py \
+ExecStart=/home/net/zentryc/venv/bin/python run_syslog.py \
     --batch-size=5000 \
     --flush-interval=2.0 \
     --cache-ttl=60 \
@@ -623,7 +623,7 @@ LimitNPROC=4096
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=netlogs-syslog
+SyslogIdentifier=zentryc-syslog
 
 [Install]
 WantedBy=multi-user.target
@@ -631,14 +631,14 @@ WantedBy=multi-user.target
 
 ### 9.2 Create Web Application Service
 ```bash
-sudo nano /etc/systemd/system/netlogs-web.service
+sudo nano /etc/systemd/system/zentryc-web.service
 ```
 
 Add the following content:
 ```ini
 [Unit]
-Description=NetLogs Web Application (Gunicorn)
-Documentation=https://github.com/your-org/netlogs
+Description=Zentryc Web Application (Gunicorn)
+Documentation=https://github.com/your-org/zentryc
 After=network.target postgresql.service
 Wants=postgresql.service
 
@@ -646,11 +646,11 @@ Wants=postgresql.service
 Type=notify
 User=net
 Group=net
-WorkingDirectory=/home/net/net-logs
-Environment="PATH=/home/net/net-logs/venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/home/net/zentryc
+Environment="PATH=/home/net/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Gunicorn with optimal settings for production
-ExecStart=/home/net/net-logs/venv/bin/gunicorn fastapi_app.main:app \
+ExecStart=/home/net/zentryc/venv/bin/gunicorn fastapi_app.main:app \
     --bind 0.0.0.0:8001 \
     --workers 4 \
     --worker-class uvicorn.workers.UvicornWorker \
@@ -676,7 +676,7 @@ LimitNOFILE=65536
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=netlogs-web
+SyslogIdentifier=zentryc-web
 
 [Install]
 WantedBy=multi-user.target
@@ -688,16 +688,16 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # Enable services to start on boot
-sudo systemctl enable netlogs-syslog
-sudo systemctl enable netlogs-web
+sudo systemctl enable zentryc-syslog
+sudo systemctl enable zentryc-web
 
 # Start services
-sudo systemctl start netlogs-syslog
-sudo systemctl start netlogs-web
+sudo systemctl start zentryc-syslog
+sudo systemctl start zentryc-web
 
 # Check status
-sudo systemctl status netlogs-syslog
-sudo systemctl status netlogs-web
+sudo systemctl status zentryc-syslog
+sudo systemctl status zentryc-web
 ```
 
 ---
@@ -750,7 +750,7 @@ udp    0.0.0.0:514      LISTEN   python
 # Enable syslog logging
 config log syslogd setting
     set status enable
-    set server "YOUR_NETLOGS_SERVER_IP"
+    set server "YOUR_ZENTRYC_SERVER_IP"
     set port 514
     set facility local7
     set format default
@@ -770,7 +770,7 @@ end
 
 ```
 # Via CLI
-set deviceconfig system log-settings syslog YOUR_SYSLOG_PROFILE server YOUR_NETLOGS_SERVER_IP
+set deviceconfig system log-settings syslog YOUR_SYSLOG_PROFILE server YOUR_ZENTRYC_SERVER_IP
 set deviceconfig system log-settings syslog YOUR_SYSLOG_PROFILE transport UDP
 set deviceconfig system log-settings syslog YOUR_SYSLOG_PROFILE port 514
 set deviceconfig system log-settings syslog YOUR_SYSLOG_PROFILE format BSD
@@ -782,7 +782,7 @@ set shared log-settings profiles YOUR_LOG_PROFILE match-list traffic send-to-sys
 ### 11.3 Generic Syslog Device
 
 Configure your device to send syslog to:
-- **Server:** YOUR_NETLOGS_SERVER_IP
+- **Server:** YOUR_ZENTRYC_SERVER_IP
 - **Port:** 514
 - **Protocol:** UDP
 - **Format:** RFC 3164 or RFC 5424
@@ -794,11 +794,11 @@ Configure your device to send syslog to:
 ### 12.1 Service Status Checks
 ```bash
 # Check all services
-sudo systemctl status netlogs-syslog netlogs-web nginx postgresql clickhouse-server
+sudo systemctl status zentryc-syslog zentryc-web nginx postgresql clickhouse-server
 
 # View recent logs
-sudo journalctl -u netlogs-syslog -n 50 --no-pager
-sudo journalctl -u netlogs-web -n 50 --no-pager
+sudo journalctl -u zentryc-syslog -n 50 --no-pager
+sudo journalctl -u zentryc-web -n 50 --no-pager
 ```
 
 ### 12.2 Test Syslog Reception
@@ -807,7 +807,7 @@ sudo journalctl -u netlogs-web -n 50 --no-pager
 echo "<134>Dec 09 12:00:00 test-device message: Test log from $(hostname)" | nc -u -w1 localhost 514
 
 # Check collector logs
-sudo journalctl -u netlogs-syslog -n 10 --no-pager
+sudo journalctl -u zentryc-syslog -n 10 --no-pager
 ```
 
 ### 12.3 Test Web Interface
@@ -822,7 +822,7 @@ curl -I http://localhost/
 ### 12.4 Test Database Connections
 ```bash
 # PostgreSQL
-psql -h localhost -U read -d netlogs -c "SELECT COUNT(*) FROM devices_device;"
+psql -h localhost -U read -d zentryc -c "SELECT COUNT(*) FROM devices_device;"
 
 # ClickHouse
 clickhouse-client --password password -q "SELECT COUNT(*) FROM syslogs;"
@@ -844,24 +844,24 @@ clickhouse-client --password password -q "SELECT COUNT(*) FROM syslogs;"
 **Check Service Health:**
 ```bash
 # Quick status check
-sudo systemctl is-active netlogs-syslog netlogs-web nginx postgresql clickhouse-server
+sudo systemctl is-active zentryc-syslog zentryc-web nginx postgresql clickhouse-server
 ```
 
 **Monitor Log Ingestion Rate:**
 ```bash
-sudo journalctl -u netlogs-syslog -f | grep METRICS
+sudo journalctl -u zentryc-syslog -f | grep METRICS
 ```
 
 ### 13.2 Log Rotation
 
 Create logrotate configuration:
 ```bash
-sudo nano /etc/logrotate.d/netlogs
+sudo nano /etc/logrotate.d/zentryc
 ```
 
 Add:
 ```
-/home/net/net-logs/logs/*.log {
+/home/net/zentryc/logs/*.log {
     daily
     rotate 7
     compress
@@ -870,7 +870,7 @@ Add:
     notifempty
     create 0644 net net
     postrotate
-        systemctl reload netlogs-web > /dev/null 2>&1 || true
+        systemctl reload zentryc-web > /dev/null 2>&1 || true
     endscript
 }
 ```
@@ -880,10 +880,10 @@ Add:
 **Backup PostgreSQL:**
 ```bash
 # Full backup
-pg_dump -h localhost -U read -d netlogs > /backup/netlogs_pg_$(date +%Y%m%d).sql
+pg_dump -h localhost -U read -d zentryc > /backup/zentryc_pg_$(date +%Y%m%d).sql
 
 # Automated daily backup (add to crontab)
-0 2 * * * pg_dump -h localhost -U read -d netlogs | gzip > /backup/netlogs_pg_$(date +\%Y\%m\%d).sql.gz
+0 2 * * * pg_dump -h localhost -U read -d zentryc | gzip > /backup/zentryc_pg_$(date +\%Y\%m\%d).sql.gz
 ```
 
 **Backup ClickHouse:**
@@ -899,7 +899,7 @@ clickhouse-client --password password -q "BACKUP TABLE syslogs TO Disk('backups'
 
 Run retention cleanup script:
 ```bash
-cd /home/net/net-logs
+cd /home/net/zentryc
 source venv/bin/activate
 python cleanup_logs.py --execute
 ```
@@ -907,7 +907,7 @@ python cleanup_logs.py --execute
 Add to crontab for automatic cleanup:
 ```bash
 # Run daily at 3 AM
-0 3 * * * cd /home/net/net-logs && ./venv/bin/python cleanup_logs.py --execute >> /home/net/net-logs/logs/cleanup.log 2>&1
+0 3 * * * cd /home/net/zentryc && ./venv/bin/python cleanup_logs.py --execute >> /home/net/zentryc/logs/cleanup.log 2>&1
 ```
 
 ### 13.5 Performance Monitoring
@@ -949,7 +949,7 @@ sudo iptables -L -n | grep 514
 **Test from firewall:**
 ```bash
 # From the firewall device
-logger -n YOUR_NETLOGS_SERVER_IP -P 514 "Test message"
+logger -n YOUR_ZENTRYC_SERVER_IP -P 514 "Test message"
 ```
 
 ### 14.2 Web Interface Not Loading
@@ -963,8 +963,8 @@ sudo journalctl -u nginx -n 50
 
 **Check FastAPI:**
 ```bash
-sudo systemctl status netlogs-web
-sudo journalctl -u netlogs-web -n 50
+sudo systemctl status zentryc-web
+sudo journalctl -u zentryc-web -n 50
 curl http://127.0.0.1:8001/api/health
 ```
 
@@ -973,7 +973,7 @@ curl http://127.0.0.1:8001/api/health
 **PostgreSQL:**
 ```bash
 sudo systemctl status postgresql
-psql -h localhost -U read -d netlogs -c "SELECT 1;"
+psql -h localhost -U read -d zentryc -c "SELECT 1;"
 ```
 
 **ClickHouse:**
@@ -1006,14 +1006,14 @@ clickhouse-client --password password -q "SELECT * FROM system.query_log WHERE q
 
 **Restart all services:**
 ```bash
-sudo systemctl restart netlogs-syslog netlogs-web nginx
+sudo systemctl restart zentryc-syslog zentryc-web nginx
 ```
 
 **Full system restart:**
 ```bash
 sudo systemctl restart postgresql clickhouse-server
 sleep 10
-sudo systemctl restart netlogs-syslog netlogs-web nginx
+sudo systemctl restart zentryc-syslog zentryc-web nginx
 ```
 
 ---
@@ -1022,14 +1022,14 @@ sudo systemctl restart netlogs-syslog netlogs-web nginx
 
 ### 15.1 Directory Structure
 ```
-/home/net/net-logs/
+/home/net/zentryc/
 ├── .env                          # Environment configuration
 ├── run_fastapi.py                # FastAPI launcher
 ├── run_syslog.py                 # Syslog collector launcher
 ├── cleanup_logs.py               # Retention cleanup script
 ├── venv/                         # Python virtual environment
 ├── logs/                         # Application logs
-│   └── netlogs.log
+│   └── zentryc.log
 ├── fastapi_app/
 │   ├── main.py                   # FastAPI application
 │   ├── requirements.txt          # Python dependencies
@@ -1055,24 +1055,24 @@ sudo systemctl restart netlogs-syslog netlogs-web nginx
 │   └── templates/                # Jinja2 HTML templates
 └── deploy/
     ├── install.sh                # Deployment script
-    ├── netlogs-syslog.service    # Systemd service
-    └── netlogs-web.service       # Systemd service
+    ├── zentryc-syslog.service    # Systemd service
+    └── zentryc-web.service       # Systemd service
 ```
 
 ### 15.2 Quick Deployment Script
 
-Create `/home/net/net-logs/deploy/quick-setup.sh`:
+Create `/home/net/zentryc/deploy/quick-setup.sh`:
 ```bash
 #!/bin/bash
 #
-# NetLogs Quick Setup Script
+# Zentryc Quick Setup Script
 # Run as root: sudo bash quick-setup.sh
 #
 
 set -e
 
 echo "=========================================="
-echo "NetLogs Quick Setup"
+echo "Zentryc Quick Setup"
 echo "=========================================="
 
 # Check if running as root
@@ -1081,12 +1081,12 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-PROJECT_DIR="/home/net/net-logs"
+PROJECT_DIR="/home/net/zentryc"
 
 # Install systemd services
 echo "[1/4] Installing systemd services..."
-cp $PROJECT_DIR/deploy/netlogs-syslog.service /etc/systemd/system/
-cp $PROJECT_DIR/deploy/netlogs-web.service /etc/systemd/system/
+cp $PROJECT_DIR/deploy/zentryc-syslog.service /etc/systemd/system/
+cp $PROJECT_DIR/deploy/zentryc-web.service /etc/systemd/system/
 
 # Reload systemd
 echo "[2/4] Reloading systemd..."
@@ -1094,12 +1094,12 @@ systemctl daemon-reload
 
 # Enable services
 echo "[3/4] Enabling services..."
-systemctl enable netlogs-syslog netlogs-web
+systemctl enable zentryc-syslog zentryc-web
 
 # Start services
 echo "[4/4] Starting services..."
-systemctl start netlogs-syslog
-systemctl start netlogs-web
+systemctl start zentryc-syslog
+systemctl start zentryc-web
 
 echo ""
 echo "=========================================="
@@ -1107,35 +1107,35 @@ echo "Setup Complete!"
 echo "=========================================="
 echo ""
 echo "Services status:"
-echo "  Syslog Collector: $(systemctl is-active netlogs-syslog)"
-echo "  Web Application:  $(systemctl is-active netlogs-web)"
+echo "  Syslog Collector: $(systemctl is-active zentryc-syslog)"
+echo "  Web Application:  $(systemctl is-active zentryc-web)"
 echo ""
 echo "Web Interface: http://$(hostname -I | awk '{print $1}')/"
 echo ""
 echo "Useful commands:"
-echo "  sudo systemctl status netlogs-syslog"
-echo "  sudo systemctl status netlogs-web"
-echo "  sudo journalctl -fu netlogs-syslog"
-echo "  sudo journalctl -fu netlogs-web"
+echo "  sudo systemctl status zentryc-syslog"
+echo "  sudo systemctl status zentryc-web"
+echo "  sudo journalctl -fu zentryc-syslog"
+echo "  sudo journalctl -fu zentryc-web"
 echo ""
 ```
 
 ### 15.3 Health Check Script
 
-Create `/home/net/net-logs/healthcheck.sh`:
+Create `/home/net/zentryc/healthcheck.sh`:
 ```bash
 #!/bin/bash
 #
-# NetLogs Health Check Script
+# Zentryc Health Check Script
 #
 
-echo "NetLogs Health Check"
+echo "Zentryc Health Check"
 echo "===================="
 echo ""
 
 # Check services
 echo "Services:"
-for service in netlogs-syslog netlogs-web nginx postgresql clickhouse-server; do
+for service in zentryc-syslog zentryc-web nginx postgresql clickhouse-server; do
     status=$(systemctl is-active $service 2>/dev/null || echo "not-found")
     if [ "$status" = "active" ]; then
         echo "  ✓ $service: $status"
@@ -1173,7 +1173,7 @@ echo ""
 
 # Database stats
 echo "Database Stats:"
-pg_count=$(psql -h localhost -U read -d netlogs -t -c "SELECT COUNT(*) FROM devices_device;" 2>/dev/null | tr -d ' ')
+pg_count=$(psql -h localhost -U read -d zentryc -t -c "SELECT COUNT(*) FROM devices_device;" 2>/dev/null | tr -d ' ')
 ch_count=$(clickhouse-client --password password -q "SELECT COUNT(*) FROM syslogs" 2>/dev/null)
 echo "  PostgreSQL devices: ${pg_count:-error}"
 echo "  ClickHouse logs: ${ch_count:-error}"
@@ -1186,7 +1186,7 @@ echo "Health check complete."
 
 ## Summary
 
-This guide covers the complete A-to-Z setup of the NetLogs SOAR/SIEM platform. After following all steps, you will have:
+This guide covers the complete A-to-Z setup of the Zentryc SOAR/SIEM platform. After following all steps, you will have:
 
 1. **Ubuntu server** with optimized system settings
 2. **PostgreSQL** database for device management
@@ -1200,15 +1200,15 @@ This guide covers the complete A-to-Z setup of the NetLogs SOAR/SIEM platform. A
 
 ```bash
 # Start/Stop/Restart services
-sudo systemctl start|stop|restart netlogs-syslog
-sudo systemctl start|stop|restart netlogs-web
+sudo systemctl start|stop|restart zentryc-syslog
+sudo systemctl start|stop|restart zentryc-web
 
 # View logs
-sudo journalctl -fu netlogs-syslog
-sudo journalctl -fu netlogs-web
+sudo journalctl -fu zentryc-syslog
+sudo journalctl -fu zentryc-web
 
 # Check status
-sudo systemctl status netlogs-syslog netlogs-web
+sudo systemctl status zentryc-syslog zentryc-web
 
 # Health check
 curl http://localhost/api/health

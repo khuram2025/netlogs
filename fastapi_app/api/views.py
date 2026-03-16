@@ -1950,11 +1950,11 @@ async def run_system_cleanup(request: Request):
     try:
         # Run cleanup script
         result = subprocess.run(
-            ['/home/net/net-logs/venv/bin/python', '-m', 'fastapi_app.cli.disk_cleanup', '--threshold', '90'],
+            ['/home/net/zentryc/venv/bin/python', '-m', 'fastapi_app.cli.disk_cleanup', '--threshold', '90'],
             capture_output=True,
             text=True,
             timeout=60,
-            cwd='/home/net/net-logs'
+            cwd='/home/net/zentryc'
         )
 
         return JSONResponse({
@@ -2449,7 +2449,7 @@ async def audit_log_export(
 
 
 # ============================================================
-# NQL (NetLogs Query Language) API
+# NQL (Zentryc Query Language) API
 # ============================================================
 
 @router.post("/api/nql/validate", dependencies=[Depends(require_min_role("VIEWER"))])

@@ -26,7 +26,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/home/net/net-logs/logs/disk_cleanup.log', mode='a')
+        logging.FileHandler('/home/net/zentryc/logs/disk_cleanup.log', mode='a')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ import os
 from pathlib import Path
 
 # Try to load .env file
-env_path = Path('/home/net/net-logs/.env')
+env_path = Path('/home/net/zentryc/.env')
 if env_path.exists():
     with open(env_path) as f:
         for line in f:

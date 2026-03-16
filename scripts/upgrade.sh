@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# NetLogs Upgrade Script
+# Zentryc Upgrade Script
 # Performs a safe upgrade with pre-flight checks, auto-backup, and rollback.
 #
 # Usage:
@@ -57,7 +57,7 @@ get_version() {
 CURRENT_VERSION=$(get_version)
 
 echo "==========================================="
-echo "   NetLogs Upgrade Script"
+echo "   Zentryc Upgrade Script"
 echo "   Current Version: $CURRENT_VERSION"
 echo "==========================================="
 echo ""
@@ -116,7 +116,7 @@ else
     if [ -f "$SCRIPT_DIR/backup.sh" ]; then
         BACKUP_PATH="${BACKUP_PATH:-$PROJECT_DIR/backups}"
         if "$SCRIPT_DIR/backup.sh" "$BACKUP_PATH" >/dev/null 2>&1; then
-            LATEST_BACKUP=$(ls -t "$BACKUP_PATH"/netlogs-backup-*.tar.gz 2>/dev/null | head -1)
+            LATEST_BACKUP=$(ls -t "$BACKUP_PATH"/zentryc-backup-*.tar.gz 2>/dev/null | head -1)
             log "  Backup created: $(basename "$LATEST_BACKUP")"
         else
             error "Backup failed"

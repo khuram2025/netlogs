@@ -1,5 +1,5 @@
 #!/bin/bash
-# NetLogs Database Migration Script
+# Zentryc Database Migration Script
 # Usage: ./scripts/migrate.sh [command] [args]
 #
 # Commands:

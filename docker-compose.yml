@@ -6,20 +6,20 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-netlogs}
-      POSTGRES_USER: ${POSTGRES_USER:-netlogs}
+      POSTGRES_DB: ${POSTGRES_DB:-zentryc}
+      POSTGRES_USER: ${POSTGRES_USER:-zentryc}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMeNow!}
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netlogs} -d ${POSTGRES_DB:-netlogs}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zentryc} -d ${POSTGRES_DB:-zentryc}"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
-      - netlogs-net
+      - zentryc-net
 
   # ---------------------------------------------------------------------------
   # ClickHouse - Log storage and analytics
@@ -44,14 +44,14 @@ services:
         soft: 262144
         hard: 262144
     networks:
-      - netlogs-net
+      - zentryc-net
 
   # ---------------------------------------------------------------------------
   # Web - FastAPI application (also handles DB init + seeding)
   # ---------------------------------------------------------------------------
   web:
     build: .
-    image: netlogs:latest
+    image: zentryc:latest
     restart: unless-stopped
     environment:
       - DEBUG=${DEBUG:-false}
@@ -60,8 +60,8 @@ services:
       - TZ=${TZ:-Asia/Riyadh}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-netlogs}
-      - POSTGRES_USER=${POSTGRES_USER:-netlogs}
+      - POSTGRES_DB=${POSTGRES_DB:-zentryc}
+      - POSTGRES_USER=${POSTGRES_USER:-zentryc}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
       - CLICKHOUSE_HOST=clickhouse
       - CLICKHOUSE_PORT=8123
@@ -71,10 +71,10 @@ services:
       - WORKERS=${WORKERS:-4}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
-      - LOG_FILE=logs/netlogs.log
+      - LOG_FILE=logs/zentryc.log
     volumes:
-      - netlogs-logs:/app/logs
-      - netlogs-credentials:/app/data/credentials
+      - zentryc-logs:/app/logs
+      - zentryc-credentials:/app/data/credentials
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/api/health/simple"]
       interval: 10s
@@ -87,20 +87,20 @@ services:
       clickhouse:
         condition: service_healthy
     networks:
-      - netlogs-net
+      - zentryc-net
 
   # ---------------------------------------------------------------------------
   # Syslog - UDP collector (same image, different mode)
   # ---------------------------------------------------------------------------
   syslog:
-    image: netlogs:latest
+    image: zentryc:latest
     restart: unless-stopped
     command: ["syslog"]
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-netlogs}
-      - POSTGRES_USER=${POSTGRES_USER:-netlogs}
+      - POSTGRES_DB=${POSTGRES_DB:-zentryc}
+      - POSTGRES_USER=${POSTGRES_USER:-zentryc}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
       - CLICKHOUSE_HOST=clickhouse
       - CLICKHOUSE_PORT=8123
@@ -115,11 +115,11 @@ services:
       - SYSLOG_MAX_BUFFER=${SYSLOG_MAX_BUFFER:-100000}
       - SYSLOG_METRICS_INTERVAL=${SYSLOG_METRICS_INTERVAL:-30}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - LOG_FILE=logs/netlogs.log
+      - LOG_FILE=logs/zentryc.log
     ports:
       - "${SYSLOG_EXTERNAL_PORT:-514}:514/udp"
     volumes:
-      - netlogs-logs:/app/logs
+      - zentryc-logs:/app/logs
     cap_add:
       - NET_BIND_SERVICE
     healthcheck:
@@ -132,7 +132,7 @@ services:
       web:
         condition: service_healthy
     networks:
-      - netlogs-net
+      - zentryc-net
 
   # ---------------------------------------------------------------------------
   # Nginx - Reverse proxy
@@ -140,14 +140,14 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
-    entrypoint: ["/docker-entrypoint-netlogs.sh"]
+    entrypoint: ["/docker-entrypoint-zentryc.sh"]
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/nginx-entrypoint.sh:/docker-entrypoint-netlogs.sh:ro
-      - netlogs-certs:/etc/nginx/certs
+      - ./docker/nginx-entrypoint.sh:/docker-entrypoint-zentryc.sh:ro
+      - zentryc-certs:/etc/nginx/certs
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1/api/health"]
       interval: 10s
@@ -158,15 +158,15 @@ services:
       web:
         condition: service_healthy
     networks:
-      - netlogs-net
+      - zentryc-net
 
 volumes:
   postgres-data:
   clickhouse-data:
-  netlogs-logs:
-  netlogs-credentials:
-  netlogs-certs:
+  zentryc-logs:
+  zentryc-credentials:
+  zentryc-certs:
 
 networks:
-  netlogs-net:
+  zentryc-net:
     driver: bridge

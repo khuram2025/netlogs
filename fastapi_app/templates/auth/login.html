@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NetLogs — Authenticate</title>
+    <title>Zentryc — Authenticate</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -453,7 +453,7 @@
                         <path d="M9 12l2 2 4-4" opacity="0.7"/>
                     </svg>
                 </div>
-                <div class="brand-name">Net<span>Logs</span></div>
+                <div class="brand-name">Zen<span>tryc</span></div>
                 <div class="brand-sub">SOAR / SIEM Platform</div>
             </div>
 
@@ -542,7 +542,7 @@
 /* CSRF — auto-inject into forms */
 (function() {
     function getCsrfToken() {
-        var m = document.cookie.match(/netlogs_csrf=([^;]+)/);
+        var m = document.cookie.match(/zentryc_csrf=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : '';
     }
     document.addEventListener('DOMContentLoaded', function() {

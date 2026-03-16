@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
-CSRF_COOKIE_NAME = "netlogs_csrf"
+CSRF_COOKIE_NAME = "zentryc_csrf"
 CSRF_HEADER_NAME = "x-csrf-token"
 CSRF_FORM_FIELD = "csrf_token"
 CSRF_TOKEN_LENGTH = 32

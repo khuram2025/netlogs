@@ -1,0 +1,39 @@
+[Unit]
+Description=Zentryc SOAR/SIEM Web Application
+Documentation=https://github.com/your-org/zentryc
+After=network.target postgresql.service clickhouse-server.service
+Wants=postgresql.service clickhouse-server.service
+
+[Service]
+Type=simple
+User=zentryc
+Group=zentryc
+WorkingDirectory=/opt/zentryc
+EnvironmentFile=/opt/zentryc/.env
+Environment="PATH=/opt/zentryc/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/opt/zentryc/venv/bin/python /opt/zentryc/run_fastapi.py \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 4
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Resource limits
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zentryc-web
+
+[Install]
+WantedBy=multi-user.target

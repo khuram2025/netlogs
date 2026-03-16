@@ -45,7 +45,7 @@ async def summarize_alert(
         # Build comprehensive prompt
         prompt = _build_alert_prompt(alert_data, enrichment_data)
 
-        system_prompt = """You are a cybersecurity analyst assistant for NetLogs SOAR/SIEM platform.
+        system_prompt = """You are a cybersecurity analyst assistant for Zentryc SOAR/SIEM platform.
 Analyze security alerts and provide actionable insights in JSON format.
 
 You MUST respond with ONLY valid JSON (no markdown, no code blocks, no explanation).

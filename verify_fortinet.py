@@ -5,7 +5,7 @@ import django
 from datetime import datetime
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'netlogs.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zentryc.settings')
 django.setup()
 
 from devices.models import Device

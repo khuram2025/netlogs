@@ -1,1 +1,1 @@
-"""AI services for NetLogs."""
+"""AI services for Zentryc."""

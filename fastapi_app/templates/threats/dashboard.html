@@ -1,0 +1,2013 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    /* ================================================================
+       THREAT INTELLIGENCE DASHBOARD
+       ================================================================ */
+
+    /* Break out of the base .container max-width */
+    .container:has(.td-page) {
+        max-width: 100%;
+        padding: 0 1rem;
+        margin: 1rem auto;
+    }
+
+    .td-page {
+        --td-bg: #0f172a;
+        --td-card-bg: #1e293b;
+        --td-text: #e2e8f0;
+        --td-text-muted: #94a3b8;
+        --td-primary: #3b82f6;
+        --td-success: #22c55e;
+        --td-danger: #ef4444;
+        --td-warning: #f59e0b;
+        --td-border: #334155;
+        --td-input-bg: #020617;
+        font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+        width: 100%;
+    }
+
+    /* ================================================================
+       ANIMATIONS
+       ================================================================ */
+    @keyframes td-fadeInUp {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes td-countUp {
+        from { opacity: 0; transform: scale(0.5); }
+        to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes td-pulse-glow {
+        0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
+        50%      { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+    }
+    @keyframes td-borderGlow {
+        0%, 100% { border-left-color: rgba(59, 130, 246, 0.3); }
+        50%      { border-left-color: rgba(59, 130, 246, 0.8); }
+    }
+    @keyframes td-modalIn {
+        from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes td-overlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    @keyframes td-spin { to { transform: rotate(360deg); } }
+
+    .td-stagger-1 { animation-delay: 0.05s; }
+    .td-stagger-2 { animation-delay: 0.1s; }
+    .td-stagger-3 { animation-delay: 0.15s; }
+    .td-stagger-4 { animation-delay: 0.2s; }
+    .td-stagger-5 { animation-delay: 0.25s; }
+    .td-stagger-6 { animation-delay: 0.3s; }
+    .td-stagger-7 { animation-delay: 0.35s; }
+    .td-stagger-8 { animation-delay: 0.4s; }
+
+    /* ================================================================
+       PAGE HEADER
+       ================================================================ */
+    .td-page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        animation: td-fadeInUp 0.4s ease-out both;
+    }
+    .td-page-header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .td-page-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0;
+        background: linear-gradient(135deg, #ffffff 0%, #ef4444 50%, #f97316 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .td-page-subtitle {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: var(--td-text-muted);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .td-header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .td-time-select {
+        background: var(--td-input-bg);
+        border: 1px solid var(--td-border);
+        color: var(--td-text);
+        border-radius: 8px;
+        padding: 0.45rem 0.85rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color 0.2s ease;
+        appearance: auto;
+    }
+    .td-time-select:focus {
+        outline: none;
+        border-color: var(--td-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    .td-btn-refresh {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.45rem 1rem;
+        border-radius: 8px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--td-border);
+        background: rgba(255,255,255,0.03);
+        color: var(--td-text-muted);
+        transition: all 0.15s ease;
+    }
+    .td-btn-refresh:hover {
+        background: rgba(59,130,246,0.1);
+        border-color: rgba(59,130,246,0.3);
+        color: white;
+    }
+    .td-btn-refresh svg {
+        width: 14px; height: 14px;
+        stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .td-btn-refresh.td-spinning svg {
+        animation: td-spin 0.8s linear infinite;
+    }
+
+    /* ================================================================
+       HERO METRICS
+       ================================================================ */
+    .td-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 1.5rem;
+    }
+    @media (max-width: 1400px) { .td-metrics-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 768px) { .td-metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .td-metric-card {
+        background: linear-gradient(145deg, var(--td-card-bg) 0%, rgba(15,23,42,0.9) 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 12px;
+        padding: 1rem 0.8rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        animation: td-fadeInUp 0.5s ease-out both;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .td-metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+    .td-metric-card::before {
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0;
+        height: 3px;
+        border-radius: 12px 12px 0 0;
+    }
+    .td-metric-card::after {
+        content: '';
+        position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+        width: 40%; height: 1px; opacity: 0.4;
+    }
+    .td-m-total::before   { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+    .td-m-total::after    { background: linear-gradient(90deg, transparent, #3b82f6, transparent); }
+    .td-m-critical::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .td-m-critical::after  { background: linear-gradient(90deg, transparent, #ef4444, transparent); }
+    .td-m-high::before    { background: linear-gradient(90deg, #f97316, #fb923c); }
+    .td-m-high::after     { background: linear-gradient(90deg, transparent, #f97316, transparent); }
+    .td-m-medium::before  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .td-m-medium::after   { background: linear-gradient(90deg, transparent, #f59e0b, transparent); }
+    .td-m-low::before     { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .td-m-low::after      { background: linear-gradient(90deg, transparent, #3b82f6, transparent); }
+    .td-m-sources::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .td-m-sources::after  { background: linear-gradient(90deg, transparent, #8b5cf6, transparent); }
+    .td-m-threats::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+    .td-m-threats::after  { background: linear-gradient(90deg, transparent, #06b6d4, transparent); }
+    .td-m-url::before     { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .td-m-url::after      { background: linear-gradient(90deg, transparent, #22c55e, transparent); }
+
+    .td-m-critical.td-has-data { animation: td-fadeInUp 0.5s ease-out both, td-pulse-glow 2.5s ease-in-out infinite; }
+
+    .td-metric-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.65rem;
+        font-weight: 600;
+        color: white;
+        line-height: 1.1;
+        animation: td-countUp 0.6s ease-out both;
+    }
+    .td-m-total .td-metric-count    { color: #818cf8; }
+    .td-m-critical .td-metric-count { color: #f87171; }
+    .td-m-high .td-metric-count     { color: #fb923c; }
+    .td-m-medium .td-metric-count   { color: #fbbf24; }
+    .td-m-low .td-metric-count      { color: #60a5fa; }
+    .td-m-sources .td-metric-count  { color: #a78bfa; }
+    .td-m-threats .td-metric-count  { color: #22d3ee; }
+    .td-m-url .td-metric-count      { color: #4ade80; }
+
+    .td-metric-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.62rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--td-text-muted);
+        margin-top: 5px;
+    }
+
+    /* ================================================================
+       TABS + FILTER STRIP (combined row)
+       ================================================================ */
+    .td-controls {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1.25rem;
+        animation: td-fadeInUp 0.5s ease-out 0.15s both;
+    }
+    .td-tabs {
+        display: flex;
+        gap: 4px;
+        background: rgba(2,6,23,0.5);
+        padding: 4px;
+        border-radius: 10px;
+        border: 1px solid var(--td-border);
+        flex-shrink: 0;
+    }
+    .td-tab {
+        padding: 0.4rem 0.95rem;
+        border-radius: 7px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: var(--td-text-muted);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+        background: none;
+        white-space: nowrap;
+    }
+    .td-tab:hover { color: var(--td-text); background: rgba(59,130,246,0.08); }
+    .td-tab.active {
+        background: linear-gradient(135deg, #ef4444, #f97316);
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 2px 10px rgba(239,68,68,0.35);
+    }
+
+    /* ================================================================
+       FILTER BAR
+       ================================================================ */
+    .td-filters {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: linear-gradient(145deg, rgba(2,6,23,0.7) 0%, rgba(30,41,59,0.4) 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 10px;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+    }
+    .td-filter-icon {
+        display: flex; align-items: center;
+        color: var(--td-text-muted);
+    }
+    .td-filter-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .td-filter-select, .td-filter-input {
+        background: var(--td-input-bg);
+        border: 1px solid var(--td-border);
+        color: var(--td-text);
+        border-radius: 7px;
+        padding: 0.38rem 0.7rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 500;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .td-filter-select {
+        cursor: pointer;
+        min-width: 0;
+        flex: 0 1 auto;
+        appearance: auto;
+    }
+    .td-filter-input {
+        min-width: 120px;
+        flex: 1;
+    }
+    .td-filter-select:focus, .td-filter-input:focus {
+        outline: none;
+        border-color: var(--td-primary);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    .td-filter-select:hover, .td-filter-input:hover {
+        border-color: #475569;
+    }
+    .td-filter-btn {
+        padding: 0.38rem 0.85rem;
+        border-radius: 7px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: white;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .td-filter-btn:hover { box-shadow: 0 4px 15px rgba(59,130,246,0.4); transform: translateY(-1px); }
+    .td-filter-reset {
+        padding: 0.38rem 0.7rem;
+        border-radius: 7px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--td-border);
+        background: transparent;
+        color: var(--td-text-muted);
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .td-filter-reset:hover { border-color: #475569; color: var(--td-text); }
+
+    /* ================================================================
+       TABLE CARD
+       ================================================================ */
+    .td-table-wrapper {
+        background: linear-gradient(145deg, var(--td-card-bg) 0%, rgba(15,23,42,0.95) 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 14px;
+        overflow: hidden;
+        animation: td-fadeInUp 0.5s ease-out 0.25s both;
+    }
+    .td-table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid var(--td-border);
+    }
+    .td-table-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .td-table-title svg {
+        width: 16px; height: 16px;
+        stroke: #ef4444; fill: none; stroke-width: 2;
+    }
+    .td-table-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.63rem; font-weight: 600;
+        background: rgba(239,68,68,0.12);
+        color: #f87171;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(239,68,68,0.2);
+    }
+
+    .td-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .td-table thead th {
+        font-family: 'Outfit', sans-serif;
+        text-align: left;
+        padding: 0.6rem 0.85rem;
+        color: var(--td-text-muted);
+        font-weight: 600;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid var(--td-border);
+        background: rgba(2,6,23,0.3);
+        white-space: nowrap;
+    }
+    .td-table tbody td {
+        padding: 0.55rem 0.85rem;
+        border-bottom: 1px solid rgba(51,65,85,0.4);
+        font-size: 0.8rem;
+        vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .td-table-row {
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border-left: 3px solid transparent;
+    }
+    .td-table-row:hover {
+        background: rgba(59,130,246,0.04);
+        border-left-color: var(--td-primary);
+        animation: td-borderGlow 1.5s ease-in-out infinite;
+    }
+    .td-table-row:last-child td { border-bottom: none; }
+
+    /* Column widths for events table */
+    .td-col-time  { width: 13%; }
+    .td-col-sev   { width: 9%; }
+    .td-col-type  { width: 9%; }
+    .td-col-name  { width: 24%; }
+    .td-col-src   { width: 12%; }
+    .td-col-dst   { width: 12%; }
+    .td-col-act   { width: 8%; }
+    .td-col-app   { width: 8%; }
+    .td-col-rule  { width: 8%; }
+
+    /* Severity badges */
+    .td-sev {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 20px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .td-sev::before {
+        content: '';
+        width: 5px; height: 5px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .td-sev-critical { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+    .td-sev-critical::before { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    .td-sev-high { background: rgba(249,115,22,0.1); color: #fb923c; border: 1px solid rgba(249,115,22,0.25); }
+    .td-sev-high::before { background: #f97316; }
+    .td-sev-medium { background: rgba(245,158,11,0.1); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+    .td-sev-medium::before { background: #f59e0b; }
+    .td-sev-low { background: rgba(59,130,246,0.1); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+    .td-sev-low::before { background: #3b82f6; }
+    .td-sev-informational { background: rgba(148,163,184,0.06); color: #94a3b8; border: 1px solid rgba(148,163,184,0.12); }
+    .td-sev-informational::before { background: #94a3b8; }
+
+    /* Subtype badges */
+    .td-subtype {
+        display: inline-flex;
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .td-subtype-virus        { background: rgba(239,68,68,0.08); color: #f87171; }
+    .td-subtype-spyware      { background: rgba(168,85,247,0.08); color: #c084fc; }
+    .td-subtype-vulnerability { background: rgba(249,115,22,0.08); color: #fb923c; }
+    .td-subtype-url          { background: rgba(34,197,94,0.08); color: #4ade80; }
+    .td-subtype-wildfire     { background: rgba(6,182,212,0.08); color: #22d3ee; }
+    .td-subtype-flood        { background: rgba(239,68,68,0.08); color: #fca5a5; }
+    .td-subtype-scan         { background: rgba(245,158,11,0.08); color: #fde68a; }
+    .td-subtype-data         { background: rgba(59,130,246,0.08); color: #93c5fd; }
+    .td-subtype-file         { background: rgba(148,163,184,0.08); color: #cbd5e1; }
+
+    /* Action badges */
+    .td-action {
+        display: inline-flex;
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.68rem;
+        font-weight: 600;
+    }
+    .td-action-alert     { background: rgba(245,158,11,0.08); color: #fbbf24; }
+    .td-action-allow     { background: rgba(34,197,94,0.08); color: #4ade80; }
+    .td-action-sinkhole  { background: rgba(168,85,247,0.08); color: #c084fc; }
+    .td-action-deny, .td-action-drop, .td-action-block-url,
+    .td-action-reset-client, .td-action-reset-server, .td-action-reset-both {
+        background: rgba(239,68,68,0.08); color: #f87171;
+    }
+
+    .td-mono { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--td-text); }
+    .td-mono-muted { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--td-text-muted); }
+    .td-threat-name { color: white; font-weight: 500; }
+    .td-url-text { color: #4ade80; }
+
+    /* Empty state */
+    .td-empty { text-align: center; padding: 3rem 1rem; color: var(--td-text-muted); }
+    .td-empty-icon { width: 48px; height: 48px; margin: 0 auto 1rem; opacity: 0.3; }
+    .td-empty-icon svg { width: 100%; height: 100%; stroke: var(--td-text-muted); fill: none; stroke-width: 1.5; }
+    .td-empty-title { font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; color: var(--td-text); margin-bottom: 0.35rem; }
+    .td-empty-desc { font-size: 0.8rem; }
+
+    /* Pagination */
+    .td-pagination {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.65rem 1.25rem;
+        border-top: 1px solid var(--td-border);
+    }
+    .td-page-info { font-size: 0.73rem; color: var(--td-text-muted); font-family: 'JetBrains Mono', monospace; }
+    .td-page-btns { display: flex; gap: 6px; }
+    .td-page-btn {
+        padding: 0.3rem 0.75rem;
+        border-radius: 6px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.73rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--td-border);
+        background: rgba(255,255,255,0.03);
+        color: var(--td-text-muted);
+        transition: all 0.15s ease;
+    }
+    .td-page-btn:hover:not(:disabled) { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: white; }
+    .td-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ================================================================
+       MINI TABLE (Sources, Threats tabs)
+       ================================================================ */
+    .td-mini-table { width: 100%; border-collapse: collapse; }
+    .td-mini-table thead th {
+        font-family: 'Outfit', sans-serif;
+        text-align: left;
+        padding: 0.55rem 1.25rem;
+        color: var(--td-text-muted);
+        font-weight: 600;
+        font-size: 0.63rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid var(--td-border);
+        background: rgba(2,6,23,0.3);
+    }
+    .td-mini-table tbody td {
+        padding: 0.6rem 1.25rem;
+        border-bottom: 1px solid rgba(51,65,85,0.35);
+        font-size: 0.8rem;
+        vertical-align: middle;
+    }
+    .td-mini-table tbody tr { transition: background 0.15s ease; }
+    .td-mini-table tbody tr:hover { background: rgba(59,130,246,0.04); }
+    .td-mini-table tbody tr:last-child td { border-bottom: none; }
+
+    .td-panel-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .td-panel-title svg {
+        width: 16px; height: 16px;
+        stroke: var(--td-primary); fill: none; stroke-width: 2;
+    }
+
+    /* ================================================================
+       URL CATEGORIES — Visual Card Layout
+       ================================================================ */
+    .td-url-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.65rem;
+        padding: 1rem 1.25rem;
+    }
+    @media (max-width: 1200px) { .td-url-grid { grid-template-columns: 1fr; } }
+
+    .td-url-card {
+        background: linear-gradient(145deg, rgba(2,6,23,0.6) 0%, rgba(30,41,59,0.35) 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 10px;
+        padding: 0.85rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .td-url-card:hover {
+        border-color: rgba(59,130,246,0.4);
+        background: linear-gradient(145deg, rgba(2,6,23,0.8) 0%, rgba(59,130,246,0.06) 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .td-url-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.55rem;
+    }
+    .td-url-card-left {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex: 1;
+        min-width: 0;
+    }
+    .td-url-rank {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: var(--td-text-muted);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 6px;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .td-url-rank-top { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.25); color: #60a5fa; }
+    .td-url-cat-name {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .td-url-card-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+    .td-url-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1rem;
+        font-weight: 700;
+        color: white;
+    }
+    .td-url-drill {
+        color: var(--td-text-muted);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .td-url-card:hover .td-url-drill { opacity: 1; }
+    .td-url-drill svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* Progress bar */
+    .td-url-bar-wrap {
+        height: 6px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+    .td-url-bar {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        min-width: 2px;
+    }
+    .td-url-bar-alert { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .td-url-bar-block { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .td-url-bar-allow { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .td-url-bar-mixed { background: linear-gradient(90deg, #f59e0b 0%, #ef4444 50%, #f59e0b 100%); }
+
+    /* Stats row */
+    .td-url-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.68rem;
+        color: var(--td-text-muted);
+    }
+    .td-url-stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .td-url-stat-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .td-url-stat-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: var(--td-text);
+    }
+
+    /* ================================================================
+       URL CATEGORY DRILL-DOWN MODAL
+       ================================================================ */
+    .td-cat-modal-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.75);
+        backdrop-filter: blur(6px);
+        z-index: 1100;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 3vh;
+    }
+    .td-cat-modal-overlay.active {
+        display: flex;
+        animation: td-overlayIn 0.2s ease-out both;
+    }
+    .td-cat-modal {
+        background: linear-gradient(170deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 960px;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 60px -12px rgba(0,0,0,0.6);
+        animation: td-modalIn 0.3s ease-out both;
+    }
+    .td-cat-modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.1rem 1.5rem;
+        border-bottom: 1px solid var(--td-border);
+        background: rgba(2,6,23,0.4);
+        flex-shrink: 0;
+    }
+    .td-cat-modal-head-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+    .td-cat-icon {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .td-cat-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .td-cat-icon-alert { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+    .td-cat-icon-block { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+    .td-cat-icon-allow { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+    .td-cat-modal-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.05rem; font-weight: 700;
+        color: white; margin: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .td-cat-modal-sub {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        color: var(--td-text-muted);
+    }
+    .td-cat-modal-body { padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1; }
+
+    /* Summary strip */
+    .td-cat-summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.65rem;
+        margin-bottom: 1.25rem;
+    }
+    .td-cat-stat-card {
+        background: rgba(2,6,23,0.5);
+        border: 1px solid rgba(51,65,85,0.5);
+        border-radius: 10px;
+        padding: 0.75rem;
+        text-align: center;
+    }
+    .td-cat-stat-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: white;
+    }
+    .td-cat-stat-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--td-text-muted);
+        margin-top: 2px;
+    }
+
+    /* Action pill strip */
+    .td-cat-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+    }
+    .td-cat-action-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+    .td-cat-action-pill .td-cap-count {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+    }
+    .td-cap-alert { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); color: #fbbf24; }
+    .td-cap-block-url, .td-cap-deny, .td-cap-drop { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: #f87171; }
+    .td-cap-allow { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2); color: #4ade80; }
+    .td-cap-sinkhole { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.2); color: #c084fc; }
+
+    /* Drill-down section panels */
+    .td-cat-panels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+    @media (max-width: 768px) { .td-cat-panels { grid-template-columns: 1fr; } }
+
+    .td-cat-panel {
+        background: rgba(2,6,23,0.4);
+        border: 1px solid rgba(51,65,85,0.4);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .td-cat-panel-full { grid-column: 1 / -1; }
+    .td-cat-panel-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.6rem 0.85rem;
+        background: rgba(2,6,23,0.5);
+        border-bottom: 1px solid rgba(51,65,85,0.4);
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--td-text);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .td-cat-panel-head svg { width: 13px; height: 13px; stroke: var(--td-primary); fill: none; stroke-width: 2; }
+
+    .td-cat-list { padding: 0; margin: 0; list-style: none; }
+    .td-cat-list-item {
+        display: flex;
+        align-items: center;
+        padding: 0.45rem 0.85rem;
+        border-bottom: 1px solid rgba(51,65,85,0.25);
+        font-size: 0.78rem;
+        gap: 0.5rem;
+        transition: background 0.15s ease;
+    }
+    .td-cat-list-item:hover { background: rgba(59,130,246,0.04); }
+    .td-cat-list-item:last-child { border-bottom: none; }
+    .td-cat-item-rank {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.6rem;
+        color: var(--td-text-muted);
+        width: 18px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+    .td-cat-item-main {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .td-cat-item-url { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #4ade80; }
+    .td-cat-item-ip { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--td-text); }
+    .td-cat-item-user { font-size: 0.68rem; color: var(--td-text-muted); margin-left: 4px; }
+    .td-cat-item-meta {
+        display: flex;
+        gap: 0.65rem;
+        flex-shrink: 0;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: var(--td-text-muted);
+    }
+    .td-cat-item-meta strong { color: var(--td-text); font-weight: 600; }
+
+    /* Mini bar in list items */
+    .td-cat-minibar-wrap {
+        width: 60px;
+        height: 4px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 2px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    .td-cat-minibar {
+        height: 100%;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--td-primary), #818cf8);
+        transition: width 0.4s ease;
+    }
+
+    /* Timeline mini chart */
+    .td-cat-timeline {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        padding: 0.75rem 0.85rem;
+        height: 80px;
+    }
+    .td-cat-tl-bar {
+        flex: 1;
+        min-width: 3px;
+        border-radius: 2px 2px 0 0;
+        transition: height 0.4s ease;
+        position: relative;
+    }
+    .td-cat-tl-bar-total { background: rgba(59,130,246,0.5); }
+    .td-cat-tl-bar-blocked {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: rgba(239,68,68,0.7);
+        border-radius: 0 0 2px 2px;
+    }
+    .td-cat-tl-labels {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.25rem 0.85rem 0.5rem;
+        font-size: 0.58rem;
+        color: var(--td-text-muted);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .td-cat-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+        color: var(--td-text-muted);
+        font-size: 0.85rem;
+        gap: 0.5rem;
+    }
+    .td-cat-loading svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; animation: td-spin 0.8s linear infinite; }
+
+    /* ================================================================
+       DETAIL MODAL
+       ================================================================ */
+    .td-modal-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 4vh;
+    }
+    .td-modal-overlay.active {
+        display: flex;
+        animation: td-overlayIn 0.2s ease-out both;
+    }
+    .td-modal {
+        background: linear-gradient(170deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid var(--td-border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 840px;
+        max-height: 88vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 60px -12px rgba(0,0,0,0.6), 0 0 40px rgba(239,68,68,0.06);
+        animation: td-modalIn 0.3s ease-out both;
+    }
+    .td-modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.75rem;
+        border-bottom: 1px solid var(--td-border);
+        background: rgba(2,6,23,0.4);
+        flex-shrink: 0;
+    }
+    .td-modal-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.05rem; font-weight: 700;
+        color: white; margin: 0;
+        max-width: 85%;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .td-modal-close {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        border: 1px solid var(--td-border);
+        background: rgba(255,255,255,0.03);
+        color: var(--td-text-muted);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+    }
+    .td-modal-close:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
+    .td-modal-close svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .td-modal-body { padding: 1.5rem 1.75rem; overflow-y: auto; flex: 1; }
+
+    .td-detail-section { margin-bottom: 1.25rem; }
+    .td-detail-section:last-child { margin-bottom: 0; }
+    .td-detail-section h4 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.75rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--td-text);
+        margin: 0 0 0.65rem 0;
+        padding: 0.45rem 0.75rem;
+        border-radius: 6px;
+        background: rgba(239,68,68,0.06);
+        border-left: 3px solid #ef4444;
+    }
+    .td-dtable { width: 100%; border-collapse: collapse; font-size: 0.8rem; background: rgba(2,6,23,0.3); border-radius: 8px; overflow: hidden; border: 1px solid rgba(51,65,85,0.4); }
+    .td-dtable th {
+        text-align: left; padding: 0.4rem 0.65rem;
+        color: var(--td-text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600; font-size: 0.65rem;
+        text-transform: uppercase; letter-spacing: 0.05em;
+        background: rgba(2,6,23,0.5);
+        width: 140px; vertical-align: top;
+        border-bottom: 1px solid rgba(51,65,85,0.3);
+    }
+    .td-dtable td {
+        padding: 0.4rem 0.65rem;
+        font-size: 0.8rem; color: var(--td-text);
+        word-break: break-all;
+        border-bottom: 1px solid rgba(51,65,85,0.3);
+    }
+    .td-dtable tr:last-child th, .td-dtable tr:last-child td { border-bottom: none; }
+
+    .td-modal-foot {
+        display: flex; justify-content: flex-end; gap: 0.5rem;
+        padding: 1rem 1.75rem;
+        border-top: 1px solid var(--td-border);
+        background: rgba(2,6,23,0.4);
+        flex-shrink: 0;
+    }
+    .td-btn-outline {
+        padding: 0.45rem 1.1rem;
+        border-radius: 8px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem; font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--td-border);
+        background: transparent; color: var(--td-text-muted);
+        transition: all 0.15s ease;
+        text-decoration: none;
+    }
+    .td-btn-outline:hover { border-color: #475569; color: white; }
+    .td-btn-primary {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 0.45rem 1.1rem;
+        border-radius: 8px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; border: none;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: white; text-decoration: none;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+    }
+    .td-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(59,130,246,0.4); }
+    .td-btn-primary svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+</style>
+{% endblock %}
+
+{% block page_title %}Threat Dashboard{% endblock %}
+
+{% block content %}
+<div class="td-page">
+    <!-- Page Header -->
+    <div class="td-page-header">
+        <div class="td-page-header-left">
+            <h1 class="td-page-title">Threat Intelligence</h1>
+            <span class="td-page-subtitle">Palo Alto NGFW &mdash; Threat & URL Filtering Analytics</span>
+        </div>
+        <div class="td-header-actions">
+            <select class="td-time-select" id="time-range" onchange="refreshAll()">
+                <option value="1">Last 1 hour</option>
+                <option value="6">Last 6 hours</option>
+                <option value="24" selected>Last 24 hours</option>
+                <option value="72">Last 3 days</option>
+                <option value="168">Last 7 days</option>
+                <option value="720">Last 30 days</option>
+            </select>
+            <button class="td-btn-refresh" id="btn-refresh" onclick="refreshAll()">
+                <svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Hero Metrics -->
+    <div class="td-metrics-grid">
+        <div class="td-metric-card td-m-total td-stagger-1">
+            <div class="td-metric-count" id="m-total">-</div>
+            <div class="td-metric-label">Total</div>
+        </div>
+        <div class="td-metric-card td-m-critical td-stagger-2" id="m-critical-card">
+            <div class="td-metric-count" id="m-critical">-</div>
+            <div class="td-metric-label">Critical</div>
+        </div>
+        <div class="td-metric-card td-m-high td-stagger-3">
+            <div class="td-metric-count" id="m-high">-</div>
+            <div class="td-metric-label">High</div>
+        </div>
+        <div class="td-metric-card td-m-medium td-stagger-4">
+            <div class="td-metric-count" id="m-medium">-</div>
+            <div class="td-metric-label">Medium</div>
+        </div>
+        <div class="td-metric-card td-m-low td-stagger-5">
+            <div class="td-metric-count" id="m-low">-</div>
+            <div class="td-metric-label">Low</div>
+        </div>
+        <div class="td-metric-card td-m-sources td-stagger-6">
+            <div class="td-metric-count" id="m-sources">-</div>
+            <div class="td-metric-label">Sources</div>
+        </div>
+        <div class="td-metric-card td-m-threats td-stagger-7">
+            <div class="td-metric-count" id="m-threats">-</div>
+            <div class="td-metric-label">Signatures</div>
+        </div>
+        <div class="td-metric-card td-m-url td-stagger-8">
+            <div class="td-metric-count" id="m-url">-</div>
+            <div class="td-metric-label">URL Filter</div>
+        </div>
+    </div>
+
+    <!-- Tabs + Filter (combined row) -->
+    <div class="td-controls">
+        <div class="td-tabs">
+            <button class="td-tab active" data-tab="events" onclick="switchTab('events')">All Events</button>
+            <button class="td-tab" data-tab="sources" onclick="switchTab('sources')">Top Sources</button>
+            <button class="td-tab" data-tab="signatures" onclick="switchTab('signatures')">Top Threats</button>
+            <button class="td-tab" data-tab="urls" onclick="switchTab('urls')">URL Categories</button>
+        </div>
+        <div class="td-filters" id="events-filters">
+            <div class="td-filter-icon">
+                <svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </div>
+            <select class="td-filter-select" id="f-severity">
+                <option value="">All Severity</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+                <option value="informational">Informational</option>
+            </select>
+            <select class="td-filter-select" id="f-subtype">
+                <option value="">All Types</option>
+                <option value="virus">Virus</option>
+                <option value="spyware">Spyware</option>
+                <option value="vulnerability">Vulnerability</option>
+                <option value="url">URL Filtering</option>
+                <option value="wildfire">WildFire</option>
+                <option value="flood">Flood</option>
+                <option value="scan">Scan</option>
+                <option value="data">Data</option>
+                <option value="file">File</option>
+            </select>
+            <select class="td-filter-select" id="f-action">
+                <option value="">All Actions</option>
+                <option value="alert">Alert</option>
+                <option value="allow">Allow</option>
+                <option value="deny">Deny</option>
+                <option value="drop">Drop</option>
+                <option value="sinkhole">Sinkhole</option>
+                <option value="block-url">Block URL</option>
+                <option value="reset-client">Reset Client</option>
+                <option value="reset-server">Reset Server</option>
+            </select>
+            <input type="text" class="td-filter-input" id="f-search" placeholder="Search threat, URL, IP...">
+            <button class="td-filter-btn" onclick="loadEvents(0)">Search</button>
+            <button class="td-filter-reset" onclick="resetFilters()">Reset</button>
+        </div>
+    </div>
+
+    <!-- EVENTS Tab -->
+    <div class="td-tab-content" id="tab-events">
+        <div class="td-table-wrapper">
+            <div class="td-table-header">
+                <div class="td-table-title">
+                    <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Threat Events
+                </div>
+                <span class="td-table-badge" id="event-count">0</span>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="td-table">
+                    <thead>
+                        <tr>
+                            <th class="td-col-time">Time</th>
+                            <th class="td-col-sev">Severity</th>
+                            <th class="td-col-type">Type</th>
+                            <th class="td-col-name">Threat / URL</th>
+                            <th class="td-col-src">Source</th>
+                            <th class="td-col-dst">Destination</th>
+                            <th class="td-col-act">Action</th>
+                            <th class="td-col-app">Application</th>
+                            <th class="td-col-rule">Rule</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-tbody">
+                        <tr>
+                            <td colspan="9" class="td-empty">
+                                <div class="td-empty-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                                <div class="td-empty-title">Loading threat data...</div>
+                                <div class="td-empty-desc">Fetching events from pa_threat_logs</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="td-pagination">
+                <span class="td-page-info" id="page-info">-</span>
+                <div class="td-page-btns">
+                    <button class="td-page-btn" id="btn-prev" onclick="prevPage()" disabled>Prev</button>
+                    <button class="td-page-btn" id="btn-next" onclick="nextPage()" disabled>Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP SOURCES Tab -->
+    <div class="td-tab-content" id="tab-sources" style="display:none;">
+        <div class="td-table-wrapper">
+            <div class="td-table-header">
+                <div class="td-panel-title">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Top Threat Sources
+                </div>
+                <span class="td-table-badge" id="src-count">0</span>
+            </div>
+            <div class="td-url-grid" id="sources-cards-grid">
+                <div class="td-cat-loading">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    Loading top sources...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP THREATS Tab -->
+    <div class="td-tab-content" id="tab-signatures" style="display:none;">
+        <div class="td-table-wrapper">
+            <div class="td-table-header">
+                <div class="td-panel-title">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Top Threat Signatures
+                </div>
+                <span class="td-table-badge" id="sig-count">0</span>
+            </div>
+            <div class="td-url-grid" id="threats-cards-grid">
+                <div class="td-cat-loading">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    Loading top threats...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL CATEGORIES Tab -->
+    <div class="td-tab-content" id="tab-urls" style="display:none;">
+        <div class="td-table-wrapper">
+            <div class="td-table-header">
+                <div class="td-panel-title">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    URL Filtering Categories
+                </div>
+                <span class="td-table-badge" id="url-cat-count">0</span>
+            </div>
+            <div class="td-url-grid" id="url-cards-grid">
+                <div class="td-cat-loading">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    Loading URL categories...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Source IP Drill-Down Modal -->
+<div class="td-cat-modal-overlay" id="src-detail-modal">
+    <div class="td-cat-modal">
+        <div class="td-cat-modal-head">
+            <div class="td-cat-modal-head-left">
+                <div class="td-cat-icon" id="src-modal-icon" style="background:rgba(168,85,247,0.12);color:#c084fc;border:1px solid rgba(168,85,247,0.2);">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div>
+                    <h2 class="td-cat-modal-title" id="src-modal-title">Source IP</h2>
+                    <div class="td-cat-modal-sub" id="src-modal-sub">Threat Source Detail</div>
+                </div>
+            </div>
+            <button class="td-modal-close" onclick="closeSrcModal()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="td-cat-modal-body" id="src-modal-body">
+            <div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Threat Signature Drill-Down Modal -->
+<div class="td-cat-modal-overlay" id="sig-detail-modal">
+    <div class="td-cat-modal">
+        <div class="td-cat-modal-head">
+            <div class="td-cat-modal-head-left">
+                <div class="td-cat-icon" id="sig-modal-icon" style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.2);">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                    <h2 class="td-cat-modal-title" id="sig-modal-title">Threat</h2>
+                    <div class="td-cat-modal-sub" id="sig-modal-sub">Threat Signature Detail</div>
+                </div>
+            </div>
+            <button class="td-modal-close" onclick="closeSigModal()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="td-cat-modal-body" id="sig-modal-body">
+            <div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- URL Category Drill-Down Modal -->
+<div class="td-cat-modal-overlay" id="cat-detail-modal">
+    <div class="td-cat-modal">
+        <div class="td-cat-modal-head">
+            <div class="td-cat-modal-head-left">
+                <div class="td-cat-icon td-cat-icon-alert" id="cat-modal-icon">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div>
+                    <h2 class="td-cat-modal-title" id="cat-modal-title">Category</h2>
+                    <div class="td-cat-modal-sub" id="cat-modal-sub">URL Filtering Category Detail</div>
+                </div>
+            </div>
+            <button class="td-modal-close" onclick="closeCatModal()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="td-cat-modal-body" id="cat-modal-body">
+            <div class="td-cat-loading">
+                <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                Loading category details...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="td-modal-overlay" id="detail-modal">
+    <div class="td-modal">
+        <div class="td-modal-head">
+            <h2 class="td-modal-title" id="modal-title">Threat Detail</h2>
+            <button class="td-modal-close" onclick="closeModal()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="td-modal-body" id="modal-body"></div>
+        <div class="td-modal-foot">
+            <button class="td-btn-outline" onclick="closeModal()">Close</button>
+            <a class="td-btn-primary" href="#" id="modal-drilldown" target="_blank">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                View in Logs
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const PAGE_SIZE = 100;
+    let currentOffset = 0;
+    let currentTotal = 0;
+    let currentTab = 'events';
+
+    function getHours() { return parseInt(document.getElementById('time-range').value) || 24; }
+    function fmtNum(n) { if (n === null || n === undefined || n === '-') return '-'; return n.toLocaleString(); }
+    function fmtTime(iso) {
+        try { const d = new Date(iso); return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
+        catch(e) { return iso; }
+    }
+    function escHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function sevClass(s) { return (s || 'informational').toLowerCase(); }
+    function subtypeClass(s) { return (s || '').toLowerCase().replace(/[^a-z]/g, ''); }
+    function actionClass(a) { return (a || '').toLowerCase().replace(/[^a-z-]/g, ''); }
+
+    // ── Summary ──
+    async function loadSummary() {
+        try {
+            const res = await fetch('/api/threats/summary?hours=' + getHours());
+            const data = await res.json();
+            if (!data.success) return;
+            document.getElementById('m-total').textContent = fmtNum(data.total);
+            document.getElementById('m-critical').textContent = fmtNum(data.severity.critical);
+            document.getElementById('m-high').textContent = fmtNum(data.severity.high);
+            document.getElementById('m-medium').textContent = fmtNum(data.severity.medium);
+            document.getElementById('m-low').textContent = fmtNum(data.severity.low);
+            document.getElementById('m-sources').textContent = fmtNum(data.unique_sources);
+            document.getElementById('m-threats').textContent = fmtNum(data.unique_threats);
+            document.getElementById('m-url').textContent = fmtNum(data.url_filtering_count);
+            const cc = document.getElementById('m-critical-card');
+            if (data.severity.critical > 0) cc.classList.add('td-has-data');
+            else cc.classList.remove('td-has-data');
+        } catch(e) { console.error('Summary error:', e); }
+    }
+
+    // ── Events ──
+    async function loadEvents(offset) {
+        currentOffset = offset || 0;
+        const params = new URLSearchParams();
+        params.append('hours', getHours());
+        params.append('limit', PAGE_SIZE);
+        params.append('offset', currentOffset);
+        const sev = document.getElementById('f-severity').value;
+        const sub = document.getElementById('f-subtype').value;
+        const act = document.getElementById('f-action').value;
+        const q = document.getElementById('f-search').value.trim();
+        if (sev) params.append('severity', sev);
+        if (sub) params.append('subtype', sub);
+        if (act) params.append('action', act);
+        if (q) params.append('search', q);
+        try {
+            const res = await fetch('/api/threats/events?' + params);
+            const data = await res.json();
+            currentTotal = data.total || 0;
+            document.getElementById('event-count').textContent = fmtNum(currentTotal);
+            const tbody = document.getElementById('events-tbody');
+            if (!data.events || data.events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="td-empty"><div class="td-empty-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div class="td-empty-title">No threat events found</div><div class="td-empty-desc">Adjust filters or time range</div></td></tr>';
+                updatePagination();
+                return;
+            }
+            tbody.innerHTML = data.events.map(function(e) {
+                var dn = e.subtype === 'url' ? (e.url || e.threat_name || e.category || '-') : (e.threat_name || e.file_name || e.threat_id || '-');
+                var nc = e.subtype === 'url' ? 'td-url-text' : 'td-threat-name';
+                var dnShort = dn.length > 48 ? dn.substring(0, 45) + '...' : dn;
+                return '<tr class="td-table-row" onclick=\'showDetail(' + JSON.stringify(e).replace(/'/g, '&#39;') + ')\'>' +
+                    '<td class="td-mono-muted">' + fmtTime(e.timestamp) + '</td>' +
+                    '<td><span class="td-sev td-sev-' + sevClass(e.severity) + '">' + escHtml(e.severity) + '</span></td>' +
+                    '<td><span class="td-subtype td-subtype-' + subtypeClass(e.subtype) + '">' + escHtml(e.subtype) + '</span></td>' +
+                    '<td class="' + nc + '" title="' + escHtml(dn) + '">' + escHtml(dnShort) + '</td>' +
+                    '<td class="td-mono">' + escHtml(e.src_ip) + (e.src_port ? ':' + e.src_port : '') + '</td>' +
+                    '<td class="td-mono">' + escHtml(e.dest_ip) + (e.dest_port ? ':' + e.dest_port : '') + '</td>' +
+                    '<td><span class="td-action td-action-' + actionClass(e.action) + '">' + escHtml(e.action) + '</span></td>' +
+                    '<td>' + escHtml(e.application || '-') + '</td>' +
+                    '<td>' + escHtml(e.rule || '-') + '</td>' +
+                    '</tr>';
+            }).join('');
+            updatePagination();
+        } catch(e) { console.error('Events error:', e); }
+    }
+    window.loadEvents = loadEvents;
+
+    function updatePagination() {
+        var start = currentTotal === 0 ? 0 : currentOffset + 1;
+        var end = Math.min(currentOffset + PAGE_SIZE, currentTotal);
+        document.getElementById('page-info').textContent = fmtNum(start) + ' - ' + fmtNum(end) + ' of ' + fmtNum(currentTotal);
+        document.getElementById('btn-prev').disabled = currentOffset === 0;
+        document.getElementById('btn-next').disabled = currentOffset + PAGE_SIZE >= currentTotal;
+    }
+    window.prevPage = function() { if (currentOffset > 0) loadEvents(currentOffset - PAGE_SIZE); };
+    window.nextPage = function() { if (currentOffset + PAGE_SIZE < currentTotal) loadEvents(currentOffset + PAGE_SIZE); };
+
+    // ── Top Sources (visual cards) ──
+    async function loadSources() {
+        var grid = document.getElementById('sources-cards-grid');
+        grid.innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading top sources...</div>';
+        try {
+            var res = await fetch('/api/threats/top-sources?hours=' + getHours() + '&limit=15');
+            var data = await res.json();
+            if (!data.sources || data.sources.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-title">No threat sources found</div><div class="td-empty-desc">No source IPs in the selected time range</div></div>';
+                document.getElementById('src-count').textContent = '0';
+                return;
+            }
+            var maxCount = data.sources[0].event_count || 1;
+            document.getElementById('src-count').textContent = fmtNum(data.sources.length) + ' sources';
+
+            grid.innerHTML = data.sources.map(function(s, i) {
+                var pct = Math.max(2, Math.round((s.event_count / maxCount) * 100));
+                var hasCritHigh = s.critical_high > 0;
+                var barClass = hasCritHigh ? 'td-url-bar-block' : (s.blocked > 0 ? 'td-url-bar-mixed' : 'td-url-bar-alert');
+                var rankClass = i < 3 ? ' td-url-rank-top' : '';
+                var sevBadges = (s.severities || []).slice(0, 4).map(function(sv) {
+                    return '<span class="td-sev td-sev-' + sevClass(sv) + '" style="font-size:0.55rem;padding:1px 5px;">' + escHtml(sv) + '</span>';
+                }).join(' ');
+
+                return '<div class="td-url-card" onclick="showSourceDetail(\'' + escHtml(s.src_ip) + '\')" title="Click for drill-down">' +
+                    '<div class="td-url-card-top">' +
+                        '<div class="td-url-card-left">' +
+                            '<div class="td-url-rank' + rankClass + '">' + (i + 1) + '</div>' +
+                            '<span class="td-url-cat-name" style="font-family:\'JetBrains Mono\',monospace;font-size:0.82rem;">' + escHtml(s.src_ip) + '</span>' +
+                            (s.src_user ? '<span style="font-size:0.68rem;color:var(--td-text-muted);margin-left:6px;">(' + escHtml(s.src_user) + ')</span>' : '') +
+                        '</div>' +
+                        '<div class="td-url-card-right">' +
+                            '<span class="td-url-count">' + fmtNum(s.event_count) + '</span>' +
+                            '<span class="td-url-drill"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="td-url-bar-wrap"><div class="td-url-bar ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
+                    '<div class="td-url-stats">' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#ef4444;"></div><span class="td-url-stat-val">' + fmtNum(s.unique_threats) + '</span> threats</div>' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#3b82f6;"></div><span class="td-url-stat-val">' + fmtNum(s.targets) + '</span> targets</div>' +
+                        (s.critical_high > 0 ? '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#f97316;"></div><span class="td-url-stat-val" style="color:#fb923c;">' + fmtNum(s.critical_high) + '</span> crit/high</div>' : '') +
+                        (s.blocked > 0 ? '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#ef4444;"></div><span class="td-url-stat-val" style="color:#f87171;">' + fmtNum(s.blocked) + '</span> blocked</div>' : '') +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('Sources error:', e); grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-desc">Error loading sources</div></div>'; }
+    }
+
+    // ── Source Drill-Down ──
+    window.showSourceDetail = async function(srcIp) {
+        var overlay = document.getElementById('src-detail-modal');
+        overlay.classList.add('active');
+        document.getElementById('src-modal-title').textContent = srcIp;
+        document.getElementById('src-modal-sub').textContent = 'Threat Source Analysis · Last ' + getHours() + ' hours';
+        document.getElementById('src-modal-body').innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading details...</div>';
+        try {
+            var res = await fetch('/api/threats/source-detail?src_ip=' + encodeURIComponent(srcIp) + '&hours=' + getHours());
+            var data = await res.json();
+            if (!data.success) { document.getElementById('src-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error: ' + escHtml(data.error || 'Unknown') + '</div></div>'; return; }
+            var s = data.summary;
+            var html = '';
+            // Summary
+            html += '<div class="td-cat-summary">' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#818cf8;">' + fmtNum(s.total) + '</div><div class="td-cat-stat-label">Total Events</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#f87171;">' + fmtNum(s.unique_threats) + '</div><div class="td-cat-stat-label">Unique Threats</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#22d3ee;">' + fmtNum(s.unique_targets) + '</div><div class="td-cat-stat-label">Targets Hit</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#fb923c;">' + fmtNum(s.critical_high) + '</div><div class="td-cat-stat-label">Crit/High</div></div>' +
+            '</div>';
+            // Severity + Subtype pills
+            if (data.severities && data.severities.length > 0) {
+                html += '<div class="td-cat-actions">';
+                data.severities.forEach(function(sv) { html += '<div class="td-cat-action-pill" style="background:rgba(100,100,100,0.08);border-color:rgba(100,100,100,0.2);color:var(--td-text);"><span class="td-sev td-sev-' + sevClass(sv.severity) + '" style="font-size:0.6rem;">' + escHtml(sv.severity) + '</span> <span class="td-cap-count">' + fmtNum(sv.count) + '</span></div>'; });
+                if (data.subtypes) { data.subtypes.forEach(function(st) { html += '<div class="td-cat-action-pill" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:#93c5fd;"><span class="td-subtype td-subtype-' + subtypeClass(st.subtype) + '" style="font-size:0.58rem;">' + escHtml(st.subtype) + '</span> <span class="td-cap-count">' + fmtNum(st.count) + '</span></div>'; }); }
+                html += '</div>';
+            }
+            html += '<div class="td-cat-panels">';
+            // Timeline
+            if (data.timeline && data.timeline.length > 0) {
+                var maxTl = Math.max.apply(null, data.timeline.map(function(t) { return t.total; })) || 1;
+                html += '<div class="td-cat-panel td-cat-panel-full"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Activity Timeline</div><div class="td-cat-timeline">';
+                data.timeline.forEach(function(t) {
+                    var h = Math.max(3, Math.round((t.total / maxTl) * 55));
+                    var ch = t.critical_high > 0 ? Math.max(2, Math.round((t.critical_high / t.total) * h)) : 0;
+                    html += '<div class="td-cat-tl-bar td-cat-tl-bar-total" style="height:' + h + 'px;" title="' + t.hour + ': ' + t.total + ' events">' + (ch > 0 ? '<div class="td-cat-tl-bar-blocked" style="height:' + ch + 'px;background:rgba(249,115,22,0.7);"></div>' : '') + '</div>';
+                });
+                html += '</div>';
+                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = new Date(f).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); l = new Date(l).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#fb923c;">■ crit/high</span><span>' + l + '</span></div>'; }
+                html += '</div>';
+            }
+            // Threats from this source
+            if (data.top_threats && data.top_threats.length > 0) {
+                var maxT = data.top_threats[0].count || 1;
+                html += '<div class="td-cat-panel"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Top Threats (' + data.top_threats.length + ')</div><ul class="td-cat-list">';
+                data.top_threats.forEach(function(t, i) {
+                    var bw = Math.max(5, Math.round((t.count / maxT) * 100));
+                    html += '<li class="td-cat-list-item"><span class="td-cat-item-rank">' + (i+1) + '</span><span class="td-cat-item-main" style="color:white;font-weight:500;" title="' + escHtml(t.threat_name) + '">' + escHtml(t.threat_name) + '</span><div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div><span class="td-cat-item-meta"><strong>' + fmtNum(t.count) + '</strong> · <span class="td-sev td-sev-' + sevClass(t.severity) + '" style="font-size:0.55rem;padding:1px 4px;">' + escHtml(t.severity) + '</span></span></li>';
+                });
+                html += '</ul></div>';
+            }
+            // Targets
+            if (data.top_targets && data.top_targets.length > 0) {
+                var maxD = data.top_targets[0].count || 1;
+                html += '<div class="td-cat-panel"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Top Targets (' + data.top_targets.length + ')</div><ul class="td-cat-list">';
+                data.top_targets.forEach(function(d, i) {
+                    var bw = Math.max(5, Math.round((d.count / maxD) * 100));
+                    html += '<li class="td-cat-list-item"><span class="td-cat-item-rank">' + (i+1) + '</span><span class="td-cat-item-main td-cat-item-ip">' + escHtml(d.dest_ip) + '</span><div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div><span class="td-cat-item-meta"><strong>' + fmtNum(d.count) + '</strong> hits · ' + fmtNum(d.threats) + ' threats</span></li>';
+                });
+                html += '</ul></div>';
+            }
+            html += '</div>';
+            document.getElementById('src-modal-body').innerHTML = html;
+        } catch(e) { console.error('Source detail error:', e); document.getElementById('src-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error loading source details</div></div>'; }
+    };
+    window.closeSrcModal = function() { document.getElementById('src-detail-modal').classList.remove('active'); };
+    document.getElementById('src-detail-modal').addEventListener('click', function(e) { if (e.target === this) closeSrcModal(); });
+
+    // ── Top Threats (visual cards) ──
+    async function loadThreats() {
+        var grid = document.getElementById('threats-cards-grid');
+        grid.innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading top threats...</div>';
+        try {
+            var res = await fetch('/api/threats/top-threats?hours=' + getHours() + '&limit=15');
+            var data = await res.json();
+            if (!data.threats || data.threats.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-title">No threat signatures found</div><div class="td-empty-desc">No named threats in the selected time range</div></div>';
+                document.getElementById('sig-count').textContent = '0';
+                return;
+            }
+            var maxCount = data.threats[0].event_count || 1;
+            document.getElementById('sig-count').textContent = fmtNum(data.threats.length) + ' signatures';
+
+            grid.innerHTML = data.threats.map(function(t, i) {
+                var pct = Math.max(2, Math.round((t.event_count / maxCount) * 100));
+                var sevC = sevClass(t.severity);
+                var barColors = { critical: 'td-url-bar-block', high: 'td-url-bar-mixed', medium: 'td-url-bar-alert', low: 'td-url-bar-allow' };
+                var barClass = barColors[sevC] || 'td-url-bar-alert';
+                var rankClass = i < 3 ? ' td-url-rank-top' : '';
+                var nameShort = t.threat_name.length > 42 ? t.threat_name.substring(0, 39) + '...' : t.threat_name;
+
+                return '<div class="td-url-card" onclick="showSigDetail(\'' + escHtml(t.threat_name).replace(/'/g, '\\\'') + '\')" title="Click for drill-down">' +
+                    '<div class="td-url-card-top">' +
+                        '<div class="td-url-card-left">' +
+                            '<div class="td-url-rank' + rankClass + '">' + (i + 1) + '</div>' +
+                            '<span class="td-url-cat-name" title="' + escHtml(t.threat_name) + '">' + escHtml(nameShort) + '</span>' +
+                        '</div>' +
+                        '<div class="td-url-card-right">' +
+                            '<span class="td-url-count">' + fmtNum(t.event_count) + '</span>' +
+                            '<span class="td-url-drill"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="td-url-bar-wrap"><div class="td-url-bar ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
+                    '<div class="td-url-stats">' +
+                        '<div class="td-url-stat"><span class="td-sev td-sev-' + sevC + '" style="font-size:0.55rem;padding:1px 5px;">' + escHtml(t.severity) + '</span></div>' +
+                        '<div class="td-url-stat"><span class="td-subtype td-subtype-' + subtypeClass(t.subtype) + '" style="font-size:0.55rem;padding:1px 5px;">' + escHtml(t.subtype) + '</span></div>' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#8b5cf6;"></div><span class="td-url-stat-val">' + fmtNum(t.unique_sources) + '</span> sources</div>' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#22d3ee;"></div><span class="td-url-stat-val">' + fmtNum(t.unique_targets) + '</span> targets</div>' +
+                        '<div class="td-url-stat"><span class="td-action td-action-' + actionClass(t.action) + '" style="font-size:0.55rem;padding:1px 5px;">' + escHtml(t.action) + '</span></div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('Threats error:', e); grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-desc">Error loading threats</div></div>'; }
+    }
+
+    // ── Threat Signature Drill-Down ──
+    window.showSigDetail = async function(threatName) {
+        var overlay = document.getElementById('sig-detail-modal');
+        overlay.classList.add('active');
+        document.getElementById('sig-modal-title').textContent = threatName;
+        document.getElementById('sig-modal-sub').textContent = 'Threat Signature Analysis · Last ' + getHours() + ' hours';
+        document.getElementById('sig-modal-body').innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading details...</div>';
+        try {
+            var res = await fetch('/api/threats/threat-sig-detail?threat_name=' + encodeURIComponent(threatName) + '&hours=' + getHours());
+            var data = await res.json();
+            if (!data.success) { document.getElementById('sig-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error: ' + escHtml(data.error || 'Unknown') + '</div></div>'; return; }
+            var s = data.summary;
+            var html = '';
+            // Summary
+            html += '<div class="td-cat-summary">' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#818cf8;">' + fmtNum(s.total) + '</div><div class="td-cat-stat-label">Total Events</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#a78bfa;">' + fmtNum(s.unique_sources) + '</div><div class="td-cat-stat-label">Unique Sources</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#22d3ee;">' + fmtNum(s.unique_targets) + '</div><div class="td-cat-stat-label">Targets Hit</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num"><span class="td-sev td-sev-' + sevClass(s.severity) + '">' + escHtml(s.severity) + '</span></div><div class="td-cat-stat-label">Severity</div></div>' +
+            '</div>';
+            // Action pills + metadata
+            html += '<div class="td-cat-actions">';
+            if (s.category) html += '<div class="td-cat-action-pill" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:#93c5fd;">' + escHtml(s.category) + '</div>';
+            if (s.subtype) html += '<div class="td-cat-action-pill" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:#93c5fd;"><span class="td-subtype td-subtype-' + subtypeClass(s.subtype) + '" style="font-size:0.62rem;">' + escHtml(s.subtype) + '</span></div>';
+            if (data.actions) { data.actions.forEach(function(a) { html += '<div class="td-cat-action-pill td-cap-' + actionClass(a.action) + '">' + escHtml(a.action) + ' <span class="td-cap-count">' + fmtNum(a.count) + '</span></div>'; }); }
+            html += '</div>';
+
+            html += '<div class="td-cat-panels">';
+            // Timeline
+            if (data.timeline && data.timeline.length > 0) {
+                var maxTl = Math.max.apply(null, data.timeline.map(function(t) { return t.total; })) || 1;
+                html += '<div class="td-cat-panel td-cat-panel-full"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Activity Timeline</div><div class="td-cat-timeline">';
+                data.timeline.forEach(function(t) {
+                    var h = Math.max(3, Math.round((t.total / maxTl) * 55));
+                    var bh = t.blocked > 0 ? Math.max(2, Math.round((t.blocked / t.total) * h)) : 0;
+                    html += '<div class="td-cat-tl-bar td-cat-tl-bar-total" style="height:' + h + 'px;" title="' + t.hour + ': ' + t.total + ' events">' + (bh > 0 ? '<div class="td-cat-tl-bar-blocked" style="height:' + bh + 'px;"></div>' : '') + '</div>';
+                });
+                html += '</div>';
+                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = new Date(f).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); l = new Date(l).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#f87171;">■ blocked</span><span>' + l + '</span></div>'; }
+                html += '</div>';
+            }
+            // Top Sources
+            if (data.top_sources && data.top_sources.length > 0) {
+                var maxS = data.top_sources[0].count || 1;
+                html += '<div class="td-cat-panel"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>Top Sources (' + data.top_sources.length + ')</div><ul class="td-cat-list">';
+                data.top_sources.forEach(function(sc, i) {
+                    var bw = Math.max(5, Math.round((sc.count / maxS) * 100));
+                    html += '<li class="td-cat-list-item"><span class="td-cat-item-rank">' + (i+1) + '</span><span class="td-cat-item-main"><span class="td-cat-item-ip">' + escHtml(sc.src_ip) + '</span>' + (sc.src_user ? '<span class="td-cat-item-user">(' + escHtml(sc.src_user) + ')</span>' : '') + '</span><div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div><span class="td-cat-item-meta"><strong>' + fmtNum(sc.count) + '</strong> hits</span></li>';
+                });
+                html += '</ul></div>';
+            }
+            // Top Targets
+            if (data.top_targets && data.top_targets.length > 0) {
+                var maxD = data.top_targets[0].count || 1;
+                html += '<div class="td-cat-panel"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Top Targets (' + data.top_targets.length + ')</div><ul class="td-cat-list">';
+                data.top_targets.forEach(function(d, i) {
+                    var bw = Math.max(5, Math.round((d.count / maxD) * 100));
+                    html += '<li class="td-cat-list-item"><span class="td-cat-item-rank">' + (i+1) + '</span><span class="td-cat-item-main td-cat-item-ip">' + escHtml(d.dest_ip) + '</span><div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div><span class="td-cat-item-meta"><strong>' + fmtNum(d.count) + '</strong> · <span class="td-action td-action-' + actionClass(d.action) + '" style="font-size:0.55rem;padding:1px 4px;">' + escHtml(d.action) + '</span></span></li>';
+                });
+                html += '</ul></div>';
+            }
+            // Top Rules (full width)
+            if (data.top_rules && data.top_rules.length > 0) {
+                var maxR = data.top_rules[0].count || 1;
+                html += '<div class="td-cat-panel td-cat-panel-full"><div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>Firewall Rules (' + data.top_rules.length + ')</div><ul class="td-cat-list">';
+                data.top_rules.forEach(function(r, i) {
+                    var bw = Math.max(5, Math.round((r.count / maxR) * 100));
+                    html += '<li class="td-cat-list-item"><span class="td-cat-item-rank">' + (i+1) + '</span><span class="td-cat-item-main" style="color:var(--td-text);font-weight:500;">' + escHtml(r.rule) + '</span><div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div><span class="td-cat-item-meta"><strong>' + fmtNum(r.count) + '</strong> hits</span></li>';
+                });
+                html += '</ul></div>';
+            }
+            html += '</div>';
+            document.getElementById('sig-modal-body').innerHTML = html;
+        } catch(e) { console.error('Sig detail error:', e); document.getElementById('sig-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error loading threat details</div></div>'; }
+    };
+    window.closeSigModal = function() { document.getElementById('sig-detail-modal').classList.remove('active'); };
+    document.getElementById('sig-detail-modal').addEventListener('click', function(e) { if (e.target === this) closeSigModal(); });
+
+    // ── URL Categories (visual cards) ──
+    async function loadURLCategories() {
+        var grid = document.getElementById('url-cards-grid');
+        grid.innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading URL categories...</div>';
+        try {
+            var res = await fetch('/api/threats/url-categories?hours=' + getHours() + '&limit=20');
+            var data = await res.json();
+            if (!data.categories || data.categories.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg></div><div class="td-empty-title">No URL filtering data</div><div class="td-empty-desc">No URL subtype events in the selected time range</div></div>';
+                document.getElementById('url-cat-count').textContent = '0';
+                return;
+            }
+            var maxCount = data.categories[0].event_count || 1;
+            var totalAll = data.categories.reduce(function(s, c) { return s + c.event_count; }, 0);
+            document.getElementById('url-cat-count').textContent = fmtNum(data.categories.length) + ' categories';
+
+            grid.innerHTML = data.categories.map(function(c, i) {
+                var pct = Math.max(2, Math.round((c.event_count / maxCount) * 100));
+                var barClass = 'td-url-bar-alert';
+                if (c.blocked > 0 && c.alerted === 0 && c.allowed === 0) barClass = 'td-url-bar-block';
+                else if (c.allowed > 0 && c.blocked === 0 && c.alerted === 0) barClass = 'td-url-bar-allow';
+                else if (c.blocked > 0) barClass = 'td-url-bar-mixed';
+                var rankClass = i < 3 ? ' td-url-rank-top' : '';
+                var share = totalAll > 0 ? ((c.event_count / totalAll) * 100).toFixed(1) : '0';
+
+                return '<div class="td-url-card" onclick="showCategoryDetail(\'' + escHtml(c.category).replace(/'/g, '\\\'') + '\')" title="Click for drill-down">' +
+                    '<div class="td-url-card-top">' +
+                        '<div class="td-url-card-left">' +
+                            '<div class="td-url-rank' + rankClass + '">' + (i + 1) + '</div>' +
+                            '<span class="td-url-cat-name">' + escHtml(c.category) + '</span>' +
+                        '</div>' +
+                        '<div class="td-url-card-right">' +
+                            '<span class="td-url-count">' + fmtNum(c.event_count) + '</span>' +
+                            '<span class="td-url-drill"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="td-url-bar-wrap"><div class="td-url-bar ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
+                    '<div class="td-url-stats">' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#8b5cf6;"></div><span class="td-url-stat-val">' + fmtNum(c.unique_users) + '</span> users</div>' +
+                        '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#3b82f6;"></div>' + share + '% share</div>' +
+                        (c.blocked > 0 ? '<div class="td-url-stat"><div class="td-url-stat-dot" style="background:#ef4444;"></div><span class="td-url-stat-val">' + fmtNum(c.blocked) + '</span> blocked</div>' : '') +
+                        '<div class="td-url-stat"><span class="td-action td-action-' + actionClass(c.action) + '" style="font-size:0.58rem;padding:1px 5px;">' + escHtml(c.action) + '</span></div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('URL cats error:', e); grid.innerHTML = '<div style="grid-column:1/-1;" class="td-empty"><div class="td-empty-desc">Error loading URL categories</div></div>'; }
+    }
+
+    // ── URL Category Drill-Down ──
+    window.showCategoryDetail = async function(category) {
+        var overlay = document.getElementById('cat-detail-modal');
+        overlay.classList.add('active');
+        document.getElementById('cat-modal-title').textContent = category;
+        document.getElementById('cat-modal-sub').textContent = 'URL Filtering Category · Last ' + getHours() + ' hours';
+        document.getElementById('cat-modal-body').innerHTML = '<div class="td-cat-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading details for ' + escHtml(category) + '...</div>';
+
+        try {
+            var res = await fetch('/api/threats/url-category-detail?category=' + encodeURIComponent(category) + '&hours=' + getHours());
+            var data = await res.json();
+            if (!data.success) { document.getElementById('cat-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error: ' + escHtml(data.error || 'Unknown') + '</div></div>'; return; }
+
+            var s = data.summary;
+            // Determine dominant action for icon
+            var iconCls = 'td-cat-icon-alert';
+            if (s.blocked > s.alerted && s.blocked > s.allowed) iconCls = 'td-cat-icon-block';
+            else if (s.allowed > s.alerted && s.allowed > s.blocked) iconCls = 'td-cat-icon-allow';
+            document.getElementById('cat-modal-icon').className = 'td-cat-icon ' + iconCls;
+
+            var html = '';
+
+            // Summary cards
+            html += '<div class="td-cat-summary">' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#818cf8;">' + fmtNum(s.total) + '</div><div class="td-cat-stat-label">Total Events</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#a78bfa;">' + fmtNum(s.unique_users) + '</div><div class="td-cat-stat-label">Unique Users</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#4ade80;">' + fmtNum(s.unique_urls) + '</div><div class="td-cat-stat-label">Unique URLs</div></div>' +
+                '<div class="td-cat-stat-card"><div class="td-cat-stat-num" style="color:#22d3ee;">' + fmtNum(s.unique_destinations) + '</div><div class="td-cat-stat-label">Destinations</div></div>' +
+            '</div>';
+
+            // Action pills
+            if (data.actions && data.actions.length > 0) {
+                html += '<div class="td-cat-actions">';
+                data.actions.forEach(function(a) {
+                    var cls = 'td-cap-' + actionClass(a.action);
+                    html += '<div class="td-cat-action-pill ' + cls + '">' + escHtml(a.action) + ' <span class="td-cap-count">' + fmtNum(a.count) + '</span></div>';
+                });
+                html += '</div>';
+            }
+
+            html += '<div class="td-cat-panels">';
+
+            // Timeline panel (full width)
+            if (data.timeline && data.timeline.length > 0) {
+                var maxTl = Math.max.apply(null, data.timeline.map(function(t) { return t.total; })) || 1;
+                html += '<div class="td-cat-panel td-cat-panel-full">' +
+                    '<div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Activity Timeline</div>' +
+                    '<div class="td-cat-timeline">';
+                data.timeline.forEach(function(t) {
+                    var h = Math.max(3, Math.round((t.total / maxTl) * 55));
+                    var bh = t.blocked > 0 ? Math.max(2, Math.round((t.blocked / t.total) * h)) : 0;
+                    html += '<div class="td-cat-tl-bar td-cat-tl-bar-total" style="height:' + h + 'px;" title="' + t.hour + ': ' + t.total + ' events">' +
+                        (bh > 0 ? '<div class="td-cat-tl-bar-blocked" style="height:' + bh + 'px;"></div>' : '') +
+                    '</div>';
+                });
+                html += '</div>';
+                // Time labels
+                if (data.timeline.length > 1) {
+                    var first = data.timeline[0].hour, last = data.timeline[data.timeline.length - 1].hour;
+                    try { first = new Date(first).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}); last = new Date(last).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}); } catch(e) {}
+                    html += '<div class="td-cat-tl-labels"><span>' + first + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#f87171;">■ blocked</span><span>' + last + '</span></div>';
+                }
+                html += '</div>';
+            }
+
+            // Top URLs panel
+            if (data.top_urls && data.top_urls.length > 0) {
+                var maxUrl = data.top_urls[0].hits || 1;
+                html += '<div class="td-cat-panel">' +
+                    '<div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Top URLs (' + data.top_urls.length + ')</div>' +
+                    '<ul class="td-cat-list">';
+                data.top_urls.forEach(function(u, i) {
+                    var bw = Math.max(5, Math.round((u.hits / maxUrl) * 100));
+                    html += '<li class="td-cat-list-item">' +
+                        '<span class="td-cat-item-rank">' + (i + 1) + '</span>' +
+                        '<span class="td-cat-item-main td-cat-item-url" title="' + escHtml(u.url) + '">' + escHtml(u.url) + '</span>' +
+                        '<div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div>' +
+                        '<span class="td-cat-item-meta"><strong>' + fmtNum(u.hits) + '</strong> hits</span>' +
+                    '</li>';
+                });
+                html += '</ul></div>';
+            }
+
+            // Top Users panel
+            if (data.top_users && data.top_users.length > 0) {
+                var maxUser = data.top_users[0].hits || 1;
+                html += '<div class="td-cat-panel">' +
+                    '<div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Top Users (' + data.top_users.length + ')</div>' +
+                    '<ul class="td-cat-list">';
+                data.top_users.forEach(function(u, i) {
+                    var bw = Math.max(5, Math.round((u.hits / maxUser) * 100));
+                    html += '<li class="td-cat-list-item">' +
+                        '<span class="td-cat-item-rank">' + (i + 1) + '</span>' +
+                        '<span class="td-cat-item-main"><span class="td-cat-item-ip">' + escHtml(u.src_ip) + '</span>' +
+                            (u.src_user ? '<span class="td-cat-item-user">(' + escHtml(u.src_user) + ')</span>' : '') +
+                        '</span>' +
+                        '<div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div>' +
+                        '<span class="td-cat-item-meta"><strong>' + fmtNum(u.hits) + '</strong> hits · ' + fmtNum(u.urls_visited) + ' URLs' +
+                            (u.blocked > 0 ? ' · <span style="color:#f87171;">' + fmtNum(u.blocked) + ' blocked</span>' : '') +
+                        '</span>' +
+                    '</li>';
+                });
+                html += '</ul></div>';
+            }
+
+            // Top Destinations panel (full width)
+            if (data.top_destinations && data.top_destinations.length > 0) {
+                var maxDest = data.top_destinations[0].hits || 1;
+                html += '<div class="td-cat-panel td-cat-panel-full">' +
+                    '<div class="td-cat-panel-head"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>Top Destinations (' + data.top_destinations.length + ')</div>' +
+                    '<ul class="td-cat-list">';
+                data.top_destinations.forEach(function(d, i) {
+                    var bw = Math.max(5, Math.round((d.hits / maxDest) * 100));
+                    html += '<li class="td-cat-list-item">' +
+                        '<span class="td-cat-item-rank">' + (i + 1) + '</span>' +
+                        '<span class="td-cat-item-main td-cat-item-ip">' + escHtml(d.dest_ip) + '</span>' +
+                        '<div class="td-cat-minibar-wrap"><div class="td-cat-minibar" style="width:' + bw + '%;"></div></div>' +
+                        '<span class="td-cat-item-meta"><strong>' + fmtNum(d.hits) + '</strong> hits · ' + fmtNum(d.unique_urls) + ' URLs · <span class="td-action td-action-' + actionClass(d.action) + '" style="font-size:0.58rem;padding:1px 4px;">' + escHtml(d.action) + '</span></span>' +
+                    '</li>';
+                });
+                html += '</ul></div>';
+            }
+
+            html += '</div>'; // end panels
+
+            document.getElementById('cat-modal-body').innerHTML = html;
+        } catch(e) {
+            console.error('Category detail error:', e);
+            document.getElementById('cat-modal-body').innerHTML = '<div class="td-empty"><div class="td-empty-desc">Error loading category details</div></div>';
+        }
+    };
+    window.closeCatModal = function() { document.getElementById('cat-detail-modal').classList.remove('active'); };
+    document.getElementById('cat-detail-modal').addEventListener('click', function(e) { if (e.target === this) closeCatModal(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { closeCatModal(); closeSrcModal(); closeSigModal(); } });
+
+    // ── Tab switching ──
+    window.switchTab = function(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.td-tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelector('.td-tab[data-tab="' + tab + '"]').classList.add('active');
+        document.querySelectorAll('.td-tab-content').forEach(function(c) { c.style.display = 'none'; });
+        document.getElementById('tab-' + tab).style.display = '';
+        // Show/hide filter bar (only for events tab)
+        document.getElementById('events-filters').style.display = tab === 'events' ? '' : 'none';
+        if (tab === 'sources') loadSources();
+        else if (tab === 'signatures') loadThreats();
+        else if (tab === 'urls') loadURLCategories();
+    };
+
+    // ── Detail Modal ──
+    window.showDetail = function(evt) {
+        document.getElementById('modal-title').textContent = evt.threat_name || evt.url || evt.threat_id || 'Threat Detail';
+        var html = '';
+        html += '<div class="td-detail-section"><h4>Classification</h4><table class="td-dtable">' +
+            '<tr><th>Type</th><td><span class="td-subtype td-subtype-' + subtypeClass(evt.subtype) + '">' + escHtml(evt.subtype) + '</span></td></tr>' +
+            '<tr><th>Severity</th><td><span class="td-sev td-sev-' + sevClass(evt.severity) + '">' + escHtml(evt.severity) + '</span></td></tr>' +
+            '<tr><th>Action</th><td><span class="td-action td-action-' + actionClass(evt.action) + '">' + escHtml(evt.action) + '</span></td></tr>' +
+            '<tr><th>Direction</th><td>' + escHtml(evt.direction || '-') + '</td></tr>' +
+            '<tr><th>Threat ID</th><td class="td-mono">' + escHtml(evt.threat_id || '-') + '</td></tr>' +
+            '<tr><th>Category</th><td>' + escHtml(evt.threat_category || evt.category || '-') + '</td></tr>' +
+            '<tr><th>Timestamp</th><td class="td-mono">' + fmtTime(evt.timestamp) + '</td></tr>' +
+            '</table></div>';
+        html += '<div class="td-detail-section"><h4>Network</h4><table class="td-dtable">' +
+            '<tr><th>Source</th><td class="td-mono">' + escHtml(evt.src_ip) + (evt.src_port ? ':' + evt.src_port : '') + '</td></tr>' +
+            '<tr><th>Destination</th><td class="td-mono">' + escHtml(evt.dest_ip) + (evt.dest_port ? ':' + evt.dest_port : '') + '</td></tr>' +
+            '<tr><th>Protocol</th><td>' + escHtml(evt.transport || '-') + '</td></tr>' +
+            '<tr><th>Src Zone</th><td>' + escHtml(evt.src_zone || '-') + '</td></tr>' +
+            '<tr><th>Dst Zone</th><td>' + escHtml(evt.dest_zone || '-') + '</td></tr>' +
+            '<tr><th>Application</th><td>' + escHtml(evt.application || '-') + '</td></tr>' +
+            '<tr><th>Rule</th><td>' + escHtml(evt.rule || '-') + '</td></tr>' +
+            '<tr><th>User</th><td>' + escHtml(evt.src_user || '-') + '</td></tr>' +
+            '</table></div>';
+        if (evt.subtype === 'url' && evt.url) {
+            html += '<div class="td-detail-section"><h4>URL Details</h4><table class="td-dtable">' +
+                '<tr><th>URL</th><td style="word-break:break-all;color:#4ade80;">' + escHtml(evt.url) + '</td></tr>' +
+                '<tr><th>Category</th><td>' + escHtml(evt.category || '-') + '</td></tr>' +
+                '</table></div>';
+        }
+        if (evt.file_name) {
+            html += '<div class="td-detail-section"><h4>File Details</h4><table class="td-dtable">' +
+                '<tr><th>File Name</th><td>' + escHtml(evt.file_name) + '</td></tr>' +
+                '<tr><th>File Hash</th><td class="td-mono">' + escHtml(evt.file_hash || '-') + '</td></tr>' +
+                '</table></div>';
+        }
+        html += '<div class="td-detail-section"><h4>Device</h4><table class="td-dtable">' +
+            '<tr><th>Device</th><td>' + escHtml(evt.device_name || '-') + '</td></tr>' +
+            '<tr><th>Device IP</th><td class="td-mono">' + escHtml(evt.device_ip || '-') + '</td></tr>' +
+            '<tr><th>Session ID</th><td class="td-mono">' + (evt.session_id || '-') + '</td></tr>' +
+            '</table></div>';
+        document.getElementById('modal-body').innerHTML = html;
+        document.getElementById('modal-drilldown').href = '/logs/?query=srcip:' + encodeURIComponent(evt.src_ip || '') + '+dstip:' + encodeURIComponent(evt.dest_ip || '');
+        document.getElementById('detail-modal').classList.add('active');
+    };
+    window.closeModal = function() { document.getElementById('detail-modal').classList.remove('active'); };
+    document.getElementById('detail-modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+    // ── Filters ──
+    window.resetFilters = function() {
+        document.getElementById('f-severity').value = '';
+        document.getElementById('f-subtype').value = '';
+        document.getElementById('f-action').value = '';
+        document.getElementById('f-search').value = '';
+        loadEvents(0);
+    };
+    document.getElementById('f-search').addEventListener('keydown', function(e) { if (e.key === 'Enter') loadEvents(0); });
+
+    // ── Refresh ──
+    window.refreshAll = function() {
+        var btn = document.getElementById('btn-refresh');
+        btn.classList.add('td-spinning');
+        setTimeout(function() { btn.classList.remove('td-spinning'); }, 800);
+        loadSummary();
+        if (currentTab === 'events') loadEvents(currentOffset);
+        else if (currentTab === 'sources') loadSources();
+        else if (currentTab === 'signatures') loadThreats();
+        else if (currentTab === 'urls') loadURLCategories();
+    };
+
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSummary();
+        loadEvents(0);
+    });
+})();
+</script>
+{% endblock %}
