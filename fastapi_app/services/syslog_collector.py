@@ -400,6 +400,176 @@ def build_threat_row(now: datetime, client_ip: str, parsed_data: dict) -> tuple:
     )
 
 
+# Fortinet UTM subtype → normalized log_subtype for pa_threat_logs
+_FORTI_SUBTYPE_MAP = {
+    'webfilter': 'url',       # URL filtering → same as PA 'url'
+    'dns': 'spyware',         # DNS security → same as PA 'spyware' (DNS threats)
+    'virus': 'virus',
+    'ips': 'vulnerability',
+    'app-ctrl': 'wildfire',   # closest match
+}
+
+# Fortinet severity string → normalized severity for pa_threat_logs
+_FORTI_SEVERITY_MAP = {
+    'emergency': 'critical', 'alert': 'critical', 'critical': 'critical',
+    'error': 'high', 'warning': 'medium', 'notice': 'low',
+    'information': 'informational', 'debug': 'informational',
+}
+
+
+def build_fortinet_threat_row(now: datetime, client_ip: str, parsed_data: dict, forti_subtype: str) -> tuple:
+    """
+    Build a tuple for pa_threat_logs from Fortinet UTM parsed_data.
+    Maps Fortinet fields to the same schema used by Palo Alto threat logs.
+    """
+    g = parsed_data.get
+
+    # Normalize subtype to match PA convention
+    subtype = _FORTI_SUBTYPE_MAP.get(forti_subtype, forti_subtype)
+
+    # Timestamps — Fortinet uses 'date' + 'time' fields
+    forti_date = g('date', '')
+    forti_time = g('time', '')
+    gen_time = now
+    if forti_date and forti_time:
+        try:
+            gen_time = datetime.strptime(f"{forti_date} {forti_time}", '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+        except (ValueError, AttributeError):
+            pass
+
+    # Severity normalization
+    raw_sev = (g('severity', '') or g('level', '')).lower()
+    severity = _FORTI_SEVERITY_MAP.get(raw_sev, raw_sev)
+
+    # URL / threat name mapping based on subtype
+    url = ''
+    file_name = ''
+    threat_name = ''
+    threat_category = ''
+    category = ''
+
+    if forti_subtype == 'webfilter':
+        url = g('url', '') or g('hostname', '')
+        threat_name = g('msg', '') or g('catdesc', '') or ''
+        threat_category = 'url'
+        category = g('catdesc', '') or g('urlcat', '') or ''
+    elif forti_subtype == 'dns':
+        # DNS queries — domain goes in threat_name (like PA spyware)
+        domain = g('qname', '') or g('hostname', '')
+        threat_name = domain
+        url = domain
+        threat_category = 'dns-malware'
+        category = g('catdesc', '') or 'dns'
+    elif forti_subtype == 'virus':
+        file_name = g('filename', '')
+        threat_name = g('virus', '') or g('msg', '') or ''
+        threat_category = 'virus'
+        category = 'virus'
+    elif forti_subtype == 'ips':
+        threat_name = g('attack', '') or g('msg', '') or ''
+        threat_category = g('attackid', '') or 'ips'
+        category = 'vulnerability'
+
+    # Protocol mapping
+    proto_raw = g('proto', '')
+    proto_map = {'6': 'tcp', '17': 'udp', '1': 'icmp', '58': 'icmpv6'}
+    transport = proto_map.get(proto_raw, proto_raw.lower() if proto_raw else '')
+
+    # Action normalization
+    action = (g('action', '') or g('utmaction', '')).lower()
+
+    return (
+        now,                                                    # timestamp
+        gen_time,                                               # receive_time
+        gen_time,                                               # generated_time
+        g('devid', ''),                                         # serial_number
+        g('devname', ''),                                       # device_name
+        g('vd', '') or 'root',                                  # vsys
+        '',                                                     # vsys_name
+        client_ip,                                              # device_ip
+        subtype,                                                # log_subtype
+        severity,                                               # severity
+        g('direction', ''),                                     # direction
+        action,                                                 # action
+        g('srcip', ''),                                         # src_ip
+        g('dstip', ''),                                         # dest_ip
+        _safe_uint(g('srcport', '')),                           # src_port
+        _safe_uint(g('dstport', '')),                           # dest_port
+        transport,                                              # transport
+        g('transip', ''),                                       # src_translated_ip
+        g('trandisp', ''),                                      # dest_translated_ip
+        _safe_uint(g('transport', '')),                         # src_translated_port
+        0,                                                      # dest_translated_port
+        g('srcintf', ''),                                       # src_zone
+        g('dstintf', ''),                                       # dest_zone
+        g('srcintf', ''),                                       # src_interface
+        g('dstintf', ''),                                       # dest_interface
+        g('user', '') or g('srcuser', ''),                      # src_user
+        g('dstuser', ''),                                       # dest_user
+        g('app', '') or g('appcat', ''),                        # application
+        g('policyname', '') or str(g('policyid', '')),          # rule
+        '',                                                     # rule_uuid
+        '',                                                     # log_forwarding_profile
+        g('threatid', '') or g('attackid', '') or '',           # threat_id
+        threat_name,                                            # threat_name
+        _safe_uint(g('threatid', '') or g('attackid', '')),     # threat_numeric_id
+        threat_category,                                        # threat_category
+        category,                                               # category
+        url,                                                    # url
+        g('contenttype', ''),                                   # content_type
+        g('agent', ''),                                         # user_agent
+        g('httpmethod', ''),                                    # http_method
+        '',                                                     # xff
+        '',                                                     # xff_ip
+        g('referralurl', ''),                                   # referrer
+        g('reason', '') or g('msg', ''),                        # reason
+        '',                                                     # justification
+        file_name,                                              # file_name
+        g('filehash', ''),                                      # file_hash
+        g('filetype', ''),                                      # file_type
+        '',                                                     # cloud_address
+        '',                                                     # report_id
+        '',                                                     # sender
+        '',                                                     # subject
+        '',                                                     # recipient
+        _safe_uint(g('sessionid', '')),                         # session_id
+        0,                                                      # repeat_count
+        '',                                                     # pcap_id
+        g('srccountry', ''),                                    # src_location
+        g('dstcountry', ''),                                    # dest_location
+        _safe_uint(g('logid', '')),                             # sequence_number
+        '',                                                     # action_flags
+        '',                                                     # content_version
+        '',                                                     # tunnel_id
+        '',                                                     # tunnel_type
+        '',                                                     # src_edl
+        '',                                                     # dest_edl
+        g('group', ''),                                         # dynusergroup_name
+        '',                                                     # src_dag
+        '',                                                     # dest_dag
+        '',                                                     # subcategory_of_app
+        g('appcat', ''),                                        # category_of_app
+        '',                                                     # technology_of_app
+        0,                                                      # risk_of_app
+        0,                                                      # is_saas
+        0,                                                      # sanctioned_state
+        '',                                                     # src_dvc_category
+        '',                                                     # src_dvc_model
+        '',                                                     # src_dvc_vendor
+        '',                                                     # src_dvc_os
+        g('srcname', ''),                                       # src_hostname
+        g('srcmac', ''),                                        # src_mac
+        '',                                                     # dest_dvc_category
+        '',                                                     # dest_dvc_model
+        '',                                                     # dest_dvc_vendor
+        '',                                                     # dest_dvc_os
+        g('dstname', ''),                                       # dest_hostname
+        g('dstmac', ''),                                        # dest_mac
+        g('urlcat', '') or g('catdesc', ''),                    # url_category_list
+        0,                                                      # http2_connection
+    )
+
+
 def flush_threat_logs(
     client,
     logs: List[tuple],
@@ -720,17 +890,24 @@ class SyslogCollector:
                 logger.info(f"Flushed {len(logs):,} logs (queue: {len(self._raw_queue):,})")
 
             # ── Dual-write: insert threat logs into dedicated pa_threat_logs ──
-            # Filter for Palo Alto THREAT log types and build dedicated rows.
+            # Supports both Palo Alto THREAT logs and Fortinet UTM logs.
             # log tuple index 13 = log_type, index 20 = parsed_data
             threat_rows = []
             for log in logs:
-                log_type_val = (log[13] or '').upper()
-                if log_type_val == 'THREAT':
-                    try:
+                log_type_val = (log[13] or '').lower()
+                try:
+                    if log_type_val == 'threat':
+                        # Palo Alto THREAT log
                         row = build_threat_row(log[0], log[1], log[20])
                         threat_rows.append(row)
-                    except Exception as e:
-                        logger.debug(f"Threat row build error: {e}")
+                    elif log_type_val.startswith('utm/'):
+                        # Fortinet UTM log (utm/webfilter, utm/dns, utm/virus, utm/ips)
+                        forti_subtype = log_type_val.split('/', 1)[1] if '/' in log_type_val else ''
+                        if forti_subtype in _FORTI_SUBTYPE_MAP:
+                            row = build_fortinet_threat_row(log[0], log[1], log[20], forti_subtype)
+                            threat_rows.append(row)
+                except Exception as e:
+                    logger.debug(f"Threat row build error ({log_type_val}): {e}")
 
             if threat_rows:
                 try:
