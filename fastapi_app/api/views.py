@@ -3,12 +3,14 @@ HTML view routes for the web UI.
 """
 
 import asyncio
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from ipaddress import IPv4Address, IPv6Address
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,110 +129,166 @@ async def home(request: Request):
 
 @router.get("/dashboard/", response_class=HTMLResponse, name="dashboard")
 async def dashboard(request: Request):
-    """Dashboard view with comprehensive SIEM statistics."""
+    """Dashboard view — renders skeleton immediately, data loaded via JS."""
+    return _render("logs/dashboard.html", request, {})
+
+
+# Port service mapping (shared by API)
+_PORT_SERVICES = {
+    22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS', 80: 'HTTP',
+    110: 'POP3', 143: 'IMAP', 443: 'HTTPS', 445: 'SMB', 465: 'SMTPS',
+    587: 'Submission', 993: 'IMAPS', 995: 'POP3S', 1433: 'MSSQL',
+    1521: 'Oracle', 3306: 'MySQL', 3389: 'RDP', 5432: 'PostgreSQL',
+    5900: 'VNC', 6379: 'Redis', 8080: 'HTTP-Alt', 8443: 'HTTPS-Alt',
+    27017: 'MongoDB'
+}
+
+
+def _safe_int(v):
+    """Convert ClickHouse numeric to int."""
     try:
-        # Run dashboard stats + recent logs in parallel (both are blocking ClickHouse calls)
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _sanitize(obj):
+    """Recursively convert non-JSON-safe types in nested dicts/lists."""
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, (IPv4Address, IPv6Address)):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, bytes):
+        return obj.decode('utf-8', errors='replace')
+    return obj
+
+
+@router.get("/api/dashboard/stats")
+async def api_dashboard_stats():
+    """JSON API for dashboard stats — called async after page load."""
+    try:
         loop = asyncio.get_event_loop()
         stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
-        logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=20))
-        stats, logs = await asyncio.gather(stats_future, logs_future)
+        logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
 
-        # Prepare severity data for chart
+        # URL/DNS stats from pa_threat_logs (run in parallel too)
+        def _get_url_dns_stats():
+            try:
+                client = ClickHouseClient.get_client()
+                r = list(client.query("""
+                    SELECT
+                        countIf(log_subtype = 'url') as url_total,
+                        countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
+                        countIf(log_subtype = 'spyware') as dns_total,
+                        countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
+                        countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
+                    FROM pa_threat_logs
+                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                """).named_results())
+                if r:
+                    return {k: _safe_int(v) for k, v in r[0].items()}
+                return {}
+            except Exception:
+                return {}
+
+        url_dns_future = loop.run_in_executor(_executor, _get_url_dns_stats)
+        stats, logs, url_dns = await asyncio.gather(stats_future, logs_future, url_dns_future)
+
+        # Prepare severity data
         severity_data = []
         for item in stats.get('severity_breakdown', []):
             severity_data.append({
-                'name': SEVERITY_MAP.get(item['severity'], f"Level {item['severity']}"),
-                'count': item['count'],
-                'severity': item['severity']
+                'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
+                'count': _safe_int(item.get('count', 0)),
+                'severity': _safe_int(item.get('severity', 6))
             })
 
-        # Prepare hourly timeline data (24h)
-        timeline_labels = []
-        timeline_data = []
-        timeline_critical = []
-        timeline_denied = []
+        # Prepare timeline
+        timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
         for item in stats.get('traffic_timeline', []):
             hour = item.get('hour')
-            if hasattr(hour, 'strftime'):
-                timeline_labels.append(hour.strftime('%H:%M'))
-            else:
-                timeline_labels.append(str(hour))
-            timeline_data.append(item.get('total', 0))
-            timeline_critical.append(item.get('critical', 0))
-            timeline_denied.append(item.get('denied', 0))
+            timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
+            timeline['total'].append(_safe_int(item.get('total', 0)))
+            timeline['critical'].append(_safe_int(item.get('critical', 0)))
+            timeline['denied'].append(_safe_int(item.get('denied', 0)))
 
-        # Prepare realtime traffic (per minute, last hour)
-        realtime_labels = []
-        realtime_data = []
+        # Prepare realtime
+        realtime = {'labels': [], 'data': []}
         for item in stats.get('realtime_traffic', []):
             minute = item.get('minute')
-            if hasattr(minute, 'strftime'):
-                realtime_labels.append(minute.strftime('%H:%M'))
-            else:
-                realtime_labels.append(str(minute))
-            realtime_data.append(item.get('count', 0))
+            realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
+            realtime['data'].append(_safe_int(item.get('count', 0)))
 
-        # Prepare action distribution data
-        action_data = []
-        for item in stats.get('action_breakdown', []):
-            action_data.append({
-                'action': item.get('action_type', 'unknown'),
-                'count': item.get('count', 0)
+        # Actions
+        actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
+
+        # Protocols
+        protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
+
+        # Top sources / destinations / threats / ports / devices
+        top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
+        top_dests = [{'ip': str(d.get('ip', '')), 'count': _safe_int(d.get('count', 0)), 'denied_count': _safe_int(d.get('denied_count', 0))} for d in stats.get('top_destinations', [])]
+        threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
+        ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
+        devices = []
+        for dv in stats.get('device_activity', []):
+            ls = dv.get('last_seen')
+            devices.append({
+                'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
+                'critical_count': _safe_int(dv.get('critical_count', 0)),
+                'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
             })
 
-        # Prepare protocol distribution
-        protocol_data = []
-        for item in stats.get('protocol_distribution', []):
-            protocol_data.append({
-                'protocol': item.get('protocol', 'Unknown'),
-                'count': item.get('count', 0)
+        # Recent logs (get_recent_logs returns list of dicts)
+        recent = []
+        for log in (logs or [])[:15]:
+            ts = log.get('timestamp')
+            sev = log.get('severity', 6)
+            recent.append({
+                'timestamp': ts.strftime('%H:%M:%S') if hasattr(ts, 'strftime') else str(ts) if ts else '-',
+                'device_ip': log.get('device_ip', ''),
+                'severity': sev,
+                'severity_name': SEVERITY_MAP.get(sev, 'Unknown'),
+                'message': (log.get('message', '') or '')[:150],
             })
 
-        # Port service mapping for common ports
-        port_services = {
-            22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS', 80: 'HTTP',
-            110: 'POP3', 143: 'IMAP', 443: 'HTTPS', 445: 'SMB', 465: 'SMTPS',
-            587: 'Submission', 993: 'IMAPS', 995: 'POP3S', 1433: 'MSSQL',
-            1521: 'Oracle', 3306: 'MySQL', 3389: 'RDP', 5432: 'PostgreSQL',
-            5900: 'VNC', 6379: 'Redis', 8080: 'HTTP-Alt', 8443: 'HTTPS-Alt',
-            27017: 'MongoDB'
+        payload = {
+            'kpi': {
+                'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
+                'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
+                'current_eps': round(float(stats.get('current_eps', 0)), 1),
+                'allowed': _safe_int(stats.get('allowed_count', 0)),
+                'denied': _safe_int(stats.get('denied_count', 0)),
+                'critical': _safe_int(stats.get('critical_count', 0)),
+                'active_devices': _safe_int(stats.get('active_devices', 0)),
+                'url_total': _safe_int(url_dns.get('url_total', 0)),
+                'url_blocked': _safe_int(url_dns.get('url_blocked', 0)),
+                'dns_total': _safe_int(url_dns.get('dns_total', 0)),
+                'dns_sinkholed': _safe_int(url_dns.get('dns_sinkholed', 0)),
+                'dns_critical': _safe_int(url_dns.get('dns_critical', 0)),
+            },
+            'severity_data': severity_data,
+            'timeline': timeline,
+            'realtime': realtime,
+            'actions': actions,
+            'protocols': protocols,
+            'top_sources': top_sources,
+            'top_destinations': top_dests,
+            'threats': threats,
+            'ports': ports,
+            'devices': devices,
+            'recent_logs': recent,
         }
-
-        return _render("logs/dashboard.html", request, {
-            "logs": logs,
-            "severity_map": SEVERITY_MAP,
-            "stats": stats,
-            "severity_data": severity_data,
-            "timeline_labels": timeline_labels,
-            "timeline_data": timeline_data,
-            "timeline_critical": timeline_critical,
-            "timeline_denied": timeline_denied,
-            "realtime_labels": realtime_labels,
-            "realtime_data": realtime_data,
-            "action_data": action_data,
-            "protocol_data": protocol_data,
-            "port_services": port_services,
-            "error": None,
-        })
+        return JSONResponse(_sanitize(payload))
     except Exception as e:
+        logger.error(f"Dashboard stats API error: {e}")
         import traceback
         traceback.print_exc()
-        return _render("logs/dashboard.html", request, {
-            "logs": [],
-            "severity_map": SEVERITY_MAP,
-            "stats": {},
-            "severity_data": [],
-            "timeline_labels": [],
-            "timeline_data": [],
-            "timeline_critical": [],
-            "timeline_denied": [],
-            "realtime_labels": [],
-            "realtime_data": [],
-            "action_data": [],
-            "protocol_data": [],
-            "port_services": {},
-            "error": str(e),
-        })
+        return JSONResponse({'error': str(e)}, status_code=500)
 
 
 @router.get("/logs/", response_class=HTMLResponse, name="log_list")
