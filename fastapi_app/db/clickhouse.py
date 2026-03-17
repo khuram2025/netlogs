@@ -773,6 +773,121 @@ class ClickHouseClient:
         client = cls.get_client()
         client.insert('url_logs', logs, column_names=cls.URL_LOG_COLUMNS)
 
+    # ── Unified DNS Logs Table ─────────────────────────────────────────
+    DNS_LOG_COLUMNS = [
+        'timestamp', 'vendor', 'device_ip', 'device_name', 'vdom',
+        'action', 'src_ip', 'dest_ip', 'src_port', 'dest_port', 'transport',
+        'src_user', 'qname', 'qtype', 'qclass', 'resolved_ip',
+        'category', 'category_id', 'severity', 'direction',
+        'policy', 'policy_id', 'profile',
+        'src_zone', 'dest_zone', 'src_country', 'dest_country',
+        'session_id', 'msg', 'event_type',
+        'threat_name', 'threat_id',
+    ]
+
+    @classmethod
+    def ensure_dns_logs_table(cls) -> None:
+        """Create the unified dns_logs table for Fortinet DNS + Palo Alto DNS logs."""
+        client = cls.get_client()
+
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS dns_logs (
+            -- Timestamps
+            timestamp           DateTime64(3) CODEC(DoubleDelta, LZ4),
+
+            -- Source identification
+            vendor              LowCardinality(String),
+            device_ip           String CODEC(ZSTD(1)),
+            device_name         LowCardinality(String),
+            vdom                LowCardinality(String),
+
+            -- Action
+            action              LowCardinality(String),
+
+            -- Network 5-tuple
+            src_ip              String CODEC(ZSTD(1)),
+            dest_ip             String CODEC(ZSTD(1)),
+            src_port            UInt16 CODEC(T64, LZ4),
+            dest_port           UInt16 CODEC(T64, LZ4),
+            transport           LowCardinality(String),
+
+            -- Identity
+            src_user            String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- DNS fields
+            qname               String DEFAULT '' CODEC(ZSTD(1)),
+            qtype               LowCardinality(String),
+            qclass              LowCardinality(String),
+            resolved_ip         String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Classification
+            category            LowCardinality(String),
+            category_id         String DEFAULT '' CODEC(ZSTD(1)),
+            severity            LowCardinality(String),
+            direction           LowCardinality(String),
+
+            -- Policy
+            policy              LowCardinality(String),
+            policy_id           String DEFAULT '' CODEC(ZSTD(1)),
+            profile             LowCardinality(String),
+
+            -- Zones
+            src_zone            LowCardinality(String),
+            dest_zone           LowCardinality(String),
+
+            -- Geo
+            src_country         LowCardinality(String),
+            dest_country        LowCardinality(String),
+
+            -- Session
+            session_id          UInt64 DEFAULT 0 CODEC(T64, LZ4),
+
+            -- Message / context
+            msg                 String DEFAULT '' CODEC(ZSTD(1)),
+            event_type          LowCardinality(String),
+
+            -- Threat
+            threat_name         String DEFAULT '' CODEC(ZSTD(1)),
+            threat_id           String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- Materialized
+            log_date            Date MATERIALIZED toDate(timestamp),
+            log_hour            UInt8 MATERIALIZED toHour(timestamp),
+
+            -- Indexes
+            INDEX idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dest_ip dest_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_qname qname TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
+            INDEX idx_category category TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_src_user src_user TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_resolved_ip resolved_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_threat_name threat_name TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_vendor vendor TYPE bloom_filter(0.01) GRANULARITY 4
+        ) ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (action, qname, timestamp)
+        TTL timestamp + INTERVAL 6 MONTH DELETE
+        SETTINGS
+            index_granularity = 8192,
+            min_bytes_for_wide_part = 10485760,
+            merge_with_ttl_timeout = 86400
+        """
+
+        try:
+            client.command(create_table_query)
+            logger.info("ClickHouse table 'dns_logs' created/verified")
+        except Exception as e:
+            logger.warning(f"dns_logs table creation issue: {e}")
+
+    @classmethod
+    def insert_dns_logs(cls, logs: List[tuple]) -> None:
+        """Insert DNS logs into the unified dns_logs table."""
+        if not logs:
+            return
+        client = cls.get_client()
+        client.insert('dns_logs', logs, column_names=cls.DNS_LOG_COLUMNS)
+
     @classmethod
     def insert_threat_logs(cls, logs: List[tuple]) -> None:
         """Insert Palo Alto threat/URL logs into the dedicated pa_threat_logs table."""

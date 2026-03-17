@@ -565,6 +565,158 @@ def flush_url_logs(
     return False, retries
 
 
+# ---------------------------------------------------------------------------
+# DNS Row Builders
+# ---------------------------------------------------------------------------
+
+def build_fortinet_dns_row(now: datetime, client_ip: str, parsed_data: dict) -> tuple:
+    """Build a tuple for the dns_logs table from a Fortinet utm/dns log."""
+    pd = parsed_data
+
+    # Map Fortinet severity level
+    level = (pd.get('level') or '').lower()
+    if level in ('emergency', 'alert', 'critical'):
+        severity = 'critical'
+    elif level == 'error':
+        severity = 'high'
+    elif level == 'warning':
+        severity = 'medium'
+    elif level == 'notice':
+        severity = 'low'
+    else:
+        severity = 'informational'
+
+    proto_num = pd.get('proto', '')
+    transport = _PROTO_MAP.get(proto_num, proto_num)
+
+    return (
+        now,                                                    # timestamp
+        'fortinet',                                             # vendor
+        client_ip,                                              # device_ip
+        pd.get('devname', ''),                                  # device_name
+        pd.get('vd', ''),                                       # vdom
+        pd.get('action', ''),                                   # action
+        pd.get('srcip', ''),                                    # src_ip
+        pd.get('dstip', ''),                                    # dest_ip
+        _safe_uint(pd.get('srcport'), 0),                       # src_port
+        _safe_uint(pd.get('dstport'), 0),                       # dest_port
+        transport,                                              # transport
+        pd.get('user') or pd.get('srcuser', ''),                # src_user
+        pd.get('qname', ''),                                    # qname
+        pd.get('qtype', ''),                                    # qtype
+        pd.get('qclass', ''),                                   # qclass
+        pd.get('ipaddr', ''),                                   # resolved_ip
+        pd.get('catdesc', ''),                                  # category
+        pd.get('cat', ''),                                      # category_id
+        severity,                                               # severity
+        pd.get('direction', ''),                                # direction
+        pd.get('policyname') or pd.get('policyid', ''),        # policy
+        pd.get('policyid', ''),                                 # policy_id
+        pd.get('profile', ''),                                  # profile
+        pd.get('srcintf', ''),                                  # src_zone
+        pd.get('dstintf', ''),                                  # dest_zone
+        pd.get('srccountry', ''),                               # src_country
+        pd.get('dstcountry', ''),                               # dest_country
+        _safe_uint(pd.get('sessionid'), 0),                     # session_id
+        pd.get('msg', ''),                                      # msg
+        pd.get('eventtype', ''),                                # event_type
+        pd.get('threatname', ''),                               # threat_name
+        pd.get('threatid', ''),                                 # threat_id
+    )
+
+
+def build_paloalto_dns_row(now: datetime, client_ip: str, parsed_data: dict) -> tuple:
+    """Build a tuple for the dns_logs table from a Palo Alto spyware/dns threat log."""
+    pd = parsed_data
+
+    # PA severity mapping
+    sev_raw = (pd.get('severity') or '').lower()
+    if sev_raw in ('critical',):
+        severity = 'critical'
+    elif sev_raw in ('high',):
+        severity = 'high'
+    elif sev_raw in ('medium',):
+        severity = 'medium'
+    elif sev_raw in ('low',):
+        severity = 'low'
+    else:
+        severity = 'informational'
+
+    proto_num = pd.get('protocol', '')
+    transport = _PROTO_MAP.get(proto_num, proto_num)
+
+    # PA stores domain in 'misc' field for spyware/dns subtype
+    qname = pd.get('misc', '') or pd.get('qname', '')
+
+    # Decompose threat_id for threat info
+    raw_tid = pd.get('threat_id', '')
+    threat_name = raw_tid
+    threat_id = ''
+    m = _THREAT_ID_RE.match(raw_tid) if raw_tid else None
+    if m:
+        threat_name = m.group(1).strip()
+        threat_id = m.group(2)
+
+    return (
+        now,                                                    # timestamp
+        'paloalto',                                             # vendor
+        client_ip,                                              # device_ip
+        pd.get('device_name') or pd.get('vsys_name', ''),      # device_name
+        pd.get('vsys', ''),                                     # vdom
+        pd.get('action', ''),                                   # action
+        pd.get('src_ip', ''),                                   # src_ip
+        pd.get('dst_ip', ''),                                   # dest_ip
+        _safe_uint(pd.get('src_port'), 0),                      # src_port
+        _safe_uint(pd.get('dst_port'), 0),                      # dest_port
+        transport,                                              # transport
+        pd.get('src_user', ''),                                 # src_user
+        qname,                                                  # qname
+        '',                                                     # qtype
+        '',                                                     # qclass
+        '',                                                     # resolved_ip
+        pd.get('category', ''),                                 # category
+        '',                                                     # category_id
+        severity,                                               # severity
+        pd.get('direction', ''),                                # direction
+        pd.get('rule', ''),                                     # policy
+        pd.get('rule_uuid', ''),                                # policy_id
+        '',                                                     # profile
+        pd.get('src_zone') or pd.get('inbound_if', ''),        # src_zone
+        pd.get('dst_zone') or pd.get('outbound_if', ''),       # dest_zone
+        pd.get('src_location', ''),                             # src_country
+        pd.get('dst_location', ''),                             # dest_country
+        _safe_uint(pd.get('session_id'), 0),                    # session_id
+        '',                                                     # msg
+        '',                                                     # event_type
+        threat_name,                                            # threat_name
+        threat_id,                                              # threat_id
+    )
+
+
+def flush_dns_logs(
+    client,
+    logs: List[tuple],
+    retries: int = 3,
+    retry_delay: float = 1.0,
+) -> Tuple[bool, int]:
+    """Insert DNS logs to dns_logs table with retry."""
+    if not logs:
+        return True, 0
+
+    for attempt in range(retries):
+        try:
+            client.insert('dns_logs', logs, column_names=ClickHouseClient.DNS_LOG_COLUMNS)
+            return True, attempt
+        except Exception as e:
+            if attempt < retries - 1:
+                logger.warning(f"DNS logs insert attempt {attempt+1} failed: {e}, retrying...")
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                logger.error(f"DNS logs insert FAILED after {retries} attempts: {e}")
+
+    return False, retries
+
+
 def flush_threat_logs(
     client,
     logs: List[tuple],
@@ -888,20 +1040,27 @@ class SyslogCollector:
             # log tuple index 13 = log_type, index 20 = parsed_data
             threat_rows = []
             url_rows = []
+            dns_rows = []
             for log in logs:
                 log_type_val = (log[13] or '').lower()
                 try:
                     if log_type_val == 'threat':
                         row = build_threat_row(log[0], log[1], log[20])
                         threat_rows.append(row)
-                        # PA URL subtype also goes to url_logs
+                        # PA URL subtype → url_logs, spyware subtype → dns_logs
                         subtype = (log[20].get('subtype') or '').lower()
                         if subtype == 'url':
                             url_row = build_paloalto_url_row(log[0], log[1], log[20])
                             url_rows.append(url_row)
+                        elif subtype == 'spyware':
+                            dns_row = build_paloalto_dns_row(log[0], log[1], log[20])
+                            dns_rows.append(dns_row)
                     elif log_type_val == 'utm/webfilter':
                         url_row = build_fortinet_url_row(log[0], log[1], log[20])
                         url_rows.append(url_row)
+                    elif log_type_val == 'utm/dns':
+                        dns_row = build_fortinet_dns_row(log[0], log[1], log[20])
+                        dns_rows.append(dns_row)
                 except Exception as e:
                     logger.debug(f"Row build error ({log_type_val}): {e}")
 
@@ -938,6 +1097,23 @@ class SyslogCollector:
                         logger.error(f"URL write FAILED for {len(url_rows)} logs")
                 except Exception as e:
                     logger.error(f"URL write error: {e}")
+
+            if dns_rows:
+                try:
+                    d_success, d_retries = await loop.run_in_executor(
+                        self.executor,
+                        flush_dns_logs,
+                        ch_client,
+                        dns_rows,
+                        self.config.insert_retries,
+                        self.config.insert_retry_delay,
+                    )
+                    if d_success:
+                        logger.info(f"DNS write: {len(dns_rows)} logs → dns_logs")
+                    else:
+                        logger.error(f"DNS write FAILED for {len(dns_rows)} logs")
+                except Exception as e:
+                    logger.error(f"DNS write error: {e}")
         else:
             self.metrics.flush_errors += 1
             # On total failure, try to recreate the client for next batch
@@ -1008,6 +1184,7 @@ class SyslogCollector:
             ClickHouseClient.ensure_table()
             ClickHouseClient.ensure_pa_threat_table()
             ClickHouseClient.ensure_url_logs_table()
+            ClickHouseClient.ensure_dns_logs_table()
         except Exception as e:
             logger.error(f"ClickHouse setup failed: {e}")
             raise

@@ -1233,7 +1233,7 @@ async def api_url_logs_stats(
 
 
 # ============================================================
-# JSON API — DNS Traffic Logs
+# JSON API — DNS Traffic Logs (from unified dns_logs table)
 # ============================================================
 
 @router.get("/api/threats/dns-logs", name="api_dns_logs",
@@ -1244,16 +1244,16 @@ async def api_dns_logs(
     action: Optional[str] = None,
     src_ip: Optional[str] = None,
     dest_ip: Optional[str] = None,
-    threat_name: Optional[str] = None,
+    vendor: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    """Paginated DNS traffic logs — spyware subtype entries that are DNS-related."""
+    """Paginated DNS traffic logs from the unified dns_logs table."""
     try:
         client = ClickHouseClient.get_client()
-        filters = ["log_subtype = 'spyware'"]
-        params = {}
+        filters = ["timestamp > now() - INTERVAL {h:UInt32} HOUR"]
+        params: dict = {"h": hours}
 
         if severity:
             filters.append("severity = {sev:String}")
@@ -1267,41 +1267,35 @@ async def api_dns_logs(
         if dest_ip:
             filters.append("dest_ip = {dip:String}")
             params["dip"] = dest_ip
-        if threat_name:
-            filters.append("threat_name = {tn:String}")
-            params["tn"] = threat_name
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            filters.append("vendor = {vnd:String}")
+            params["vnd"] = vendor
         if search:
-            filters.append(
-                "(threat_name ILIKE {q:String} OR src_ip ILIKE {q:String} "
-                "OR dest_ip ILIKE {q:String} OR application ILIKE {q:String} "
-                "OR rule ILIKE {q:String} OR src_user ILIKE {q:String})"
-            )
             params["q"] = f"%{search}%"
+            filters.append(
+                "(qname ILIKE {q:String} OR src_ip ILIKE {q:String} "
+                "OR dest_ip ILIKE {q:String} OR resolved_ip ILIKE {q:String} "
+                "OR src_user ILIKE {q:String} OR category ILIKE {q:String} "
+                "OR threat_name ILIKE {q:String} OR msg ILIKE {q:String})"
+            )
 
-        outer_where = " AND ".join(filters)
+        where = " AND ".join(filters)
 
-        _cols = """timestamp, src_ip, src_user, dest_ip, dest_port,
-            threat_name, threat_category, category,
-            action, severity, application, rule,
-            device_name, device_ip, session_id,
-            direction, transport, src_zone, dest_zone,
-            url, log_subtype"""
-        cte = _combined_cte(hours, pa_cols=_cols, forti_cols=_cols)
-
-        count_q = f"{cte} SELECT count() FROM combined WHERE {outer_where}"
+        count_q = f"SELECT count() FROM dns_logs WHERE {where}"
         total = _safe((client.query(count_q, parameters=params).result_rows or [[0]])[0][0])
 
         query = f"""
-        {cte}
         SELECT
-            timestamp, src_ip, src_user, dest_ip, dest_port,
-            threat_name, threat_category, category,
-            action, severity, application, rule,
+            timestamp, vendor, src_ip, src_user, dest_ip, dest_port,
+            qname, qtype, qclass, resolved_ip,
+            category, action, severity, msg,
             device_name, device_ip, session_id,
             direction, transport, src_zone, dest_zone,
-            url
-        FROM combined
-        WHERE {outer_where}
+            src_country, dest_country, policy, profile,
+            event_type, threat_name, threat_id
+        FROM dns_logs
+        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
+        WHERE {where}
         ORDER BY timestamp DESC
         LIMIT {limit} OFFSET {offset}
         """
@@ -1309,38 +1303,39 @@ async def api_dns_logs(
         events = []
         for r in rows:
             ts = r['timestamp']
-            # Extract queried domain from threat_name
-            tn = r['threat_name']
-            domain = ""
-            if "generic:" in tn:
-                domain = tn.split("generic:")[-1].rstrip(")")
-            elif "Grayware:" in tn:
-                domain = tn.split("Grayware:")[-1].rstrip(")")
-            elif "Ransomware:" in tn:
-                domain = tn.split("Ransomware:")[-1].rstrip(")")
-
             events.append({
                 "timestamp": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
+                "vendor": r['vendor'],
                 "src_ip": r['src_ip'],
                 "src_user": r['src_user'] or "",
                 "dest_ip": r['dest_ip'],
                 "dest_port": r['dest_port'],
-                "threat_name": tn,
-                "domain": domain,
-                "threat_category": r['threat_category'],
+                "qname": r['qname'],
+                "qtype": r['qtype'] or "",
+                "qclass": r['qclass'] or "",
+                "resolved_ip": r['resolved_ip'] or "",
+                "domain": r['qname'],
+                "threat_name": r['threat_name'] or r['qname'],
                 "category": r['category'],
                 "action": r['action'],
                 "severity": r['severity'],
-                "application": r['application'],
-                "rule": r['rule'],
+                "msg": r['msg'] or "",
                 "device_name": r['device_name'],
                 "device_ip": r['device_ip'],
                 "session_id": r['session_id'],
-                "direction": r['direction'],
-                "transport": r['transport'],
+                "direction": r['direction'] or "",
+                "transport": r['transport'] or "",
                 "src_zone": r['src_zone'],
                 "dest_zone": r['dest_zone'],
-                "url": r['url'],
+                "src_country": r['src_country'] or "",
+                "dest_country": r['dest_country'] or "",
+                "policy": r['policy'] or "",
+                "profile": r['profile'] or "",
+                "event_type": r['event_type'] or "",
+                "threat_category": r['category'],
+                "application": "",
+                "rule": r['policy'] or "",
+                "url": r['qname'],
             })
 
         return JSONResponse({
@@ -1357,25 +1352,22 @@ async def api_dns_logs(
 async def api_dns_logs_stats(
     hours: int = Query(24, ge=1, le=720),
 ):
-    """Stats for DNS traffic — top queried domains, sources, actions."""
+    """Stats for DNS traffic from the unified dns_logs table."""
     try:
         client = ClickHouseClient.get_client()
-        _cols = "src_ip, src_user, dest_ip, threat_name, action, severity, log_subtype"
-        cte = _combined_cte(hours, pa_cols=_cols, forti_cols=_cols)
-        dns_filter = "log_subtype = 'spyware'"
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
 
         # Summary
         sum_q = f"""
-        {cte}
         SELECT count() as total,
                uniqExact(src_ip) as unique_sources,
-               uniqExact(threat_name) as unique_signatures,
+               uniqExact(qname) as unique_signatures,
                uniqExact(dest_ip) as unique_resolvers,
-               countIf(action IN ('sinkhole','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(action IN ('sinkhole','block','deny','drop','reset-client','reset-server')) as blocked,
                countIf(action = 'alert') as alerted,
-               countIf(action = 'allow') as allowed,
+               countIf(action IN ('allow','pass','passthrough')) as allowed,
                countIf(severity IN ('critical','high')) as critical_high
-        FROM combined WHERE {dns_filter}
+        FROM dns_logs WHERE {tw}
         """
         sr = list(client.query(sum_q).named_results())
         s = sr[0] if sr else {}
@@ -1390,24 +1382,25 @@ async def api_dns_logs_stats(
             "critical_high": _safe(s.get('critical_high')),
         }
 
-        # Top queried domains (threat_name)
+        # Top queried domains
         dom_q = f"""
-        {cte}
-        SELECT threat_name, count() as cnt, any(severity) as sev, any(action) as act
-        FROM combined WHERE {dns_filter} AND threat_name != ''
-        GROUP BY threat_name ORDER BY cnt DESC LIMIT 10
+        SELECT qname as threat_name, count() as cnt,
+               any(severity) as sev, any(action) as act,
+               any(category) as category
+        FROM dns_logs WHERE {tw} AND qname != ''
+        GROUP BY qname ORDER BY cnt DESC LIMIT 10
         """
         domains = [{"threat_name": r['threat_name'], "count": _safe(r['cnt']),
-                     "severity": r['sev'], "action": r['act']}
+                     "severity": r['sev'], "action": r['act'],
+                     "category": r.get('category', '')}
                    for r in client.query(dom_q).named_results()]
 
         # Top sources
         src_q = f"""
-        {cte}
         SELECT src_ip, any(src_user) as src_user, count() as cnt,
-               uniqExact(threat_name) as unique_domains,
-               countIf(action IN ('sinkhole','deny','drop')) as blocked
-        FROM combined WHERE {dns_filter}
+               uniqExact(qname) as unique_domains,
+               countIf(action IN ('sinkhole','block','deny','drop')) as blocked
+        FROM dns_logs WHERE {tw}
         GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
         """
         sources = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "",
@@ -1417,9 +1410,8 @@ async def api_dns_logs_stats(
 
         # Action breakdown
         act_q = f"""
-        {cte}
         SELECT action, count() as cnt
-        FROM combined WHERE {dns_filter}
+        FROM dns_logs WHERE {tw}
         GROUP BY action ORDER BY cnt DESC
         """
         actions = [{"action": r['action'], "count": _safe(r['cnt'])}
@@ -1427,9 +1419,8 @@ async def api_dns_logs_stats(
 
         # Severity breakdown
         sev_q = f"""
-        {cte}
         SELECT severity, count() as cnt
-        FROM combined WHERE {dns_filter}
+        FROM dns_logs WHERE {tw}
         GROUP BY severity ORDER BY cnt DESC
         """
         severities = [{"severity": r['severity'], "count": _safe(r['cnt'])}

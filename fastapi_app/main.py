@@ -155,6 +155,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"url_logs table setup warning: {e}")
 
+    # Initialize unified DNS logs table
+    try:
+        ClickHouseClient.ensure_dns_logs_table()
+        logger.info("ClickHouse dns_logs table verified")
+    except Exception as e:
+        logger.warning(f"dns_logs table setup warning: {e}")
+
     # Run ClickHouse migrations
     try:
         from .db.clickhouse_migrations.runner import run_clickhouse_migrations

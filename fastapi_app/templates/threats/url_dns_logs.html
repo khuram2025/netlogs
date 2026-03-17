@@ -542,14 +542,14 @@
                         <thead>
                             <tr>
                                 <th>Time</th>
+                                <th>Vendor</th>
                                 <th>Source</th>
                                 <th>User</th>
-                                <th>Domain / Threat</th>
-                                <th>Severity</th>
+                                <th>Domain</th>
+                                <th>Type</th>
+                                <th>Category</th>
                                 <th>Action</th>
-                                <th>Dest</th>
-                                <th>App</th>
-                                <th>Rule</th>
+                                <th>Resolver</th>
                             </tr>
                         </thead>
                         <tbody id="dns-table-body">
@@ -974,17 +974,17 @@
             expandedRow = null;
             data.events.forEach((e, i) => {
                 const tr = document.createElement('tr');
-                const displayName = e.domain || e.threat_name;
+                const displayName = e.qname || e.domain || e.threat_name;
                 tr.innerHTML = `
                     <td class="udl-ts">${fmtTime(e.timestamp)}</td>
+                    <td>${vendorBadge(e.vendor)}</td>
                     <td class="udl-ip">${esc(e.src_ip)}</td>
                     <td class="udl-user-cell">${esc(e.src_user)}</td>
-                    <td class="udl-domain-cell" title="${esc(e.threat_name)}">${esc(truncUrl(displayName, 45))}</td>
-                    <td>${sevBadge(e.severity)}</td>
+                    <td class="udl-domain-cell" title="${esc(displayName)}">${esc(truncUrl(displayName, 45))}</td>
+                    <td><span class="udl-method">${esc(e.qtype || '')}</span></td>
+                    <td>${esc(e.category)}</td>
                     <td>${actionBadge(e.action)}</td>
                     <td class="udl-ip">${esc(e.dest_ip)}</td>
-                    <td>${esc(e.application)}</td>
-                    <td>${esc(e.rule)}</td>
                 `;
                 tr.addEventListener('click', () => toggleDnsDetail(tr, e));
                 body.appendChild(tr);
@@ -1008,29 +1008,34 @@
         detail.className = 'udl-detail-row';
         detail.innerHTML = `<td colspan="9"><div class="udl-detail-content">
             <div class="udl-detail-group">
-                <h4>DNS / Threat Details</h4>
-                <div class="udl-detail-field"><span class="lbl">Threat Name</span><span class="val">${esc(e.threat_name)}</span></div>
-                ${e.domain ? `<div class="udl-detail-field"><span class="lbl">Domain</span><span class="val" style="color:var(--udl-warning);font-weight:600">${esc(e.domain)}</span></div>` : ''}
-                <div class="udl-detail-field"><span class="lbl">Category</span><span class="val">${esc(e.threat_category)}${e.category ? ' / ' + esc(e.category) : ''}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Severity</span><span class="val">${sevBadge(e.severity)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Direction</span><span class="val">${esc(e.direction)}</span></div>
-                ${e.url ? `<div class="udl-detail-field"><span class="lbl">URL</span><span class="val">${esc(e.url)}</span></div>` : ''}
+                <h4>DNS Query Details</h4>
+                <div class="udl-detail-field"><span class="lbl">Vendor</span><span class="val">${vendorBadge(e.vendor)} ${esc(e.vendor)}</span></div>
+                <div class="udl-detail-field"><span class="lbl">Domain (qname)</span><span class="val" style="color:var(--udl-warning);font-weight:600">${esc(e.qname || e.domain || e.threat_name)}</span></div>
+                <div class="udl-detail-field"><span class="lbl">Query Type</span><span class="val">${esc(e.qtype || '-')}</span></div>
+                ${e.resolved_ip ? `<div class="udl-detail-field"><span class="lbl">Resolved IP</span><span class="val" style="color:var(--udl-cyan)">${esc(e.resolved_ip)}</span></div>` : ''}
+                <div class="udl-detail-field"><span class="lbl">Category</span><span class="val">${esc(e.category)}</span></div>
+                ${e.msg ? `<div class="udl-detail-field"><span class="lbl">Message</span><span class="val">${esc(e.msg)}</span></div>` : ''}
+                ${e.threat_name && e.threat_name !== e.qname ? `<div class="udl-detail-field"><span class="lbl">Threat</span><span class="val">${esc(e.threat_name)}</span></div>` : ''}
+                ${e.profile ? `<div class="udl-detail-field"><span class="lbl">Profile</span><span class="val">${esc(e.profile)}</span></div>` : ''}
             </div>
             <div class="udl-detail-group">
                 <h4>Network</h4>
                 <div class="udl-detail-field"><span class="lbl">Source</span><span class="val">${esc(e.src_ip)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">User</span><span class="val">${esc(e.src_user)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Destination</span><span class="val">${esc(e.dest_ip)}:${e.dest_port}</span></div>
+                <div class="udl-detail-field"><span class="lbl">Resolver</span><span class="val">${esc(e.dest_ip)}:${e.dest_port}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Transport</span><span class="val">${esc(e.transport)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Zones</span><span class="val">${esc(e.src_zone)} → ${esc(e.dest_zone)}</span></div>
+                ${e.src_country ? `<div class="udl-detail-field"><span class="lbl">Src Country</span><span class="val">${esc(e.src_country)}</span></div>` : ''}
+                ${e.dest_country ? `<div class="udl-detail-field"><span class="lbl">Dest Country</span><span class="val">${esc(e.dest_country)}</span></div>` : ''}
             </div>
             <div class="udl-detail-group">
                 <h4>Policy</h4>
                 <div class="udl-detail-field"><span class="lbl">Action</span><span class="val">${actionBadge(e.action)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Rule</span><span class="val">${esc(e.rule)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Application</span><span class="val">${esc(e.application)}</span></div>
+                <div class="udl-detail-field"><span class="lbl">Severity</span><span class="val">${sevBadge(e.severity)}</span></div>
+                <div class="udl-detail-field"><span class="lbl">Policy</span><span class="val">${esc(e.policy || e.rule)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Device</span><span class="val">${esc(e.device_name)} (${esc(e.device_ip)})</span></div>
                 <div class="udl-detail-field"><span class="lbl">Session ID</span><span class="val">${e.session_id}</span></div>
+                ${e.event_type ? `<div class="udl-detail-field"><span class="lbl">Event Type</span><span class="val">${esc(e.event_type)}</span></div>` : ''}
             </div>
         </div></td>`;
         tr.after(detail);
