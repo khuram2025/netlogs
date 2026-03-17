@@ -88,3 +88,36 @@ http://10.12.50.77:8002/logs/
 just go through this one and then me what your suggestion  about this is it right approach 
 
 
+ we are receiving logs from the fortinet devices is our logs from the fortient all have  type="traffic"  or we have type="utm" subtype="webfilter"
+
+
+ You have both types and more. Here's the breakdown from your 1.68 billion logs:                                        
+                                                                                                                         
+  Traffic logs (~1.6B, ~96%):                                                                                            
+  - TRAFFIC — 799M (Palo Alto format)                                                                                    
+  - traffic/forward — 743M (Fortinet forwarded traffic)                                                                  
+  - traffic/local — 64M (Fortinet local traffic)                                                                         
+                                                                                                                         
+  UTM logs (~40M):                                                                                                       
+  - utm/app-ctrl — 18.9M (application control)                                                                           
+  - utm/webfilter — 8.5M (web filtering)                                                                                 
+  - utm/voip — 7.5M (VoIP)                                          
+  - utm/ssl — 5.4M (SSL inspection)                                                                                      
+  - utm/file-filter — 150K                                          
+  - utm/dns — 96K                                                                                                        
+                 
+  Event logs (~4.2M):                                                                                                    
+  - event/system — 2.2M                                                                                                  
+  - event/user — 1.6M                                                                                                    
+  - event/vpn — 410K                                                                                                     
+  - event/sdwan, event/security-rating, event/ha, event/router — small counts                                            
+                                                                    
+  Other:                                                                                                                 
+  - THREAT — 1.8M (Palo Alto threat logs)
+  - 26M with empty log_type                                                                                              
+                                                                    
+  So yes — you're receiving both type="traffic" and type="utm" subtype="webfilter" from Fortinet, plus app-ctrl, voip,   
+  ssl, file-filter, dns UTM subtypes, and event logs too. The Fortinet logs are quite comprehensive.                     
+                                                                                                                         
+✻ Crunched for 3m 47s · 1 background task still running (↓ to manage)                                                    
+                                                                           

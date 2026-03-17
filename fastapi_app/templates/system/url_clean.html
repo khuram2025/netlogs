@@ -1,0 +1,697 @@
+{% extends "base.html" %}
+
+{% block title %}SiteClean Rules — Zentryc{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ================================================================
+       SITECLEAN RULES - URL NOISE FILTERING
+       ================================================================ */
+
+    .uc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .uc-header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-color);
+        margin: 0;
+    }
+    .uc-header .subtitle {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }
+
+    /* Stats bar */
+    .uc-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .uc-stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+    }
+    .uc-stat-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+    }
+    .uc-stat-card .value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-color);
+    }
+    .uc-stat-card .value.success { color: var(--success); }
+    .uc-stat-card .value.primary { color: var(--primary); }
+    .uc-stat-card .value.warning { color: #f59e0b; }
+
+    /* Toolbar */
+    .uc-toolbar {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .uc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        transition: all 0.15s;
+    }
+    .uc-btn:hover { color: var(--text-color); border-color: var(--text-muted); }
+    .uc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .uc-btn.primary {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+    .uc-btn.primary:hover { background: #2563eb; border-color: #2563eb; }
+    .uc-btn.success {
+        background: var(--success);
+        color: #fff;
+        border-color: var(--success);
+    }
+    .uc-btn.success:hover { background: #16a34a; border-color: #16a34a; }
+    .uc-btn.danger {
+        background: transparent;
+        color: var(--danger);
+        border-color: var(--danger);
+    }
+    .uc-btn.danger:hover { background: var(--danger); color: #fff; }
+    .uc-toolbar-spacer { flex: 1; }
+
+    /* Add rule form */
+    .uc-add-form {
+        display: none;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+    .uc-add-form.visible { display: block; }
+    .uc-add-form h3 {
+        margin: 0 0 1rem;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-color);
+    }
+    .uc-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .uc-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .uc-form-group label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+    .uc-form-group input,
+    .uc-form-group select {
+        background: var(--input-bg, #020617);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        color: var(--text-color);
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .uc-form-group input:focus,
+    .uc-form-group select:focus {
+        border-color: var(--primary);
+    }
+    .uc-form-group select option {
+        background: #1e293b;
+        color: var(--text-color);
+    }
+    .uc-form-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    /* Rules table */
+    .uc-table-wrap {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .uc-table-wrap table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .uc-table-wrap th {
+        text-align: left;
+        padding: 0.75rem 1rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        background: rgba(0,0,0,0.15);
+        border-bottom: 1px solid var(--border);
+    }
+    .uc-table-wrap td {
+        padding: 0.65rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text-color);
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+    }
+    .uc-table-wrap tr:last-child td { border-bottom: none; }
+    .uc-table-wrap tr:hover td { background: rgba(59, 130, 246, 0.04); }
+
+    /* Group header row */
+    .uc-group-row td {
+        background: rgba(59, 130, 246, 0.06);
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--primary);
+        letter-spacing: 0.02em;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    /* Toggle switch */
+    .uc-toggle {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+    .uc-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+    .uc-toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: #475569;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .uc-toggle-slider::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s;
+    }
+    .uc-toggle input:checked + .uc-toggle-slider {
+        background: var(--success);
+    }
+    .uc-toggle input:checked + .uc-toggle-slider::before {
+        transform: translateX(16px);
+    }
+
+    /* Badge */
+    .uc-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--primary);
+    }
+    .uc-badge.hostname_exact { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+    .uc-badge.hostname_glob { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .uc-badge.category { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+    .uc-badge.url_contains { background: rgba(59, 130, 246, 0.15); color: var(--primary); }
+
+    .uc-pattern {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        word-break: break-all;
+    }
+
+    .uc-matched {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .uc-matched.has-count { color: #f59e0b; font-weight: 600; }
+
+    .uc-btn-del {
+        padding: 0.3rem 0.6rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .uc-btn-del:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* Empty state */
+    .uc-empty {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+    }
+    .uc-empty svg { width: 48px; height: 48px; opacity: 0.3; margin-bottom: 1rem; }
+
+    /* Toast */
+    .uc-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.875rem;
+        z-index: 1100;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 0.3s;
+        max-width: 400px;
+    }
+    .uc-toast.show { opacity: 1; transform: translateY(0); }
+    .uc-toast.success { background: var(--success); }
+    .uc-toast.error { background: var(--danger); }
+
+    /* Loading spinner for stats */
+    .uc-loading {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: uc-spin 0.7s linear infinite;
+    }
+    @keyframes uc-spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+        .uc-form-grid { grid-template-columns: 1fr 1fr; }
+        .uc-stats { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+        .uc-form-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
+    <!-- Header -->
+    <div class="uc-header">
+        <div>
+            <h1>SiteClean Rules</h1>
+            <div class="subtitle">URL noise filtering — remove machine-generated background traffic</div>
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="uc-stats">
+        <div class="uc-stat-card">
+            <div class="label">Total Rules</div>
+            <div class="value" id="statTotal"><span class="uc-loading"></span></div>
+        </div>
+        <div class="uc-stat-card">
+            <div class="label">Active Rules</div>
+            <div class="value success" id="statActive"><span class="uc-loading"></span></div>
+        </div>
+        <div class="uc-stat-card">
+            <div class="label">Noise Filtered (1h)</div>
+            <div class="value primary" id="statFiltered"><span class="uc-loading"></span></div>
+        </div>
+        <div class="uc-stat-card">
+            <div class="label">Noise %</div>
+            <div class="value warning" id="statPct"><span class="uc-loading"></span></div>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="uc-toolbar">
+        <button class="uc-btn success" onclick="toggleAll(true)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Enable All
+        </button>
+        <button class="uc-btn danger" onclick="toggleAll(false)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Disable All
+        </button>
+        <div class="uc-toolbar-spacer"></div>
+        <button class="uc-btn" onclick="loadPreview()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Preview
+        </button>
+        <button class="uc-btn primary" onclick="showAddForm()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Rule
+        </button>
+    </div>
+
+    <!-- Add Rule Form -->
+    <div class="uc-add-form" id="addForm">
+        <h3>New SiteClean Rule</h3>
+        <div class="uc-form-grid">
+            <div class="uc-form-group">
+                <label>Label</label>
+                <input type="text" id="formLabel" placeholder="e.g. Windows Update">
+            </div>
+            <div class="uc-form-group">
+                <label>Type</label>
+                <select id="formType">
+                    <option value="hostname_exact">hostname_exact</option>
+                    <option value="hostname_glob">hostname_glob</option>
+                    <option value="category">category</option>
+                    <option value="url_contains">url_contains</option>
+                </select>
+            </div>
+            <div class="uc-form-group">
+                <label>Pattern</label>
+                <input type="text" id="formPattern" placeholder="e.g. *.windowsupdate.com">
+            </div>
+            <div class="uc-form-group">
+                <label>Group</label>
+                <input type="text" id="formGroup" placeholder="e.g. OS Updates">
+            </div>
+        </div>
+        <div class="uc-form-actions">
+            <button class="uc-btn primary" onclick="saveRule()">Save Rule</button>
+            <button class="uc-btn" onclick="hideAddForm()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="uc-table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60px;">Enabled</th>
+                    <th>Label</th>
+                    <th style="width: 120px;">Type</th>
+                    <th>Pattern</th>
+                    <th style="width: 130px;">Group</th>
+                    <th style="width: 80px;">Matched</th>
+                    <th style="width: 80px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="rulesBody">
+                <tr>
+                    <td colspan="7" class="uc-empty">
+                        <span class="uc-loading"></span>
+                        <p>Loading rules...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="uc-toast" id="ucToast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var rules = [];
+    var previewData = null;
+
+    function getCsrf() {
+        var m = document.cookie.match(/zentryc_csrf=([^;]+)/);
+        return m ? m[1] : '';
+    }
+
+    function apiFetch(url, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        opts.headers['X-CSRF-Token'] = getCsrf();
+        if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(opts.body);
+        }
+        return fetch(url, opts);
+    }
+
+    function showToast(msg, type) {
+        var t = document.getElementById('ucToast');
+        t.textContent = msg;
+        t.className = 'uc-toast ' + (type || 'success') + ' show';
+        setTimeout(function() { t.classList.remove('show'); }, 4000);
+    }
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    /* ---------- Load Rules ---------- */
+    async function loadRules() {
+        try {
+            var resp = await apiFetch('/api/url-clean/rules');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var data = await resp.json();
+            rules = Array.isArray(data) ? data : (data.rules || []);
+            renderTable();
+        } catch (e) {
+            document.getElementById('rulesBody').innerHTML =
+                '<tr><td colspan="7" class="uc-empty">Failed to load rules: ' + escHtml(e.message) + '</td></tr>';
+        }
+    }
+
+    /* ---------- Load Preview ---------- */
+    async function loadPreview() {
+        document.getElementById('statFiltered').innerHTML = '<span class="uc-loading"></span>';
+        document.getElementById('statPct').innerHTML = '<span class="uc-loading"></span>';
+        try {
+            var resp = await apiFetch('/api/url-clean/preview?hours=1');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            previewData = await resp.json();
+
+            document.getElementById('statTotal').textContent = previewData.total_rules != null ? previewData.total_rules : rules.length;
+            document.getElementById('statActive').textContent = previewData.active_rules != null ? previewData.active_rules : '-';
+            document.getElementById('statFiltered').textContent = previewData.noise_filtered != null ? previewData.noise_filtered.toLocaleString() : '-';
+            var pct = previewData.noise_pct != null ? previewData.noise_pct : previewData.noise_percent;
+            document.getElementById('statPct').textContent = pct != null ? pct.toFixed(1) + '%' : '-';
+
+            renderTable();
+        } catch (e) {
+            document.getElementById('statFiltered').textContent = '-';
+            document.getElementById('statPct').textContent = '-';
+            showToast('Preview failed: ' + e.message, 'error');
+        }
+    }
+
+    /* ---------- Render Table ---------- */
+    function renderTable() {
+        var body = document.getElementById('rulesBody');
+        if (!rules.length) {
+            body.innerHTML = '<tr><td colspan="7" class="uc-empty">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>' +
+                '<p>No rules configured. Click "Add Rule" to get started.</p></td></tr>';
+            return;
+        }
+
+        /* Group rules */
+        var groups = {};
+        var groupOrder = [];
+        rules.forEach(function(r) {
+            var g = r.group_name || 'Ungrouped';
+            if (!groups[g]) {
+                groups[g] = [];
+                groupOrder.push(g);
+            }
+            groups[g].push(r);
+        });
+
+        /* Build match counts map from preview */
+        var matchMap = {};
+        if (previewData && previewData.rule_matches) {
+            if (Array.isArray(previewData.rule_matches)) {
+                previewData.rule_matches.forEach(function(m) {
+                    matchMap[m.rule_id || m.id] = m.count || m.matched || 0;
+                });
+            } else {
+                matchMap = previewData.rule_matches;
+            }
+        }
+
+        var html = '';
+        groupOrder.forEach(function(gName) {
+            html += '<tr class="uc-group-row"><td colspan="7">' + escHtml(gName) +
+                ' (' + groups[gName].length + ' rules)</td></tr>';
+
+            groups[gName].forEach(function(r) {
+                var rid = r.id;
+                var checked = r.enabled ? 'checked' : '';
+                var isBuiltin = r.builtin || r.is_builtin;
+                var matchCount = matchMap[rid];
+                var matchDisplay = matchCount != null ?
+                    '<span class="uc-matched has-count">' + Number(matchCount).toLocaleString() + '</span>' :
+                    '<span class="uc-matched">-</span>';
+                var deleteBtn = isBuiltin ? '' :
+                    '<button class="uc-btn-del" onclick="window._ucDeleteRule(\'' + rid + '\')">Delete</button>';
+
+                html += '<tr data-rule-id="' + rid + '">' +
+                    '<td><label class="uc-toggle"><input type="checkbox" ' + checked +
+                    ' onchange="window._ucToggleRule(\'' + rid + '\', this.checked)"><span class="uc-toggle-slider"></span></label></td>' +
+                    '<td>' + escHtml(r.label) + '</td>' +
+                    '<td><span class="uc-badge ' + escHtml(r.rule_type) + '">' + escHtml(r.rule_type) + '</span></td>' +
+                    '<td><span class="uc-pattern">' + escHtml(r.pattern) + '</span></td>' +
+                    '<td>' + escHtml(r.group_name || '') + '</td>' +
+                    '<td>' + matchDisplay + '</td>' +
+                    '<td>' + deleteBtn + '</td>' +
+                    '</tr>';
+            });
+        });
+
+        body.innerHTML = html;
+
+        /* Update stats from rule data if preview hasn't loaded yet */
+        var totalEl = document.getElementById('statTotal');
+        var activeEl = document.getElementById('statActive');
+        if (totalEl.querySelector('.uc-loading')) {
+            totalEl.textContent = rules.length;
+        }
+        if (activeEl.querySelector('.uc-loading')) {
+            activeEl.textContent = rules.filter(function(r) { return r.enabled; }).length;
+        }
+    }
+
+    /* ---------- Toggle Single Rule ---------- */
+    window._ucToggleRule = async function(id, enabled) {
+        try {
+            var resp = await apiFetch('/api/url-clean/rules/' + id, {
+                method: 'PUT',
+                body: { enabled: enabled }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            rules.forEach(function(r) { if (String(r.id) === String(id)) r.enabled = enabled; });
+            document.getElementById('statActive').textContent =
+                rules.filter(function(r) { return r.enabled; }).length;
+            showToast('Rule ' + (enabled ? 'enabled' : 'disabled'), 'success');
+        } catch (e) {
+            showToast('Toggle failed: ' + e.message, 'error');
+            loadRules();
+        }
+    };
+
+    /* ---------- Toggle All ---------- */
+    window.toggleAll = async function(enabled) {
+        try {
+            var resp = await apiFetch('/api/url-clean/rules/toggle-all', {
+                method: 'POST',
+                body: { enabled: enabled }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            showToast(enabled ? 'All rules enabled' : 'All rules disabled', 'success');
+            loadRules();
+        } catch (e) {
+            showToast('Toggle all failed: ' + e.message, 'error');
+        }
+    };
+
+    /* ---------- Delete Rule ---------- */
+    window._ucDeleteRule = async function(id) {
+        if (!confirm('Delete this rule? This cannot be undone.')) return;
+        try {
+            var resp = await apiFetch('/api/url-clean/rules/' + id, { method: 'DELETE' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            rules = rules.filter(function(r) { return String(r.id) !== String(id); });
+            renderTable();
+            document.getElementById('statTotal').textContent = rules.length;
+            document.getElementById('statActive').textContent =
+                rules.filter(function(r) { return r.enabled; }).length;
+            showToast('Rule deleted', 'success');
+        } catch (e) {
+            showToast('Delete failed: ' + e.message, 'error');
+        }
+    };
+
+    /* ---------- Add Rule Form ---------- */
+    window.showAddForm = function() {
+        document.getElementById('addForm').classList.add('visible');
+        document.getElementById('formLabel').focus();
+    };
+
+    window.hideAddForm = function() {
+        document.getElementById('addForm').classList.remove('visible');
+        document.getElementById('formLabel').value = '';
+        document.getElementById('formPattern').value = '';
+        document.getElementById('formGroup').value = '';
+    };
+
+    window.saveRule = async function() {
+        var label = document.getElementById('formLabel').value.trim();
+        var ruleType = document.getElementById('formType').value;
+        var pattern = document.getElementById('formPattern').value.trim();
+        var groupName = document.getElementById('formGroup').value.trim();
+
+        if (!label) { showToast('Label is required', 'error'); return; }
+        if (!pattern) { showToast('Pattern is required', 'error'); return; }
+
+        try {
+            var resp = await apiFetch('/api/url-clean/rules', {
+                method: 'POST',
+                body: {
+                    rule_type: ruleType,
+                    pattern: pattern,
+                    label: label,
+                    group_name: groupName || 'Custom'
+                }
+            });
+            if (!resp.ok) {
+                var err = await resp.json().catch(function() { return {}; });
+                throw new Error(err.detail || 'HTTP ' + resp.status);
+            }
+            showToast('Rule created', 'success');
+            hideAddForm();
+            loadRules();
+        } catch (e) {
+            showToast('Save failed: ' + e.message, 'error');
+        }
+    };
+
+    /* ---------- Preview (exposed globally) ---------- */
+    window.loadPreview = loadPreview;
+
+    /* ---------- Init ---------- */
+    loadRules();
+    loadPreview();
+})();
+</script>
+{% endblock %}

@@ -648,6 +648,131 @@ class ClickHouseClient:
         except Exception as e:
             logger.debug(f"pa_threat_top_sources_mv view: {e}")
 
+    # ── Unified URL / WebFilter Logs Table ──────────────────────────────
+    URL_LOG_COLUMNS = [
+        'timestamp', 'vendor', 'device_ip', 'device_name', 'vdom',
+        'action', 'src_ip', 'dest_ip', 'src_port', 'dest_port', 'transport',
+        'src_user', 'url', 'hostname', 'url_category', 'url_category_id',
+        'http_method', 'user_agent', 'content_type', 'referrer', 'direction',
+        'severity', 'policy', 'policy_id', 'application', 'service',
+        'src_zone', 'dest_zone', 'src_country', 'dest_country',
+        'sent_bytes', 'recv_bytes', 'session_id', 'msg', 'profile',
+        'event_type', 'request_type',
+    ]
+
+    @classmethod
+    def ensure_url_logs_table(cls) -> None:
+        """Create the unified url_logs table for Fortinet WebFilter + Palo Alto URL logs."""
+        client = cls.get_client()
+
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS url_logs (
+            -- Timestamps
+            timestamp           DateTime64(3) CODEC(DoubleDelta, LZ4),
+
+            -- Source identification
+            vendor              LowCardinality(String),   -- 'fortinet' or 'paloalto'
+            device_ip           String CODEC(ZSTD(1)),
+            device_name         LowCardinality(String),
+            vdom                LowCardinality(String),
+
+            -- Action
+            action              LowCardinality(String),
+
+            -- Network 5-tuple
+            src_ip              String CODEC(ZSTD(1)),
+            dest_ip             String CODEC(ZSTD(1)),
+            src_port            UInt16 CODEC(T64, LZ4),
+            dest_port           UInt16 CODEC(T64, LZ4),
+            transport           LowCardinality(String),
+
+            -- Identity
+            src_user            String DEFAULT '' CODEC(ZSTD(1)),
+
+            -- URL / Web fields
+            url                 String DEFAULT '' CODEC(ZSTD(3)),
+            hostname            String DEFAULT '' CODEC(ZSTD(1)),
+            url_category        LowCardinality(String),
+            url_category_id     String DEFAULT '' CODEC(ZSTD(1)),
+            http_method         LowCardinality(String),
+            user_agent          String DEFAULT '' CODEC(ZSTD(3)),
+            content_type        LowCardinality(String),
+            referrer            String DEFAULT '' CODEC(ZSTD(3)),
+            direction           LowCardinality(String),
+
+            -- Severity / Classification
+            severity            LowCardinality(String),
+
+            -- Policy
+            policy              LowCardinality(String),
+            policy_id           String DEFAULT '' CODEC(ZSTD(1)),
+            application         LowCardinality(String),
+            service             LowCardinality(String),
+
+            -- Zones
+            src_zone            LowCardinality(String),
+            dest_zone           LowCardinality(String),
+
+            -- Geo
+            src_country         LowCardinality(String),
+            dest_country        LowCardinality(String),
+
+            -- Bytes
+            sent_bytes          UInt64 DEFAULT 0 CODEC(T64, LZ4),
+            recv_bytes          UInt64 DEFAULT 0 CODEC(T64, LZ4),
+
+            -- Session
+            session_id          UInt64 DEFAULT 0 CODEC(T64, LZ4),
+
+            -- Message / context
+            msg                 String DEFAULT '' CODEC(ZSTD(1)),
+            profile             LowCardinality(String),
+
+            -- Fortinet-specific
+            event_type          LowCardinality(String),  -- ftgd_allow, ftgd_blk, etc.
+            request_type        LowCardinality(String),  -- direct, referral, etc.
+
+            -- Materialized
+            log_date            Date MATERIALIZED toDate(timestamp),
+            log_hour            UInt8 MATERIALIZED toHour(timestamp),
+
+            -- Indexes
+            INDEX idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_dest_ip dest_ip TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_url url TYPE tokenbf_v1(32768, 3, 0) GRANULARITY 4,
+            INDEX idx_hostname hostname TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_url_category url_category TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_action action TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_src_user src_user TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_policy policy TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_application application TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_vendor vendor TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_http_method http_method TYPE bloom_filter(0.01) GRANULARITY 4,
+            INDEX idx_severity severity TYPE bloom_filter(0.01) GRANULARITY 4
+        ) ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (action, url_category, timestamp)
+        TTL timestamp + INTERVAL 6 MONTH DELETE
+        SETTINGS
+            index_granularity = 8192,
+            min_bytes_for_wide_part = 10485760,
+            merge_with_ttl_timeout = 86400
+        """
+
+        try:
+            client.command(create_table_query)
+            logger.info("ClickHouse table 'url_logs' created/verified")
+        except Exception as e:
+            logger.warning(f"url_logs table creation issue: {e}")
+
+    @classmethod
+    def insert_url_logs(cls, logs: List[tuple]) -> None:
+        """Insert URL/WebFilter logs into the unified url_logs table."""
+        if not logs:
+            return
+        client = cls.get_client()
+        client.insert('url_logs', logs, column_names=cls.URL_LOG_COLUMNS)
+
     @classmethod
     def insert_threat_logs(cls, logs: List[tuple]) -> None:
         """Insert Palo Alto threat/URL logs into the dedicated pa_threat_logs table."""

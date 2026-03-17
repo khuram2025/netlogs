@@ -113,6 +113,33 @@
     .udl-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
     .udl-time-select { min-width: 130px; }
 
+    /* ---- SITECLEAN TOGGLE ---- */
+    .udl-clean-toggle {
+        display: flex; align-items: center; gap: .4rem; cursor: pointer;
+        font-size: .8rem; color: var(--udl-muted); padding: 4px 10px;
+        border-radius: 6px; border: 1px solid var(--udl-border);
+        background: var(--udl-input); transition: all .2s; white-space: nowrap;
+        margin-left: .25rem;
+    }
+    .udl-clean-toggle:hover { border-color: var(--udl-primary); }
+    .udl-clean-toggle input { display: none; }
+    .udl-clean-slider {
+        width: 32px; height: 18px; border-radius: 9px;
+        background: var(--udl-border); position: relative; transition: background .2s; flex-shrink: 0;
+    }
+    .udl-clean-slider::after {
+        content: ''; position: absolute; left: 2px; top: 2px;
+        width: 14px; height: 14px; border-radius: 50%;
+        background: #fff; transition: transform .2s;
+    }
+    .udl-clean-toggle input:checked ~ .udl-clean-slider { background: var(--udl-success); }
+    .udl-clean-toggle input:checked ~ .udl-clean-slider::after { transform: translateX(14px); }
+    .udl-clean-toggle input:checked ~ .udl-clean-label { color: var(--udl-success); font-weight: 600; }
+    .udl-clean-badge {
+        padding: 1px 6px; border-radius: 8px; font-size: .68rem; font-weight: 600;
+        background: rgba(239,68,68,.12); color: #f87171;
+    }
+
     /* ---- LOG TABLE ---- */
     .udl-table-wrap {
         background: var(--udl-card); border: 1px solid var(--udl-border);
@@ -169,6 +196,10 @@
     .udl-sev-low       { background: rgba(34,197,94,.15); color: #4ade80; }
     .udl-sev-informational { background: rgba(59,130,246,.15); color: #60a5fa; }
     .udl-method { font-family: 'JetBrains Mono', monospace; font-size: .7rem; font-weight: 600; color: var(--udl-success); }
+    .udl-vendor { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .udl-vendor-pa { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .udl-vendor-fg { background: rgba(34,197,94,.15); color: #4ade80; }
+    .udl-hostname-sub { display: block; font-size: .68rem; color: var(--udl-warning); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
 
     /* ---- EXPANDED ROW DETAIL ---- */
     .udl-detail-row td { padding: 0 !important; border-bottom: 1px solid var(--udl-border); }
@@ -247,11 +278,16 @@
     /* ---- SIDEBAR CLICKABLE ITEMS ---- */
     .udl-sidebar-list li.udl-clickable {
         cursor: pointer; border-radius: 6px; padding: 5px 6px; margin: 0 -6px;
-        transition: background .15s, transform .1s;
+        transition: background .15s, transform .1s, border-color .15s;
+        border-left: 3px solid transparent;
     }
     .udl-sidebar-list li.udl-clickable:hover {
         background: rgba(59,130,246,.1); transform: translateX(2px);
     }
+    .udl-sidebar-list li.udl-clickable.udl-sb-active {
+        background: rgba(59,130,246,.15); border-left-color: var(--udl-primary);
+    }
+    .udl-sidebar-list li.udl-clickable.udl-sb-active .item-name { color: #fff; font-weight: 600; }
     .udl-sidebar-list li.udl-clickable .item-name { color: var(--udl-primary); }
 
     /* ---- INLINE DRILLDOWN VIEW ---- */
@@ -378,7 +414,7 @@
                 <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 URL & DNS Logs
             </h1>
-            <div class="udl-header-sub">Palo Alto NGFW — URL Filtering & DNS Traffic Analysis</div>
+            <div class="udl-header-sub">Fortinet + Palo Alto — URL Filtering & DNS Traffic Analysis</div>
         </div>
         <div class="udl-header-right">
             <select id="udl-time-range" class="udl-time-select" style="background:var(--udl-input);color:var(--udl-text);border:1px solid var(--udl-border);padding:7px 10px;border-radius:6px;font-size:.8rem;font-family:inherit;">
@@ -418,6 +454,12 @@
 
     <!-- FILTER BAR -->
     <div class="udl-filters">
+        <!-- Vendor filter (URL tab) -->
+        <select id="filter-vendor" style="display:block;" title="Vendor">
+            <option value="">All Vendors</option>
+            <option value="fortinet">Fortinet</option>
+            <option value="paloalto">Palo Alto</option>
+        </select>
         <!-- URL-specific filters -->
         <select id="filter-category" style="display:block;" title="URL Category">
             <option value="">All Categories</option>
@@ -436,13 +478,19 @@
         </select>
         <div class="udl-search-wrap">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="filter-search" placeholder="Search URL, domain, IP, user...">
+            <input type="text" id="filter-search" placeholder="Username, IP, subnet (10.0.0.0/8), URL...">
         </div>
         <button class="udl-btn udl-btn-primary" onclick="applyFilters()">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Search
         </button>
         <button class="udl-btn udl-btn-ghost" onclick="resetFilters()">Reset</button>
+        <label class="udl-clean-toggle" title="Filter machine-generated noise (OCSP, CRL, telemetry, updates, CDN, etc.)">
+            <input type="checkbox" id="filter-clean" onchange="applyFilters()">
+            <span class="udl-clean-slider"></span>
+            <span class="udl-clean-label">SiteClean</span>
+            <span class="udl-clean-badge" id="clean-badge" style="display:none"></span>
+        </label>
     </div>
 
     <!-- LAYOUT: TABLE + SIDEBAR -->
@@ -462,14 +510,14 @@
                         <thead>
                             <tr>
                                 <th>Time</th>
+                                <th>Vendor</th>
                                 <th>Source</th>
                                 <th>User</th>
-                                <th>URL</th>
+                                <th>URL / Domain</th>
                                 <th>Category</th>
                                 <th>Action</th>
                                 <th>Method</th>
                                 <th>Dest</th>
-                                <th>App</th>
                             </tr>
                         </thead>
                         <tbody id="url-table-body">
@@ -578,11 +626,26 @@
         if (!action) return '';
         const a = action.toLowerCase();
         let cls = 'udl-badge-other';
-        if (a === 'allow') cls = 'udl-badge-allow';
+        if (a === 'allow' || a === 'passthrough') cls = 'udl-badge-allow';
         else if (a === 'alert') cls = 'udl-badge-alert';
-        else if (a.includes('block') || a === 'deny' || a === 'drop' || a.includes('reset')) cls = 'udl-badge-block';
+        else if (a.includes('block') || a === 'blocked' || a === 'deny' || a === 'drop' || a.includes('reset')) cls = 'udl-badge-block';
         else if (a === 'sinkhole') cls = 'udl-badge-sinkhole';
         return `<span class="udl-badge ${cls}">${esc(action)}</span>`;
+    }
+
+    function vendorBadge(vendor) {
+        if (!vendor) return '';
+        const v = vendor.toLowerCase();
+        if (v === 'paloalto' || v === 'palo alto') return '<span class="udl-vendor udl-vendor-pa">PA</span>';
+        if (v === 'fortinet') return '<span class="udl-vendor udl-vendor-fg">FG</span>';
+        return `<span class="udl-vendor">${esc(vendor)}</span>`;
+    }
+
+    function fmtBytes(bytes) {
+        if (!bytes && bytes !== 0) return '-';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
     }
 
     function sevBadge(sev) {
@@ -605,6 +668,7 @@
         document.getElementById('dns-panel').style.display = tab === 'dns' ? '' : 'none';
 
         // Toggle filter visibility
+        document.getElementById('filter-vendor').style.display = tab === 'url' ? '' : 'none';
         document.getElementById('filter-category').style.display = tab === 'url' ? '' : 'none';
         document.getElementById('filter-severity').style.display = tab === 'dns' ? '' : 'none';
 
@@ -619,7 +683,7 @@
         const val = sel.value;
         sel.innerHTML = '<option value="">All Actions</option>';
         const acts = tab === 'url'
-            ? ['allow','alert','block-url','deny','drop','reset-client','reset-server']
+            ? ['allow','passthrough','alert','block-url','blocked','deny','drop','reset-client','reset-server']
             : ['sinkhole','alert','allow','deny','drop','reset-client'];
         acts.forEach(a => {
             const o = document.createElement('option');
@@ -642,6 +706,8 @@
                 <div class="udl-stat"><div class="udl-stat-val danger">${fmtNum(s.blocked)}</div><div class="udl-stat-label">Blocked</div></div>
                 <div class="udl-stat"><div class="udl-stat-val warning">${fmtNum(s.alerted)}</div><div class="udl-stat-label">Alerted</div></div>
                 <div class="udl-stat"><div class="udl-stat-val success">${fmtNum(s.allowed)}</div><div class="udl-stat-label">Allowed</div></div>
+                <div class="udl-stat"><div class="udl-stat-val" style="color:#4ade80">${fmtNum(s.fortinet_count)}</div><div class="udl-stat-label">Fortinet</div></div>
+                <div class="udl-stat"><div class="udl-stat-val" style="color:#60a5fa">${fmtNum(s.paloalto_count)}</div><div class="udl-stat-label">Palo Alto</div></div>
             `;
         } else if (currentTab === 'dns' && dnsStats) {
             const s = dnsStats.summary || {};
@@ -660,31 +726,79 @@
     }
 
     // ============ SIDEBAR ============
+    // Helper: get current filter values
+    function getCurrentFilters() {
+        return {
+            vendor: document.getElementById('filter-vendor').value,
+            category: document.getElementById('filter-category').value,
+            action: document.getElementById('filter-action').value,
+            search: document.getElementById('filter-search').value.trim(),
+        };
+    }
+
+    // Click sidebar item → set filter → reload logs + stats
+    window.sidebarFilterBy = function(filterKey, value) {
+        const f = getCurrentFilters();
+        if (filterKey === 'category') {
+            const sel = document.getElementById('filter-category');
+            sel.value = (f.category === value) ? '' : value;
+        } else if (filterKey === 'action') {
+            const sel = document.getElementById('filter-action');
+            sel.value = (f.action === value) ? '' : value;
+        } else if (filterKey === 'src_ip') {
+            const inp = document.getElementById('filter-search');
+            inp.value = (f.search === value) ? '' : value;
+        } else if (filterKey === 'hostname') {
+            const inp = document.getElementById('filter-search');
+            inp.value = (f.search === value) ? '' : value;
+        }
+        urlPage = 0;
+        loadUrlLogs();
+        loadUrlStats();
+    };
+
     function renderSidebar() {
         const el = document.getElementById('udl-sidebar');
         if (currentTab === 'url' && urlStats) {
             const cats = urlStats.top_categories || [];
             const users = urlStats.top_users || [];
             const acts = urlStats.actions || [];
+            const hostnames = urlStats.top_hostnames || [];
+            const f = getCurrentFilters();
+
             el.innerHTML = `
                 <div class="udl-sidebar-card">
                     <h3><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Top Categories</h3>
-                    <ul class="udl-sidebar-list">${cats.map(c => `<li class="udl-clickable" onclick="drillCategory('${esc(c.category).replace(/'/g,'\\&#39;')}')"><span class="item-name" title="${esc(c.category)}">${esc(c.category)}</span><span class="item-count">${fmtNum(c.count)}</span></li>`).join('')}${cats.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
+                    <ul class="udl-sidebar-list">${cats.map(c => {
+                        const active = f.category === c.category ? ' udl-sb-active' : '';
+                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('category','${esc(c.category).replace(/'/g,'&#39;')}')"><span class="item-name" title="${esc(c.category)}">${esc(c.category)}</span><span class="item-count">${fmtNum(c.count)}</span></li>`;
+                    }).join('')}${cats.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
+                </div>
+                <div class="udl-sidebar-card">
+                    <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Top Hostnames</h3>
+                    <ul class="udl-sidebar-list">${hostnames.map(h => {
+                        const active = f.search === h.hostname ? ' udl-sb-active' : '';
+                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('hostname','${esc(h.hostname).replace(/'/g,'&#39;')}')"><span class="item-name" title="${esc(h.hostname)}">${esc(truncUrl(h.hostname, 25))}</span><span class="item-count">${fmtNum(h.count)}</span></li>`;
+                    }).join('')}${hostnames.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
                 </div>
                 <div class="udl-sidebar-card">
                     <h3><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Top Users</h3>
-                    <ul class="udl-sidebar-list">${users.map(u => `<li class="udl-clickable" onclick="drillSource('${esc(u.src_ip)}')"><span class="item-name" title="${esc(u.src_ip)}${u.src_user?' ('+esc(u.src_user)+')':''}">${esc(u.src_ip)}${u.src_user?'<br><small style="color:var(--udl-purple)">'+esc(u.src_user)+'</small>':''}</span><span class="item-count">${fmtNum(u.count)}</span></li>`).join('')}${users.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
+                    <ul class="udl-sidebar-list">${users.map(u => {
+                        const active = f.search === u.src_ip ? ' udl-sb-active' : '';
+                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('src_ip','${esc(u.src_ip)}')"><span class="item-name" title="${esc(u.src_ip)}${u.src_user?' ('+esc(u.src_user)+')':''}">${esc(u.src_ip)}${u.src_user?'<br><small style="color:var(--udl-purple)">'+esc(u.src_user)+'</small>':''}</span><span class="item-count">${fmtNum(u.count)}</span></li>`;
+                    }).join('')}${users.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
                 </div>
                 <div class="udl-sidebar-card">
                     <h3><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Actions</h3>
                     <div class="udl-action-bar">${acts.map(a => {
                         let bg = 'rgba(148,163,184,.1)', fg = '#94a3b8';
                         const al = a.action.toLowerCase();
-                        if (al === 'allow') { bg='rgba(34,197,94,.12)'; fg='#4ade80'; }
+                        if (al === 'allow' || al === 'passthrough') { bg='rgba(34,197,94,.12)'; fg='#4ade80'; }
                         else if (al === 'alert') { bg='rgba(245,158,11,.12)'; fg='#fbbf24'; }
-                        else if (al.includes('block')||al==='deny'||al==='drop') { bg='rgba(239,68,68,.12)'; fg='#f87171'; }
+                        else if (al.includes('block')||al==='blocked'||al==='deny'||al==='drop') { bg='rgba(239,68,68,.12)'; fg='#f87171'; }
                         else if (al === 'sinkhole') { bg='rgba(168,85,247,.12)'; fg='#c084fc'; }
-                        return `<span class="udl-action-chip" style="background:${bg};color:${fg}">${esc(a.action)} <strong>${fmtNum(a.count)}</strong></span>`;
+                        const active = f.action === a.action ? 'outline:2px solid '+fg+';outline-offset:1px;' : '';
+                        return `<span class="udl-action-chip" style="background:${bg};color:${fg};cursor:pointer;${active}" onclick="sidebarFilterBy('action','${esc(a.action)}')">${esc(a.action)} <strong>${fmtNum(a.count)}</strong></span>`;
                     }).join('')}</div>
                 </div>
             `;
@@ -726,12 +840,16 @@
         body.innerHTML = '<tr><td colspan="9"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading URL logs...</div></div></td></tr>';
 
         const params = new URLSearchParams({ hours: getHours(), limit: perPage, offset: urlPage * perPage });
+        const vendor = document.getElementById('filter-vendor').value;
         const cat = document.getElementById('filter-category').value;
         const act = document.getElementById('filter-action').value;
         const q = document.getElementById('filter-search').value.trim();
+        const cleanOn = document.getElementById('filter-clean').checked;
+        if (vendor) params.set('vendor', vendor);
         if (cat) params.set('category', cat);
         if (act) params.set('action', act);
         if (q) params.set('search', q);
+        if (cleanOn) params.set('clean', 'true');
 
         try {
             const resp = await fetch('/api/threats/url-logs?' + params);
@@ -750,16 +868,17 @@
             expandedRow = null;
             data.events.forEach((e, i) => {
                 const tr = document.createElement('tr');
+                const hostnameHtml = e.hostname ? `<span class="udl-hostname-sub" title="${esc(e.hostname)}">${esc(e.hostname)}</span>` : '';
                 tr.innerHTML = `
                     <td class="udl-ts">${fmtTime(e.timestamp)}</td>
+                    <td>${vendorBadge(e.vendor)}</td>
                     <td class="udl-ip">${esc(e.src_ip)}</td>
                     <td class="udl-user-cell">${esc(e.src_user)}</td>
-                    <td class="udl-url-cell" title="${esc(e.url)}">${esc(truncUrl(e.url, 60))}</td>
+                    <td class="udl-url-cell" title="${esc(e.url)}">${esc(truncUrl(e.url, 60))}${hostnameHtml}</td>
                     <td>${esc(e.category)}</td>
                     <td>${actionBadge(e.action)}</td>
                     <td><span class="udl-method">${esc(e.http_method)}</span></td>
                     <td class="udl-ip">${esc(e.dest_ip)}</td>
-                    <td>${esc(e.application)}</td>
                 `;
                 tr.addEventListener('click', () => toggleUrlDetail(tr, e));
                 body.appendChild(tr);
@@ -785,26 +904,37 @@
         detail.innerHTML = `<td colspan="9"><div class="udl-detail-content">
             <div class="udl-detail-group">
                 <h4>Request Details</h4>
+                <div class="udl-detail-field"><span class="lbl">Vendor</span><span class="val">${vendorBadge(e.vendor)} ${esc(e.vendor)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Full URL</span><span class="val"><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a></span></div>
+                ${e.hostname ? `<div class="udl-detail-field"><span class="lbl">Hostname</span><span class="val" style="color:var(--udl-warning);font-weight:600">${esc(e.hostname)}</span></div>` : ''}
                 <div class="udl-detail-field"><span class="lbl">Category</span><span class="val">${esc(e.category)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Method</span><span class="val">${esc(e.http_method)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Content-Type</span><span class="val">${esc(e.content_type)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">User-Agent</span><span class="val">${esc(e.user_agent)}</span></div>
                 ${e.referrer ? `<div class="udl-detail-field"><span class="lbl">Referrer</span><span class="val">${esc(e.referrer)}</span></div>` : ''}
                 ${e.reason ? `<div class="udl-detail-field"><span class="lbl">Reason</span><span class="val">${esc(e.reason)}</span></div>` : ''}
+                ${e.event_type ? `<div class="udl-detail-field"><span class="lbl">Event Type</span><span class="val">${esc(e.event_type)}</span></div>` : ''}
+                ${e.request_type ? `<div class="udl-detail-field"><span class="lbl">Request Type</span><span class="val">${esc(e.request_type)}</span></div>` : ''}
             </div>
             <div class="udl-detail-group">
                 <h4>Network</h4>
                 <div class="udl-detail-field"><span class="lbl">Source IP</span><span class="val">${esc(e.src_ip)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">User</span><span class="val">${esc(e.src_user)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Destination</span><span class="val">${esc(e.dest_ip)}:${e.dest_port}</span></div>
+                ${e.direction ? `<div class="udl-detail-field"><span class="lbl">Direction</span><span class="val">${esc(e.direction)}</span></div>` : ''}
                 <div class="udl-detail-field"><span class="lbl">Zones</span><span class="val">${esc(e.src_zone)} → ${esc(e.dest_zone)}</span></div>
+                ${e.sent_bytes != null ? `<div class="udl-detail-field"><span class="lbl">Sent</span><span class="val">${fmtBytes(e.sent_bytes)}</span></div>` : ''}
+                ${e.recv_bytes != null ? `<div class="udl-detail-field"><span class="lbl">Received</span><span class="val">${fmtBytes(e.recv_bytes)}</span></div>` : ''}
+                ${e.src_country ? `<div class="udl-detail-field"><span class="lbl">Src Country</span><span class="val">${esc(e.src_country)}</span></div>` : ''}
+                ${e.dest_country ? `<div class="udl-detail-field"><span class="lbl">Dest Country</span><span class="val">${esc(e.dest_country)}</span></div>` : ''}
                 ${e.xff_ip ? `<div class="udl-detail-field"><span class="lbl">XFF IP</span><span class="val">${esc(e.xff_ip)}</span></div>` : ''}
             </div>
             <div class="udl-detail-group">
                 <h4>Policy</h4>
                 <div class="udl-detail-field"><span class="lbl">Action</span><span class="val">${actionBadge(e.action)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Rule</span><span class="val">${esc(e.rule)}</span></div>
+                ${e.service ? `<div class="udl-detail-field"><span class="lbl">Service</span><span class="val">${esc(e.service)}</span></div>` : ''}
+                ${e.profile ? `<div class="udl-detail-field"><span class="lbl">Profile</span><span class="val">${esc(e.profile)}</span></div>` : ''}
                 <div class="udl-detail-field"><span class="lbl">Application</span><span class="val">${esc(e.application)}</span></div>
                 <div class="udl-detail-field"><span class="lbl">Device</span><span class="val">${esc(e.device_name)} (${esc(e.device_ip)})</span></div>
                 <div class="udl-detail-field"><span class="lbl">Session ID</span><span class="val">${e.session_id}</span></div>
@@ -962,7 +1092,18 @@
     // ============ STATS LOADING ============
     async function loadUrlStats() {
         try {
-            const resp = await fetch('/api/threats/url-logs/stats?hours=' + getHours());
+            const sp = new URLSearchParams({ hours: getHours() });
+            const vendor = document.getElementById('filter-vendor').value;
+            const cat = document.getElementById('filter-category').value;
+            const act = document.getElementById('filter-action').value;
+            const q = document.getElementById('filter-search').value.trim();
+            if (vendor) sp.set('vendor', vendor);
+            if (cat) sp.set('category', cat);
+            if (act) sp.set('action', act);
+            if (q) sp.set('search', q);
+            const cleanOn = document.getElementById('filter-clean').checked;
+            if (cleanOn) sp.set('clean', 'true');
+            const resp = await fetch('/api/threats/url-logs/stats?' + sp);
             urlStats = await resp.json();
             // Populate category dropdown
             if (urlStats.filter_categories) {
@@ -988,25 +1129,48 @@
         if (currentTab === 'dns') { renderStats(); renderSidebar(); }
     }
 
+    // ============ NOISE COUNT BADGE ============
+    async function loadNoiseCount() {
+        try {
+            const resp = await fetch('/api/threats/url-logs/noise-count?hours=' + getHours());
+            const data = await resp.json();
+            const badge = document.getElementById('clean-badge');
+            if (data.noise_count > 0) {
+                badge.textContent = fmtNum(data.noise_count) + ' noise (' + data.noise_pct + '%)';
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        } catch(e) {
+            document.getElementById('clean-badge').style.display = 'none';
+        }
+    }
+
     // ============ ACTIONS ============
     window.refreshAll = function() {
         urlPage = 0; dnsPage = 0;
         renderStats(); renderSidebar();
-        loadUrlStats(); loadDnsStats();
+        loadUrlStats(); loadDnsStats(); loadNoiseCount();
         if (currentTab === 'url') loadUrlLogs();
         else loadDnsLogs();
     };
 
     window.applyFilters = function() {
-        if (currentTab === 'url') { urlPage = 0; loadUrlLogs(); }
+        if (currentTab === 'url') {
+            urlPage = 0;
+            loadUrlLogs();
+            loadUrlStats();  // reload stats/sidebar with current vendor filter
+        }
         else { dnsPage = 0; loadDnsLogs(); }
     };
 
     window.resetFilters = function() {
+        document.getElementById('filter-vendor').value = '';
         document.getElementById('filter-category').value = '';
         document.getElementById('filter-severity').value = '';
         document.getElementById('filter-action').value = '';
         document.getElementById('filter-search').value = '';
+        document.getElementById('filter-clean').checked = false;
         applyFilters();
     };
 
@@ -1299,11 +1463,47 @@
     };
 
     // ============ INIT ============
+    // Read URL query params for drill-down from analytics dashboard
+    const _initParams = new URLSearchParams(window.location.search);
+    // Apply non-dropdown params immediately
+    if (_initParams.get('vendor')) document.getElementById('filter-vendor').value = _initParams.get('vendor');
+    if (_initParams.get('search')) document.getElementById('filter-search').value = _initParams.get('search');
+    if (_initParams.get('clean') === 'true') document.getElementById('filter-clean').checked = true;
+    if (_initParams.get('hours')) document.getElementById('udl-time-range').value = _initParams.get('hours');
+    if (_initParams.get('action')) document.getElementById('filter-action').value = _initParams.get('action');
+    if (_initParams.get('tab') === 'dns') { currentTab = 'dns'; switchTab('dns'); }
+
+    // For category: need to wait for stats to populate dropdown, then set value
+    const _pendingCategory = _initParams.get('category') || '';
+
+    // Patch loadUrlStats to apply pending category after dropdown is populated
+    const _origLoadUrlStats = loadUrlStats;
+    loadUrlStats = async function() {
+        await _origLoadUrlStats();
+        if (_pendingCategory) {
+            const sel = document.getElementById('filter-category');
+            // Add option if not present (edge case: category not in top 100)
+            if (!sel.querySelector('option[value="'+_pendingCategory+'"]')) {
+                const o = document.createElement('option');
+                o.value = _pendingCategory; o.textContent = _pendingCategory;
+                sel.appendChild(o);
+            }
+            sel.value = _pendingCategory;
+            // Reload logs with the category applied (only on first load)
+            if (loadUrlStats._first !== false) {
+                loadUrlStats._first = false;
+                urlPage = 0;
+                loadUrlLogs();
+            }
+        }
+    };
+
     populateActionFilter('url');
     renderStats();
     renderSidebar();
     loadUrlStats();
     loadDnsStats();
+    loadNoiseCount();
     loadUrlLogs();
     loadDnsLogs(); // Pre-load DNS count for tab badge
 

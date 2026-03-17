@@ -1,13 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zentryc - Log Viewer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+{% block title %}Zentryc - Log Viewer{% endblock %}
+
+{% block extra_css %}
     <style>
+        /* Break out of base layout to fill full height */
+        .content-scroll { overflow: hidden !important; }
+        .container:has(.log-app) { max-width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100% !important; }
+        .content-scroll:has(.log-app) { display: flex; flex-direction: column; }
         :root {
             /* Unified Dark Theme - Matching Devices Page */
             --bg-void: #0f172a;
@@ -54,25 +53,9 @@
             --radius-lg: 10px;
         }
 
-        *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        html, body {
-            height: 100%;
-            overflow: hidden;
-        }
-
-        body {
-            font-family: var(--font-sans);
+        /* Font overrides for log viewer */
+        .log-app {
             font-size: 13px;
-            line-height: 1.5;
-            color: var(--text-primary);
-            background: var(--bg-void);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
 
         /* Custom Scrollbar */
@@ -95,14 +78,13 @@
         }
 
         /* ===== LAYOUT ===== */
-        .app {
+        .log-app {
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            background: linear-gradient(180deg, var(--bg-void) 0%, var(--bg-deep) 100%);
+            height: 100%;
         }
 
-        /* ===== HEADER ===== */
+        /* ===== HEADER (removed — using base.html sidebar) ===== */
         .header {
             height: var(--header-height);
             background: var(--bg-surface);
@@ -2670,42 +2652,13 @@
             overflow: hidden;
         }
     </style>
-</head>
-<body>
-    <form id="filterForm" method="GET" action="">
-    <div class="app">
-        <!-- Header -->
-        <header class="header">
-            <a href="/" class="logo">
-                <div class="logo-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
-                </div>
-                Zentryc
-            </a>
-            <nav class="nav">
-                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('log_list') }}" class="nav-link active">Logs</a>
-                <a href="{{ url_for('policy_builder') }}" class="nav-link">Policy Builder</a>
-                <a href="{{ url_for('edl_list') }}" class="nav-link">EDL</a>
-                <a href="{{ url_for('project_list') }}" class="nav-link">Projects</a>
-                <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
-            </nav>
-            <div class="header-spacer"></div>
-            <div class="header-user">
-                <div class="user-avatar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                </div>
-                admin
-            </div>
-        </header>
+    </style>
+{% endblock %}
 
-        <!-- Main Content -->
-        <main class="main">
+{% block content %}
+    <form id="filterForm" method="GET" action="">
+    <div class="log-app">
+        <main class="main" style="height: calc(100vh - var(--topbar-h, 48px) - 57px); display:flex; flex-direction:column; overflow:hidden;">
             <!-- NQL Query Bar -->
             <div class="nql-bar">
                 <span class="nql-label">NQL</span>
@@ -5029,5 +4982,4 @@
     }
     </script>
     {% endif %}
-</body>
-</html>
+{% endblock %}

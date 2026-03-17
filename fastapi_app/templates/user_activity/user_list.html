@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentryc - User Activity</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-void: #0f172a; --bg-deep: #0f172a; --bg-surface: #1e293b;
+            --bg-elevated: #1e293b; --bg-hover: #334155; --bg-active: #475569;
+            --text-bright: #ffffff; --text-primary: #e2e8f0; --text-secondary: #94a3b8;
+            --text-muted: #64748b; --text-ghost: #475569;
+            --accent-cyan: #3b82f6; --accent-cyan-dim: rgba(59,130,246,0.15);
+            --accent-green: #22c55e; --accent-green-dim: rgba(34,197,94,0.15);
+            --accent-red: #ef4444; --accent-red-dim: rgba(239,68,68,0.15);
+            --accent-amber: #f59e0b; --accent-amber-dim: rgba(245,158,11,0.15);
+            --accent-purple: #8b5cf6; --accent-purple-dim: rgba(139,92,246,0.15);
+            --accent-blue: #3b82f6;
+            --border-subtle: #1e293b; --border-default: #334155; --border-emphasis: #475569;
+            --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --header-height: 52px; --row-height: 56px;
+            --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        body { font-family: var(--font-sans); font-size: 13px; line-height: 1.5; color: var(--text-primary); background: var(--bg-void); -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-void); }
+        ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-emphasis); }
+
+        .app { display: flex; flex-direction: column; height: 100vh; }
+
+        /* Header */
+        .header { height: var(--header-height); background: var(--bg-surface); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; padding: 0 20px; gap: 24px; flex-shrink: 0; }
+        .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-bright); font-weight: 700; font-size: 15px; }
+        .logo-icon { width: 26px; height: 26px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .logo-icon svg { width: 16px; height: 16px; color: var(--bg-void); }
+        .nav { display: flex; gap: 2px; }
+        .nav-link { padding: 8px 14px; color: var(--text-secondary); text-decoration: none; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); transition: all .15s; }
+        .nav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .nav-link.active { color: var(--accent-blue); background: var(--accent-cyan-dim); }
+        .header-spacer { flex: 1; }
+        .header-user { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+        .user-avatar { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .user-avatar svg { width: 14px; height: 14px; color: white; }
+
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Toolbar */
+        .toolbar { height: 56px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); padding: 0 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .search-field { display: flex; flex-direction: column; gap: 2px; flex: 1; max-width: 400px; }
+        .search-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-muted); padding-left: 2px; }
+        .search-input { height: 32px; padding: 0 10px; background: var(--bg-deep); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-bright); font-family: var(--font-mono); font-size: 12px; transition: all .15s; }
+        .search-input:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 2px var(--accent-cyan-dim); }
+        .search-input::placeholder { color: var(--text-ghost); font-family: var(--font-sans); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; }
+        .btn svg { width: 14px; height: 14px; }
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-default); }
+        .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .toolbar-divider { width: 1px; height: 24px; background: var(--border-default); margin: 0 8px; }
+        .toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+        /* Stats Bar */
+        .stats-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+        .stats-left { display: flex; align-items: center; gap: 20px; }
+        .stat-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+        .stat-value { color: var(--text-bright); font-weight: 600; font-family: var(--font-mono); }
+        .stat-divider { width: 1px; height: 16px; background: var(--border-default); }
+        .time-pills { display: flex; gap: 4px; padding: 2px; background: var(--bg-surface); border-radius: var(--radius-md); }
+        .time-pill { padding: 4px 10px; font-size: 11px; font-weight: 500; color: var(--text-secondary); background: transparent; border: none; border-radius: var(--radius-sm); cursor: pointer; transition: all .15s; }
+        .time-pill:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .time-pill.active { color: var(--accent-blue); background: var(--accent-cyan-dim); }
+
+        /* Table */
+        .table-wrapper { flex: 1; overflow: auto; position: relative; }
+        .loading-overlay { position: absolute; inset: 0; background: rgba(10,14,20,0.9); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .loading-overlay.visible { display: flex; }
+        .spinner { width: 32px; height: 32px; border: 2px solid var(--bg-active); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .log-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .log-table thead { position: sticky; top: 0; z-index: 10; }
+        .log-table th { height: 36px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-default); text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-muted); white-space: nowrap; }
+        .log-table td { height: var(--row-height); padding: 0 12px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .log-row { transition: background .1s; cursor: pointer; }
+        .log-row:hover { background: var(--bg-hover); }
+
+        /* Column Widths */
+        .col-user { width: 200px; }
+        .col-ip { width: 140px; }
+        .col-events { width: 100px; }
+        .col-bw { width: 100px; }
+        .col-dests { width: 80px; }
+        .col-apps { width: 80px; }
+        .col-denied { width: 80px; }
+        .col-threats { width: 80px; }
+        .col-seen { width: 140px; }
+        .col-action { width: 60px; }
+
+        /* Cells */
+        .user-cell { display: flex; flex-direction: column; gap: 2px; }
+        .user-name { font-weight: 600; color: var(--text-bright); font-size: 12px; }
+        .user-ips { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+        .ip-link { font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); text-decoration: none; }
+        .ip-link:hover { color: var(--accent-blue); }
+        .mono { font-family: var(--font-mono); font-size: 12px; }
+        .num-cell { text-align: right; font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+        .bw-cell { display: flex; flex-direction: column; gap: 1px; text-align: right; }
+        .bw-total { font-size: 12px; font-weight: 500; }
+        .bw-detail { font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); }
+        .ts-cell { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+        .denied-val { color: var(--accent-red); }
+        .threat-val { color: var(--accent-amber); }
+        .apps-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+        .app-tag { font-size: 9px; padding: 1px 5px; background: var(--accent-cyan-dim); color: var(--accent-blue); border-radius: 3px; }
+        .view-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; color: var(--text-muted); transition: all .15s; text-decoration: none; }
+        .view-btn:hover { background: var(--accent-cyan-dim); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .view-btn svg { width: 14px; height: 14px; }
+
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+        .empty-state h3 { color: var(--text-secondary); margin-bottom: 8px; }
+
+        /* Pagination */
+        .pagination { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: var(--bg-surface); border-top: 1px solid var(--border-default); flex-shrink: 0; }
+        .page-info { font-size: 12px; color: var(--text-muted); }
+        .page-info strong { color: var(--text-bright); }
+        .page-btns { display: flex; gap: 4px; }
+        .page-btn { padding: 5px 12px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-secondary); transition: all .15s; }
+        .page-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+        .page-btn.active { background: var(--accent-cyan-dim); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <a href="/" class="logo">
+                <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                Zentryc
+            </a>
+            <nav class="nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('log_list') }}" class="nav-link">Logs</a>
+                <a href="{{ url_for('user_activity_list') }}" class="nav-link active">Users</a>
+                <a href="{{ url_for('policy_builder') }}" class="nav-link">Policy Builder</a>
+                <a href="{{ url_for('edl_list') }}" class="nav-link">EDL</a>
+                <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
+            </nav>
+            <div class="header-spacer"></div>
+            <div class="header-user">
+                <div class="user-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+                {{ current_user.username if current_user else 'admin' }}
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="toolbar">
+                <div class="search-field">
+                    <span class="search-label">Search Users / IPs</span>
+                    <input type="text" id="searchInput" class="search-input" placeholder="username, 192.168.1.x..." onkeydown="if(event.key==='Enter'){loadUsers();}">
+                </div>
+                <div style="padding-top:14px;display:flex;gap:6px;">
+                    <button class="btn btn-primary" onclick="loadUsers()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        Search
+                    </button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('searchInput').value='';loadUsers();">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        Clear
+                    </button>
+                </div>
+                <div class="toolbar-divider"></div>
+                <div class="toolbar-right">
+                    <button class="btn btn-ghost" onclick="loadUsers()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-bar">
+                <div class="stats-left">
+                    <div class="stat-item">
+                        <span>Total</span>
+                        <span class="stat-value" id="totalUsers">--</span>
+                        <span>users</span>
+                    </div>
+                </div>
+                <div class="time-pills">
+                    <button class="time-pill" data-hours="1" onclick="setTime(1)">1H</button>
+                    <button class="time-pill" data-hours="6" onclick="setTime(6)">6H</button>
+                    <button class="time-pill active" data-hours="24" onclick="setTime(24)">24H</button>
+                    <button class="time-pill" data-hours="72" onclick="setTime(72)">3D</button>
+                    <button class="time-pill" data-hours="168" onclick="setTime(168)">7D</button>
+                    <button class="time-pill" data-hours="720" onclick="setTime(720)">30D</button>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <div class="loading-overlay visible" id="loading"><div class="spinner"></div></div>
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th class="col-user">Source IP</th>
+                            <th class="col-events" style="text-align:right">Events</th>
+                            <th class="col-denied" style="text-align:right">Denied</th>
+                            <th class="col-threats" style="text-align:right">Threats</th>
+                            <th class="col-seen">Last Seen</th>
+                            <th class="col-action"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <div class="page-info" id="pageInfo">--</div>
+                <div class="page-btns" id="pageBtns"></div>
+            </div>
+        </main>
+    </div>
+
+<script>
+let hours = 24, page = 0, total = 0;
+const LIMIT = 50;
+
+function formatBytes(b) {
+    if (!b || b < 1024) return (b||0) + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+    return (b/1073741824).toFixed(2) + ' GB';
+}
+
+function formatTS(iso) {
+    if (!iso) return '--';
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).replace(',','');
+}
+
+function setTime(h) {
+    hours = h;
+    page = 0;
+    document.querySelectorAll('.time-pill').forEach(p => p.classList.toggle('active', +p.dataset.hours === h));
+    loadUsers();
+}
+
+function loadUsers() {
+    const search = document.getElementById('searchInput').value.trim();
+    const loading = document.getElementById('loading');
+    loading.classList.add('visible');
+
+    let url = `/api/users/activity/top?hours=${hours}&limit=${LIMIT}&offset=${page*LIMIT}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    fetch(url).then(r => r.json()).then(data => {
+        loading.classList.remove('visible');
+        total = data.total || 0;
+        document.getElementById('totalUsers').textContent = total.toLocaleString();
+        renderTable(data.users || []);
+        renderPagination();
+    }).catch(() => {
+        loading.classList.remove('visible');
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted);">Error loading users</td></tr>';
+    });
+}
+
+function renderTable(users) {
+    const tb = document.getElementById('tableBody');
+    if (!users.length) {
+        tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h3>No users found</h3><p>No activity in the selected time range.</p></div></td></tr>';
+        return;
+    }
+    tb.innerHTML = users.map(u => {
+        const denied = u.denied_count || 0;
+        const threats = u.threat_events || 0;
+        return `<tr class="log-row" onclick="viewUser('${u.user_id}')">
+            <td class="col-user"><span class="ip-link">${u.primary_ip}</span></td>
+            <td class="col-events num-cell">${u.event_count.toLocaleString()}</td>
+            <td class="col-denied num-cell ${denied > 0 ? 'denied-val' : ''}">${denied.toLocaleString()}</td>
+            <td class="col-threats num-cell ${threats > 0 ? 'threat-val' : ''}">${threats.toLocaleString()}</td>
+            <td class="col-seen ts-cell">${formatTS(u.last_seen)}</td>
+            <td class="col-action"><a href="/users/activity/timeline?user=${encodeURIComponent(u.user_id)}&hours=${hours}" class="view-btn" title="View Timeline" onclick="event.stopPropagation()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a></td>
+        </tr>`;
+    }).join('');
+}
+
+function viewUser(uid) {
+    window.location.href = `/users/activity/timeline?user=${encodeURIComponent(uid)}&hours=${hours}`;
+}
+
+function renderPagination() {
+    const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+    const start = page * LIMIT + 1;
+    const end = Math.min((page + 1) * LIMIT, total);
+    document.getElementById('pageInfo').innerHTML = total > 0
+        ? `Showing <strong>${start}</strong> - <strong>${end}</strong> of <strong>${total.toLocaleString()}</strong> users`
+        : 'No results';
+    const btns = document.getElementById('pageBtns');
+    btns.innerHTML = `
+        <button class="page-btn" ${page === 0 ? 'disabled' : ''} onclick="goPage(${page-1})">&laquo; Prev</button>
+        <button class="page-btn active">${page+1} / ${totalPages}</button>
+        <button class="page-btn" ${page >= totalPages-1 ? 'disabled' : ''} onclick="goPage(${page+1})">Next &raquo;</button>
+    `;
+}
+
+function goPage(p) { page = p; loadUsers(); }
+
+// Init
+loadUsers();
+</script>
+</body>
+</html>

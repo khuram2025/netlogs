@@ -175,19 +175,43 @@ async def api_dashboard_stats():
         stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
         logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
 
-        # URL/DNS stats from pa_threat_logs (run in parallel too)
+        # URL/DNS stats from pa_threat_logs + Fortinet UTM syslogs
         def _get_url_dns_stats():
             try:
                 client = ClickHouseClient.get_client()
                 r = list(client.query("""
+                    WITH combined AS (
+                        SELECT log_subtype, action, severity
+                        FROM pa_threat_logs
+                        WHERE timestamp > now() - INTERVAL 24 HOUR
+                      UNION ALL
+                        SELECT
+                            CASE log_type
+                                WHEN 'utm/webfilter' THEN 'url'
+                                WHEN 'utm/dns'       THEN 'spyware'
+                                WHEN 'utm/virus'     THEN 'virus'
+                                WHEN 'utm/ips'       THEN 'vulnerability'
+                                ELSE log_type
+                            END as log_subtype,
+                            action,
+                            multiIf(
+                                parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
+                                parsed_data['level'] = 'error',   'high',
+                                parsed_data['level'] = 'warning', 'medium',
+                                parsed_data['level'] = 'notice',  'low',
+                                'informational'
+                            ) as severity
+                        FROM syslogs
+                        WHERE timestamp > now() - INTERVAL 24 HOUR
+                          AND log_type IN ('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')
+                    )
                     SELECT
                         countIf(log_subtype = 'url') as url_total,
                         countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
                         countIf(log_subtype = 'spyware') as dns_total,
                         countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
                         countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
-                    FROM pa_threat_logs
-                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                    FROM combined
                 """).named_results())
                 if r:
                     return {k: _safe_int(v) for k, v in r[0].items()}

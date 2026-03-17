@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    .container:has(.ua-page) { max-width:100%; padding:0 1rem; margin:1rem auto; }
+    .ua-page {
+        --ua-bg:#0f172a; --ua-card:#1e293b; --ua-border:#334155;
+        --ua-text:#e2e8f0; --ua-muted:#94a3b8; --ua-dim:#64748b;
+        --ua-primary:#3b82f6; --ua-success:#22c55e; --ua-danger:#ef4444;
+        --ua-warning:#f59e0b; --ua-purple:#a78bfa; --ua-cyan:#22d3ee;
+        font-family:'Outfit',system-ui,sans-serif; width:100%;
+    }
+    @keyframes ua-fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes ua-spin { to{transform:rotate(360deg)} }
+
+    /* Header */
+    .ua-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; animation:ua-fadeIn .4s ease-out both; }
+    .ua-hdr h1 { font-size:1.5rem; font-weight:700; color:#fff; margin:0; display:flex; align-items:center; gap:.5rem; }
+    .ua-hdr h1 svg { width:28px; height:28px; stroke:var(--ua-primary); fill:none; stroke-width:2; }
+    .ua-hdr-sub { color:var(--ua-muted); font-size:.85rem; margin-top:2px; }
+    .ua-hdr-right { display:flex; align-items:center; gap:.75rem; }
+    .ua-sel { background:var(--ua-card); border:1px solid var(--ua-border); color:#fff; padding:.4rem .75rem; border-radius:8px; font-size:.8rem; font-family:inherit; cursor:pointer; }
+    .ua-sel:focus { outline:none; border-color:var(--ua-primary); }
+    .ua-btn { background:var(--ua-card); border:1px solid var(--ua-border); color:var(--ua-muted); padding:.4rem .75rem; border-radius:8px; font-size:.8rem; cursor:pointer; display:flex; align-items:center; gap:.35rem; transition:all .2s; font-family:inherit; }
+    .ua-btn:hover { border-color:var(--ua-primary); color:#fff; }
+    .ua-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+
+    /* Hero stats */
+    .ua-stats { display:grid; grid-template-columns:repeat(8,1fr); gap:.75rem; margin-bottom:1.25rem; animation:ua-fadeIn .5s ease-out .1s both; }
+    .ua-stat { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.75rem .875rem; text-align:center; transition:border-color .2s,transform .15s; }
+    .ua-stat:hover { border-color:var(--ua-primary); transform:translateY(-2px); }
+    .ua-stat-val { font-size:1.35rem; font-weight:800; color:#fff; line-height:1.2; font-family:'JetBrains Mono',monospace; }
+    .ua-stat-label { font-size:.65rem; color:var(--ua-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; font-weight:500; }
+    @media(max-width:1200px){ .ua-stats{grid-template-columns:repeat(4,1fr);} }
+    @media(max-width:640px){ .ua-stats{grid-template-columns:repeat(2,1fr);} }
+
+    /* Tabs */
+    .ua-tabs { display:flex; gap:2px; background:var(--ua-card); border-radius:10px; padding:4px; margin-bottom:1rem; width:fit-content; animation:ua-fadeIn .5s ease-out .15s both; }
+    .ua-tab { padding:.45rem 1.1rem; border-radius:8px; font-size:.82rem; font-weight:600; color:var(--ua-muted); background:transparent; border:none; cursor:pointer; transition:all .2s; font-family:inherit; }
+    .ua-tab:hover { color:var(--ua-text); background:rgba(59,130,246,.08); }
+    .ua-tab.active { color:#fff; background:var(--ua-primary); }
+
+    /* Panels */
+    .ua-panel { display:none; animation:ua-fadeIn .35s ease-out both; }
+    .ua-panel.active { display:block; }
+    .ua-cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    @media(max-width:900px){ .ua-cols{grid-template-columns:1fr;} }
+    .ua-3cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+    @media(max-width:1100px){ .ua-3cols{grid-template-columns:1fr;} }
+
+    /* Card */
+    .ua-card { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:1rem; margin-bottom:1rem; }
+    .ua-card-title { font-size:.8rem; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.75rem; display:flex; align-items:center; gap:.4rem; }
+    .ua-card-title svg { width:16px; height:16px; stroke:var(--ua-primary); fill:none; stroke-width:2; }
+
+    /* Table */
+    .ua-tbl { width:100%; border-collapse:collapse; font-size:.8rem; }
+    .ua-tbl th { text-align:left; padding:.5rem .6rem; font-size:.65rem; text-transform:uppercase; color:var(--ua-dim); border-bottom:1px solid var(--ua-border); font-weight:600; letter-spacing:.04em; }
+    .ua-tbl td { padding:.45rem .6rem; border-bottom:1px solid rgba(51,65,85,.4); color:var(--ua-text); vertical-align:middle; }
+    .ua-tbl tbody tr:hover td { background:rgba(59,130,246,.06); }
+    .ua-tbl tbody tr[style*="cursor:pointer"]:hover td { background:rgba(59,130,246,.12); }
+    .ua-tbl tbody tr[style*="cursor:pointer"]:active td { background:rgba(59,130,246,.18); }
+    .ua-tbl .mono { font-family:'JetBrains Mono',monospace; font-size:.75rem; }
+    .ua-tbl .r { text-align:right; }
+
+    /* Badges */
+    .ua-badge { display:inline-block; padding:2px 8px; border-radius:9999px; font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .ua-badge-productive { background:rgba(34,197,94,.12); color:var(--ua-success); }
+    .ua-badge-neutral { background:rgba(148,163,184,.12); color:var(--ua-muted); }
+    .ua-badge-unproductive { background:rgba(245,158,11,.12); color:var(--ua-warning); }
+    .ua-badge-risky { background:rgba(239,68,68,.12); color:var(--ua-danger); }
+
+    /* Productivity breakdown */
+    .ua-prod-row { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-top:1rem; }
+    @media(max-width:900px){ .ua-prod-row{grid-template-columns:repeat(2,1fr);} }
+    .ua-prod-card { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.875rem; }
+    .ua-prod-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; }
+    .ua-prod-lbl { font-size:.7rem; text-transform:uppercase; font-weight:600; letter-spacing:.04em; }
+    .ua-prod-val { font-size:1.2rem; font-weight:800; font-family:'JetBrains Mono',monospace; }
+    .ua-bar-bg { height:6px; background:rgba(51,65,85,.5); border-radius:3px; overflow:hidden; }
+    .ua-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+
+    /* YouTube stats row */
+    .ua-yt-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1rem; }
+    @media(max-width:800px){ .ua-yt-stats{grid-template-columns:repeat(2,1fr);} }
+    .ua-yt-stat { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.75rem; text-align:center; }
+    .ua-yt-stat-val { font-size:1.25rem; font-weight:800; color:#fff; font-family:'JetBrains Mono',monospace; }
+    .ua-yt-stat-lbl { font-size:.65rem; color:var(--ua-muted); text-transform:uppercase; margin-top:3px; font-weight:500; }
+
+    /* Search query highlight */
+    .ua-search-q { background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.15); padding:2px 8px; border-radius:4px; font-style:italic; color:var(--ua-cyan); font-size:.78rem; }
+
+    /* BW bar */
+    .ua-bw-bar { display:flex; align-items:center; gap:.5rem; }
+    .ua-bw-track { flex:1; height:6px; background:rgba(51,65,85,.5); border-radius:3px; overflow:hidden; }
+    .ua-bw-fill { height:100%; border-radius:3px; background:var(--ua-primary); transition:width .5s ease; }
+
+    /* Loading */
+    .ua-loading { text-align:center; padding:3rem; color:var(--ua-muted); }
+    .ua-loading::after { content:''; display:inline-block; width:20px; height:20px; border:2px solid var(--ua-border); border-top-color:var(--ua-primary); border-radius:50%; animation:ua-spin .6s linear infinite; margin-left:.5rem; vertical-align:middle; }
+    .ua-empty { text-align:center; padding:2rem; color:var(--ua-dim); font-size:.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ua-page">
+    <!-- Header -->
+    <div class="ua-hdr">
+        <div>
+            <h1>
+                <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 0 1 9-9"/></svg>
+                URL Analytics
+            </h1>
+            <div class="ua-hdr-sub">Web Activity Intelligence &mdash; Bandwidth, Productivity &amp; Security</div>
+        </div>
+        <div class="ua-hdr-right">
+            <select class="ua-sel" id="uaTimeRange">
+                <option value="1">Last 1 hour</option>
+                <option value="6">Last 6 hours</option>
+                <option value="24" selected>Last 24 hours</option>
+                <option value="72">Last 3 days</option>
+                <option value="168">Last 7 days</option>
+                <option value="720">Last 30 days</option>
+            </select>
+            <button class="ua-btn" id="uaRefresh">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Hero Stats -->
+    <div class="ua-stats">
+        <div class="ua-stat" style="cursor:pointer" onclick="drill({})"><div class="ua-stat-val" id="sTotal">-</div><div class="ua-stat-label">Total Requests</div></div>
+        <div class="ua-stat"><div class="ua-stat-val" id="sUsers" style="color:var(--ua-cyan)">-</div><div class="ua-stat-label">Unique Users</div></div>
+        <div class="ua-stat"><div class="ua-stat-val" id="sSites" style="color:var(--ua-primary)">-</div><div class="ua-stat-label">Unique Sites</div></div>
+        <div class="ua-stat"><div class="ua-stat-val" id="sBW" style="color:var(--ua-purple)">-</div><div class="ua-stat-label">Bandwidth</div></div>
+        <div class="ua-stat" style="cursor:pointer" onclick="drill({action:'blocked'})"><div class="ua-stat-val" id="sBlocked" style="color:var(--ua-danger)">-</div><div class="ua-stat-label">Blocked</div></div>
+        <div class="ua-stat"><div class="ua-stat-val" id="sCats">-</div><div class="ua-stat-label">Categories</div></div>
+        <div class="ua-stat" style="cursor:pointer" onclick="drill({search:'youtube.com'})"><div class="ua-stat-val" id="sYT" style="color:var(--ua-danger)">-</div><div class="ua-stat-label">YouTube</div></div>
+        <div class="ua-stat"><div class="ua-stat-val" id="sProd">-</div><div class="ua-stat-label">Productivity Score</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="ua-tabs">
+        <button class="ua-tab active" data-tab="overview">Overview</button>
+        <button class="ua-tab" data-tab="users">Users</button>
+        <button class="ua-tab" data-tab="youtube">YouTube</button>
+        <button class="ua-tab" data-tab="searches">Searches</button>
+        <button class="ua-tab" data-tab="blocked">Blocked</button>
+        <button class="ua-tab" data-tab="bandwidth">Bandwidth</button>
+    </div>
+
+    <!-- Tab: Overview -->
+    <div class="ua-panel active" id="tab-overview">
+        <div class="ua-cols">
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> Top Categories</div>
+                <div id="tblCategories"><div class="ua-loading">Loading</div></div>
+            </div>
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Top Hostnames</div>
+                <div id="tblHostnames"><div class="ua-loading">Loading</div></div>
+            </div>
+        </div>
+        <div class="ua-card">
+            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Productivity Breakdown</div>
+            <div id="prodBreakdown"><div class="ua-loading">Loading</div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Users -->
+    <div class="ua-panel" id="tab-users">
+        <div class="ua-card">
+            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Top Users</div>
+            <div id="tblUsers"><div class="ua-loading">Loading</div></div>
+        </div>
+    </div>
+
+    <!-- Tab: YouTube -->
+    <div class="ua-panel" id="tab-youtube">
+        <div id="ytStats"><div class="ua-loading">Loading</div></div>
+        <div class="ua-card">
+            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg> YouTube Users</div>
+            <div id="tblYT"><div class="ua-loading">Loading</div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Searches -->
+    <div class="ua-panel" id="tab-searches">
+        <div class="ua-card">
+            <div class="ua-card-title"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Recent Searches</div>
+            <div id="tblSearches"><div class="ua-loading">Loading</div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Blocked -->
+    <div class="ua-panel" id="tab-blocked">
+        <div class="ua-3cols">
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Top Blocked Sites</div>
+                <div id="tblBlockedHosts"><div class="ua-loading">Loading</div></div>
+            </div>
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> Blocked Categories</div>
+                <div id="tblBlockedCats"><div class="ua-loading">Loading</div></div>
+            </div>
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg> Users Hitting Blocks</div>
+                <div id="tblBlockedUsers"><div class="ua-loading">Loading</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Bandwidth -->
+    <div class="ua-panel" id="tab-bandwidth">
+        <div class="ua-cols">
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Top Users by Bandwidth</div>
+                <div id="tblBWUsers"><div class="ua-loading">Loading</div></div>
+            </div>
+            <div class="ua-card">
+                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Top Sites by Bandwidth</div>
+                <div id="tblBWHosts"><div class="ua-loading">Loading</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+    /* ---- Helpers ---- */
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function fmtBytes(b){
+        if(!b||b===0) return '0 B';
+        var u=['B','KB','MB','GB','TB'], i=0; b=Number(b);
+        while(b>=1024&&i<u.length-1){b/=1024;i++;}
+        return b.toFixed(i?1:0)+' '+u[i];
+    }
+    function esc(s){ if(!s) return ''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+    function getHours(){ return document.getElementById('uaTimeRange').value; }
+    function $(id){ return document.getElementById(id); }
+
+    /* ---- Tab switching ---- */
+    document.querySelectorAll('.ua-tab').forEach(function(t){
+        t.addEventListener('click',function(){
+            document.querySelectorAll('.ua-tab').forEach(function(x){x.classList.remove('active');});
+            document.querySelectorAll('.ua-panel').forEach(function(x){x.classList.remove('active');});
+            t.classList.add('active');
+            $('tab-'+t.dataset.tab).classList.add('active');
+        });
+    });
+
+    /* ---- Productivity badge ---- */
+    function prodBadge(p){
+        if(!p) return '';
+        var m={'productive':'ua-badge-productive','neutral':'ua-badge-neutral','unproductive':'ua-badge-unproductive','risky':'ua-badge-risky'};
+        return '<span class="ua-badge '+(m[p.toLowerCase()]||'ua-badge-neutral')+'">'+esc(p)+'</span>';
+    }
+
+    /* ---- Drill-down to URL & DNS page ---- */
+    window.drill = function(params) {
+        var p = new URLSearchParams(params);
+        p.set('hours', getHours());
+        p.set('clean', 'true');
+        window.location.href = '/threats/url-dns/?' + p.toString();
+    }
+
+    /* ---- Fetch helper ---- */
+    function api(path){
+        return fetch('/api/url-analytics/'+path+'?hours='+getHours()).then(function(r){
+            if(!r.ok) throw new Error(r.status);
+            return r.json();
+        });
+    }
+
+    /* ---- Render: Summary ---- */
+    function renderSummary(data){
+        var s=data.summary||{};
+        $('sTotal').textContent=fmtNum(s.total_requests);
+        $('sUsers').textContent=fmtNum(s.unique_users);
+        $('sSites').textContent=fmtNum(s.unique_sites);
+        $('sBW').textContent=fmtBytes(s.total_bandwidth);
+        $('sBlocked').textContent=fmtNum(s.blocked_count);
+        $('sCats').textContent=fmtNum(s.category_count);
+        $('sYT').textContent=fmtNum(s.youtube_requests);
+    }
+
+    /* ---- Render: Categories + Productivity ---- */
+    function renderCategories(data){
+        var cats=data.categories||[], prod=data.productivity||{};
+        /* Categories table */
+        if(!cats.length){ $('tblCategories').innerHTML='<div class="ua-empty">No category data</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>Category</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th>Productivity</th></tr></thead><tbody>';
+            cats.slice(0,15).forEach(function(c){
+                h+='<tr style="cursor:pointer" onclick="drill({category:\''+esc(c.category).replace(/'/g,'&#39;')+'\'})" title="Drill down to URL logs for '+esc(c.category)+'"><td>'+esc(c.category)+'</td><td class="r mono">'+fmtNum(c.requests)+'</td><td class="r mono">'+fmtNum(c.users)+'</td><td class="r mono">'+fmtBytes(c.bandwidth)+'</td><td>'+prodBadge(c.productivity)+'</td></tr>';
+            });
+            h+='</tbody></table>';
+            $('tblCategories').innerHTML=h;
+        }
+        /* Productivity breakdown */
+        var total=(prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
+        if(!total){ $('prodBreakdown').innerHTML='<div class="ua-empty">No productivity data</div>'; return; }
+        var items=[
+            {label:'Productive',val:prod.productive||0,color:'var(--ua-success)'},
+            {label:'Neutral',val:prod.neutral||0,color:'var(--ua-muted)'},
+            {label:'Unproductive',val:prod.unproductive||0,color:'var(--ua-warning)'},
+            {label:'Risky',val:prod.risky||0,color:'var(--ua-danger)'}
+        ];
+        var ph='<div class="ua-prod-row">';
+        items.forEach(function(it){
+            var pct=total?((it.val/total)*100).toFixed(1):0;
+            ph+='<div class="ua-prod-card"><div class="ua-prod-hdr"><span class="ua-prod-lbl" style="color:'+it.color+'">'+it.label+'</span><span class="ua-prod-val" style="color:'+it.color+'">'+fmtNum(it.val)+'</span></div><div class="ua-bar-bg"><div class="ua-bar-fill" style="width:'+pct+'%;background:'+it.color+'"></div></div><div style="font-size:.7rem;color:var(--ua-dim);margin-top:4px;text-align:right">'+pct+'%</div></div>';
+        });
+        ph+='</div>';
+        $('prodBreakdown').innerHTML=ph;
+        /* Productivity score in hero */
+        var score=total?(((prod.productive||0)/total)*100).toFixed(0):0;
+        var el=$('sProd'); el.textContent=score+'%';
+        el.style.color=score>=60?'var(--ua-success)':score>=30?'var(--ua-warning)':'var(--ua-danger)';
+    }
+
+    /* ---- Render: Hostnames ---- */
+    function renderHostnames(data){
+        var rows=data.hostnames||[];
+        if(!rows.length){ $('tblHostnames').innerHTML='<div class="ua-empty">No hostname data</div>'; return; }
+        var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th>Category</th></tr></thead><tbody>';
+        rows.slice(0,15).forEach(function(r){
+            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\'})" title="View logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td>'+esc(r.category||'-')+'</td></tr>';
+        });
+        h+='</tbody></table>';
+        $('tblHostnames').innerHTML=h;
+    }
+
+    /* ---- Render: Users ---- */
+    function renderUsers(data){
+        var rows=data.users||[];
+        if(!rows.length){ $('tblUsers').innerHTML='<div class="ua-empty">No user data</div>'; return; }
+        var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Requests</th><th class="r">Sites</th><th class="r">Bandwidth</th><th class="r">Blocked</th><th>Top Sites</th></tr></thead><tbody>';
+        rows.slice(0,30).forEach(function(r){
+            var user=esc(r.username||r.src_ip);
+            if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
+            var sites=(r.top_sites||[]).slice(0,3).map(function(s){return esc(s);}).join(', ');
+            var searchVal=r.username||r.src_ip;
+            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(searchVal)+'\'})" title="View logs for '+esc(searchVal)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.unique_sites)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td class="r mono">'+fmtNum(r.blocked)+'</td><td style="font-size:.75rem;color:var(--ua-dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+sites+'</td></tr>';
+        });
+        h+='</tbody></table>';
+        $('tblUsers').innerHTML=h;
+    }
+
+    /* ---- Render: YouTube ---- */
+    function renderYouTube(data){
+        var t=data.totals||{}, users=data.top_users||[];
+        var hrs=Math.floor((t.est_watch_hours||0));
+        var mins=Math.round(((t.est_watch_hours||0)-hrs)*60);
+        var statsH='<div class="ua-yt-stats">'
+            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-danger)">'+fmtNum(t.requests)+'</div><div class="ua-yt-stat-lbl">Total Requests</div></div>'
+            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-cyan)">'+fmtNum(t.users)+'</div><div class="ua-yt-stat-lbl">Users</div></div>'
+            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-purple)">'+fmtBytes(t.download_bytes)+'</div><div class="ua-yt-stat-lbl">Data Downloaded</div></div>'
+            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-warning)">'+hrs+'h '+mins+'m</div><div class="ua-yt-stat-lbl">Est. Watch Time</div></div>'
+            +'</div>';
+        $('ytStats').innerHTML=statsH;
+        if(!users.length){ $('tblYT').innerHTML='<div class="ua-empty">No YouTube data</div>'; return; }
+        var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Requests</th><th class="r">Data Downloaded</th><th class="r">Est. Watch Time</th></tr></thead><tbody>';
+        users.forEach(function(r){
+            var user=esc(r.username||r.src_ip);
+            if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
+            var m=r.est_minutes||0, uh=Math.floor(m/60), um=Math.round(m%60);
+            var searchVal=r.username||r.src_ip;
+            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(searchVal)+'\'})" title="View logs for '+esc(searchVal)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td class="r mono">'+uh+'h '+um+'m</td></tr>';
+        });
+        h+='</tbody></table>';
+        $('tblYT').innerHTML=h;
+    }
+
+    /* ---- Render: Searches ---- */
+    function renderSearches(data){
+        var rows=data.searches||[];
+        if(!rows.length){ $('tblSearches').innerHTML='<div class="ua-empty">No search data</div>'; return; }
+        var h='<table class="ua-tbl"><thead><tr><th>Search Query</th><th class="r">Count</th><th class="r">Users</th><th>Sample User</th><th>Engine</th></tr></thead><tbody>';
+        rows.slice(0,30).forEach(function(r){
+            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.query).replace(/'/g,'&#39;')+'\'})" title="View logs matching this search"><td><span class="ua-search-q">&ldquo;'+esc(r.query)+'&rdquo;</span></td><td class="r mono">'+fmtNum(r.searches)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td class="mono" style="font-size:.75rem">'+esc(r.user||'-')+'</td><td>'+esc(r.engine||'-')+'</td></tr>';
+        });
+        h+='</tbody></table>';
+        $('tblSearches').innerHTML=h;
+    }
+
+    /* ---- Render: Blocked ---- */
+    function renderBlocked(data){
+        var hosts=data.blocked_hosts||[], cats=data.blocked_categories||[], users=data.blocked_users||[];
+        /* Hosts */
+        if(!hosts.length){ $('tblBlockedHosts').innerHTML='<div class="ua-empty">No blocked sites</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th>Category</th><th class="r">Count</th><th class="r">Users</th></tr></thead><tbody>';
+            hosts.slice(0,15).forEach(function(r){
+                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\',action:\'blocked\'})" title="View blocked logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td>'+esc(r.category||'-')+'</td><td class="r mono">'+fmtNum(r.blocked_count)+'</td><td class="r mono">'+fmtNum(r.users_blocked)+'</td></tr>';
+            });
+            $('tblBlockedHosts').innerHTML=h+'</tbody></table>';
+        }
+        /* Categories */
+        if(!cats.length){ $('tblBlockedCats').innerHTML='<div class="ua-empty">No blocked categories</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>Category</th><th class="r">Count</th><th class="r">Users</th></tr></thead><tbody>';
+            cats.slice(0,15).forEach(function(r){
+                h+='<tr style="cursor:pointer" onclick="drill({category:\''+esc(r.category).replace(/'/g,'&#39;')+'\',action:\'blocked\'})" title="View blocked logs for '+esc(r.category)+'"><td>'+esc(r.category)+'</td><td class="r mono">'+fmtNum(r.count)+'</td><td class="r mono">'+fmtNum(r.users)+'</td></tr>';
+            });
+            $('tblBlockedCats').innerHTML=h+'</tbody></table>';
+        }
+        /* Users */
+        if(!users.length){ $('tblBlockedUsers').innerHTML='<div class="ua-empty">No blocked users</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Blocked</th><th class="r">Unique Sites</th></tr></thead><tbody>';
+            users.slice(0,15).forEach(function(r){
+                var user=esc(r.username||r.src_ip);
+                if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
+                var sv=r.username||r.src_ip;
+                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(sv)+'\',action:\'blocked\'})" title="View blocked logs for '+esc(sv)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.blocked_count)+'</td><td class="r mono">'+fmtNum(r.unique_blocked_sites)+'</td></tr>';
+            });
+            $('tblBlockedUsers').innerHTML=h+'</tbody></table>';
+        }
+    }
+
+    /* ---- Render: Bandwidth ---- */
+    function renderBandwidth(data){
+        var byUser=data.by_user||[], byHost=data.by_hostname||[];
+        var maxU=byUser.length?Math.max.apply(null,byUser.map(function(r){return r.total_bytes||0;})):1;
+        var maxH=byHost.length?Math.max.apply(null,byHost.map(function(r){return r.total_bytes||0;})):1;
+        /* By user */
+        if(!byUser.length){ $('tblBWUsers').innerHTML='<div class="ua-empty">No bandwidth data</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th class="r">Requests</th><th style="width:100px"></th></tr></thead><tbody>';
+            byUser.slice(0,15).forEach(function(r){
+                var user=esc(r.username||r.src_ip);
+                if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
+                var pct=maxU?((r.total_bytes/maxU)*100).toFixed(1):0;
+                var sv=r.username||r.src_ip;
+                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(sv)+'\'})" title="View logs for '+esc(sv)+'"><td>'+user+'</td><td class="r mono">'+fmtBytes(r.sent)+'</td><td class="r mono">'+fmtBytes(r.recv)+'</td><td class="r mono">'+fmtBytes(r.total_bytes)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td><div class="ua-bw-bar"><div class="ua-bw-track"><div class="ua-bw-fill" style="width:'+pct+'%;background:var(--ua-purple)"></div></div></div></td></tr>';
+            });
+            $('tblBWUsers').innerHTML=h+'</tbody></table>';
+        }
+        /* By host */
+        if(!byHost.length){ $('tblBWHosts').innerHTML='<div class="ua-empty">No bandwidth data</div>'; }
+        else {
+            var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th class="r">Total</th><th class="r">Recv</th><th class="r">Sent</th><th class="r">Requests</th><th class="r">Users</th><th style="width:100px"></th></tr></thead><tbody>';
+            byHost.slice(0,15).forEach(function(r){
+                var pct=maxH?((r.total_bytes/maxH)*100).toFixed(1):0;
+                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\'})" title="View logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td class="r mono">'+fmtBytes(r.total_bytes)+'</td><td class="r mono">'+fmtBytes(r.recv)+'</td><td class="r mono">'+fmtBytes(r.sent)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td><div class="ua-bw-bar"><div class="ua-bw-track"><div class="ua-bw-fill" style="width:'+pct+'%"></div></div></div></td></tr>';
+            });
+            $('tblBWHosts').innerHTML=h+'</tbody></table>';
+        }
+    }
+
+    /* ---- Load all data in parallel ---- */
+    function refreshAll(){
+        Promise.all([
+            api('summary').then(renderSummary).catch(function(){ $('sTotal').textContent='ERR'; }),
+            api('categories').then(renderCategories).catch(function(){ $('tblCategories').innerHTML='<div class="ua-empty">Failed to load</div>'; $('prodBreakdown').innerHTML=''; }),
+            api('hostnames').then(renderHostnames).catch(function(){ $('tblHostnames').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
+            api('users').then(renderUsers).catch(function(){ $('tblUsers').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
+            api('youtube').then(renderYouTube).catch(function(){ $('ytStats').innerHTML=''; $('tblYT').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
+            api('searches').then(renderSearches).catch(function(){ $('tblSearches').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
+            api('blocked').then(renderBlocked).catch(function(){ $('tblBlockedHosts').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
+            api('bandwidth').then(renderBandwidth).catch(function(){ $('tblBWUsers').innerHTML='<div class="ua-empty">Failed to load</div>'; })
+        ]);
+    }
+
+    /* ---- Events ---- */
+    $('uaTimeRange').addEventListener('change', refreshAll);
+    $('uaRefresh').addEventListener('click', refreshAll);
+
+    /* ---- Init ---- */
+    refreshAll();
+})();
+</script>
+{% endblock %}

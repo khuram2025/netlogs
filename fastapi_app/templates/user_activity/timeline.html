@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentryc - User Timeline</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-void: #0f172a; --bg-deep: #0f172a; --bg-surface: #1e293b;
+            --bg-elevated: #1e293b; --bg-hover: #334155; --bg-active: #475569;
+            --text-bright: #ffffff; --text-primary: #e2e8f0; --text-secondary: #94a3b8;
+            --text-muted: #64748b; --text-ghost: #475569;
+            --accent-cyan: #3b82f6; --accent-cyan-dim: rgba(59,130,246,0.15);
+            --accent-green: #22c55e; --accent-green-dim: rgba(34,197,94,0.15);
+            --accent-red: #ef4444; --accent-red-dim: rgba(239,68,68,0.15);
+            --accent-amber: #f59e0b; --accent-amber-dim: rgba(245,158,11,0.15);
+            --accent-purple: #8b5cf6; --accent-purple-dim: rgba(139,92,246,0.15);
+            --accent-blue: #3b82f6;
+            --border-subtle: #1e293b; --border-default: #334155; --border-emphasis: #475569;
+            --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --header-height: 52px; --row-height: 42px;
+            --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        body { font-family: var(--font-sans); font-size: 13px; line-height: 1.5; color: var(--text-primary); background: var(--bg-void); -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-void); }
+        ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+        .app { display: flex; flex-direction: column; height: 100vh; }
+
+        /* Header */
+        .header { height: var(--header-height); background: var(--bg-surface); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; padding: 0 20px; gap: 24px; flex-shrink: 0; }
+        .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-bright); font-weight: 700; font-size: 15px; }
+        .logo-icon { width: 26px; height: 26px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .logo-icon svg { width: 16px; height: 16px; color: var(--bg-void); }
+        .nav { display: flex; gap: 2px; }
+        .nav-link { padding: 8px 14px; color: var(--text-secondary); text-decoration: none; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); transition: all .15s; }
+        .nav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .nav-link.active { color: var(--accent-blue); background: var(--accent-cyan-dim); }
+        .header-spacer { flex: 1; }
+        .header-user { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+        .user-avatar { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .user-avatar svg { width: 14px; height: 14px; color: white; }
+
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* User Banner */
+        .user-banner { background: var(--bg-surface); border-bottom: 1px solid var(--border-default); padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+        .user-banner-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .user-banner-icon svg { width: 20px; height: 20px; color: white; }
+        .user-banner-info { flex: 1; }
+        .user-banner-name { font-size: 16px; font-weight: 700; color: var(--text-bright); }
+        .user-banner-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); display: flex; gap: 12px; flex-wrap: wrap; }
+        .user-banner-meta span { display: flex; align-items: center; gap: 4px; }
+        .back-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-hover); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-secondary); text-decoration: none; font-size: 12px; font-weight: 500; transition: all .15s; }
+        .back-btn:hover { background: var(--bg-active); color: var(--text-primary); }
+        .back-btn svg { width: 14px; height: 14px; }
+
+        /* KPI Cards */
+        .kpi-bar { display: flex; gap: 8px; padding: 10px 20px; background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow-x: auto; }
+        .kpi { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 8px 14px; min-width: 110px; text-align: center; }
+        .kpi-val { font-size: 18px; font-weight: 700; color: var(--text-bright); font-family: var(--font-mono); }
+        .kpi-val.green { color: var(--accent-green); }
+        .kpi-val.red { color: var(--accent-red); }
+        .kpi-val.amber { color: var(--accent-amber); }
+        .kpi-val.purple { color: var(--accent-purple); }
+        .kpi-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+        /* Content Layout */
+        .content-wrap { flex: 1; display: flex; overflow: hidden; }
+        .main-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .sidebar { width: 280px; background: var(--bg-surface); border-left: 1px solid var(--border-default); overflow-y: auto; flex-shrink: 0; }
+
+        /* Toolbar */
+        .toolbar { height: 48px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); padding: 0 20px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .filter-select { height: 30px; padding: 0 8px; background: var(--bg-deep); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; }
+        .filter-select:focus { outline: none; border-color: var(--accent-blue); }
+        .search-input { height: 30px; padding: 0 10px; background: var(--bg-deep); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-bright); font-family: var(--font-mono); font-size: 12px; flex: 1; max-width: 300px; }
+        .search-input:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 2px var(--accent-cyan-dim); }
+        .search-input::placeholder { color: var(--text-ghost); font-family: var(--font-sans); }
+        .btn { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px; border: none; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500; cursor: pointer; transition: all .15s; }
+        .btn svg { width: 13px; height: 13px; }
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-default); }
+        .btn-ghost:hover { background: var(--bg-hover); }
+        .toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+        .time-pills { display: flex; gap: 3px; padding: 2px; background: var(--bg-deep); border-radius: var(--radius-md); }
+        .time-pill { padding: 3px 8px; font-size: 10px; font-weight: 500; color: var(--text-secondary); background: transparent; border: none; border-radius: var(--radius-sm); cursor: pointer; transition: all .15s; }
+        .time-pill:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .time-pill.active { color: var(--accent-blue); background: var(--accent-cyan-dim); }
+
+        /* Table */
+        .table-wrapper { flex: 1; overflow: auto; }
+        .loading-overlay { position: absolute; inset: 0; background: rgba(10,14,20,0.9); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .loading-overlay.visible { display: flex; }
+        .spinner { width: 32px; height: 32px; border: 2px solid var(--bg-active); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .log-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .log-table thead { position: sticky; top: 0; z-index: 10; }
+        .log-table th { height: 34px; padding: 0 10px; background: var(--bg-surface); border-bottom: 1px solid var(--border-default); text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-muted); white-space: nowrap; }
+        .log-table td { height: var(--row-height); padding: 0 10px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .log-row { transition: background .1s; cursor: pointer; }
+        .log-row:hover { background: var(--bg-hover); }
+        .log-row.expanded { background: var(--bg-active); }
+
+        .col-ts { width: 140px; } .col-status { width: 80px; } .col-type { width: 90px; }
+        .col-dst { width: 120px; } .col-url { width: 1fr; } .col-cat { width: 130px; }
+        .col-app { width: 100px; } .col-bw { width: 90px; } .col-dev { width: 120px; } .col-exp { width: 36px; }
+
+        .timestamp { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+        .ip-link { font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); text-decoration: none; }
+        .status-badge { display: inline-block; padding: 2px 7px; border-radius: var(--radius-sm); font-size: 10px; font-weight: 700; letter-spacing: .3px; }
+        .status-accept { background: var(--accent-green-dim); color: var(--accent-green); }
+        .status-deny { background: var(--accent-red-dim); color: var(--accent-red); }
+        .status-alert { background: var(--accent-amber-dim); color: var(--accent-amber); }
+        .type-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 500; }
+        .type-traffic { background: var(--accent-cyan-dim); color: var(--accent-blue); }
+        .type-utm { background: var(--accent-amber-dim); color: var(--accent-amber); }
+        .type-threat { background: var(--accent-red-dim); color: var(--accent-red); }
+        .url-cell { color: var(--accent-blue); max-width: 300px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+        .cat-cell { font-size: 11px; color: var(--text-secondary); }
+        .app-cell { font-size: 11px; color: var(--accent-purple); }
+        .bw-cell { text-align: right; font-family: var(--font-mono); font-size: 11px; }
+        .device-cell { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+        /* Detail Row */
+        .detail-row { display: none; }
+        .detail-row.visible { display: table-row; }
+        .detail-row td { padding: 0; background: var(--bg-deep); border-bottom: 1px solid var(--border-default); }
+        .detail-panel { padding: 14px 16px; }
+        .flow-section { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; background: var(--bg-surface); border-radius: var(--radius-lg); padding: 14px; margin-bottom: 10px; border: 1px solid var(--border-subtle); }
+        .endpoint { display: flex; flex-direction: column; gap: 6px; }
+        .endpoint-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; padding: 2px 7px; border-radius: var(--radius-sm); display: inline-block; width: fit-content; }
+        .endpoint-tag.src { background: var(--accent-cyan-dim); color: var(--accent-blue); }
+        .endpoint-tag.dst { background: var(--accent-green-dim); color: var(--accent-green); }
+        .endpoint-ip { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--text-bright); }
+        .endpoint-meta { display: grid; grid-template-columns: repeat(2,1fr); gap: 3px 10px; }
+        .meta-item { display: flex; gap: 5px; font-size: 11px; }
+        .meta-label { color: var(--text-muted); }
+        .meta-value { color: var(--text-secondary); font-weight: 500; }
+        .meta-value.mono { font-family: var(--font-mono); font-size: 10px; }
+        .flow-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px; }
+        .flow-arrow-line { display: flex; align-items: center; color: var(--accent-blue); }
+        .flow-arrow-line span { width: 30px; height: 2px; background: linear-gradient(90deg, var(--border-emphasis), var(--accent-blue)); }
+        .flow-arrow-line svg { width: 14px; height: 14px; }
+        .flow-action { font-size: 10px; font-weight: 700; margin-top: 4px; }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; }
+        .info-item { display: flex; gap: 6px; font-size: 11px; padding: 4px 8px; background: var(--bg-surface); border-radius: var(--radius-sm); }
+        .info-item .lbl { color: var(--text-muted); min-width: 70px; }
+        .info-item .val { color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; word-break: break-all; }
+
+        .expand-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; color: var(--text-muted); transition: all .15s; }
+        .expand-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        .expand-btn.open { background: var(--accent-cyan-dim); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .expand-btn svg { width: 12px; height: 12px; transition: transform .2s; }
+        .expand-btn.open svg { transform: rotate(45deg); }
+
+        /* Sidebar */
+        .sb-section { padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); }
+        .sb-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+        .sb-title svg { width: 13px; height: 13px; stroke: var(--accent-blue); fill: none; stroke-width: 2; }
+        .sb-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; cursor: pointer; transition: color .15s; }
+        .sb-item:hover { color: var(--accent-blue); }
+        .sb-item-name { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+        .sb-item-val { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
+        /* Pagination */
+        .pagination { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: var(--bg-surface); border-top: 1px solid var(--border-default); flex-shrink: 0; }
+        .page-info { font-size: 12px; color: var(--text-muted); }
+        .page-info strong { color: var(--text-bright); }
+        .page-btns { display: flex; gap: 4px; }
+        .page-btn { padding: 4px 10px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-secondary); transition: all .15s; }
+        .page-btn:hover:not(:disabled) { background: var(--bg-hover); }
+        .page-btn.active { background: var(--accent-cyan-dim); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+        @media (max-width: 1100px) { .sidebar { display: none; } }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header class="header">
+        <a href="/" class="logo">
+            <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            Zentryc
+        </a>
+        <nav class="nav">
+            <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+            <a href="{{ url_for('log_list') }}" class="nav-link">Logs</a>
+            <a href="{{ url_for('user_activity_list') }}" class="nav-link active">Users</a>
+            <a href="{{ url_for('policy_builder') }}" class="nav-link">Policy Builder</a>
+            <a href="{{ url_for('edl_list') }}" class="nav-link">EDL</a>
+            <a href="{{ url_for('device_list') }}" class="nav-link">Devices</a>
+        </nav>
+        <div class="header-spacer"></div>
+        <div class="header-user">
+            <div class="user-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            {{ current_user.username if current_user else 'admin' }}
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- User Banner -->
+        <div class="user-banner">
+            <a href="{{ url_for('user_activity_list') }}" class="back-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                All Users
+            </a>
+            <div class="user-banner-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            <div class="user-banner-info">
+                <div class="user-banner-name" id="bannerName">--</div>
+                <div class="user-banner-meta" id="bannerMeta"></div>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-bar" id="kpiBar">
+            <div class="kpi"><div class="kpi-val" id="kTotal">--</div><div class="kpi-label">Events</div></div>
+            <div class="kpi"><div class="kpi-val green" id="kAllowed">--</div><div class="kpi-label">Allowed</div></div>
+            <div class="kpi"><div class="kpi-val red" id="kDenied">--</div><div class="kpi-label">Denied</div></div>
+            <div class="kpi"><div class="kpi-val amber" id="kThreats">--</div><div class="kpi-label">Threats</div></div>
+            <div class="kpi"><div class="kpi-val purple" id="kDests">--</div><div class="kpi-label">Destinations</div></div>
+            <div class="kpi"><div class="kpi-val" id="kApps">--</div><div class="kpi-label">Applications</div></div>
+            <div class="kpi"><div class="kpi-val" id="kPorts">--</div><div class="kpi-label">Ports</div></div>
+        </div>
+
+        <!-- Content -->
+        <div class="content-wrap">
+            <div class="main-panel">
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <select id="filterType" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Types</option>
+                        <option value="traffic">Traffic</option>
+                        <option value="utm/webfilter">Web Filter</option>
+                        <option value="utm/dns">DNS</option>
+                        <option value="utm/virus">Virus</option>
+                        <option value="utm/ips">IPS</option>
+                        <option value="threat">Threat</option>
+                    </select>
+                    <select id="filterAction" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Actions</option>
+                        <option value="accept">Accept</option>
+                        <option value="allow">Allow</option>
+                        <option value="deny">Deny</option>
+                        <option value="drop">Drop</option>
+                        <option value="block">Block</option>
+                        <option value="alert">Alert</option>
+                        <option value="passthrough">Passthrough</option>
+                    </select>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search URL, IP, app..." onkeydown="if(event.key==='Enter')applyFilters()">
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        Search
+                    </button>
+                    <button class="btn btn-ghost" onclick="clearFilters()">Clear</button>
+                    <div class="toolbar-right">
+                        <div class="time-pills">
+                            <button class="time-pill" data-hours="1" onclick="setTime(1)">1H</button>
+                            <button class="time-pill" data-hours="6" onclick="setTime(6)">6H</button>
+                            <button class="time-pill" data-hours="24" onclick="setTime(24)">24H</button>
+                            <button class="time-pill" data-hours="72" onclick="setTime(72)">3D</button>
+                            <button class="time-pill" data-hours="168" onclick="setTime(168)">7D</button>
+                            <button class="time-pill" data-hours="720" onclick="setTime(720)">30D</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="table-wrapper" style="position:relative;">
+                    <div class="loading-overlay visible" id="loading"><div class="spinner"></div></div>
+                    <table class="log-table">
+                        <thead><tr>
+                            <th class="col-ts">Time</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-type">Type</th>
+                            <th class="col-dst">Destination</th>
+                            <th>URL / Threat</th>
+                            <th class="col-cat">Category</th>
+                            <th class="col-app">Application</th>
+                            <th class="col-bw">Size</th>
+                            <th class="col-dev">Device</th>
+                            <th class="col-exp"></th>
+                        </tr></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination">
+                    <div class="page-info" id="pageInfo">--</div>
+                    <div class="page-btns" id="pageBtns"></div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar" id="sidebar"></div>
+        </div>
+    </main>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+let userId = params.get('user') || '';
+let hours = parseInt(params.get('hours')) || 24;
+let page = 0, total = 0, events = [];
+const LIMIT = 100;
+
+// Set active time pill
+document.querySelectorAll('.time-pill').forEach(p => p.classList.toggle('active', +p.dataset.hours === hours));
+document.getElementById('bannerName').textContent = userId;
+
+function formatBytes(b) {
+    if (!b || b < 1024) return (b||0)+' B';
+    if (b < 1048576) return (b/1024).toFixed(1)+' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(1)+' MB';
+    return (b/1073741824).toFixed(2)+' GB';
+}
+function formatTS(iso) {
+    if (!iso) return '--';
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).replace(',','');
+}
+function setTime(h) {
+    hours = h; page = 0;
+    document.querySelectorAll('.time-pill').forEach(p => p.classList.toggle('active', +p.dataset.hours === h));
+    loadAll();
+}
+function applyFilters() { page = 0; loadEvents(); }
+function clearFilters() {
+    document.getElementById('filterType').value = '';
+    document.getElementById('filterAction').value = '';
+    document.getElementById('searchInput').value = '';
+    page = 0; loadEvents();
+}
+
+function loadAll() { loadSummary(); loadEvents(); }
+
+function loadSummary() {
+    fetch(`/api/users/activity/summary?user=${encodeURIComponent(userId)}&hours=${hours}`)
+    .then(r => r.json()).then(data => {
+        if (!data.success) return;
+        const s = data.summary;
+        document.getElementById('kTotal').textContent = (s.total_events||0).toLocaleString();
+        document.getElementById('kAllowed').textContent = (s.allowed||0).toLocaleString();
+        document.getElementById('kDenied').textContent = (s.denied||0).toLocaleString();
+        document.getElementById('kThreats').textContent = (s.threat_events||0).toLocaleString();
+        document.getElementById('kDests').textContent = (s.unique_destinations||0).toLocaleString();
+        document.getElementById('kApps').textContent = (s.unique_apps||0).toLocaleString();
+        document.getElementById('kPorts').textContent = (s.unique_ports||0).toLocaleString();
+
+        // Banner meta
+        const ips = (s.all_ips || []).join(', ');
+        const meta = [];
+        if (ips) meta.push(`<span>IPs: ${ips}</span>`);
+        if (s.first_seen) meta.push(`<span>First: ${formatTS(s.first_seen)}</span>`);
+        if (s.last_seen) meta.push(`<span>Last: ${formatTS(s.last_seen)}</span>`);
+        document.getElementById('bannerMeta').innerHTML = meta.join('');
+
+        // Sidebar
+        renderSidebar(data);
+    });
+}
+
+function renderSidebar(data) {
+    let html = '';
+    // Top Destinations
+    if (data.top_destinations && data.top_destinations.length) {
+        html += `<div class="sb-section"><div class="sb-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Top Destinations</div>`;
+        data.top_destinations.forEach(d => {
+            html += `<div class="sb-item"><span class="sb-item-name" title="${d.ip}">${d.ip}</span><span class="sb-item-val">${d.count.toLocaleString()}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    // Top Applications
+    if (data.top_applications && data.top_applications.length) {
+        html += `<div class="sb-section"><div class="sb-title"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Top Applications</div>`;
+        data.top_applications.forEach(a => {
+            html += `<div class="sb-item"><span class="sb-item-name">${a.application}</span><span class="sb-item-val">${a.count.toLocaleString()}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    // Top Categories
+    if (data.top_categories && data.top_categories.length) {
+        html += `<div class="sb-section"><div class="sb-title"><svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 002-2V8a2 2 0 00-2-2h-7.93a2 2 0 01-1.66-.9l-.82-1.2A2 2 0 007.93 3H4a2 2 0 00-2 2v13c0 1.1.9 2 2 2z"/></svg>Top URL Categories</div>`;
+        data.top_categories.forEach(c => {
+            html += `<div class="sb-item"><span class="sb-item-name">${c.category}</span><span class="sb-item-val">${c.count.toLocaleString()}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    // Top URLs
+    if (data.top_urls && data.top_urls.length) {
+        html += `<div class="sb-section"><div class="sb-title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Top URLs</div>`;
+        data.top_urls.forEach(u => {
+            const short = u.url.length > 40 ? u.url.substring(0,40)+'...' : u.url;
+            html += `<div class="sb-item"><span class="sb-item-name" title="${u.url}">${short}</span><span class="sb-item-val">${u.count.toLocaleString()}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    // Actions
+    if (data.actions && data.actions.length) {
+        html += `<div class="sb-section"><div class="sb-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Actions</div>`;
+        data.actions.forEach(a => {
+            html += `<div class="sb-item"><span class="sb-item-name">${a.action||'(empty)'}</span><span class="sb-item-val">${a.count.toLocaleString()}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    document.getElementById('sidebar').innerHTML = html;
+}
+
+function loadEvents() {
+    const lt = document.getElementById('filterType').value;
+    const act = document.getElementById('filterAction').value;
+    const q = document.getElementById('searchInput').value.trim();
+    document.getElementById('loading').classList.add('visible');
+
+    let url = `/api/users/activity/events?user=${encodeURIComponent(userId)}&hours=${hours}&limit=${LIMIT}&offset=${page*LIMIT}`;
+    if (lt) url += `&log_type=${encodeURIComponent(lt)}`;
+    if (act) url += `&action=${encodeURIComponent(act)}`;
+    if (q) url += `&search=${encodeURIComponent(q)}`;
+
+    fetch(url).then(r => r.json()).then(data => {
+        document.getElementById('loading').classList.remove('visible');
+        total = data.total || 0;
+        events = data.events || [];
+        renderTable();
+        renderPagination();
+    }).catch(() => {
+        document.getElementById('loading').classList.remove('visible');
+    });
+}
+
+function actionBadge(action) {
+    const a = (action||'').toLowerCase();
+    if (['deny','drop','block','reject','block-url','reset-client','reset-server'].includes(a))
+        return `<span class="status-badge status-deny">${a.toUpperCase()}</span>`;
+    if (a === 'alert')
+        return `<span class="status-badge status-alert">ALERT</span>`;
+    return `<span class="status-badge status-accept">${(a||'ALLOW').toUpperCase()}</span>`;
+}
+function typeTag(lt) {
+    const t = (lt||'').toLowerCase();
+    if (t.startsWith('utm/')) return `<span class="type-tag type-utm">${t}</span>`;
+    if (t === 'threat') return `<span class="type-tag type-threat">threat</span>`;
+    return `<span class="type-tag type-traffic">${t||'traffic'}</span>`;
+}
+
+function renderTable() {
+    const tb = document.getElementById('tableBody');
+    if (!events.length) {
+        tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted);">No events found</td></tr>';
+        return;
+    }
+    tb.innerHTML = events.map((e, i) => {
+        const urlDisplay = e.url ? (e.url.length > 55 ? e.url.substring(0,55)+'...' : e.url) : (e.threat_name || '');
+        const bw = e.total_bytes > 0 ? formatBytes(e.total_bytes) : '';
+        return `<tr class="log-row" data-idx="${i}" onclick="toggleRow(${i})">
+            <td class="col-ts"><span class="timestamp">${formatTS(e.timestamp)}</span></td>
+            <td class="col-status">${actionBadge(e.action)}</td>
+            <td class="col-type">${typeTag(e.log_type)}</td>
+            <td class="col-dst"><span class="ip-link">${e.dest_ip}</span></td>
+            <td><span class="${e.url?'url-cell':'cat-cell'}" title="${e.url||e.threat_name||''}">${urlDisplay}</span></td>
+            <td class="col-cat cat-cell">${e.category||''}</td>
+            <td class="col-app app-cell">${e.application||''}</td>
+            <td class="col-bw bw-cell">${bw}</td>
+            <td class="col-dev device-cell">${e.device_ip}</td>
+            <td class="col-exp"><button class="expand-btn" id="ebtn${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></td>
+        </tr>
+        <tr class="detail-row" id="detail${i}"><td colspan="10">
+            <div class="detail-panel">
+                <div class="flow-section">
+                    <div class="endpoint">
+                        <span class="endpoint-tag src">Source</span>
+                        <span class="endpoint-ip">${e.src_ip}</span>
+                        <div class="endpoint-meta">
+                            <div class="meta-item"><span class="meta-label">Port</span><span class="meta-value mono">${e.src_port||'--'}</span></div>
+                            <div class="meta-item"><span class="meta-label">Zone</span><span class="meta-value">${e.src_zone||'--'}</span></div>
+                            <div class="meta-item"><span class="meta-label">User</span><span class="meta-value">${e.src_user||'--'}</span></div>
+                            <div class="meta-item"><span class="meta-label">Proto</span><span class="meta-value">${e.protocol||'--'}</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">
+                        <div class="flow-arrow-line"><span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+                        <div class="flow-action">${actionBadge(e.action)}</div>
+                    </div>
+                    <div class="endpoint">
+                        <span class="endpoint-tag dst">Destination</span>
+                        <span class="endpoint-ip">${e.dest_ip}</span>
+                        <div class="endpoint-meta">
+                            <div class="meta-item"><span class="meta-label">Port</span><span class="meta-value mono">${e.dest_port||'--'}</span></div>
+                            <div class="meta-item"><span class="meta-label">Zone</span><span class="meta-value">${e.dest_zone||'--'}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-grid">
+                    <div class="info-item"><span class="lbl">Policy</span><span class="val">${e.policy||'--'}</span></div>
+                    <div class="info-item"><span class="lbl">App</span><span class="val">${e.application||'--'}</span></div>
+                    <div class="info-item"><span class="lbl">Category</span><span class="val">${e.category||'--'}</span></div>
+                    <div class="info-item"><span class="lbl">Device</span><span class="val">${e.device_ip}</span></div>
+                    <div class="info-item"><span class="lbl">Sent</span><span class="val">${formatBytes(e.bytes_sent)}</span></div>
+                    <div class="info-item"><span class="lbl">Received</span><span class="val">${formatBytes(e.bytes_recv)}</span></div>
+                    ${e.url?`<div class="info-item" style="grid-column:1/-1"><span class="lbl">URL</span><span class="val" style="color:var(--accent-blue)">${e.url}</span></div>`:''}
+                    ${e.threat_name?`<div class="info-item" style="grid-column:1/-1"><span class="lbl">Threat</span><span class="val" style="color:var(--accent-amber)">${e.threat_name}</span></div>`:''}
+                </div>
+            </div>
+        </td></tr>`;
+    }).join('');
+}
+
+function toggleRow(i) {
+    const dr = document.getElementById('detail'+i);
+    const btn = document.getElementById('ebtn'+i);
+    const row = dr.previousElementSibling;
+    const open = dr.classList.toggle('visible');
+    btn.classList.toggle('open', open);
+    row.classList.toggle('expanded', open);
+}
+
+function renderPagination() {
+    const tp = Math.max(1, Math.ceil(total/LIMIT));
+    const s = page*LIMIT+1, e = Math.min((page+1)*LIMIT, total);
+    document.getElementById('pageInfo').innerHTML = total > 0
+        ? `Showing <strong>${s}</strong>-<strong>${e}</strong> of <strong>${total.toLocaleString()}</strong>`
+        : 'No results';
+    document.getElementById('pageBtns').innerHTML = `
+        <button class="page-btn" ${page===0?'disabled':''} onclick="goPage(${page-1})">&laquo; Prev</button>
+        <button class="page-btn active">${page+1} / ${tp}</button>
+        <button class="page-btn" ${page>=tp-1?'disabled':''} onclick="goPage(${page+1})">Next &raquo;</button>`;
+}
+function goPage(p) { page = p; loadEvents(); }
+
+// Init
+if (userId) loadAll();
+else document.getElementById('bannerName').textContent = 'No user specified';
+</script>
+</body>
+</html>

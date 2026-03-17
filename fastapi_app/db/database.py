@@ -82,6 +82,7 @@ async def init_db() -> None:
     from ..models import address_object  # noqa: F401
     from ..models import system_settings  # noqa: F401
     from ..models import llm_config  # noqa: F401
+    from ..models import url_clean  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -91,6 +92,10 @@ async def init_db() -> None:
 
     # Seed pre-built alert rules on first run
     await _seed_alert_rules()
+
+    # Seed SiteClean builtin rules
+    from ..services.siteclean import seed_builtin_rules
+    await seed_builtin_rules()
 
 
 async def _create_default_admin() -> None:
