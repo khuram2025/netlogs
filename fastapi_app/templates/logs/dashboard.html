@@ -1,6 +1,14 @@
 {% extends 'base.html' %}
 
 {% block extra_css %}
+<!-- Inline cached data for instant render; fetch is fallback for cold cache -->
+<script>
+{% if inline_data %}
+window.__dashData = Promise.resolve({{ inline_data | safe }});
+{% else %}
+window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
+{% endif %}
+</script>
 <style>
     /* Full width override */
     .container:has(.db-page) { max-width: 100%; padding: 0 1rem; margin: 1rem auto; }
@@ -140,20 +148,28 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function(){
     const fmt = n => (n||0).toLocaleString();
     const esc = s => { if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
 
-    Chart.defaults.color = '#94a3b8';
-    Chart.defaults.borderColor = 'rgba(51,65,85,0.5)';
+    // Load Chart.js dynamically (non-blocking)
+    const chartReady = new Promise(resolve => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        s.onload = resolve;
+        document.head.appendChild(s);
+    });
 
-    fetch('/api/dashboard/stats').then(r=>r.json()).then(d => {
+    // Use the prefetched data promise from <head>
+    const dataReady = window.__dashData || fetch('/api/dashboard/stats').then(r => r.json());
+
+    // Populate KPIs and tables immediately when data arrives (no Chart.js needed)
+    dataReady.then(d => {
         if (d.error) { console.error('Dashboard error:', d.error); return; }
         const k = d.kpi;
 
-        // KPI cards
+        // KPI cards — render instantly
         document.getElementById('k-total').textContent = fmt(k.total_24h);
         document.getElementById('k-eps-sub').textContent = k.avg_eps + ' avg EPS';
         document.getElementById('k-eps').textContent = k.current_eps;
@@ -167,6 +183,43 @@
         document.getElementById('k-dns-sub').textContent = fmt(k.dns_sinkholed) + ' sinkholed';
         document.getElementById('k-threats').textContent = fmt(k.dns_critical);
         document.getElementById('k-threats-sub').textContent = 'Critical/High severity';
+
+        // Tables — render instantly (no Chart.js dependency)
+        const maxSrc = d.top_sources[0]?.count || 1;
+        document.getElementById('tbl-sources').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Events</th><th>Denied</th><th>Activity</th></tr></thead><tbody>' +
+            (d.top_sources.length ? d.top_sources.slice(0,8).map(s => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(s.ip)}'"><td class="ip mono">${esc(s.ip)}</td><td class="mono">${fmt(s.count)}</td><td class="${s.denied_count?'danger':''} mono">${fmt(s.denied_count)}</td><td><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(s.count/maxSrc*100)}%"></div></div></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No source data</td></tr>') +
+            '</tbody></table>';
+
+        document.getElementById('tbl-threats').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Denied</th><th>Targets</th><th>Ports</th></tr></thead><tbody>' +
+            (d.threats.length ? d.threats.slice(0,8).map(t => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(t.ip)}&action=deny'"><td class="ip mono">${esc(t.ip)}</td><td class="danger mono">${fmt(t.denied_count)}</td><td class="mono">${fmt(t.unique_targets)}</td><td class="mono">${fmt(t.unique_ports)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No threats detected</td></tr>') +
+            '</tbody></table>';
+
+        document.getElementById('tbl-ports').innerHTML = '<table class="db-tbl"><thead><tr><th>Port</th><th>Service</th><th>Events</th><th>Denied</th></tr></thead><tbody>' +
+            (d.ports.length ? d.ports.slice(0,8).map(p => `<tr class="clickable" onclick="location.href='/logs/?dstport=${p.port}'"><td class="mono">${p.port}</td><td>${esc(p.service)}</td><td class="mono">${fmt(p.count)}</td><td class="${p.denied_count?'danger':''} mono">${fmt(p.denied_count)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No port data</td></tr>') +
+            '</tbody></table>';
+
+        document.getElementById('tbl-devices').innerHTML = '<table class="db-tbl"><thead><tr><th>Device</th><th>Events</th><th>Critical</th><th>Status</th></tr></thead><tbody>' +
+            (d.devices.length ? d.devices.slice(0,8).map(dv => `<tr class="clickable" onclick="location.href='/logs/?device=${esc(dv.device)}'"><td class="ip mono">${esc(dv.device)}</td><td class="mono">${fmt(dv.log_count)}</td><td class="${dv.critical_count?'danger':''} mono">${fmt(dv.critical_count)}</td><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dv.last_seen?'#22c55e':'#64748b'};margin-right:4px;"></span><span style="font-size:.7rem;color:#94a3b8;">${dv.last_seen?'Active':'Unknown'}</span></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No devices</td></tr>') +
+            '</tbody></table>';
+
+        document.getElementById('tbl-recent').innerHTML = '<div style="overflow-x:auto;"><table class="db-tbl"><thead><tr><th>Time</th><th>Device</th><th>Severity</th><th>Message</th></tr></thead><tbody>' +
+            (d.recent_logs.length ? d.recent_logs.map(l => {
+                let bc = 'badge-info';
+                if (l.severity <= 3) bc = 'badge-crit';
+                else if (l.severity === 4) bc = 'badge-warn';
+                return `<tr class="clickable" onclick="location.href='/logs/?device=${esc(l.device_ip)}&severity=${l.severity}'"><td class="mono" style="white-space:nowrap;">${esc(l.timestamp)}</td><td class="ip mono">${esc(l.device_ip)}</td><td><span class="badge-s ${bc}">${esc(l.severity_name)}</span></td><td style="max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(l.message)}">${esc(l.message)}</td></tr>`;
+            }).join('') : '<tr><td colspan="4" class="empty">No recent logs</td></tr>') +
+            '</tbody></table></div>';
+    }).catch(e => {
+        console.error('Dashboard load error:', e);
+        document.querySelectorAll('.db-skel').forEach(el => { el.style.background = 'rgba(239,68,68,.1)'; el.style.animation = 'none'; });
+    });
+
+    // Render charts once BOTH data AND Chart.js are ready
+    Promise.all([dataReady, chartReady]).then(([d]) => {
+        if (d.error) return;
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = 'rgba(51,65,85,0.5)';
 
         // Traffic Timeline
         const tlEl = document.getElementById('ct-timeline');
@@ -224,45 +277,30 @@
             data: { labels:d.protocols.map(p=>p.protocol), datasets:[{data:d.protocols.map(p=>p.count),backgroundColor:['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#06b6d4'],borderWidth:0}] },
             options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{legend:{position:'right',labels:{boxWidth:12,padding:8,font:{size:11}}}} }
         });
-
-        // Top Sources table
-        const maxSrc = d.top_sources[0]?.count || 1;
-        document.getElementById('tbl-sources').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Events</th><th>Denied</th><th>Activity</th></tr></thead><tbody>' +
-            (d.top_sources.length ? d.top_sources.slice(0,8).map(s => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(s.ip)}'"><td class="ip mono">${esc(s.ip)}</td><td class="mono">${fmt(s.count)}</td><td class="${s.denied_count?'danger':''} mono">${fmt(s.denied_count)}</td><td><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(s.count/maxSrc*100)}%"></div></div></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No source data</td></tr>') +
-            '</tbody></table>';
-
-        // Threats table
-        document.getElementById('tbl-threats').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Denied</th><th>Targets</th><th>Ports</th></tr></thead><tbody>' +
-            (d.threats.length ? d.threats.slice(0,8).map(t => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(t.ip)}&action=deny'"><td class="ip mono">${esc(t.ip)}</td><td class="danger mono">${fmt(t.denied_count)}</td><td class="mono">${fmt(t.unique_targets)}</td><td class="mono">${fmt(t.unique_ports)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No threats detected</td></tr>') +
-            '</tbody></table>';
-
-        // Ports table
-        document.getElementById('tbl-ports').innerHTML = '<table class="db-tbl"><thead><tr><th>Port</th><th>Service</th><th>Events</th><th>Denied</th></tr></thead><tbody>' +
-            (d.ports.length ? d.ports.slice(0,8).map(p => `<tr class="clickable" onclick="location.href='/logs/?dstport=${p.port}'"><td class="mono">${p.port}</td><td>${esc(p.service)}</td><td class="mono">${fmt(p.count)}</td><td class="${p.denied_count?'danger':''} mono">${fmt(p.denied_count)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No port data</td></tr>') +
-            '</tbody></table>';
-
-        // Devices table
-        document.getElementById('tbl-devices').innerHTML = '<table class="db-tbl"><thead><tr><th>Device</th><th>Events</th><th>Critical</th><th>Status</th></tr></thead><tbody>' +
-            (d.devices.length ? d.devices.slice(0,8).map(dv => `<tr class="clickable" onclick="location.href='/logs/?device=${esc(dv.device)}'"><td class="ip mono">${esc(dv.device)}</td><td class="mono">${fmt(dv.log_count)}</td><td class="${dv.critical_count?'danger':''} mono">${fmt(dv.critical_count)}</td><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dv.last_seen?'#22c55e':'#64748b'};margin-right:4px;"></span><span style="font-size:.7rem;color:#94a3b8;">${dv.last_seen?'Active':'Unknown'}</span></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No devices</td></tr>') +
-            '</tbody></table>';
-
-        // Recent logs table
-        document.getElementById('tbl-recent').innerHTML = '<div style="overflow-x:auto;"><table class="db-tbl"><thead><tr><th>Time</th><th>Device</th><th>Severity</th><th>Message</th></tr></thead><tbody>' +
-            (d.recent_logs.length ? d.recent_logs.map(l => {
-                let bc = 'badge-info';
-                if (l.severity <= 3) bc = 'badge-crit';
-                else if (l.severity === 4) bc = 'badge-warn';
-                return `<tr class="clickable" onclick="location.href='/logs/?device=${esc(l.device_ip)}&severity=${l.severity}'"><td class="mono" style="white-space:nowrap;">${esc(l.timestamp)}</td><td class="ip mono">${esc(l.device_ip)}</td><td><span class="badge-s ${bc}">${esc(l.severity_name)}</span></td><td style="max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(l.message)}">${esc(l.message)}</td></tr>`;
-            }).join('') : '<tr><td colspan="4" class="empty">No recent logs</td></tr>') +
-            '</tbody></table></div>';
-
-    }).catch(e => {
-        console.error('Dashboard load error:', e);
-        document.querySelectorAll('.db-skel').forEach(el => { el.style.background = 'rgba(239,68,68,.1)'; el.style.animation = 'none'; });
     });
 
-    // Auto-refresh every 60 seconds
-    setTimeout(() => location.reload(), 60000);
+    // Soft auto-refresh every 60 seconds (no skeleton flash)
+    function softRefresh() {
+        fetch('/api/dashboard/stats').then(r => r.json()).then(d => {
+            if (d.error) return;
+            const k = d.kpi;
+            document.getElementById('k-total').textContent = fmt(k.total_24h);
+            document.getElementById('k-eps-sub').textContent = k.avg_eps + ' avg EPS';
+            document.getElementById('k-eps').textContent = k.current_eps;
+            document.getElementById('k-allowed').textContent = fmt(k.allowed);
+            document.getElementById('k-denied').textContent = fmt(k.denied);
+            document.getElementById('k-critical').textContent = fmt(k.critical);
+            document.getElementById('k-devices').textContent = fmt(k.active_devices);
+            document.getElementById('k-url').textContent = fmt(k.url_total);
+            document.getElementById('k-url-sub').textContent = fmt(k.url_blocked) + ' blocked';
+            document.getElementById('k-dns').textContent = fmt(k.dns_total);
+            document.getElementById('k-dns-sub').textContent = fmt(k.dns_sinkholed) + ' sinkholed';
+            document.getElementById('k-threats').textContent = fmt(k.dns_critical);
+            document.getElementById('k-threats-sub').textContent = 'Critical/High severity';
+        }).catch(() => {});
+        setTimeout(softRefresh, 60000);
+    }
+    setTimeout(softRefresh, 60000);
 })();
 </script>
 {% endblock %}

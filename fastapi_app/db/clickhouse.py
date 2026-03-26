@@ -2445,21 +2445,51 @@ class ClickHouseClient:
     # Dashboard cache for performance
     _dashboard_cache: Dict[str, Any] = {}
     _dashboard_cache_time: float = 0
-    _DASHBOARD_CACHE_TTL: int = 120  # Cache for 2 minutes (dashboard data is 24h aggregates, doesn't need to be real-time)
+    _DASHBOARD_CACHE_TTL: int = 300  # Serve cached data for 5 minutes
+    _DASHBOARD_STALE_TTL: int = 600  # Accept stale data up to 10 minutes while refreshing in background
+    _dashboard_refreshing: bool = False  # Guard against concurrent background refreshes
 
     @classmethod
     def get_dashboard_stats(cls) -> Dict[str, Any]:
         """
         Get comprehensive dashboard statistics for SIEM dashboard.
-        Uses caching and optimized queries for fast performance.
+        Uses stale-while-revalidate caching for instant responses.
         """
         import time
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
 
-        # Check cache first
         now = time.time()
-        if cls._dashboard_cache and (now - cls._dashboard_cache_time) < cls._DASHBOARD_CACHE_TTL:
+        age = now - cls._dashboard_cache_time if cls._dashboard_cache else float('inf')
+
+        # Fresh cache — return immediately
+        if cls._dashboard_cache and age < cls._DASHBOARD_CACHE_TTL:
             return cls._dashboard_cache
+
+        # Stale cache — return stale data immediately, refresh in background
+        if cls._dashboard_cache and age < cls._DASHBOARD_STALE_TTL:
+            if not cls._dashboard_refreshing:
+                cls._dashboard_refreshing = True
+                threading.Thread(target=cls._refresh_dashboard_cache, daemon=True).start()
+            return cls._dashboard_cache
+
+        # No cache or too old — must refresh synchronously
+        return cls._run_dashboard_queries()
+
+    @classmethod
+    def _refresh_dashboard_cache(cls):
+        """Background thread: refresh dashboard cache silently."""
+        try:
+            cls._run_dashboard_queries()
+        except Exception as e:
+            logger.error(f"Background dashboard refresh failed: {e}")
+        finally:
+            cls._dashboard_refreshing = False
+
+    @classmethod
+    def _run_dashboard_queries(cls) -> Dict[str, Any]:
+        """Execute all dashboard queries, update cache, return stats."""
+        import time as _time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Define all queries - optimized for performance
         queries = {
@@ -2600,7 +2630,7 @@ class ClickHouseClient:
 
         # Update cache
         cls._dashboard_cache = stats
-        cls._dashboard_cache_time = now
+        cls._dashboard_cache_time = _time.time()
 
         return stats
 

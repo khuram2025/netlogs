@@ -129,8 +129,68 @@ async def home(request: Request):
 
 @router.get("/dashboard/", response_class=HTMLResponse, name="dashboard")
 async def dashboard(request: Request):
-    """Dashboard view — renders skeleton immediately, data loaded via JS."""
-    return _render("logs/dashboard.html", request, {})
+    """Dashboard view — embeds cached data inline for instant render, falls back to JS fetch."""
+    import json as _json
+    # Check if this worker has cached dashboard data (non-blocking, no queries)
+    cached = ClickHouseClient._dashboard_cache
+    inline_json = ""
+    if cached:
+        try:
+            # Build the same payload shape as the API endpoint
+            stats = cached
+            severity_data = []
+            for item in stats.get('severity_breakdown', []):
+                severity_data.append({
+                    'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
+                    'count': _safe_int(item.get('count', 0)),
+                    'severity': _safe_int(item.get('severity', 6))
+                })
+            timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
+            for item in stats.get('traffic_timeline', []):
+                hour = item.get('hour')
+                timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
+                timeline['total'].append(_safe_int(item.get('total', 0)))
+                timeline['critical'].append(_safe_int(item.get('critical', 0)))
+                timeline['denied'].append(_safe_int(item.get('denied', 0)))
+            realtime = {'labels': [], 'data': []}
+            for item in stats.get('realtime_traffic', []):
+                minute = item.get('minute')
+                realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
+                realtime['data'].append(_safe_int(item.get('count', 0)))
+            actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
+            protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
+            top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
+            threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
+            ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
+            devices = []
+            for dv in stats.get('device_activity', []):
+                ls = dv.get('last_seen')
+                devices.append({
+                    'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
+                    'critical_count': _safe_int(dv.get('critical_count', 0)),
+                    'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
+                })
+            recent_logs = []
+            payload = _sanitize({
+                'kpi': {
+                    'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
+                    'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
+                    'current_eps': round(float(stats.get('current_eps', 0)), 1),
+                    'allowed': _safe_int(stats.get('allowed_count', 0)),
+                    'denied': _safe_int(stats.get('denied_count', 0)),
+                    'critical': _safe_int(stats.get('critical_count', 0)),
+                    'active_devices': _safe_int(stats.get('active_devices', 0)),
+                    'url_total': 0, 'url_blocked': 0, 'dns_total': 0, 'dns_sinkholed': 0, 'dns_critical': 0,
+                },
+                'severity_data': severity_data, 'timeline': timeline, 'realtime': realtime,
+                'actions': actions, 'protocols': protocols, 'top_sources': top_sources,
+                'top_destinations': [], 'threats': threats, 'ports': ports,
+                'devices': devices, 'recent_logs': recent_logs,
+            })
+            inline_json = _json.dumps(payload)
+        except Exception:
+            inline_json = ""
+    return _render("logs/dashboard.html", request, {"inline_data": inline_json})
 
 
 # Port service mapping (shared by API)
