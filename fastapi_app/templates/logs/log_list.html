@@ -7,6 +7,7 @@
         .content-scroll { overflow: hidden !important; }
         .container:has(.log-app) { max-width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100% !important; }
         .content-scroll:has(.log-app) { display: flex; flex-direction: column; }
+        #filterForm { height: 100%; }
         :root {
             /* Unified Dark Theme - Matching Devices Page */
             --bg-void: #0f172a;
@@ -1734,8 +1735,9 @@
         }
 
         /* ===== SIDEBAR (Right Panel) ===== */
-        .sidebar {
+        #filterSidebar {
             width: 260px;
+            height: auto;
             background: var(--bg-surface);
             border-left: 1px solid var(--border-subtle);
             flex-shrink: 0;

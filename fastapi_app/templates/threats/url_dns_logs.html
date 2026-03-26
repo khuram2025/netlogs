@@ -145,6 +145,7 @@
         background: var(--udl-card); border: 1px solid var(--udl-border);
         border-radius: 10px; overflow: hidden;
         animation: udl-fadeIn .5s ease-out .25s both;
+        flex: 1; display: flex; flex-direction: column;
     }
     .udl-table-header {
         display: flex; justify-content: space-between; align-items: center;
@@ -244,13 +245,13 @@
     .udl-empty { text-align: center; padding: 3rem; color: var(--udl-dim); }
     .udl-empty svg { width: 40px; height: 40px; stroke: var(--udl-dim); fill: none; stroke-width: 1.5; margin-bottom: .75rem; }
 
-    /* Scrollable table body */
-    .udl-table-scroll { max-height: calc(100vh - 380px); overflow-y: auto; }
+    /* Scrollable table body — fills table-wrap, stretches to match sidebar */
+    .udl-table-scroll { flex: 1; overflow-y: auto; }
 
     /* ---- SIDE PANEL (mini stats) ---- */
-    .udl-layout { display: flex; gap: 1rem; }
-    .udl-main { flex: 1; min-width: 0; }
-    .udl-sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: .75rem; animation: udl-fadeIn .5s ease-out .3s both; }
+    .udl-layout { display: grid; grid-template-columns: 1fr 280px; gap: 1rem; min-height: calc(100vh - 380px); }
+    .udl-main { min-width: 0; display: flex; flex-direction: column; overflow: hidden; contain: size; }
+    .udl-sidebar { display: flex; flex-direction: column; gap: .75rem; animation: udl-fadeIn .5s ease-out .3s both; }
     .udl-sidebar-card {
         background: var(--udl-card); border: 1px solid var(--udl-border);
         border-radius: 10px; padding: .875rem; overflow: hidden;
@@ -398,6 +399,7 @@
     .udl-dd-loading svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; animation: udl-spin 1s linear infinite; }
 
     @media (max-width: 1200px) {
+        .udl-layout { grid-template-columns: 1fr; }
         .udl-sidebar { display: none; }
         .udl-dd-right { display: none; }
     }
