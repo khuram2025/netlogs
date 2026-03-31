@@ -115,13 +115,11 @@ echo ""
 info "Configuring environment..."
 
 generate_password() {
-    # 24-char alphanumeric password (safe for shell, no special chars that break .env)
-    tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24
+    openssl rand -base64 24 | tr -d '/+=' | head -c 24
 }
 
 generate_secret_key() {
-    # 64-char hex token
-    tr -dc 'a-f0-9' </dev/urandom | head -c 64
+    openssl rand -hex 32
 }
 
 if [[ -f .env ]]; then
