@@ -152,9 +152,10 @@ else
     sed -i "s|TZ=Asia/Riyadh|TZ=${SYS_TZ}|" .env
     sed -i "s|WORKERS=4|WORKERS=${WORKERS}|" .env
 
-    # Generate PgBouncer userlist (plain text — safe on internal Docker network)
+    # PgBouncer: trust auth on internal Docker network (not exposed externally)
     echo "\"zentryc\" \"${PG_PASS}\"" > docker/pgbouncer-userlist.txt
-    sed -i 's|auth_type = scram-sha-256|auth_type = plain|' docker/pgbouncer.ini 2>/dev/null || true
+    sed -i 's|auth_type = scram-sha-256|auth_type = trust|' docker/pgbouncer.ini 2>/dev/null || true
+    sed -i 's|auth_type = plain|auth_type = trust|' docker/pgbouncer.ini 2>/dev/null || true
 
     ok "Generated .env with secure random passwords"
     ok "Timezone: ${SYS_TZ} | Workers: ${WORKERS}"
