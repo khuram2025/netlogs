@@ -57,7 +57,8 @@ fi
 ok "RAM: ~${TOTAL_RAM_GB} GB"
 
 # Disk check (minimum 20 GB free)
-FREE_DISK_KB=$(df --output=avail "$SCRIPT_DIR" | tail -1 | tr -d ' ')
+FREE_DISK_KB=$(df --output=avail /opt 2>/dev/null || df --output=avail / | tail -1 | tr -d ' ')
+FREE_DISK_KB=$(echo "$FREE_DISK_KB" | tail -1 | tr -d ' ')
 FREE_DISK_GB=$((FREE_DISK_KB / 1024 / 1024))
 if [[ $FREE_DISK_GB -lt 20 ]]; then
     fail "Minimum 20 GB free disk required. Available: ${FREE_DISK_GB} GB"
