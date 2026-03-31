@@ -5,7 +5,7 @@
 On a fresh Ubuntu 22.04/24.04 server (min 4 CPU, 16 GB RAM, 100 GB disk):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/khuram2025/netlogs/main/install.sh | sudo bash
+git clone https://github.com/khuram2025/netlogs.git /opt/zentryc && sudo bash /opt/zentryc/install.sh
 ```
 
 That's it. The script will:
