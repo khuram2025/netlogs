@@ -102,7 +102,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             max_age=8 * 3600,  # 8 hours, matches session
             httponly=False,     # JS must be able to read this
             samesite="lax",
-            secure=not _is_debug(),
+            secure=False,       # Allow on HTTP and self-signed HTTPS
             path="/",
         )
 

@@ -253,7 +253,7 @@ def set_session_cookie(response: Response, token: str, remember_me: bool = False
         max_age=max_age,
         httponly=True,
         samesite="lax",
-        secure=not settings.debug,
+        secure=False,   # Allow on HTTP and self-signed HTTPS
     )
 
 
