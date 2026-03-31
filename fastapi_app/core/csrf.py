@@ -29,6 +29,9 @@ CSRF_EXEMPT_PREFIXES = (
     "/api/redoc",
     "/api/openapi.json",
     "/api/health",
+    "/api/setup",        # Setup wizard API
+    "/setup",            # Setup wizard pages
+    "/auth/login",       # Login form
     "/edl/feed/",        # EDL feeds consumed by firewalls
 )
 
