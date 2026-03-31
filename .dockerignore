@@ -33,6 +33,9 @@ deploy/
 .env
 docker-compose*.yml
 
+# Node.js (built in Docker, not copied from host)
+node_modules/
+
 # IDE
 .vscode/
 .idea/

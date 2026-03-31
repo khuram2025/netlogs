@@ -8,8 +8,6 @@ from urllib.parse import quote_plus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
-
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -25,11 +23,16 @@ def get_database_url() -> str:
     return f"postgresql+asyncpg://{settings.postgres_user}:{encoded_password}@{db_host}:{settings.postgres_port}/{settings.postgres_db}"
 
 
-# Create async engine
+# Create async engine with connection pooling
+# QueuePool reuses connections instead of creating new TCP connections per request
 engine = create_async_engine(
     get_database_url(),
     echo=settings.debug,
-    poolclass=NullPool,
+    pool_size=10,          # 10 persistent connections in pool
+    max_overflow=20,       # 20 additional connections under burst
+    pool_timeout=30,       # Wait up to 30s for a connection
+    pool_recycle=1800,     # Recycle connections every 30 min (avoid stale)
+    pool_pre_ping=True,    # Verify connection health before use
 )
 
 # Session factory

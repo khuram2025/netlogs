@@ -9,17 +9,22 @@ __pycache__/
 *$py.class
 *.so
 
+# Node.js
+node_modules/
+
+# Vite build output (rebuilt in Docker)
+fastapi_app/static/dist/
+
 # Environment variables
 .env
 .env.local
 
 # Database
 *.sqlite3
-db.sqlite3
 
 # Logs
 *.log
-logs/*.log
+logs/
 
 # IDE
 .idea/
@@ -32,11 +37,10 @@ logs/*.log
 .DS_Store
 Thumbs.db
 
-# Static files (collected)
-staticfiles/
-
-# Reference images
-refrence Images/
+# Screenshots / images (dev artifacts)
+*.png
+*.jpg
+*.jpeg
 
 # Backup files
 backups/
@@ -47,3 +51,7 @@ backups/
 # Temporary files
 tmp/
 temp/
+.playwright-mcp/
+
+# Packer output
+packer/output-*/

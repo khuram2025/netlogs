@@ -80,7 +80,7 @@ async def setup_step1(request: Request):
         await session.commit()
 
         # Auto-login: create session token
-        token = create_session_token(
+        token = await create_session_token(
             user_id=admin.id,
             username=admin.username,
             role=admin.role,

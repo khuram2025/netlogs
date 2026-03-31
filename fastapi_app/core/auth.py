@@ -1,5 +1,8 @@
 """
 Authentication utilities - JWT session tokens, login/logout, middleware.
+
+Sessions are stored in Redis (survives restarts, shared across workers).
+Falls back to in-memory if Redis is unavailable.
 """
 
 import logging
@@ -11,7 +14,8 @@ from typing import Optional
 
 from fastapi import Request, Response, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,36 +32,47 @@ REMEMBER_ME_DAYS = 30
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
-# ============================================================
-# Token revocation (in-memory, per-process)
-# ============================================================
-# Maps jti -> expiry timestamp so we can prune expired entries
-_revoked_tokens: dict[str, float] = {}
-_REVOKE_CLEANUP_INTERVAL = 300  # cleanup every 5 minutes
-_last_revoke_cleanup: float = 0.0
+# Redis key prefix for sessions
+_SESSION_PREFIX = "session:"
+
+# In-memory fallback (used only when Redis is unavailable)
+_revoked_tokens_fallback: dict[str, float] = {}
 
 
-def revoke_token(jti: str, exp_timestamp: float) -> None:
-    """Mark a JWT ID as revoked (e.g. on logout)."""
-    _revoked_tokens[jti] = exp_timestamp
-    _cleanup_revoked()
+async def store_session(jti: str, user_id: int, username: str, role: str, ttl_seconds: int) -> None:
+    """Store an active session in Redis. Falls back to no-op if Redis unavailable."""
+    try:
+        from .cache import get_redis
+        redis = await get_redis()
+        await redis.setex(f"{_SESSION_PREFIX}{jti}", ttl_seconds, f"{user_id}:{username}:{role}")
+        logger.debug(f"Session stored in Redis: session:{jti[:8]}... ttl={ttl_seconds}s user={username}")
+    except Exception as e:
+        logger.debug(f"Redis session store unavailable, using stateless JWT: {e}")
 
 
-def is_token_revoked(jti: str) -> bool:
-    """Check if a JWT ID has been revoked."""
-    return jti in _revoked_tokens
+async def revoke_token(jti: str, exp_timestamp: float) -> None:
+    """Revoke a session by deleting it from Redis (e.g. on logout)."""
+    try:
+        from .cache import get_redis
+        redis = await get_redis()
+        await redis.delete(f"{_SESSION_PREFIX}{jti}")
+    except Exception:
+        # Fallback: mark in memory
+        _revoked_tokens_fallback[jti] = exp_timestamp
 
 
-def _cleanup_revoked() -> None:
-    """Prune expired entries from the revocation list."""
-    global _last_revoke_cleanup
-    now = time.time()
-    if now - _last_revoke_cleanup < _REVOKE_CLEANUP_INTERVAL:
-        return
-    _last_revoke_cleanup = now
-    expired = [jti for jti, exp in _revoked_tokens.items() if exp < now]
-    for jti in expired:
-        del _revoked_tokens[jti]
+async def is_token_revoked(jti: str) -> bool:
+    """Check if a token's session has been revoked.
+    In Redis mode: session key must exist (deleted = revoked).
+    Fallback: check in-memory revocation set."""
+    try:
+        from .cache import get_redis
+        redis = await get_redis()
+        exists = await redis.exists(f"{_SESSION_PREFIX}{jti}")
+        return not exists  # If key doesn't exist, session was revoked/expired
+    except Exception:
+        # Fallback: check in-memory
+        return jti in _revoked_tokens_fallback
 
 
 # ============================================================
@@ -90,15 +105,19 @@ PUBLIC_PATHS = {
     "/api/openapi.json",
     "/static",
     "/favicon.ico",
+    "/metrics",
 }
 
 
-def create_session_token(user_id: int, username: str, role: str, remember_me: bool = False) -> str:
-    """Create a JWT session token with a unique JTI for revocation support."""
+async def create_session_token(user_id: int, username: str, role: str, remember_me: bool = False) -> str:
+    """Create a JWT session token and register the session in Redis."""
     if remember_me:
-        expire = datetime.now(timezone.utc) + timedelta(days=REMEMBER_ME_DAYS)
+        ttl = timedelta(days=REMEMBER_ME_DAYS)
     else:
-        expire = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
+        ttl = timedelta(hours=SESSION_EXPIRY_HOURS)
+
+    expire = datetime.now(timezone.utc) + ttl
+    jti = uuid.uuid4().hex
 
     payload = {
         "sub": str(user_id),
@@ -106,22 +125,27 @@ def create_session_token(user_id: int, username: str, role: str, remember_me: bo
         "role": role,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
-        "jti": uuid.uuid4().hex,
+        "jti": jti,
     }
-    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+    token = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+
+    # Store session in Redis with matching TTL
+    await store_session(jti, user_id, username, role, int(ttl.total_seconds()))
+
+    return token
 
 
-def decode_session_token(token: str) -> Optional[dict]:
+async def decode_session_token(token: str) -> Optional[dict]:
     """Decode and validate a JWT session token.
     Returns None if expired, invalid signature, or revoked."""
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
         # Check if this specific token has been revoked (e.g. logout)
         jti = payload.get("jti")
-        if jti and is_token_revoked(jti):
+        if jti and await is_token_revoked(jti):
             return None
         return payload
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
@@ -146,7 +170,7 @@ async def get_current_user(request: Request) -> Optional[User]:
     if not token:
         return None
 
-    payload = decode_session_token(token)
+    payload = await decode_session_token(token)
     if not payload:
         return None
 

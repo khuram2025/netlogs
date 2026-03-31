@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* Zentryc Design Tokens */
+@theme {
+  --color-bg: #0f172a;
+  --color-card: #1e293b;
+  --color-text: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-border: #334155;
+  --color-input: #020617;
+  --color-sidebar: #0b1120;
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Zentryc component classes */
+.z-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.z-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  cursor: pointer;
+  border: none;
+}
+
+.z-btn-primary {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+.z-btn-primary:hover { background-color: var(--color-primary-hover); }
+
+.z-btn-danger {
+  background-color: var(--color-danger);
+  color: #fff;
+}
+.z-btn-danger:hover { background-color: #dc2626; }
+
+.z-input {
+  background-color: var(--color-input);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+.z-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.z-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.z-badge-success { background: rgba(34,197,94,0.2); color: #4ade80; }
+.z-badge-danger { background: rgba(239,68,68,0.2); color: #f87171; }
+.z-badge-warning { background: rgba(245,158,11,0.2); color: #fbbf24; }
+
+.z-table { width: 100%; font-size: 0.875rem; text-align: left; }
+.z-table th {
+  padding: 0.5rem 0.75rem;
+  color: var(--color-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.z-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(51,65,85,0.5);
+}
+.z-table tr:hover td { background: rgba(255,255,255,0.02); }

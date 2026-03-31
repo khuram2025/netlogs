@@ -45,9 +45,16 @@ cryptography>=41.0.0
 # Background tasks / scheduling
 apscheduler>=3.10.0
 
+# Redis/Valkey - cache, sessions, rate limiting, streams, queue
+redis[hiredis]>=5.0.0
+
 # Authentication
 passlib[bcrypt]>=1.7.4
-python-jose[cryptography]>=3.3.0
+PyJWT>=2.8.0
+
+# Monitoring
+prometheus-fastapi-instrumentator>=7.0.0
+prometheus-client>=0.20.0
 
 # Appliance CLI
 prompt_toolkit>=3.0.0

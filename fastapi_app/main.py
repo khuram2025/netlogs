@@ -19,6 +19,7 @@ from .core.auth import is_public_path, get_current_user, authenticate_api_key, S
 from .core.csrf import CSRFMiddleware
 from .db.database import init_db, close_db
 from .db.clickhouse import ClickHouseClient
+from .core.cache import get_redis, close_redis, redis_health_check
 from .api.devices import router as devices_api_router
 from .api.logs import router as logs_api_router
 from .api.views import router as views_router
@@ -127,6 +128,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize PostgreSQL: {e}")
 
+    # Initialize Redis connection
+    try:
+        await get_redis()
+        healthy = await redis_health_check()
+        if healthy:
+            logger.info("Redis connection established")
+        else:
+            logger.warning("Redis connection established but health check failed")
+    except Exception as e:
+        logger.warning(f"Redis connection failed (non-fatal): {e}")
+
     # Run Alembic migrations (stamp if fresh install, upgrade if pending)
     try:
         from .db.migrate import run_pg_migrations
@@ -227,9 +239,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Zentryc...")
     stop_scheduler()
+    await close_redis()
     ClickHouseClient.close_client()
     await close_db()
-    logger.info("Database connections closed")
+    logger.info("All connections closed")
 
 
 # Create FastAPI application
@@ -243,6 +256,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+
+# Prometheus metrics — instrument before middleware so all requests are tracked
+from .core.metrics import setup_instrumentator, APP_INFO
+instrumentator = setup_instrumentator()
+instrumentator.instrument(app).expose(app, include_in_schema=False, should_gzip=True)
+APP_INFO.labels(version=__version__).set(1)
 
 # CORS middleware
 app.add_middleware(
@@ -260,12 +279,13 @@ app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthenticationMiddleware)
 
 
-# Mount static files
-try:
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-except RuntimeError:
-    # Static directory doesn't exist
-    pass
+# Mount static files — try built assets first, then fallback to root static
+for _static_dir in ["fastapi_app/static", "static"]:
+    try:
+        app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+        break
+    except RuntimeError:
+        continue
 
 
 # Include setup wizard (must be before auth routes)
@@ -313,6 +333,20 @@ app.include_router(url_dashboard_router)
 
 # Include user activity timeline routes
 app.include_router(user_activity_router)
+
+# Include HTMX partial endpoints
+from .api.partials import router as partials_router
+app.include_router(partials_router)
+
+# Register vite_asset helper in ALL Jinja2Templates instances
+from .core.vite import vite_asset
+import fastapi_app.api as _api_pkg
+import importlib, pkgutil
+for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
+    _mod = importlib.import_module(f"fastapi_app.api.{_mod_info.name}")
+    _tmpl = getattr(_mod, "templates", None)
+    if _tmpl and hasattr(_tmpl, "env"):
+        _tmpl.env.globals["vite_asset"] = vite_asset
 
 
 @app.get("/api/")

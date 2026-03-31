@@ -86,7 +86,7 @@ async def login_post(
 
     # Create session token
     is_remember = remember_me == "on"
-    token = create_session_token(
+    token = await create_session_token(
         user_id=user.id,
         username=user.username,
         role=user.role,
@@ -120,10 +120,10 @@ async def logout(request: Request):
     # Revoke the JWT so it can't be reused
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
-        payload = decode_session_token(token)
+        payload = await decode_session_token(token)
         if payload and payload.get("jti"):
             exp = payload.get("exp", 0)
-            revoke_token(payload["jti"], exp)
+            await revoke_token(payload["jti"], exp)
 
     if user:
         from ..services.audit_service import log_action

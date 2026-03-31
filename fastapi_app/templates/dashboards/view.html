@@ -215,7 +215,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
 <script>
 const DASHBOARD_ID = {{ dashboard.id }};
 const chartInstances = {};
@@ -337,46 +337,47 @@ function renderWidget(widgetId, type, data) {
         body.style.alignItems = 'flex-start';
     }
     else if (type === 'bar_chart' || type === 'line_chart' || type === 'doughnut') {
-        body.innerHTML = `<canvas id="chart-${widgetId}" style="width:100%;max-height:250px;"></canvas>`;
-        const ctx = document.getElementById(`chart-${widgetId}`).getContext('2d');
+        body.innerHTML = `<div id="chart-${widgetId}" style="width:100%;height:250px;"></div>`;
 
-        if (chartInstances[widgetId]) chartInstances[widgetId].destroy();
+        if (chartInstances[widgetId]) { chartInstances[widgetId].dispose(); }
 
-        const labels = data.labels || [];
+        const chartDom = document.getElementById(`chart-${widgetId}`);
+        const chart = echarts.init(chartDom, 'zentryc', {renderer:'canvas'});
+
+        const labels = (data.labels || []).map(l => l.length > 20 ? l.substring(0,20) + '...' : l);
         const values = data.values || [];
 
-        let chartType = type === 'line_chart' ? 'line' : type === 'doughnut' ? 'doughnut' : 'bar';
-
-        const config = {
-            type: chartType,
-            data: {
-                labels: labels.map(l => l.length > 20 ? l.substring(0, 20) + '...' : l),
-                datasets: [{
-                    data: values,
-                    backgroundColor: type === 'doughnut' ? CHART_COLORS.slice(0, labels.length) :
-                        type === 'line_chart' ? 'rgba(59,130,246,0.1)' : CHART_COLORS.slice(0, labels.length),
-                    borderColor: type === 'line_chart' ? '#3b82f6' :
-                        type === 'doughnut' ? CHART_COLORS.slice(0, labels.length) : 'transparent',
-                    borderWidth: type === 'line_chart' ? 2 : type === 'doughnut' ? 1 : 0,
-                    fill: type === 'line_chart',
-                    tension: 0.3,
-                    borderRadius: type === 'bar' ? 4 : 0,
+        let option = {};
+        if (type === 'doughnut') {
+            option = {
+                tooltip: {trigger:'item', formatter:'{b}: {c} ({d}%)'},
+                legend: {orient:'vertical', right:5, top:'center', textStyle:{fontSize:10, color:'#94a3b8'}},
+                series: [{
+                    type:'pie', radius:['45%','70%'], center:['35%','50%'],
+                    label:{show:false},
+                    data: labels.map((l,i) => ({name:l, value:values[i], itemStyle:{color:CHART_COLORS[i % CHART_COLORS.length]}}))
                 }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: type === 'doughnut', position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } },
-                },
-                scales: type === 'doughnut' ? {} : {
-                    x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.3)' } },
-                    y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.3)' }, beginAtZero: true },
-                },
-            }
-        };
-
-        chartInstances[widgetId] = new Chart(ctx, config);
+            };
+        } else if (type === 'line_chart') {
+            option = {
+                tooltip: {trigger:'axis'},
+                grid: {top:10, left:50, right:15, bottom:30},
+                xAxis: {type:'category', data:labels, axisLabel:{color:'#64748b',fontSize:9}, axisLine:{lineStyle:{color:'#334155'}}},
+                yAxis: {type:'value', splitLine:{lineStyle:{color:'rgba(51,65,85,.3)'}}, axisLabel:{color:'#64748b',fontSize:9}},
+                series: [{type:'line', data:values, smooth:0.3, showSymbol:false, lineStyle:{width:2,color:'#3b82f6'}, areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(59,130,246,.15)'},{offset:1,color:'rgba(59,130,246,0)'}]}}, itemStyle:{color:'#3b82f6'}}]
+            };
+        } else {
+            option = {
+                tooltip: {trigger:'axis', axisPointer:{type:'shadow'}},
+                grid: {top:10, left:50, right:15, bottom:30},
+                xAxis: {type:'category', data:labels, axisLabel:{color:'#64748b',fontSize:9,rotate:labels.length>6?30:0}, axisLine:{lineStyle:{color:'#334155'}}},
+                yAxis: {type:'value', splitLine:{lineStyle:{color:'rgba(51,65,85,.3)'}}, axisLabel:{color:'#64748b',fontSize:9}},
+                series: [{type:'bar', data:values.map((v,i)=>({value:v,itemStyle:{color:CHART_COLORS[i%CHART_COLORS.length],borderRadius:[4,4,0,0]}})), barMaxWidth:40}]
+            };
+        }
+        chart.setOption(option);
+        chartInstances[widgetId] = chart;
+        window.addEventListener('resize', () => chart.resize());
     }
 }
 

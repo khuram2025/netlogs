@@ -1,10 +1,22 @@
 # =============================================================================
 # Zentryc SOAR/SIEM Platform - Docker Image
-# Multi-stage build for minimal runtime image
+# Multi-stage build: Node.js frontend + Python backend
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# Stage 1: Builder - install dependencies and build wheels
+# Stage 1: Frontend - build CSS/JS assets with Vite
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS frontend
+
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit
+COPY vite.config.js ./
+COPY static/ ./static/
+RUN npm run build
+
+# ---------------------------------------------------------------------------
+# Stage 2: Python Builder - install dependencies and build wheels
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
@@ -24,7 +36,7 @@ RUN pip install --no-cache-dir wheel && \
     bcrypt==4.0.1
 
 # ---------------------------------------------------------------------------
-# Stage 2: Runtime - minimal image with only what's needed
+# Stage 3: Runtime - minimal image with only what's needed
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
@@ -47,7 +59,14 @@ RUN pip install --no-cache-dir /tmp/wheels/*.whl && \
 
 # Copy application code
 COPY fastapi_app/ ./fastapi_app/
+
+# Copy built frontend assets from Stage 1
+COPY --from=frontend /build/fastapi_app/static/dist/ ./fastapi_app/static/dist/
+
 COPY run_fastapi.py run_syslog.py ./
+
+# Copy static files (favicon, etc.)
+COPY static/favicon.svg ./static/favicon.svg
 
 # Copy entrypoint
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh

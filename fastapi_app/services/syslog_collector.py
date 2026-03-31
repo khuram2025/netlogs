@@ -745,22 +745,48 @@ def flush_threat_logs(
 # Database helpers
 # ---------------------------------------------------------------------------
 
-async def get_or_create_device(ip: str) -> Optional[Tuple[str, str]]:
+def detect_parser(raw_data: bytes) -> str:
+    """Auto-detect parser type from raw syslog message content.
+
+    Fortinet: contains 'devname=' and 'devid=' key-value pairs
+    Palo Alto: CSV format with ',TRAFFIC,' or ',THREAT,' or ',SYSTEM,' after syslog header
+    Otherwise: GENERIC
+    """
+    try:
+        sample = raw_data[:500] if len(raw_data) > 500 else raw_data
+        text_sample = sample.decode('utf-8', errors='ignore')
+
+        # Fortinet: key=value format with devname= and devid=
+        if 'devname=' in text_sample and 'devid=' in text_sample:
+            return 'FORTINET'
+
+        # Palo Alto: CSV with known log type markers
+        if any(marker in text_sample for marker in [',TRAFFIC,', ',THREAT,', ',SYSTEM,', ',CONFIG,', ',GLOBALPROTECT,']):
+            return 'PALOALTO'
+
+    except Exception:
+        pass
+
+    return 'GENERIC'
+
+
+async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple[str, str]]:
     """
     Get device (status, parser) from PostgreSQL.
-    Auto-creates new devices as APPROVED so logs are never dropped.
+    Auto-creates new devices as APPROVED. Detects parser from log format.
     """
     try:
         async with _syslog_session_maker() as session:
             result = await session.execute(
-                text("SELECT status, parser FROM devices_device WHERE ip_address = CAST(:ip AS inet)"),
+                text("SELECT status, parser FROM devices_device WHERE ip_address = :ip"),
                 {"ip": ip}
             )
             row = result.first()
 
             if row is None:
-                # Auto-approve: new devices default to APPROVED with GENERIC parser
-                # Admin can change parser type later in the UI
+                # Auto-detect parser from the first log received
+                detected_parser = detect_parser(raw_data)
+
                 await session.execute(text(
                     "INSERT INTO devices_device (ip_address, status, parser, retention_days, log_count, created_at, updated_at) "
                     "VALUES (:ip, :status, :parser, :retention, 0, now(), now()) "
@@ -768,19 +794,19 @@ async def get_or_create_device(ip: str) -> Optional[Tuple[str, str]]:
                 ), {
                     'ip': ip,
                     'status': DeviceStatus.APPROVED,
-                    'parser': 'GENERIC',
+                    'parser': detected_parser,
                     'retention': 90,
                 })
                 await session.commit()
-                logger.info(f"New device auto-approved: {ip}")
-                return (DeviceStatus.APPROVED, 'GENERIC')
+                logger.info(f"New device auto-approved: {ip} (parser: {detected_parser})")
+                return (DeviceStatus.APPROVED, detected_parser)
 
             return (row.status, row.parser)
     except Exception as e:
         logger.error(f"DB error for device {ip}: {e}")
-        # On DB error, STILL accept the log with generic parser
-        # rather than dropping it
-        return (DeviceStatus.APPROVED, 'GENERIC')
+        # On DB error, still detect parser for this batch
+        detected = detect_parser(raw_data)
+        return (DeviceStatus.APPROVED, detected)
 
 
 async def batch_update_device_stats(updates: Dict[str, dict]):
@@ -796,7 +822,7 @@ async def batch_update_device_stats(updates: Dict[str, dict]):
                         SET updated_at = now(),
                             last_log_received = :last_time,
                             log_count = log_count + :count
-                        WHERE ip_address = CAST(:ip AS inet)
+                        WHERE ip_address = :ip
                     """),
                     {"last_time": data['last_time'], "count": data['count'], "ip": ip}
                 )
@@ -962,7 +988,7 @@ class SyslogCollector:
             # Device lookup (cached for 5 min)
             cached = self.device_cache.get(client_ip)
             if cached is None:
-                result = await get_or_create_device(client_ip)
+                result = await get_or_create_device(client_ip, data)
                 if result is None:
                     self.metrics.logs_dropped_device += 1
                     continue

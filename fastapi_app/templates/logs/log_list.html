@@ -189,11 +189,12 @@
         .nql-bar {
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border-subtle);
-            padding: 8px 20px;
+            padding: 5px 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-shrink: 0;
+            overflow: hidden;
         }
         .nql-bar .nql-label {
             font-size: 10px;
@@ -208,14 +209,15 @@
         }
         .nql-bar .nql-input {
             flex: 1;
-            height: 34px;
-            padding: 0 12px;
+            min-width: 180px;
+            height: 30px;
+            padding: 0 10px;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--accent-cyan);
             font-family: var(--font-mono);
-            font-size: 13px;
+            font-size: 12px;
             transition: all 0.15s ease;
         }
         .nql-bar .nql-input:focus {
@@ -259,6 +261,32 @@
         }
         .nql-bar .nql-status.error { color: var(--accent-red); }
         .nql-bar .nql-status.success { color: var(--accent-green); }
+        .nql-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border-default);
+            flex-shrink: 0;
+        }
+        .nql-stats {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+        .nql-stat-val {
+            color: var(--text-bright);
+            font-weight: 600;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        .nql-stat-sep {
+            width: 1px;
+            height: 12px;
+            background: var(--border-default);
+        }
         .nql-autocomplete {
             position: absolute;
             top: 100%;
@@ -356,33 +384,34 @@
 
         /* ===== SEARCH TOOLBAR ===== */
         .toolbar {
-            height: var(--toolbar-height);
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border-subtle);
-            padding: 0 20px;
+            padding: 4px 16px;
             display: flex;
-            align-items: center;
-            gap: 12px;
+            align-items: flex-end;
+            gap: 8px;
             flex-shrink: 0;
         }
 
         .search-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex: 1;
-            max-width: 900px;
+            min-width: 0;
         }
 
         .search-field {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 1px;
             flex: 1;
+            min-width: 60px;
         }
 
         .search-field.narrow {
-            max-width: 140px;
+            max-width: 80px;
+            flex: 0 1 80px;
         }
 
         .search-label {
@@ -395,8 +424,8 @@
         }
 
         .search-input {
-            height: 32px;
-            padding: 0 10px;
+            height: 28px;
+            padding: 0 8px;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
@@ -420,16 +449,16 @@
         .search-actions {
             display: flex;
             gap: 6px;
-            padding-top: 14px;
+            padding-top: 12px;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            height: 32px;
-            padding: 0 14px;
+            gap: 5px;
+            height: 28px;
+            padding: 0 10px;
             border: none;
             border-radius: var(--radius-sm);
             font-family: var(--font-sans);
@@ -465,6 +494,10 @@
             color: var(--text-primary);
             border-color: var(--border-emphasis);
         }
+        .btn-icon {
+            padding: 0 6px;
+            min-width: 28px;
+        }
 
         .toolbar-divider {
             width: 1px;
@@ -475,64 +508,70 @@
 
         .toolbar-right {
             margin-left: auto;
+            flex-shrink: 0;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        /* ===== STATS BAR ===== */
+        /* ===== STATS BAR (inline in toolbar) ===== */
         .stats-bar {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 10px 20px;
+            gap: 10px;
+            padding: 4px 16px;
             background: var(--bg-elevated);
             border-bottom: 1px solid var(--border-subtle);
-            font-size: 12px;
+            font-size: 11px;
+            flex-shrink: 0;
         }
 
         .stats-left {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 10px;
         }
 
         .stat-item {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             color: var(--text-secondary);
+            font-size: 11px;
         }
 
         .stat-value {
             color: var(--text-bright);
             font-weight: 600;
             font-family: var(--font-mono);
+            font-size: 12px;
         }
 
         .stat-divider {
             width: 1px;
-            height: 16px;
+            height: 14px;
             background: var(--border-default);
         }
 
         .stats-right {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 8px;
+            margin-left: auto;
         }
 
         .time-pills {
             display: flex;
-            gap: 4px;
+            gap: 2px;
             padding: 2px;
-            background: var(--bg-surface);
+            background: var(--bg-deep);
             border-radius: var(--radius-md);
+            flex-shrink: 0;
         }
 
         .time-pill {
-            padding: 4px 10px;
-            font-size: 11px;
+            padding: 2px 6px;
+            font-size: 10px;
             font-weight: 500;
             color: var(--text-secondary);
             background: transparent;
@@ -2196,18 +2235,19 @@
         /* ===== VIEW TOGGLE & GROUP-BY ===== */
         .view-toggle {
             display: flex;
-            gap: 4px;
+            gap: 2px;
             padding: 2px;
-            background: var(--bg-surface);
+            background: var(--bg-deep);
             border-radius: var(--radius-md);
+            flex-shrink: 0;
         }
 
         .view-pill {
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 4px 12px;
-            font-size: 11px;
+            gap: 3px;
+            padding: 2px 6px;
+            font-size: 10px;
             font-weight: 500;
             color: var(--text-secondary);
             background: transparent;
@@ -2229,8 +2269,8 @@
         }
 
         .view-pill svg {
-            width: 13px;
-            height: 13px;
+            width: 11px;
+            height: 11px;
             flex-shrink: 0;
         }
 
@@ -2661,7 +2701,7 @@
     <form id="filterForm" method="GET" action="">
     <div class="log-app">
         <main class="main" style="height: calc(100vh - var(--topbar-h, 48px) - 57px); display:flex; flex-direction:column; overflow:hidden;">
-            <!-- NQL Query Bar -->
+            <!-- NQL Query Bar + Stats -->
             <div class="nql-bar">
                 <span class="nql-label">NQL</span>
                 <div style="position:relative;flex:1;display:flex;align-items:center;">
@@ -2675,6 +2715,12 @@
                     Run
                 </button>
                 <span id="nqlStatus" class="nql-status"></span>
+                <div class="nql-divider"></div>
+                <div class="nql-stats">
+                    <span class="nql-stat"><span class="nql-stat-val">{{ total | format_number }}</span> {% if is_aggregate %}groups{% else %}logs{% endif %}</span>
+                    <span class="nql-stat-sep"></span>
+                    <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
+                </div>
             </div>
 
             <!-- NQL Results Panel (for aggregate queries) -->
@@ -2723,14 +2769,31 @@
                         </button>
                     </div>
                 </div>
-                <div class="toolbar-divider"></div>
                 <div class="toolbar-right">
+                    <div class="view-toggle">
+                        <button type="button" class="view-pill {% if not is_aggregate %}active{% endif %}" onclick="setViewMode('')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                            Log View
+                        </button>
+                        <button type="button" class="view-pill {% if is_aggregate %}active{% endif %}" onclick="setViewMode('aggregate')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            Aggregate
+                        </button>
+                    </div>
+                    <div class="time-pills">
+                        <button type="button" class="time-pill {% if current_time_range == '1m' %}active{% endif %}" data-range="1m" onclick="setTimeRange('1m')">1M</button>
+                        <button type="button" class="time-pill {% if current_time_range == '5m' %}active{% endif %}" data-range="5m" onclick="setTimeRange('5m')">5M</button>
+                        <button type="button" class="time-pill {% if current_time_range == '1h' %}active{% endif %}" data-range="1h" onclick="setTimeRange('1h')">1H</button>
+                        <button type="button" class="time-pill {% if current_time_range == '24h' %}active{% endif %}" data-range="24h" onclick="setTimeRange('24h')">24H</button>
+                        <button type="button" class="time-pill {% if current_time_range == '7d' %}active{% endif %}" data-range="7d" onclick="setTimeRange('7d')">7D</button>
+                        <button type="button" class="time-pill {% if current_time_range == '30d' %}active{% endif %}" data-range="30d" onclick="setTimeRange('30d')">30D</button>
+                    </div>
+                    <div class="toolbar-divider"></div>
                     <div style="position:relative;">
-                        <button type="button" class="btn btn-ghost" onclick="toggleSavedSearches()" title="Saved Searches">
+                        <button type="button" class="btn btn-ghost btn-icon" onclick="toggleSavedSearches()" title="Saved Searches">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
-                            Saved
                         </button>
                         <div id="savedSearchDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;width:320px;max-height:400px;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:0.5rem;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:60;padding:0.5rem;">
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:0.375rem 0.5rem;margin-bottom:0.25rem;">
@@ -2742,59 +2805,23 @@
                             </div>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-ghost" onclick="toggleSidebar()" title="More Filters">
+                    <button type="button" class="btn btn-ghost btn-icon" onclick="toggleSidebar()" title="More Filters">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                         </svg>
-                        Filters
                     </button>
-                    <button type="button" class="btn btn-ghost" onclick="location.reload()">
+                    <button type="button" class="btn btn-ghost btn-icon" onclick="location.reload()" title="Refresh">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                             <path d="M3 3v5h5"/>
                             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
                             <path d="M16 21h5v-5"/>
                         </svg>
-                        Refresh
                     </button>
                 </div>
             </div>
 
-            <!-- Stats Bar -->
-            <div class="stats-bar">
-                <div class="stats-left">
-                    <div class="stat-item">
-                        <span>Total</span>
-                        <span class="stat-value">{{ total | format_number }}</span>
-                        <span>{% if is_aggregate %}groups{% else %}logs{% endif %}</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-item">
-                        <span class="stat-value">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span>
-                        <span>Devices Active</span>
-                    </div>
-                </div>
-                <div class="view-toggle">
-                    <button type="button" class="view-pill {% if not is_aggregate %}active{% endif %}" onclick="setViewMode('')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                        Log View
-                    </button>
-                    <button type="button" class="view-pill {% if is_aggregate %}active{% endif %}" onclick="setViewMode('aggregate')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                        Aggregate
-                    </button>
-                </div>
-                <div class="stats-right">
-                    <div class="time-pills">
-                        <button type="button" class="time-pill {% if current_time_range == '1m' %}active{% endif %}" data-range="1m" onclick="setTimeRange('1m')">1M</button>
-                        <button type="button" class="time-pill {% if current_time_range == '5m' %}active{% endif %}" data-range="5m" onclick="setTimeRange('5m')">5M</button>
-                        <button type="button" class="time-pill {% if current_time_range == '1h' %}active{% endif %}" data-range="1h" onclick="setTimeRange('1h')">1H</button>
-                        <button type="button" class="time-pill {% if current_time_range == '24h' %}active{% endif %}" data-range="24h" onclick="setTimeRange('24h')">24H</button>
-                        <button type="button" class="time-pill {% if current_time_range == '7d' %}active{% endif %}" data-range="7d" onclick="setTimeRange('7d')">7D</button>
-                        <button type="button" class="time-pill {% if current_time_range == '30d' %}active{% endif %}" data-range="30d" onclick="setTimeRange('30d')">30D</button>
-                    </div>
-                </div>
-            </div>
+            <!-- Stats bar removed — merged into NQL bar above -->
 
             <!-- Active Filters -->
             {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}

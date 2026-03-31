@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     clickhouse_password: str = Field(default="", alias="CLICKHOUSE_PASSWORD")
     clickhouse_db: str = Field(default="default", alias="CLICKHOUSE_DB")
 
+    # Redis
+    redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="REDIS_URL")
+
     # Syslog Collector
     syslog_port: int = Field(default=514, alias="SYSLOG_PORT")
     syslog_batch_size: int = Field(default=5000, alias="SYSLOG_BATCH_SIZE")

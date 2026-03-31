@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Form, Query
@@ -438,7 +438,7 @@ async def log_list(
         # Parse datetime strings
         start_time = None
         end_time = None
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # Default to 1 hour if no time range specified (for performance)
         default_time_range = '1h'
@@ -657,13 +657,9 @@ async def log_list(
             logs_future, total_future, stats_future, devices_future
         )
 
-        # Handle approximate count (-1 means 10,000+)
-        is_approximate = total == -1
-        if is_approximate:
-            total = 10000  # Use 10,000 for pagination calculation
-            total_display = "10,000+"
-        else:
-            total_display = f"{total:,}"
+        # Format count display
+        is_approximate = False
+        total_display = f"{total:,}"
 
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
 
@@ -826,7 +822,7 @@ async def policy_builder(
         # Parse datetime strings
         start_time = None
         end_time = None
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # Default to 1 hour for policy builder (faster initial load)
         default_time_range = '1h'
@@ -1044,7 +1040,7 @@ async def policy_lookup_page(
             # Parse time range
             start_time = None
             end_time = None
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             effective = (time_range or "24h").strip().lower()
 
             if effective.endswith('h'):

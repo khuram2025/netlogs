@@ -1,0 +1,165 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - link "Zentryc" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img [ref=e6]
+      - generic [ref=e8]: Zentryc
+    - generic "Toggle sidebar" [ref=e9] [cursor=pointer]:
+      - img [ref=e10]
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]: Main
+        - link "Dashboard" [ref=e15] [cursor=pointer]:
+          - /url: http://10.12.50.77/dashboard/
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Logs" [ref=e23] [cursor=pointer]:
+          - /url: http://10.12.50.77/logs/
+          - img [ref=e25]
+          - generic [ref=e28]: Logs
+        - link "Dashboards" [ref=e29] [cursor=pointer]:
+          - /url: http://10.12.50.77/dashboards/
+          - img [ref=e31]
+          - generic [ref=e36]: Dashboards
+      - generic [ref=e37]:
+        - generic [ref=e38]: Security
+        - link "Alerts" [ref=e39] [cursor=pointer]:
+          - /url: http://10.12.50.77/alerts/
+          - img [ref=e41]
+          - generic [ref=e44]: Alerts
+        - link "Threats" [ref=e45] [cursor=pointer]:
+          - /url: http://10.12.50.77/threats/
+          - img [ref=e47]
+          - generic [ref=e49]: Threats
+        - link "URL & DNS" [ref=e50] [cursor=pointer]:
+          - /url: http://10.12.50.77/threats/url-dns/
+          - img [ref=e52]
+          - generic [ref=e55]: URL & DNS
+        - link "URL Analytics" [ref=e56] [cursor=pointer]:
+          - /url: http://10.12.50.77/dashboards/url-analytics/
+          - img [ref=e58]
+          - generic [ref=e60]: URL Analytics
+        - link "Threat Intel" [ref=e61] [cursor=pointer]:
+          - /url: http://10.12.50.77/threat-intel/
+          - img [ref=e63]
+          - generic [ref=e66]: Threat Intel
+        - link "Correlation" [ref=e67] [cursor=pointer]:
+          - /url: http://10.12.50.77/correlation/
+          - img [ref=e69]
+          - generic [ref=e74]: Correlation
+        - link "Policy Builder" [ref=e75] [cursor=pointer]:
+          - /url: http://10.12.50.77/policy-builder/
+          - img [ref=e77]
+          - generic [ref=e79]: Policy Builder
+        - link "Policy Lookup" [ref=e80] [cursor=pointer]:
+          - /url: http://10.12.50.77/policy-lookup/
+          - img [ref=e82]
+          - generic [ref=e85]: Policy Lookup
+      - generic [ref=e86]:
+        - generic [ref=e87]: Assets
+        - link "Devices" [ref=e88] [cursor=pointer]:
+          - /url: http://10.12.50.77/devices/
+          - img [ref=e90]
+          - generic [ref=e95]: Devices
+        - link "Address Objects" [ref=e96] [cursor=pointer]:
+          - /url: http://10.12.50.77/address-objects/
+          - img [ref=e98]
+          - generic [ref=e101]: Address Objects
+        - link "EDL" [ref=e102] [cursor=pointer]:
+          - /url: http://10.12.50.77/edl/
+          - img [ref=e104]
+          - generic [ref=e105]: EDL
+        - link "Projects" [ref=e106] [cursor=pointer]:
+          - /url: http://10.12.50.77/projects/
+          - img [ref=e108]
+          - generic [ref=e110]: Projects
+      - generic [ref=e111]:
+        - generic [ref=e112]: Admin
+        - link "Users" [ref=e113] [cursor=pointer]:
+          - /url: http://10.12.50.77/users/
+          - img [ref=e115]
+          - generic [ref=e120]: Users
+        - link "API Keys" [ref=e121] [cursor=pointer]:
+          - /url: http://10.12.50.77/settings/api-keys/
+          - img [ref=e123]
+          - generic [ref=e125]: API Keys
+        - link "System" [ref=e126] [cursor=pointer]:
+          - /url: http://10.12.50.77/system/
+          - img [ref=e128]
+          - generic [ref=e131]: System
+        - link "Audit Log" [ref=e132] [cursor=pointer]:
+          - /url: http://10.12.50.77/system/audit-log/
+          - img [ref=e134]
+          - generic [ref=e137]: Audit Log
+        - link "Backups" [ref=e138] [cursor=pointer]:
+          - /url: http://10.12.50.77/system/backups/
+          - img [ref=e140]
+          - generic [ref=e143]: Backups
+        - link "SiteClean" [ref=e144] [cursor=pointer]:
+          - /url: http://10.12.50.77/system/url-clean/
+          - img [ref=e146]
+          - generic [ref=e150]: SiteClean
+        - link "AI Settings" [ref=e151] [cursor=pointer]:
+          - /url: http://10.12.50.77/system/ai-settings/
+          - img [ref=e153]
+          - generic [ref=e156]: AI Settings
+    - generic [ref=e157]:
+      - generic [ref=e158]:
+        - img [ref=e160]
+        - generic [ref=e163]:
+          - generic [ref=e164]: admin
+          - generic [ref=e165]: ADMIN
+      - link "Logout" [ref=e166] [cursor=pointer]:
+        - /url: http://10.12.50.77/auth/logout
+        - img [ref=e167]
+        - generic [ref=e170]: Logout
+  - generic [ref=e171]:
+    - banner [ref=e172]:
+      - generic [ref=e173]:
+        - generic [ref=e175]: System Online
+        - generic [ref=e176]: v3.0.0
+    - main [ref=e181]:
+      - generic [ref=e182]:
+        - generic [ref=e183]: NQL
+        - textbox "srcip:10.0.0.0/8 AND action:deny | stats count by srcip | sort -count | limit 20" [ref=e185]
+        - button "Run" [ref=e186] [cursor=pointer]:
+          - img [ref=e187]
+          - text: Run
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - generic [ref=e191]
+          - generic [ref=e194]
+          - generic [ref=e197]
+          - generic [ref=e200]
+          - generic [ref=e203]
+          - generic [ref=e206]
+          - generic [ref=e209]
+        - generic [ref=e217]:
+          - button "Saved" [ref=e219] [cursor=pointer]
+          - button "Filters" [ref=e222] [cursor=pointer]
+          - button "Refresh" [ref=e225] [cursor=pointer]
+      - generic [ref=e231]:
+        - generic [ref=e232]:
+          - generic [ref=e233]
+          - generic [ref=e238]
+        - generic [ref=e241]:
+          - button "Log View" [ref=e242] [cursor=pointer]
+          - button "Aggregate" [ref=e245] [cursor=pointer]
+        - generic [ref=e252]:
+          - button "1M" [ref=e253] [cursor=pointer]
+          - button "5M" [ref=e254] [cursor=pointer]
+          - button "1H" [ref=e255] [cursor=pointer]
+          - button "24H" [ref=e256] [cursor=pointer]
+          - button "7D" [ref=e257] [cursor=pointer]
+          - button "30D" [ref=e258] [cursor=pointer]
+      - generic [ref=e259]:
+        - generic [ref=e260]:
+          - table [ref=e262]
+          - generic [ref=e2575]
+        - complementary [ref=e2592]:
+          - generic [ref=e2593]
+          - generic [ref=e2598]
+          - generic [ref=e2617]
+          - generic [ref=e2637]
+          - generic [ref=e2652]
+          - generic [ref=e2672]

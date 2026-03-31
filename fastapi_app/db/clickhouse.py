@@ -159,7 +159,7 @@ class ClickHouseClient:
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (device_ip, timestamp)
-        TTL timestamp + INTERVAL 3 MONTH DELETE
+        TTL toDateTime(timestamp) + INTERVAL 3 MONTH DELETE
         SETTINGS
             index_granularity = 8192,
             min_bytes_for_wide_part = 10485760,
@@ -586,7 +586,7 @@ class ClickHouseClient:
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (log_subtype, severity, timestamp)
-        TTL timestamp + INTERVAL 6 MONTH DELETE
+        TTL toDateTime(timestamp) + INTERVAL 6 MONTH DELETE
         SETTINGS
             index_granularity = 8192,
             min_bytes_for_wide_part = 10485760,
@@ -752,7 +752,7 @@ class ClickHouseClient:
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (action, url_category, timestamp)
-        TTL timestamp + INTERVAL 6 MONTH DELETE
+        TTL toDateTime(timestamp) + INTERVAL 6 MONTH DELETE
         SETTINGS
             index_granularity = 8192,
             min_bytes_for_wide_part = 10485760,
@@ -867,7 +867,7 @@ class ClickHouseClient:
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (action, qname, timestamp)
-        TTL timestamp + INTERVAL 6 MONTH DELETE
+        TTL toDateTime(timestamp) + INTERVAL 6 MONTH DELETE
         SETTINGS
             index_granularity = 8192,
             min_bytes_for_wide_part = 10485760,
@@ -1694,8 +1694,9 @@ class ClickHouseClient:
 
         return " AND ".join(where_clauses)
 
-    # Light columns for fast queries (excludes only 'raw' - the heaviest field)
-    # Keeps parsed_data as it's needed for detail panel display
+    # List columns for table view (excludes message, raw, parsed_data — the 3 heaviest columns)
+    LIST_COLUMNS = "timestamp, device_ip, vdom, facility, severity, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id"
+    # Light columns (includes message, excludes raw and parsed_data)
     LIGHT_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
     # Full columns including raw message
     FULL_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
@@ -1748,7 +1749,8 @@ class ClickHouseClient:
         # Use PREWHERE for time + indexed fields (allows skipping data blocks early)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
-        # Use light columns by default for performance (excludes raw, parsed_data)
+        # Use list columns by default (fast — excludes message/raw/parsed_data)
+        # include_raw=True returns everything including raw
         columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
 
         query = f"""
@@ -1773,13 +1775,11 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
         default_hours: int = 1,
-        max_count: int = 100000
+        max_count: int = 0
     ) -> int:
         """
-        Count logs matching filters with performance optimizations.
-
-        For large datasets, uses LIMIT to cap counting at max_count for speed.
-        Returns -1 if count exceeds max_count (indicates "100,000+" logs).
+        Count logs matching filters. Returns exact count.
+        ClickHouse count() on MergeTree is fast even on large tables.
         """
         client = cls.get_client()
 
@@ -1805,26 +1805,15 @@ class ClickHouseClient:
         # Use PREWHERE for time + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
-        # Use LIMIT to cap counting for performance (avoids counting millions of rows)
-        # We check if there are more than max_count results
         query = f"""
         SELECT count() as total
-        FROM (
-            SELECT 1
-            FROM syslogs
-            PREWHERE {prewhere_clause}
-            WHERE {where_sql}
-            LIMIT {max_count + 1}
-        )
+        FROM syslogs
+        PREWHERE {prewhere_clause}
+        WHERE {where_sql}
         """
 
         result = client.query(query).result_rows
-        count = result[0][0] if result else 0
-
-        # Return -1 to indicate "100,000+" logs
-        if count > max_count:
-            return -1
-        return count
+        return result[0][0] if result else 0
 
     # SQL expression to compute /24 subnet from srcip column
     _SUBNET24_EXPR = "if(srcip = '', '', concat(IPv4NumToString(toUInt32(bitAnd(IPv4StringToNumOrDefault(srcip), 4294967040))), '/24'))"
