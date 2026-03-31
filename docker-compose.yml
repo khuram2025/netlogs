@@ -150,8 +150,8 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - TZ=${TZ:-Asia/Riyadh}
-      - POSTGRES_HOST=pgbouncer
-      - POSTGRES_PORT=6432
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-zentryc}
       - POSTGRES_USER=${POSTGRES_USER:-zentryc}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
@@ -211,8 +211,8 @@ services:
     restart: unless-stopped
     command: ["syslog"]
     environment:
-      - POSTGRES_HOST=pgbouncer
-      - POSTGRES_PORT=6432
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-zentryc}
       - POSTGRES_USER=${POSTGRES_USER:-zentryc}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ChangeMeNow!}
