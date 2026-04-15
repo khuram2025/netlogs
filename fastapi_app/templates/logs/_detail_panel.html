@@ -1,0 +1,222 @@
+<div class="detail-panel">
+    <!-- Multi-Firewall Trace -->
+    {% set ts = log.get('timestamp', '') %}
+    <div class="multiflow-container" id="flow-container-{{ index }}"
+         data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
+         data-device="{{ dev_display }}">
+        <div class="multiflow-header">
+            <span class="multiflow-title">Multi-Firewall Packet Trace</span>
+            <button type="button" class="trace-btn" onclick="loadSessionFlow({{ index }})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+                Trace Flow
+            </button>
+        </div>
+        <div class="dynamic-flow" id="dynamic-flow-{{ index }}">
+            <div class="flow-loading">
+                <div class="spinner"></div>
+                <span>Tracing packet flow...</span>
+            </div>
+        </div>
+        <div class="flow-summary" id="flow-summary-{{ index }}"></div>
+    </div>
+
+    <!-- Log Header Bar -->
+    {% set hdr_devname = pd.get('devname', pd.get('device_name', '')) %}
+    {% set hdr_type = pd.get('type', pd.get('log_type', '')) %}
+    {% set hdr_subtype = pd.get('subtype', pd.get('log_subtype', '')) %}
+    {% set hdr_level = pd.get('level', pd.get('severity', pd.get('pri', ''))) %}
+    {% set hdr_logid = pd.get('logid', pd.get('log_id', '')) %}
+    {% set hdr_serial = pd.get('serial', pd.get('devid', pd.get('serialno', ''))) %}
+    {% set hdr_logtime = pd.get('log_datetime', '') %}
+    {% if not hdr_logtime and pd.get('date') and pd.get('time') %}{% set hdr_logtime = pd.get('date') ~ ' ' ~ pd.get('time') %}{% endif %}
+    {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial %}
+    <div class="log-header-bar">
+        {% if hdr_devname %}<div class="log-header-chip device"><span class="chip-label">Device</span><span class="chip-value">{{ hdr_devname }}</span></div><div class="log-header-sep"></div>{% endif %}
+        {% if hdr_type %}<div class="log-header-chip"><span class="chip-label">Type</span><span class="chip-value">{{ hdr_type }}{% if hdr_subtype %}/{{ hdr_subtype }}{% endif %}</span></div>{% endif %}
+        {% if hdr_level %}<div class="log-header-chip level-{{ hdr_level | lower }}"><span class="chip-label">Level</span><span class="chip-value">{{ hdr_level | upper }}</span></div>{% endif %}
+        {% if hdr_logid %}<div class="log-header-chip"><span class="chip-label">Log ID</span><span class="chip-value">{{ hdr_logid }}</span></div>{% endif %}
+        {% if hdr_serial %}<div class="log-header-sep"></div><div class="log-header-chip"><span class="chip-label">Serial</span><span class="chip-value">{{ hdr_serial }}</span></div>{% endif %}
+        {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Time</span><span class="chip-value">{{ hdr_logtime }}</span></div>{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Network Flow with NAT -->
+    {% set proto = pd.get('proto', pd.get('protocol', '')) %}
+    {% set proto_num = proto | string %}
+    {% set proto_label = 'TCP' if proto_num == '6' else 'UDP' if proto_num == '17' else 'ICMP' if proto_num == '1' else 'GRE' if proto_num == '47' else 'ESP' if proto_num == '50' else 'AH' if proto_num == '51' else proto or '--' %}
+    {% set src_natip = pd.get('transip', pd.get('transsrcip', pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('srcPostNAT', ''))))) %}
+    {% set src_natport = pd.get('transport', pd.get('transsrcport', pd.get('nat_srcport', pd.get('natsrcport', pd.get('nat_src_port', pd.get('srcPostNATPort', '')))))) %}
+    {% set dst_natip = pd.get('transdstip', pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('dstPostNAT', '')))) %}
+    {% set dst_natport = pd.get('transdstport', pd.get('nat_dstport', pd.get('natdstport', pd.get('nat_dst_port', pd.get('dstPostNATPort', ''))))) %}
+    <div class="flow-section">
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="endpoint-tag src">Source</span>
+            </div>
+            <div class="endpoint-ip">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</div>
+            {% if src_natip and src_natip not in ['0.0.0.0', '::'] %}
+            <div class="endpoint-nat">
+                <span class="nat-label">NAT</span>
+                <span class="nat-value">{{ src_natip }}{% if src_natport and src_natport != '0' %}:{{ src_natport }}{% endif %}</span>
+            </div>
+            {% endif %}
+            <div class="endpoint-meta">
+                <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('srczone', pd.get('src_zone', pd.get('srcintf_zone', '--'))) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('srccountry', pd.get('src_location', pd.get('srcloc', '--'))) }}</span></div>
+                <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('srcuser', pd.get('src_user', pd.get('user', '--'))) }}</span></div>
+            </div>
+        </div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-line">
+                <span></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+            <span class="flow-proto-tag">{{ proto_label }}</span>
+        </div>
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="endpoint-tag dst">Destination</span>
+            </div>
+            <div class="endpoint-ip">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</div>
+            {% if dst_natip and dst_natip not in ['0.0.0.0', '::'] %}
+            <div class="endpoint-nat">
+                <span class="nat-label">NAT</span>
+                <span class="nat-value">{{ dst_natip }}{% if dst_natport and dst_natport != '0' %}:{{ dst_natport }}{% endif %}</span>
+            </div>
+            {% endif %}
+            <div class="endpoint-meta">
+                <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('dstzone', pd.get('dst_zone', pd.get('dstintf_zone', '--'))) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span></div>
+                <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('dstcountry', pd.get('dst_location', pd.get('dstloc', '--'))) }}</span></div>
+                <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Info Grid (6 blocks) -->
+    <div class="info-grid-6">
+        <div class="info-block">
+            <div class="info-title">Session</div>
+            <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
+            <div class="info-row"><span class="info-key">End Reason</span><span class="info-val">{{ pd.get('session_end_reason', pd.get('reason', pd.get('utmaction', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Session ID</span><span class="info-val mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Duration</span><span class="info-val">{{ pd.get('duration', pd.get('elapsed_time', '--')) }}s</span></div>
+            <div class="info-row"><span class="info-key">Subtype</span><span class="info-val">{{ pd.get('subtype', pd.get('log_subtype', '--')) }}</span></div>
+        </div>
+        <div class="info-block">
+            <div class="info-title">Traffic</div>
+            <div class="info-row"><span class="info-key">Sent Bytes</span><span class="info-val">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span></div>
+            <div class="info-row"><span class="info-key">Rcvd Bytes</span><span class="info-val">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span></div>
+            <div class="info-row"><span class="info-key">Sent Pkts</span><span class="info-val mono">{{ pd.get('sentpkt', pd.get('packets_sent', pd.get('pkts_sent', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Rcvd Pkts</span><span class="info-val mono">{{ pd.get('rcvdpkt', pd.get('packets_received', pd.get('pkts_received', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Service</span><span class="info-val">{{ pd.get('service', '--') }}</span></div>
+        </div>
+        <div class="info-block">
+            <div class="info-title">Policy</div>
+            <div class="info-row"><span class="info-key">Rule</span><span class="info-val">{{ pd.get('policyname', pd.get('rule', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Policy ID</span><span class="info-val mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Policy Type</span><span class="info-val">{{ pd.get('policytype', pd.get('policy_type', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Rule UUID</span><span class="info-val mono">{{ pd.get('poluuid', pd.get('rule_uuid', pd.get('uuid', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">NAT</span><span class="info-val">{{ pd.get('nat', pd.get('natdisp', '--')) }}</span></div>
+        </div>
+        <div class="info-block">
+            <div class="info-title">Application</div>
+            <div class="info-row"><span class="info-key">App</span><span class="info-val">{{ pd.get('app', pd.get('application', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Category</span><span class="info-val">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Subcategory</span><span class="info-val">{{ pd.get('subappcat', pd.get('subcategory_of_app', pd.get('subcategory', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Risk</span><span class="info-val">{{ pd.get('apprisk', pd.get('risk', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Technology</span><span class="info-val">{{ pd.get('technology', pd.get('apptech', '--')) }}</span></div>
+        </div>
+        <div class="info-block">
+            <div class="info-title">Identity</div>
+            <div class="info-row"><span class="info-key">User</span><span class="info-val">{{ pd.get('user', pd.get('srcuser', pd.get('unauthuser', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Src Host</span><span class="info-val">{{ pd.get('srchwvendor', pd.get('srcname', pd.get('hostname', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">MAC</span><span class="info-val mono">{{ pd.get('srcmac', pd.get('mac', pd.get('mastersrcmac', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">OS</span><span class="info-val">{{ pd.get('osname', pd.get('srcos', pd.get('devtype', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Auth Server</span><span class="info-val">{{ pd.get('authserver', pd.get('auth_server', '--')) }}</span></div>
+        </div>
+        <div class="info-block">
+            <div class="info-title">Device</div>
+            <div class="info-row"><span class="info-key">FW Name</span><span class="info-val">{{ pd.get('devname', pd.get('device_name', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Serial</span><span class="info-val mono">{{ pd.get('serial', pd.get('devid', pd.get('serialno', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">VDOM/Vsys</span><span class="info-val">{{ pd.get('vd', pd.get('vsys', pd.get('vdom', '--'))) }}</span></div>
+            <div class="info-row"><span class="info-key">Log Action</span><span class="info-val">{{ pd.get('logdesc', pd.get('log_action', '--')) }}</span></div>
+            <div class="info-row"><span class="info-key">Flags</span><span class="info-val mono">{{ pd.get('crscore', '') }}{% if pd.get('crscore') %}/{% endif %}{{ pd.get('craction', pd.get('flags', '--')) }}</span></div>
+        </div>
+    </div>
+
+    <!-- All Parsed Fields (collapsible) -->
+    {% set shown_keys = [
+        'srcip', 'src_ip', 'srcport', 'src_port', 'srczone', 'src_zone', 'srcintf_zone', 'srcintf', 'inbound_if',
+        'srccountry', 'src_location', 'srcloc', 'srcuser', 'src_user',
+        'dstip', 'dst_ip', 'dstport', 'dst_port', 'dstzone', 'dst_zone', 'dstintf_zone', 'dstintf', 'outbound_if',
+        'dstcountry', 'dst_location', 'dstloc', 'dstuser', 'dst_user',
+        'transip', 'transsrcip', 'nat_srcip', 'nat_src_ip', 'srcPostNAT', 'transport', 'transsrcport', 'nat_srcport', 'natsrcport', 'nat_src_port', 'srcPostNATPort',
+        'transdstip', 'nat_dstip', 'nat_dst_ip', 'dstPostNAT', 'transdstport', 'nat_dstport', 'natdstport', 'nat_dst_port', 'dstPostNATPort',
+        'proto', 'protocol', 'action',
+        'session_end_reason', 'reason', 'utmaction', 'sessionid', 'session_id', 'duration', 'elapsed_time',
+        'subtype', 'log_subtype',
+        'sentbyte', 'bytes_sent', 'rcvdbyte', 'bytes_recv',
+        'sentpkt', 'packets_sent', 'pkts_sent', 'rcvdpkt', 'packets_received', 'pkts_received', 'service',
+        'policyname', 'rule', 'policyid', 'policy_id', 'policytype', 'policy_type',
+        'poluuid', 'rule_uuid', 'uuid', 'nat', 'natdisp',
+        'app', 'application', 'appcat', 'category_of_app', 'category',
+        'subappcat', 'subcategory_of_app', 'subcategory', 'apprisk', 'risk', 'technology', 'apptech',
+        'user', 'unauthuser', 'srchwvendor', 'srcname', 'hostname',
+        'srcmac', 'mac', 'mastersrcmac', 'osname', 'srcos', 'devtype', 'authserver', 'auth_server',
+        'devname', 'device_name', 'serial', 'devid', 'serialno',
+        'vd', 'vsys', 'vdom', 'logdesc', 'log_action',
+        'crscore', 'craction', 'flags',
+        'type', 'log_type', 'level', 'severity', 'pri', 'logid', 'log_id',
+        'date', 'time', 'log_datetime', 'eventtime', 'tz'
+    ] %}
+    {% set extra_fields = [] %}
+    {% for k, v in pd.items() %}
+        {% if v and v | string != '' and v | string != '0' and v | string != 'N/A' and k not in shown_keys and not k.startswith('future_use') and not k.startswith('FUTURE_USE') %}
+            {% if extra_fields.append((k, v)) %}{% endif %}
+        {% endif %}
+    {% endfor %}
+    {% if extra_fields %}
+    <div class="parsed-fields-section" id="pf-section-{{ index }}">
+        <div class="parsed-fields-header" onclick="this.parentElement.classList.toggle('expanded')">
+            <span class="parsed-fields-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                All Parsed Fields
+            </span>
+            <span class="parsed-fields-badge">{{ extra_fields | length }} fields</span>
+        </div>
+        <div class="parsed-fields-body">
+            <div class="parsed-fields-grid">
+                {% for k, v in extra_fields %}
+                <div class="pf-item"><span class="pf-key" title="{{ k }}">{{ k }}</span><span class="pf-val" title="{{ v }}">{{ v }}</span></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Raw Log (lazy-loaded for performance) -->
+    {% set ts = log.get('timestamp', '') %}
+    <div class="raw-section" id="raw-section-{{ index }}"
+         data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
+         data-device="{{ log.get('device_ip', '') }}"
+         data-loaded="{{ 'true' if log.get('raw') else 'false' }}">
+        <div class="raw-header" onclick="toggleRawSection({{ index }})">
+            <span class="raw-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                Raw Log
+            </span>
+            <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyRaw({{ index }})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copy
+            </button>
+        </div>
+        <div class="raw-body" id="raw-{{ index }}">{% if log.get('raw') %}{{ log.get('raw') }}{% else %}<span class="raw-loading">Click to load raw message...</span>{% endif %}</div>
+    </div>
+</div>

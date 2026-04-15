@@ -640,7 +640,9 @@
         /* ===== TABLE CONTAINER ===== */
         .table-wrapper {
             flex: 1;
-            overflow: auto;
+            overflow-x: auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             position: relative;
         }
 
@@ -735,15 +737,7 @@
             background: var(--bg-active);
         }
 
-        /* Column Widths */
-        .col-time { width: 140px; }
-        .col-status { width: 100px; }
-        .col-src { width: 130px; }
-        .col-dst { width: 130px; }
-        .col-intf { width: 90px; }
-        .col-port { width: 80px; }
-        .col-size { width: 100px; }
-        .col-device { width: 160px; }
+        /* Column widths managed dynamically by ColumnManager via <style id="col-visibility-style"> */
         .col-expand { width: 40px; }
 
         /* Timestamp */
@@ -846,6 +840,76 @@
             font-size: 9px;
             color: var(--text-muted);
             font-family: var(--font-mono);
+        }
+
+        /* ===== COLUMN MANAGEMENT ===== */
+
+        /* Column chooser panel */
+        .preset-btn {
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 3px;
+            border: 1px solid var(--border-default);
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .preset-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .preset-btn.active { background: var(--accent-cyan-dim); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+
+        .cc-section-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem 0.25rem;
+        }
+        .cc-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 1rem;
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .cc-item:hover { background: var(--bg-hover); }
+        .cc-check {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-cyan);
+            cursor: pointer;
+        }
+
+        /* Column resize handle */
+        .col-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            z-index: 2;
+        }
+        .col-resize-handle:hover { background: var(--accent-cyan); }
+        .log-table th { position: relative; }
+
+        /* Drag feedback */
+        .col-dragging { opacity: 0.5; }
+        .col-drop-target { border-left: 2px solid var(--accent-cyan) !important; }
+
+        /* New column value styles */
+        .app-value {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .policy-value {
+            font-size: 11px;
+            color: var(--accent-purple);
+            font-weight: 500;
         }
 
         /* Device */
@@ -2694,7 +2758,6 @@
             overflow: hidden;
         }
     </style>
-    </style>
 {% endblock %}
 
 {% block content %}
@@ -2810,6 +2873,23 @@
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                         </svg>
                     </button>
+                    <div style="position:relative;">
+                        <button type="button" class="btn btn-ghost btn-icon" onclick="toggleColumnChooser(event)" title="Columns">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            </svg>
+                        </button>
+                        <div id="columnChooserPanel" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;width:300px;max-height:500px;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:0.5rem;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:60;padding:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;border-bottom:1px solid var(--border-default);">
+                                <span style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-secondary);">Columns</span>
+                                <div style="display:flex;gap:4px;flex-wrap:wrap;" id="presetButtons"></div>
+                            </div>
+                            <div id="columnChooserBody"></div>
+                            <div style="padding:0.5rem 1rem;border-top:1px solid var(--border-default);">
+                                <button onclick="colMgr.reset()" style="width:100%;padding:4px 8px;font-size:11px;background:transparent;border:1px solid var(--border-default);border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;">Reset to Default</button>
+                            </div>
+                        </div>
+                    </div>
                     <button type="button" class="btn btn-ghost btn-icon" onclick="location.reload()" title="Refresh">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -3001,35 +3081,46 @@
                         <table class="log-table">
                             <thead>
                                 <tr>
-                                    <th class="col-time sortable">Timestamp <span class="sort-icon">▼</span></th>
-                                    <th class="col-status">Status</th>
-                                    <th class="col-src sortable">Source IP</th>
-                                    <th class="col-dst sortable">Dest IP</th>
-                                    <th class="col-intf">Interface</th>
-                                    <th class="col-port">Port</th>
-                                    <th class="col-size">Size</th>
-                                    <th class="col-device">Device</th>
-                                    <th class="col-expand"></th>
+                                    <th data-col="timestamp" class="sortable">Timestamp <span class="sort-icon">▼</span><span class="col-resize-handle"></span></th>
+                                    <th data-col="action">Status<span class="col-resize-handle"></span></th>
+                                    <th data-col="srcip" class="sortable">Source IP<span class="col-resize-handle"></span></th>
+                                    <th data-col="dstip" class="sortable">Dest IP<span class="col-resize-handle"></span></th>
+                                    <th data-col="srcport">Src Port<span class="col-resize-handle"></span></th>
+                                    <th data-col="dstport">Dst Port<span class="col-resize-handle"></span></th>
+                                    <th data-col="proto">Protocol<span class="col-resize-handle"></span></th>
+                                    <th data-col="application">Application<span class="col-resize-handle"></span></th>
+                                    <th data-col="policyname">Policy<span class="col-resize-handle"></span></th>
+                                    <th data-col="src_zone">Src Zone<span class="col-resize-handle"></span></th>
+                                    <th data-col="dst_zone">Dst Zone<span class="col-resize-handle"></span></th>
+                                    <th data-col="intf">Interface<span class="col-resize-handle"></span></th>
+                                    <th data-col="size">Size<span class="col-resize-handle"></span></th>
+                                    <th data-col="device_ip">Device<span class="col-resize-handle"></span></th>
+                                    <th data-col="vdom">VDOM<span class="col-resize-handle"></span></th>
+                                    <th data-col="log_type">Log Type<span class="col-resize-handle"></span></th>
+                                    <th data-col="severity">Severity<span class="col-resize-handle"></span></th>
+                                    <th data-col="threat_id">Threat ID<span class="col-resize-handle"></span></th>
+                                    <th data-col="session_end_reason">End Reason<span class="col-resize-handle"></span></th>
+                                    <th data-col="message">Message<span class="col-resize-handle"></span></th>
+                                    <th data-col="_expand" class="col-expand"></th>
                                 </tr>
                             </thead>
                             <tbody id="logTableBody">
                                 {% for log in logs %}
-                                {% set pd = log.get('parsed_data', {}) %}
-                                {% set log_srcip = log.get('srcip', '') or pd.get('srcip', pd.get('src_ip', '')) %}
-                                {% set log_dstip = log.get('dstip', '') or pd.get('dstip', pd.get('dst_ip', '')) %}
+                                {% set pd = log.get('parsed_data', {}) if log.get('parsed_data') else {} %}
+                                {% set log_srcip = log.get('srcip', '') %}
+                                {% set log_dstip = log.get('dstip', '') %}
                                 {% set log_srcport = log.get('srcport', 0) %}
                                 {% set log_dstport = log.get('dstport', 0) %}
                                 {% set log_proto = log.get('proto', 0) %}
-                                {% set log_action = log.get('action', '') or pd.get('action', '') %}
+                                {% set log_action = log.get('action', '') %}
                                 {% set action = log_action | lower %}
                                 <tr class="log-row" data-index="{{ loop.index }}">
-                                    <td class="col-time">
+                                    <td data-col="timestamp">
                                         <span class="timestamp">
-                                            {# Show firewall's log timestamp (time from the log itself) #}
-                                            {% if pd.get('log_datetime') %}{{ pd.get('log_datetime') }}{% elif pd.get('date') and pd.get('time') %}{{ pd.get('date') }} {{ pd.get('time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                            {% if log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
                                         </span>
                                     </td>
-                                    <td class="col-status">
+                                    <td data-col="action">
                                         <div class="status-cell">
                                             {% if action in ['deny', 'drop', 'block', 'reject'] %}
                                             <span class="status-badge status-deny">DENY</span>
@@ -3041,39 +3132,67 @@
                                             {% endif %}
                                         </div>
                                     </td>
-                                    <td class="col-src">
+                                    <td data-col="srcip">
                                         <a href="?srcip={{ log_srcip or '' }}" class="ip-link">{{ log_srcip or '--' }}</a>
                                     </td>
-                                    <td class="col-dst">
+                                    <td data-col="dstip">
                                         <a href="?dstip={{ log_dstip or '' }}" class="ip-link">{{ log_dstip or '--' }}</a>
                                     </td>
-                                    <td class="col-intf">
-                                        <span class="intf-cell">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span>
+                                    <td data-col="srcport">
+                                        <span class="port-value">{{ log_srcport if log_srcport else '--' }}</span>
                                     </td>
-                                    <td class="col-port">
-                                        {% set display_port = log_dstport if log_dstport else (pd.get('dstport', pd.get('dst_port', '--'))) %}
-                                        {% set display_proto = log_proto if log_proto else pd.get('proto', pd.get('protocol', '')) %}
-                                        <div class="port-cell">
-                                            <span class="port-value">{{ display_port if display_port else '--' }}</span>
-                                            <span class="proto-value">{% if display_proto == 6 or display_proto == '6' %}TCP{% elif display_proto == 17 or display_proto == '17' %}UDP{% elif display_proto == 1 or display_proto == '1' %}ICMP{% elif display_proto == 'icmp' %}ICMP{% elif display_proto == 'tcp' %}TCP{% elif display_proto == 'udp' %}UDP{% else %}{{ display_proto or '--' }}{% endif %}</span>
-                                        </div>
+                                    <td data-col="dstport">
+                                        <span class="port-value">{{ log_dstport if log_dstport else '--' }}</span>
                                     </td>
-                                    <td class="col-size">
-                                        {% set sent = pd.get('sentbyte', pd.get('bytes_sent', '0')) | int %}
-                                        {% set rcvd = pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | int %}
-                                        {% set total_bytes = sent + rcvd %}
+                                    <td data-col="proto">
+                                        {% set display_proto = log_proto %}
+                                        <span class="proto-value">{% if display_proto == 6 or display_proto == '6' %}TCP{% elif display_proto == 17 or display_proto == '17' %}UDP{% elif display_proto == 1 or display_proto == '1' %}ICMP{% elif display_proto == 'icmp' %}ICMP{% elif display_proto == 'tcp' %}TCP{% elif display_proto == 'udp' %}UDP{% else %}{{ display_proto or '--' }}{% endif %}</span>
+                                    </td>
+                                    <td data-col="application">
+                                        <span class="app-value">{{ log.get('application', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="policyname">
+                                        <span class="policy-value">{{ log.get('policyname', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="src_zone">
+                                        <span class="intf-cell">{{ log.get('src_zone', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="dst_zone">
+                                        <span class="intf-cell">{{ log.get('dst_zone', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="intf">
+                                        <span class="intf-cell">--</span>
+                                    </td>
+                                    <td data-col="size">
                                         <div class="size-cell">
-                                            <span class="size-total">{{ total_bytes | format_bytes }}</span>
-                                            <span class="size-detail">{{ sent | format_bytes }}/{{ rcvd | format_bytes }}</span>
+                                            <span class="size-total">--</span>
                                         </div>
                                     </td>
-                                    <td class="col-device">
+                                    <td data-col="device_ip">
                                         {% set dev_ip = log.get('device_ip', '') | string %}
                                         {% set dev_vdom = log.get('vdom', '') %}
                                         {% set dev_display = dev_ip ~ '_' ~ dev_vdom if dev_vdom else dev_ip %}
                                         <a href="?device={{ dev_display }}" class="device-link">{{ dev_display or '--' }}</a>
                                     </td>
-                                    <td class="col-expand">
+                                    <td data-col="vdom">
+                                        <span class="intf-cell">{{ log.get('vdom', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="log_type">
+                                        <span class="intf-cell">{{ log.get('log_type', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="severity">
+                                        <span class="intf-cell">{{ log.get('severity', '--') }}</span>
+                                    </td>
+                                    <td data-col="threat_id">
+                                        <span class="intf-cell">{{ log.get('threat_id', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="session_end_reason">
+                                        <span class="intf-cell">{{ log.get('session_end_reason', '') or '--' }}</span>
+                                    </td>
+                                    <td data-col="message">
+                                        <span class="intf-cell">--</span>
+                                    </td>
+                                    <td data-col="_expand" class="col-expand">
                                         <button type="button" class="expand-btn" onclick="toggleRow({{ loop.index }})">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -3082,230 +3201,15 @@
                                         </button>
                                     </td>
                                 </tr>
-                                <tr class="detail-row" id="detail-{{ loop.index }}">
-                                    <td colspan="9">
-                                        <div class="detail-panel">
-                                            <!-- Multi-Firewall Trace -->
-                                            {% set ts = log.get('timestamp', '') %}
-                                            <div class="multiflow-container" id="flow-container-{{ loop.index }}"
-                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
-                                                 data-device="{{ dev_display }}">
-                                                <div class="multiflow-header">
-                                                    <span class="multiflow-title">Multi-Firewall Packet Trace</span>
-                                                    <button type="button" class="trace-btn" onclick="loadSessionFlow({{ loop.index }})">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                                        </svg>
-                                                        Trace Flow
-                                                    </button>
-                                                </div>
-                                                <div class="dynamic-flow" id="dynamic-flow-{{ loop.index }}">
-                                                    <div class="flow-loading">
-                                                        <div class="spinner"></div>
-                                                        <span>Tracing packet flow...</span>
-                                                    </div>
-                                                </div>
-                                                <div class="flow-summary" id="flow-summary-{{ loop.index }}"></div>
-                                            </div>
-
-                                            <!-- Log Header Bar -->
-                                            {% set hdr_devname = pd.get('devname', pd.get('device_name', '')) %}
-                                            {% set hdr_type = pd.get('type', pd.get('log_type', '')) %}
-                                            {% set hdr_subtype = pd.get('subtype', pd.get('log_subtype', '')) %}
-                                            {% set hdr_level = pd.get('level', pd.get('severity', pd.get('pri', ''))) %}
-                                            {% set hdr_logid = pd.get('logid', pd.get('log_id', '')) %}
-                                            {% set hdr_serial = pd.get('serial', pd.get('devid', pd.get('serialno', ''))) %}
-                                            {% set hdr_logtime = pd.get('log_datetime', '') %}
-                                            {% if not hdr_logtime and pd.get('date') and pd.get('time') %}{% set hdr_logtime = pd.get('date') ~ ' ' ~ pd.get('time') %}{% endif %}
-                                            {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial %}
-                                            <div class="log-header-bar">
-                                                {% if hdr_devname %}<div class="log-header-chip device"><span class="chip-label">Device</span><span class="chip-value">{{ hdr_devname }}</span></div><div class="log-header-sep"></div>{% endif %}
-                                                {% if hdr_type %}<div class="log-header-chip"><span class="chip-label">Type</span><span class="chip-value">{{ hdr_type }}{% if hdr_subtype %}/{{ hdr_subtype }}{% endif %}</span></div>{% endif %}
-                                                {% if hdr_level %}<div class="log-header-chip level-{{ hdr_level | lower }}"><span class="chip-label">Level</span><span class="chip-value">{{ hdr_level | upper }}</span></div>{% endif %}
-                                                {% if hdr_logid %}<div class="log-header-chip"><span class="chip-label">Log ID</span><span class="chip-value">{{ hdr_logid }}</span></div>{% endif %}
-                                                {% if hdr_serial %}<div class="log-header-sep"></div><div class="log-header-chip"><span class="chip-label">Serial</span><span class="chip-value">{{ hdr_serial }}</span></div>{% endif %}
-                                                {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Time</span><span class="chip-value">{{ hdr_logtime }}</span></div>{% endif %}
-                                            </div>
-                                            {% endif %}
-
-                                            <!-- Network Flow with NAT -->
-                                            {% set proto = pd.get('proto', pd.get('protocol', '')) %}
-                                            {% set proto_num = proto | string %}
-                                            {% set proto_label = 'TCP' if proto_num == '6' else 'UDP' if proto_num == '17' else 'ICMP' if proto_num == '1' else 'GRE' if proto_num == '47' else 'ESP' if proto_num == '50' else 'AH' if proto_num == '51' else proto or '--' %}
-                                            {% set src_natip = pd.get('transip', pd.get('transsrcip', pd.get('nat_srcip', pd.get('nat_src_ip', pd.get('srcPostNAT', ''))))) %}
-                                            {% set src_natport = pd.get('transport', pd.get('transsrcport', pd.get('nat_srcport', pd.get('natsrcport', pd.get('nat_src_port', pd.get('srcPostNATPort', '')))))) %}
-                                            {% set dst_natip = pd.get('transdstip', pd.get('nat_dstip', pd.get('nat_dst_ip', pd.get('dstPostNAT', '')))) %}
-                                            {% set dst_natport = pd.get('transdstport', pd.get('nat_dstport', pd.get('natdstport', pd.get('nat_dst_port', pd.get('dstPostNATPort', ''))))) %}
-                                            <div class="flow-section">
-                                                <div class="endpoint">
-                                                    <div class="endpoint-header">
-                                                        <span class="endpoint-tag src">Source</span>
-                                                    </div>
-                                                    <div class="endpoint-ip">{{ pd.get('srcip', pd.get('src_ip', '--')) }}:{{ pd.get('srcport', pd.get('src_port', '--')) }}</div>
-                                                    {% if src_natip and src_natip not in ['0.0.0.0', '::'] %}
-                                                    <div class="endpoint-nat">
-                                                        <span class="nat-label">NAT</span>
-                                                        <span class="nat-value">{{ src_natip }}{% if src_natport and src_natport != '0' %}:{{ src_natport }}{% endif %}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    <div class="endpoint-meta">
-                                                        <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('srczone', pd.get('src_zone', pd.get('srcintf_zone', '--'))) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('srcintf', pd.get('inbound_if', '--')) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('srccountry', pd.get('src_location', pd.get('srcloc', '--'))) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('srcuser', pd.get('src_user', pd.get('user', '--'))) }}</span></div>
-                                                    </div>
-                                                </div>
-                                                <div class="flow-arrow">
-                                                    <div class="flow-arrow-line">
-                                                        <span></span>
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                                    </div>
-                                                    <span class="flow-proto-tag">{{ proto_label }}</span>
-                                                </div>
-                                                <div class="endpoint">
-                                                    <div class="endpoint-header">
-                                                        <span class="endpoint-tag dst">Destination</span>
-                                                    </div>
-                                                    <div class="endpoint-ip">{{ pd.get('dstip', pd.get('dst_ip', '--')) }}:{{ pd.get('dstport', pd.get('dst_port', '--')) }}</div>
-                                                    {% if dst_natip and dst_natip not in ['0.0.0.0', '::'] %}
-                                                    <div class="endpoint-nat">
-                                                        <span class="nat-label">NAT</span>
-                                                        <span class="nat-value">{{ dst_natip }}{% if dst_natport and dst_natport != '0' %}:{{ dst_natport }}{% endif %}</span>
-                                                    </div>
-                                                    {% endif %}
-                                                    <div class="endpoint-meta">
-                                                        <div class="meta-item"><span class="meta-label">Zone:</span><span class="meta-value">{{ pd.get('dstzone', pd.get('dst_zone', pd.get('dstintf_zone', '--'))) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">Interface:</span><span class="meta-value">{{ pd.get('dstintf', pd.get('outbound_if', '--')) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">Location:</span><span class="meta-value">{{ pd.get('dstcountry', pd.get('dst_location', pd.get('dstloc', '--'))) }}</span></div>
-                                                        <div class="meta-item"><span class="meta-label">User:</span><span class="meta-value">{{ pd.get('dstuser', pd.get('dst_user', '--')) }}</span></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Enhanced Info Grid (6 blocks) -->
-                                            <div class="info-grid-6">
-                                                <div class="info-block">
-                                                    <div class="info-title">Session</div>
-                                                    <div class="info-row"><span class="info-key">Action</span><span class="info-val {% if pd.get('action', '').lower() in ['allow', 'accept', 'pass'] %}allow{% elif pd.get('action', '').lower() in ['deny', 'drop', 'block', 'reject'] %}deny{% endif %}">{{ pd.get('action', '--') | upper }}</span></div>
-                                                    <div class="info-row"><span class="info-key">End Reason</span><span class="info-val">{{ pd.get('session_end_reason', pd.get('reason', pd.get('utmaction', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Session ID</span><span class="info-val mono">{{ pd.get('sessionid', pd.get('session_id', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Duration</span><span class="info-val">{{ pd.get('duration', pd.get('elapsed_time', '--')) }}s</span></div>
-                                                    <div class="info-row"><span class="info-key">Subtype</span><span class="info-val">{{ pd.get('subtype', pd.get('log_subtype', '--')) }}</span></div>
-                                                </div>
-                                                <div class="info-block">
-                                                    <div class="info-title">Traffic</div>
-                                                    <div class="info-row"><span class="info-key">Sent Bytes</span><span class="info-val">{{ pd.get('sentbyte', pd.get('bytes_sent', '0')) | format_bytes }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Rcvd Bytes</span><span class="info-val">{{ pd.get('rcvdbyte', pd.get('bytes_recv', '0')) | format_bytes }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Sent Pkts</span><span class="info-val mono">{{ pd.get('sentpkt', pd.get('packets_sent', pd.get('pkts_sent', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Rcvd Pkts</span><span class="info-val mono">{{ pd.get('rcvdpkt', pd.get('packets_received', pd.get('pkts_received', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Service</span><span class="info-val">{{ pd.get('service', '--') }}</span></div>
-                                                </div>
-                                                <div class="info-block">
-                                                    <div class="info-title">Policy</div>
-                                                    <div class="info-row"><span class="info-key">Rule</span><span class="info-val">{{ pd.get('policyname', pd.get('rule', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Policy ID</span><span class="info-val mono">{{ pd.get('policyid', pd.get('policy_id', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Policy Type</span><span class="info-val">{{ pd.get('policytype', pd.get('policy_type', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Rule UUID</span><span class="info-val mono">{{ pd.get('poluuid', pd.get('rule_uuid', pd.get('uuid', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">NAT</span><span class="info-val">{{ pd.get('nat', pd.get('natdisp', '--')) }}</span></div>
-                                                </div>
-                                                <div class="info-block">
-                                                    <div class="info-title">Application</div>
-                                                    <div class="info-row"><span class="info-key">App</span><span class="info-val">{{ pd.get('app', pd.get('application', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Category</span><span class="info-val">{{ pd.get('appcat', pd.get('category_of_app', pd.get('category', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Subcategory</span><span class="info-val">{{ pd.get('subappcat', pd.get('subcategory_of_app', pd.get('subcategory', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Risk</span><span class="info-val">{{ pd.get('apprisk', pd.get('risk', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Technology</span><span class="info-val">{{ pd.get('technology', pd.get('apptech', '--')) }}</span></div>
-                                                </div>
-                                                <div class="info-block">
-                                                    <div class="info-title">Identity</div>
-                                                    <div class="info-row"><span class="info-key">User</span><span class="info-val">{{ pd.get('user', pd.get('srcuser', pd.get('unauthuser', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Src Host</span><span class="info-val">{{ pd.get('srchwvendor', pd.get('srcname', pd.get('hostname', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">MAC</span><span class="info-val mono">{{ pd.get('srcmac', pd.get('mac', pd.get('mastersrcmac', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">OS</span><span class="info-val">{{ pd.get('osname', pd.get('srcos', pd.get('devtype', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Auth Server</span><span class="info-val">{{ pd.get('authserver', pd.get('auth_server', '--')) }}</span></div>
-                                                </div>
-                                                <div class="info-block">
-                                                    <div class="info-title">Device</div>
-                                                    <div class="info-row"><span class="info-key">FW Name</span><span class="info-val">{{ pd.get('devname', pd.get('device_name', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Serial</span><span class="info-val mono">{{ pd.get('serial', pd.get('devid', pd.get('serialno', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">VDOM/Vsys</span><span class="info-val">{{ pd.get('vd', pd.get('vsys', pd.get('vdom', '--'))) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Log Action</span><span class="info-val">{{ pd.get('logdesc', pd.get('log_action', '--')) }}</span></div>
-                                                    <div class="info-row"><span class="info-key">Flags</span><span class="info-val mono">{{ pd.get('crscore', '') }}{% if pd.get('crscore') %}/{% endif %}{{ pd.get('craction', pd.get('flags', '--')) }}</span></div>
-                                                </div>
-                                            </div>
-
-                                            <!-- All Parsed Fields (collapsible) -->
-                                            {% set shown_keys = [
-                                                'srcip', 'src_ip', 'srcport', 'src_port', 'srczone', 'src_zone', 'srcintf_zone', 'srcintf', 'inbound_if',
-                                                'srccountry', 'src_location', 'srcloc', 'srcuser', 'src_user',
-                                                'dstip', 'dst_ip', 'dstport', 'dst_port', 'dstzone', 'dst_zone', 'dstintf_zone', 'dstintf', 'outbound_if',
-                                                'dstcountry', 'dst_location', 'dstloc', 'dstuser', 'dst_user',
-                                                'transip', 'transsrcip', 'nat_srcip', 'nat_src_ip', 'srcPostNAT', 'transport', 'transsrcport', 'nat_srcport', 'natsrcport', 'nat_src_port', 'srcPostNATPort',
-                                                'transdstip', 'nat_dstip', 'nat_dst_ip', 'dstPostNAT', 'transdstport', 'nat_dstport', 'natdstport', 'nat_dst_port', 'dstPostNATPort',
-                                                'proto', 'protocol', 'action',
-                                                'session_end_reason', 'reason', 'utmaction', 'sessionid', 'session_id', 'duration', 'elapsed_time',
-                                                'subtype', 'log_subtype',
-                                                'sentbyte', 'bytes_sent', 'rcvdbyte', 'bytes_recv',
-                                                'sentpkt', 'packets_sent', 'pkts_sent', 'rcvdpkt', 'packets_received', 'pkts_received', 'service',
-                                                'policyname', 'rule', 'policyid', 'policy_id', 'policytype', 'policy_type',
-                                                'poluuid', 'rule_uuid', 'uuid', 'nat', 'natdisp',
-                                                'app', 'application', 'appcat', 'category_of_app', 'category',
-                                                'subappcat', 'subcategory_of_app', 'subcategory', 'apprisk', 'risk', 'technology', 'apptech',
-                                                'user', 'unauthuser', 'srchwvendor', 'srcname', 'hostname',
-                                                'srcmac', 'mac', 'mastersrcmac', 'osname', 'srcos', 'devtype', 'authserver', 'auth_server',
-                                                'devname', 'device_name', 'serial', 'devid', 'serialno',
-                                                'vd', 'vsys', 'vdom', 'logdesc', 'log_action',
-                                                'crscore', 'craction', 'flags',
-                                                'type', 'log_type', 'level', 'severity', 'pri', 'logid', 'log_id',
-                                                'date', 'time', 'log_datetime', 'eventtime', 'tz'
-                                            ] %}
-                                            {% set extra_fields = [] %}
-                                            {% for k, v in pd.items() %}
-                                                {% if v and v | string != '' and v | string != '0' and v | string != 'N/A' and k not in shown_keys and not k.startswith('future_use') and not k.startswith('FUTURE_USE') %}
-                                                    {% if extra_fields.append((k, v)) %}{% endif %}
-                                                {% endif %}
-                                            {% endfor %}
-                                            {% if extra_fields %}
-                                            <div class="parsed-fields-section" id="pf-section-{{ loop.index }}">
-                                                <div class="parsed-fields-header" onclick="this.parentElement.classList.toggle('expanded')">
-                                                    <span class="parsed-fields-title">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                                        All Parsed Fields
-                                                    </span>
-                                                    <span class="parsed-fields-badge">{{ extra_fields | length }} fields</span>
-                                                </div>
-                                                <div class="parsed-fields-body">
-                                                    <div class="parsed-fields-grid">
-                                                        {% for k, v in extra_fields %}
-                                                        <div class="pf-item"><span class="pf-key" title="{{ k }}">{{ k }}</span><span class="pf-val" title="{{ v }}">{{ v }}</span></div>
-                                                        {% endfor %}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {% endif %}
-
-                                            <!-- Raw Log (lazy-loaded for performance) -->
-                                            {% set ts = log.get('timestamp', '') %}
-                                            <div class="raw-section" id="raw-section-{{ loop.index }}"
-                                                 data-timestamp="{{ ts.isoformat() if ts and ts.isoformat else ts }}"
-                                                 data-device="{{ log.get('device_ip', '') }}"
-                                                 data-loaded="false">
-                                                <div class="raw-header" onclick="toggleRawSection({{ loop.index }})">
-                                                    <span class="raw-title">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                                        Raw Log
-                                                    </span>
-                                                    <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyRaw({{ loop.index }})">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="9" y="9" width="13" height="13" rx="2"/>
-                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                                        </svg>
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <div class="raw-body" id="raw-{{ loop.index }}">
-                                                    <span class="raw-loading">Click to load raw message...</span>
-                                                </div>
+                                <tr class="detail-row" id="detail-{{ loop.index }}"
+                                    data-timestamp="{{ log.get('timestamp', '').isoformat() if log.get('timestamp', '') and log.get('timestamp', '').isoformat else log.get('timestamp', '') }}"
+                                    data-device="{{ dev_display }}"
+                                    data-loaded="false">
+                                    <td colspan="99">
+                                        <div class="detail-panel-placeholder" id="detail-content-{{ loop.index }}">
+                                            <div class="detail-loading">
+                                                <div class="spinner"></div>
+                                                <span>Loading log details...</span>
                                             </div>
                                         </div>
                                     </td>
@@ -3612,8 +3516,212 @@
     </form>
 
     <script>
-        // Toggle row expansion
-        function toggleRow(index) {
+    // ============================================================
+    // COLUMN MANAGEMENT SYSTEM
+    // ============================================================
+
+    const COLUMN_DEFS = [
+        { id: 'timestamp',   label: 'Timestamp',    category: 'Core',     defaultWidth: 155, defaultVisible: true },
+        { id: 'action',      label: 'Status',       category: 'Core',     defaultWidth: 90,  defaultVisible: true },
+        { id: 'srcip',       label: 'Source IP',     category: 'Network',  defaultWidth: 130, defaultVisible: true },
+        { id: 'dstip',       label: 'Dest IP',      category: 'Network',  defaultWidth: 130, defaultVisible: true },
+        { id: 'srcport',     label: 'Src Port',     category: 'Network',  defaultWidth: 75,  defaultVisible: false },
+        { id: 'dstport',     label: 'Dst Port',     category: 'Network',  defaultWidth: 75,  defaultVisible: true },
+        { id: 'proto',       label: 'Protocol',     category: 'Network',  defaultWidth: 75,  defaultVisible: true },
+        { id: 'application', label: 'Application',  category: 'Security', defaultWidth: 120, defaultVisible: true },
+        { id: 'policyname',  label: 'Policy',       category: 'Security', defaultWidth: 120, defaultVisible: true },
+        { id: 'src_zone',    label: 'Src Zone',     category: 'Zone',     defaultWidth: 90,  defaultVisible: false },
+        { id: 'dst_zone',    label: 'Dst Zone',     category: 'Zone',     defaultWidth: 90,  defaultVisible: false },
+        { id: 'intf',        label: 'Interface',    category: 'Network',  defaultWidth: 90,  defaultVisible: false },
+        { id: 'size',        label: 'Size',         category: 'Core',     defaultWidth: 100, defaultVisible: false },
+        { id: 'device_ip',   label: 'Device',       category: 'Core',     defaultWidth: 140, defaultVisible: true },
+        { id: 'vdom',        label: 'VDOM',         category: 'Device',   defaultWidth: 80,  defaultVisible: false },
+        { id: 'log_type',    label: 'Log Type',     category: 'Security', defaultWidth: 90,  defaultVisible: false },
+        { id: 'severity',    label: 'Severity',     category: 'Core',     defaultWidth: 80,  defaultVisible: false },
+        { id: 'threat_id',   label: 'Threat ID',    category: 'Security', defaultWidth: 100, defaultVisible: false },
+        { id: 'session_end_reason', label: 'End Reason', category: 'Session', defaultWidth: 100, defaultVisible: false },
+        { id: 'message',     label: 'Message',      category: 'Core',     defaultWidth: 300, defaultVisible: false },
+    ];
+
+    const COLUMN_PRESETS = {
+        'Default':  ['timestamp','action','srcip','dstip','dstport','proto','application','policyname','device_ip'],
+        'Network':  ['timestamp','action','srcip','srcport','dstip','dstport','proto','src_zone','dst_zone','intf','device_ip'],
+        'Security': ['timestamp','action','srcip','dstip','policyname','application','log_type','threat_id','severity','device_ip'],
+        'Minimal':  ['timestamp','action','srcip','dstip','dstport','device_ip'],
+        'Full':     COLUMN_DEFS.map(c => c.id),
+    };
+
+    const STORAGE_KEY = 'zentryc_log_columns';
+
+    class ColumnManager {
+        constructor() {
+            this.columns = this._load();
+            this._styleEl = document.createElement('style');
+            this._styleEl.id = 'col-visibility-style';
+            document.head.appendChild(this._styleEl);
+            this._buildChooserUI();
+            this.apply();
+        }
+
+        _load() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                if (saved && saved.visible) return saved;
+            } catch {}
+            return { visible: COLUMN_DEFS.filter(c => c.defaultVisible).map(c => c.id), widths: {} };
+        }
+
+        _save() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.columns));
+        }
+
+        apply() {
+            const visible = new Set(this.columns.visible);
+            let css = '';
+            for (const col of COLUMN_DEFS) {
+                if (!visible.has(col.id)) {
+                    css += `[data-col="${col.id}"] { display: none !important; }\n`;
+                } else {
+                    const w = this.columns.widths[col.id] || col.defaultWidth;
+                    css += `.log-table [data-col="${col.id}"] { width: ${w}px; min-width: ${Math.min(w, 60)}px; }\n`;
+                }
+            }
+            this._styleEl.textContent = css;
+            this._updateChooserUI();
+        }
+
+        isVisible(id) { return this.columns.visible.includes(id); }
+
+        toggle(id) {
+            const idx = this.columns.visible.indexOf(id);
+            if (idx >= 0) {
+                if (this.columns.visible.length <= 2) return;
+                this.columns.visible.splice(idx, 1);
+            } else {
+                this.columns.visible.push(id);
+            }
+            this._save();
+            this.apply();
+        }
+
+        applyPreset(name) {
+            if (COLUMN_PRESETS[name]) {
+                this.columns.visible = [...COLUMN_PRESETS[name]];
+                this.columns.widths = {};
+                this._save();
+                this.apply();
+            }
+        }
+
+        reset() { this.applyPreset('Default'); }
+
+        setWidth(id, width) {
+            this.columns.widths[id] = Math.max(50, Math.min(500, width));
+            this._save();
+            this.apply();
+        }
+
+        _buildChooserUI() {
+            // Build preset buttons
+            const presetContainer = document.getElementById('presetButtons');
+            if (presetContainer) {
+                for (const name of Object.keys(COLUMN_PRESETS)) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'preset-btn';
+                    btn.dataset.preset = name;
+                    btn.textContent = name;
+                    btn.onclick = () => this.applyPreset(name);
+                    presetContainer.appendChild(btn);
+                }
+            }
+
+            // Build column checkboxes grouped by category
+            const body = document.getElementById('columnChooserBody');
+            if (!body) return;
+
+            const categories = {};
+            for (const col of COLUMN_DEFS) {
+                if (!categories[col.category]) categories[col.category] = [];
+                categories[col.category].push(col);
+            }
+
+            let html = '';
+            for (const [cat, cols] of Object.entries(categories)) {
+                html += `<div class="cc-section-label">${cat}</div>`;
+                for (const col of cols) {
+                    html += `<label class="cc-item">
+                        <input type="checkbox" class="cc-check" data-col="${col.id}" onchange="colMgr.toggle('${col.id}')">
+                        <span>${col.label}</span>
+                    </label>`;
+                }
+            }
+            body.innerHTML = html;
+        }
+
+        _updateChooserUI() {
+            document.querySelectorAll('.cc-check').forEach(cb => {
+                cb.checked = this.isVisible(cb.dataset.col);
+            });
+            const presetBtns = document.querySelectorAll('.preset-btn');
+            presetBtns.forEach(btn => {
+                const presetCols = COLUMN_PRESETS[btn.dataset.preset];
+                const match = presetCols && presetCols.length === this.columns.visible.length &&
+                              presetCols.every(c => this.columns.visible.includes(c));
+                btn.classList.toggle('active', !!match);
+            });
+        }
+    }
+
+    let colMgr;
+    document.addEventListener('DOMContentLoaded', () => { colMgr = new ColumnManager(); });
+
+    function toggleColumnChooser(e) {
+        if (e) e.stopPropagation();
+        const panel = document.getElementById('columnChooserPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Close column chooser when clicking outside
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('columnChooserPanel');
+        if (panel && panel.style.display !== 'none' && !panel.contains(e.target) && !e.target.closest('[onclick*="toggleColumnChooser"]')) {
+            panel.style.display = 'none';
+        }
+    });
+
+    // Column resize
+    (function() {
+        let resizing = null;
+        document.addEventListener('mousedown', (e) => {
+            const handle = e.target.closest('.col-resize-handle');
+            if (!handle) return;
+            e.preventDefault();
+            const th = handle.closest('th');
+            const colId = th.dataset.col;
+            if (!colId || colId === '_expand') return;
+            const startX = e.clientX;
+            const startW = th.offsetWidth;
+            resizing = { colId, startX, startW };
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!resizing) return;
+            const newW = resizing.startW + (e.clientX - resizing.startX);
+            if (colMgr) colMgr.setWidth(resizing.colId, newW);
+        });
+        document.addEventListener('mouseup', () => {
+            if (resizing) {
+                resizing = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    })();
+
+        // Toggle row expansion with lazy-loaded detail panel
+        async function toggleRow(index) {
             const detailRow = document.getElementById(`detail-${index}`);
             const expandBtn = document.querySelector(`[data-index="${index}"] .expand-btn`);
             const logRow = document.querySelector(`[data-index="${index}"]`);
@@ -3630,6 +3738,21 @@
                 detailRow.classList.add('visible');
                 expandBtn.classList.add('open');
                 logRow.classList.add('expanded');
+
+                // Lazy-load detail panel content if not already loaded
+                if (detailRow.dataset.loaded !== 'true') {
+                    const timestamp = detailRow.dataset.timestamp;
+                    const device = detailRow.dataset.device;
+                    const container = document.getElementById(`detail-content-${index}`);
+                    try {
+                        const resp = await fetch(`/logs/detail-panel?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}&index=${index}`);
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        container.innerHTML = await resp.text();
+                        detailRow.dataset.loaded = 'true';
+                    } catch (err) {
+                        container.innerHTML = `<div class="detail-empty" style="padding:20px;color:var(--text-muted);">Failed to load details: ${err.message}</div>`;
+                    }
+                }
             }
         }
 

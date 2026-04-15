@@ -776,6 +776,40 @@ async def log_list(
         })
 
 
+@router.get("/logs/detail-panel", response_class=HTMLResponse, name="log_detail_panel")
+async def log_detail_panel(
+    request: Request,
+    timestamp: str = Query(..., description="Log timestamp in ISO format"),
+    device: str = Query(..., description="Device IP"),
+    index: int = Query(1, description="Row index for element IDs"),
+):
+    """Return rendered HTML for a single log's detail panel (lazy-loaded on row expand)."""
+    try:
+        log = ClickHouseClient.get_log_by_id(
+            timestamp=timestamp,
+            device_ip=device,
+            include_raw=True,
+        )
+        if not log:
+            return HTMLResponse('<div class="detail-empty">Log entry not found</div>')
+
+        pd = log.get('parsed_data', {})
+        dev_ip = str(log.get('device_ip', ''))
+        dev_vdom = log.get('vdom', '')
+        dev_display = f"{dev_ip}_{dev_vdom}" if dev_vdom else dev_ip
+
+        return _render("logs/_detail_panel.html", request, {
+            "log": log,
+            "pd": pd,
+            "dev_display": dev_display,
+            "index": index,
+            "severity_map": SEVERITY_MAP,
+        })
+    except Exception as e:
+        logger.error(f"Error in log_detail_panel: {e}")
+        return HTMLResponse(f'<div class="detail-empty">Error loading details: {e}</div>')
+
+
 @router.get("/policy-builder/", response_class=HTMLResponse, name="policy_builder")
 async def policy_builder(
     request: Request,
@@ -2013,6 +2047,9 @@ async def system_monitor(request: Request):
         # Get cleanup status
         cleanup_status = ClickHouseClient.get_cleanup_status()
 
+        # Get real system partitions
+        sys_partitions = get_system_partitions()
+
         # Calculate ClickHouse vs disk usage
         clickhouse_bytes = db_summary.get('total_bytes', 0)
         disk_used = disk_info['used_bytes']
@@ -2038,6 +2075,7 @@ async def system_monitor(request: Request):
             "partitions": partitions,
             "cleanup_status": cleanup_status,
             "clickhouse_percent_of_used": clickhouse_percent_of_used,
+            "sys_partitions": sys_partitions,
             "error": None,
         })
 
@@ -2053,6 +2091,7 @@ async def system_monitor(request: Request):
             "partitions": [],
             "cleanup_status": {'pending_mutations': 0, 'mutations': []},
             "clickhouse_percent_of_used": 0,
+            "sys_partitions": {'disks': [], 'partitions': [], 'unallocated': [], 'has_hostfs': False},
             "error": str(e),
         })
 
@@ -2123,6 +2162,248 @@ async def api_disk_usage():
                 "total_readable": db_summary['total_readable']
             }
         })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ============================================================
+# System Partitions / Block Devices
+# ============================================================
+
+def _format_bytes(b: int) -> str:
+    """Format bytes to human-readable string."""
+    if b is None:
+        return "--"
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if abs(b) < 1024:
+            return f"{b:.1f} {unit}"
+        b /= 1024
+    return f"{b:.1f} PiB"
+
+
+def get_system_partitions() -> dict:
+    """Get real system block devices and partition info via lsblk + host /proc/mounts + statvfs."""
+    import subprocess, json, os
+
+    hostfs = '/hostfs'
+    has_hostfs = os.path.isdir(hostfs)
+
+    # --- Block devices from lsblk ---
+    try:
+        r = subprocess.run(
+            ['lsblk', '-J', '-b', '-o',
+             'NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,FSUSED,FSAVAIL,FSUSE%,MODEL,VENDOR'],
+            capture_output=True, text=True, timeout=5
+        )
+        lsblk = json.loads(r.stdout) if r.stdout else {}
+    except Exception:
+        lsblk = {}
+
+    # --- Read host /proc/mounts to find ALL mounted filesystems ---
+    # This is critical: inside a container, lsblk can't see LVM/device-mapper mounts.
+    # By reading the host's /proc/mounts we discover volumes like ubuntu--vg-ubuntu--lv.
+    host_mounts = []  # list of {device, mountpoint, fstype, host_mount}
+    seen_host_devs = set()
+    if has_hostfs:
+        try:
+            with open(os.path.join(hostfs, 'proc/mounts'), 'r') as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 3 and parts[0].startswith('/dev/'):
+                        dev_path = parts[0]
+                        # The mountpoint in host's /proc/mounts is relative to our /hostfs
+                        container_mp = parts[1]  # e.g. /hostfs, /hostfs/boot
+                        fstype = parts[2]
+
+                        # Derive the real host mountpoint by stripping /hostfs prefix
+                        if container_mp == hostfs:
+                            real_mp = '/'
+                        elif container_mp.startswith(hostfs + '/'):
+                            real_mp = container_mp[len(hostfs):]
+                        else:
+                            # Skip bind-mounts to container paths (resolv.conf, hostname, etc.)
+                            continue
+
+                        # Skip duplicate mounts (same device to different bind-mount targets)
+                        dev_key = dev_path + ':' + real_mp
+                        if dev_key in seen_host_devs:
+                            continue
+                        seen_host_devs.add(dev_key)
+
+                        # Skip non-filesystem mounts
+                        if fstype in ('tmpfs', 'devtmpfs', 'proc', 'sysfs', 'cgroup', 'cgroup2',
+                                      'overlay', 'devpts', 'mqueue', 'hugetlbfs', 'securityfs',
+                                      'debugfs', 'tracefs', 'fusectl', 'configfs', 'pstore',
+                                      'bpf', 'autofs', 'rpc_pipefs', 'nfsd', 'fuse.snapfuse'):
+                            continue
+
+                        host_mounts.append({
+                            'device': dev_path,
+                            'mountpoint': real_mp,
+                            'fstype': fstype,
+                            'container_path': container_mp,
+                        })
+        except Exception:
+            pass
+
+    # --- Build disk list from lsblk ---
+    disks = []
+    lsblk_disk_names = set()  # track which disks lsblk sees with children
+
+    def _collect_disks(devices):
+        for dev in devices:
+            dtype = dev.get('type', '')
+            if dtype == 'rom':
+                continue
+            if dtype == 'disk':
+                name = dev.get('name', '')
+                model = (dev.get('model') or '').strip()
+                vendor = (dev.get('vendor') or '').strip()
+                children = dev.get('children', [])
+                fstype = dev.get('fstype') or ''
+                size = dev.get('size') or 0
+
+                has_children = len(children) > 0
+                # Also check if this disk appears in host_mounts (LVM member)
+                is_lvm_member = any(
+                    m['device'].startswith('/dev/mapper/') for m in host_mounts
+                    if m['mountpoint'] == '/'
+                ) if not has_children else False
+
+                disks.append({
+                    'name': name,
+                    'size': size,
+                    'size_readable': _format_bytes(size),
+                    'model': model,
+                    'vendor': vendor,
+                    'fstype': fstype,
+                    'has_partitions': has_children,
+                    'children_count': len(children),
+                    'is_lvm_member': is_lvm_member,
+                })
+                if has_children:
+                    lsblk_disk_names.add(name)
+
+    _collect_disks(lsblk.get('blockdevices', []))
+
+    # --- Build partition list from host mounts + statvfs ---
+    partitions = []
+    seen_partitions = set()
+
+    for mount in host_mounts:
+        dev_path = mount['device']
+        real_mp = mount['mountpoint']
+        fstype = mount['fstype']
+        container_path = mount['container_path']
+
+        # Deduplicate by real mountpoint
+        if real_mp in seen_partitions:
+            continue
+        seen_partitions.add(real_mp)
+
+        # Derive a friendly device name
+        dev_name = dev_path.replace('/dev/', '').replace('mapper/', '')
+
+        # Get real usage via statvfs
+        used = None
+        avail = None
+        total_fs = 0
+        pct = 0
+        pct_str = '--'
+        try:
+            st = os.statvfs(container_path)
+            total_fs = st.f_frsize * st.f_blocks
+            free_fs = st.f_frsize * st.f_bavail
+            used_fs = total_fs - free_fs
+            used = used_fs
+            avail = free_fs
+            pct = round((used_fs / total_fs) * 100, 1) if total_fs > 0 else 0
+            pct_str = f"{pct}%"
+        except Exception:
+            total_fs = 0
+
+        # Find model/vendor from lsblk disks
+        model = ''
+        vendor = ''
+        for d in disks:
+            if dev_name.startswith(d['name']):
+                model = d.get('model', '')
+                vendor = d.get('vendor', '')
+                break
+
+        partitions.append({
+            'name': dev_name,
+            'type': 'lvm' if 'mapper' in dev_path else 'part',
+            'mountpoint': real_mp,
+            'fstype': fstype,
+            'size': total_fs,
+            'size_readable': _format_bytes(total_fs),
+            'used': used,
+            'used_readable': _format_bytes(used) if used else '--',
+            'available': avail,
+            'available_readable': _format_bytes(avail) if avail else '--',
+            'usage_percent': pct,
+            'usage_pct_str': pct_str,
+            'model': model,
+            'vendor': vendor,
+        })
+
+    # Sort partitions: root first, then by size descending
+    partitions.sort(key=lambda p: (0 if p['mountpoint'] == '/' else 1, -(p.get('size') or 0)))
+
+    # --- Identify unallocated disks ---
+    # A disk is "unallocated" if lsblk shows it with no children AND
+    # it doesn't appear in any host mount (not an LVM PV in use)
+    unallocated = []
+    mounted_devs = {m['device'] for m in host_mounts}
+
+    for d in disks:
+        if d['has_partitions'] or d['fstype']:
+            continue
+        # Check if this disk is actually used via device-mapper (LVM)
+        dev_full = f"/dev/{d['name']}"
+        is_used = d.get('is_lvm_member', False)
+        # Also check if device appears in /proc/diskstats as an LVM PV
+        if not is_used and has_hostfs:
+            try:
+                # Check if disk is an LVM physical volume by reading host's /proc/partitions
+                pvs_path = os.path.join(hostfs, 'proc/partitions')
+                with open(pvs_path) as f:
+                    for line in f:
+                        cols = line.split()
+                        if len(cols) >= 4 and 'ubuntu' in cols[3]:
+                            is_used = True
+                            break
+            except Exception:
+                pass
+
+        if not is_used:
+            unallocated.append({
+                'name': d['name'],
+                'size': d['size'],
+                'size_readable': d['size_readable'],
+                'model': d['model'],
+                'vendor': d['vendor'],
+                'status': 'Unallocated',
+            })
+        else:
+            # Mark disk as LVM member in disk info
+            d['is_lvm_member'] = True
+
+    return {
+        'disks': disks,
+        'partitions': partitions,
+        'unallocated': unallocated,
+        'has_hostfs': has_hostfs,
+    }
+
+
+@router.get("/api/system/partitions/", name="get_system_partitions")
+async def api_system_partitions():
+    """API endpoint returning real system block devices and partition info."""
+    try:
+        data = get_system_partitions()
+        return JSONResponse({"success": True, **data})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 

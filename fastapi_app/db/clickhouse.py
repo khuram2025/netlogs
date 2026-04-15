@@ -7,7 +7,7 @@ import re
 import logging
 import threading
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import clickhouse_connect
 from clickhouse_connect.driver import Client
@@ -1721,37 +1721,114 @@ class ClickHouseClient:
         """
         Search logs with advanced filtering. Defaults to last 1 hour for performance.
 
-        Args:
-            include_raw: If False (default), excludes 'raw' and 'parsed_data' columns
-                        for faster queries. Set to True to include full log data.
+        Uses progressive time narrowing: tries a narrow recent window first to avoid
+        scanning hundreds of millions of rows when only the most recent N are needed.
+        The table is ORDER BY (device_ip, timestamp) so ORDER BY timestamp DESC
+        requires a full sort — narrowing the scan window is critical for performance.
         """
         client = cls.get_client()
 
-        # Build time filter + indexed field conditions for PREWHERE optimization
-        prewhere_parts = []
-
-        if start_time is None and end_time is None:
-            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
-        else:
-            if start_time:
-                start_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
-                prewhere_parts.append(f"timestamp >= '{start_str}'")
-            if end_time:
-                end_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
-                prewhere_parts.append(f"timestamp <= '{end_str}'")
-
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        indexed_prewhere = cls._build_indexed_prewhere(query_text)
 
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
 
-        # Use PREWHERE for time + indexed fields (allows skipping data blocks early)
-        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
-
         # Use list columns by default (fast — excludes message/raw/parsed_data)
-        # include_raw=True returns everything including raw
-        columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
+        columns = cls.FULL_COLUMNS if include_raw else cls.LIST_COLUMNS
+
+        # Determine the user's requested time bounds
+        user_start = start_time
+        user_end = end_time
+        if user_start is None and user_end is None:
+            # Default: restrict to default_hours
+            user_time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
+        else:
+            parts = []
+            if user_start:
+                parts.append(f"timestamp >= '{user_start.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if user_end:
+                parts.append(f"timestamp <= '{user_end.strftime('%Y-%m-%d %H:%M:%S')}'")
+            user_time_filter = " AND ".join(parts)
+
+        required_rows = offset + limit
+
+        # Progressive time narrowing: query expanding windows anchored at the
+        # END of the requested range (most recent shown logs), so we can avoid
+        # sorting hundreds of millions of rows.
+        #
+        # For "last 7d" (no end_time) we anchor at now(). For "yesterday"
+        # (custom end_time) we anchor at end_time so we look in the right place.
+        #
+        # The newest 100 rows from any range are almost always within minutes
+        # of that range's upper bound, so a tiny window usually suffices.
+        narrow_window_seconds = [
+            60,         # 1 minute
+            300,        # 5 minutes
+            1800,       # 30 minutes
+            7200,       # 2 hours
+            43200,      # 12 hours
+            259200,     # 3 days
+            1209600,    # 14 days
+        ]
+
+        chosen_time_filter = user_time_filter  # fallback to full range
+
+        # For very deep offsets (>1M rows), narrow windows are too small.
+        # Cursor pagination is the proper fix; for now, fall through.
+        if required_rows < 1_000_000:
+            # Determine the anchor for narrow windows.
+            # - If end_time is None or in the future, use now() (no probe needed).
+            # - If end_time is in the past (custom historical range), probe for
+            #   max(timestamp) so we land on actual data even if there's a gap
+            #   right before end_time.
+            from datetime import datetime, timezone
+            now_utc = datetime.now(timezone.utc)
+            need_probe = (
+                user_end is not None and user_end < now_utc - timedelta(minutes=5)
+            )
+
+            anchor_sql = "now()"
+            if need_probe:
+                probe_prewhere = [user_time_filter] + list(indexed_prewhere)
+                probe_clause = " AND ".join(probe_prewhere)
+                probe_q = (
+                    f"SELECT max(timestamp) FROM syslogs "
+                    f"PREWHERE {probe_clause} WHERE {where_sql}"
+                )
+                probe_result = list(client.query(probe_q).result_rows)
+                max_ts = probe_result[0][0] if probe_result else None
+                if max_ts is None:
+                    # No data at all in this range — skip narrowing
+                    pass
+                else:
+                    anchor_sql = (
+                        f"parseDateTime64BestEffort("
+                        f"'{max_ts.strftime('%Y-%m-%d %H:%M:%S.%f')}', 3)"
+                    )
+
+            # Progressive narrowing
+            for secs in narrow_window_seconds:
+                narrow_filter = (
+                    f"timestamp > {anchor_sql} - INTERVAL {secs} SECOND "
+                    f"AND timestamp <= {anchor_sql}"
+                )
+                combined = f"({narrow_filter}) AND ({user_time_filter})"
+
+                prewhere_parts = [combined] + list(indexed_prewhere)
+                prewhere_clause = " AND ".join(prewhere_parts)
+
+                count_q = f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}"
+                cnt = list(client.query(count_q).result_rows)
+                cnt_val = cnt[0][0] if cnt else 0
+
+                if cnt_val >= required_rows:
+                    chosen_time_filter = combined
+                    break
+
+        # Build final query with the chosen time filter
+        prewhere_parts = [chosen_time_filter] + list(indexed_prewhere)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         query = f"""
         SELECT {columns}
@@ -1987,8 +2064,24 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         default_hours: int = 1
     ) -> Dict[str, Any]:
-        """Get summary statistics for logs matching the current filters."""
+        """Get summary statistics for logs matching the current filters.
+
+        For large time ranges (>24h), uses a fast count-only query to avoid
+        scanning hundreds of millions of severity values. The device count
+        comes from the cached device list instead.
+        """
         client = cls.get_client()
+
+        # Determine if range is "large" — severity scan is too slow on millions of rows.
+        # Even 1h can have ~7M rows; the full scan adds 3-13s. Use fast path unless
+        # the range is very small (<=5 min) where full stats are cheap.
+        large_range = True  # default to fast path
+        if start_time is not None and end_time is None:
+            from datetime import datetime, timezone
+            hours_back = (datetime.now(timezone.utc) - start_time).total_seconds() / 3600
+            large_range = hours_back > 0.1  # >6 minutes
+        elif start_time is None and end_time is None:
+            large_range = default_hours > 0.1
 
         # Build time filter + indexed field conditions for PREWHERE optimization
         prewhere_parts = []
@@ -2012,20 +2105,39 @@ class ClickHouseClient:
         # Use PREWHERE for time filter + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
-        query = f"""
-        SELECT
-            count() as total_logs,
-            uniq(device_ip, vdom) as unique_devices,
-            countIf(severity <= 3) as critical_count,
-            countIf(severity = 4) as warning_count,
-            countIf(severity >= 5) as info_count
-        FROM syslogs
-        PREWHERE {prewhere_clause}
-        WHERE {where_sql}
-        """
-
-        result = list(client.query(query).named_results())
-        return result[0] if result else {}
+        if large_range:
+            # Fast path: just count() for large ranges (0.2-0.9s vs 13-60s+)
+            query = f"""
+            SELECT count() as total_logs
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            """
+            result = list(client.query(query).named_results())
+            total = result[0]['total_logs'] if result else 0
+            # Use cached device count instead of expensive uniq()
+            devices = cls.get_distinct_devices()
+            return {
+                'total_logs': total,
+                'unique_devices': len(devices),
+                'critical_count': 0,
+                'warning_count': 0,
+                'info_count': 0,
+            }
+        else:
+            query = f"""
+            SELECT
+                count() as total_logs,
+                uniq(device_ip, vdom) as unique_devices,
+                countIf(severity <= 3) as critical_count,
+                countIf(severity = 4) as warning_count,
+                countIf(severity >= 5) as info_count
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            """
+            result = list(client.query(query).named_results())
+            return result[0] if result else {}
 
     @classmethod
     def get_severity_distribution(cls, hours: int = 24) -> List[Dict[str, Any]]:
