@@ -693,6 +693,46 @@ def build_paloalto_dns_row(now: datetime, client_ip: str, parsed_data: dict) -> 
     )
 
 
+def build_windows_dns_row(now: datetime, client_ip: str, parsed_data: dict) -> tuple:
+    """Build a tuple for the dns_logs table from Zentryc Windows DNS Agent structured data."""
+    pd = parsed_data
+
+    return (
+        now,                                                    # timestamp
+        pd.get('vendor', 'windows-dns'),                        # vendor
+        pd.get('device_ip', client_ip),                         # device_ip
+        pd.get('device_name', ''),                              # device_name
+        '',                                                     # vdom (N/A for Windows DNS)
+        pd.get('action', ''),                                   # action
+        pd.get('src_ip', ''),                                   # src_ip
+        pd.get('dst_ip', ''),                                   # dest_ip
+        _safe_uint(pd.get('src_port'), 0),                      # src_port
+        _safe_uint(pd.get('dst_port'), 0),                      # dest_port
+        pd.get('transport', ''),                                # transport
+        pd.get('src_user', ''),                                 # src_user
+        pd.get('qname', ''),                                    # qname
+        pd.get('qtype', ''),                                    # qtype
+        pd.get('qclass', 'IN'),                                 # qclass
+        pd.get('resolved_ip', ''),                              # resolved_ip
+        pd.get('category', ''),                                 # category
+        '',                                                     # category_id
+        pd.get('severity', 'informational'),                    # severity
+        pd.get('direction', 'inbound'),                         # direction
+        '',                                                     # policy
+        '',                                                     # policy_id
+        '',                                                     # profile
+        '',                                                     # src_zone
+        '',                                                     # dest_zone
+        '',                                                     # src_country
+        '',                                                     # dest_country
+        0,                                                      # session_id
+        pd.get('msg', ''),                                      # msg
+        pd.get('event_type', ''),                               # event_type
+        '',                                                     # threat_name
+        '',                                                     # threat_id
+    )
+
+
 def flush_dns_logs(
     client,
     logs: List[tuple],
@@ -748,6 +788,7 @@ def flush_threat_logs(
 def detect_parser(raw_data: bytes) -> str:
     """Auto-detect parser type from raw syslog message content.
 
+    Zentryc DNS Agent: contains 'ZentrycDNS' app name and 'dns@zentryc' structured data
     Fortinet: contains 'devname=' and 'devid=' key-value pairs
     Palo Alto: CSV format with ',TRAFFIC,' or ',THREAT,' or ',SYSTEM,' after syslog header
     Otherwise: GENERIC
@@ -755,6 +796,10 @@ def detect_parser(raw_data: bytes) -> str:
     try:
         sample = raw_data[:500] if len(raw_data) > 500 else raw_data
         text_sample = sample.decode('utf-8', errors='ignore')
+
+        # Zentryc DNS Agent: RFC5424 with ZentrycDNS app name
+        if 'ZentrycDNS' in text_sample or 'dns@zentryc' in text_sample or 'heartbeat@zentryc' in text_sample:
+            return 'WINDOWS_DNS'
 
         # Fortinet: key=value format with devname= and devid=
         if 'devname=' in text_sample and 'devid=' in text_sample:
@@ -1086,6 +1131,9 @@ class SyslogCollector:
                         url_rows.append(url_row)
                     elif log_type_val == 'utm/dns':
                         dns_row = build_fortinet_dns_row(log[0], log[1], log[20])
+                        dns_rows.append(dns_row)
+                    elif log_type_val == 'windows-dns':
+                        dns_row = build_windows_dns_row(log[0], log[1], log[20])
                         dns_rows.append(dns_row)
                 except Exception as e:
                     logger.debug(f"Row build error ({log_type_val}): {e}")

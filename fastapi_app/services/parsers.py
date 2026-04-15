@@ -887,11 +887,63 @@ class PaloAltoParser(BaseParser):
         return data
 
 
+class WindowsDNSParser(BaseParser):
+    """
+    Parser for Zentryc DNS Agent syslog messages from Windows DNS Server.
+
+    Expects RFC5424 format with [dns@zentryc ...] structured data block:
+    <14>1 2026-03-31T10:15:30.123Z WIN-DNS01 ZentrycDNS - dns-query
+      [dns@zentryc qname="mail.example.com" qtype="A" src_ip="192.168.1.50"
+       action="allow" ...] DNS query from 192.168.1.50 for mail.example.com (A)
+
+    Also handles [heartbeat@zentryc ...] blocks for agent health tracking.
+    """
+
+    # Match structured data block: [id key="value" key="value" ...]
+    _SD_PATTERN = re.compile(
+        r'\[(?:dns|heartbeat)@zentryc\s+((?:[a-z_]+=(?:"(?:[^"\\]|\\.)*"|[^\s\]]+)\s*)*)\]'
+    )
+    # Match individual key="value" pairs inside structured data
+    _SD_KV_PATTERN = re.compile(r'([a-z_]+)="((?:[^"\\]|\\.)*)"')
+
+    def parse(self, message: str) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+
+        # Extract structured data block
+        sd_match = self._SD_PATTERN.search(message)
+        if not sd_match:
+            return data
+
+        sd_content = sd_match.group(1)
+
+        # Parse key="value" pairs from structured data
+        for kv_match in self._SD_KV_PATTERN.finditer(sd_content):
+            key = kv_match.group(1)
+            value = kv_match.group(2)
+            # Unescape RFC5424 escapes
+            value = value.replace('\\\\', '\\').replace('\\"', '"').replace('\\]', ']')
+            if value:
+                data[key] = value
+
+        # Set log type marker for dual-write detection
+        event_type = data.get('event_type', '')
+        if event_type.startswith('dns-') or data.get('qname'):
+            data['type'] = 'dns'
+            data['subtype'] = event_type
+            # Compose log_type for detection in batch worker
+            data['log_type'] = 'windows-dns'
+        elif event_type == 'agent-heartbeat' or 'heartbeat@zentryc' in message:
+            data['log_type'] = 'agent-heartbeat'
+
+        return data
+
+
 # Parser registry
 PARSER_MAP: Dict[str, BaseParser] = {
     'GENERIC': GenericParser(),
     'FORTINET': FortinetParser(),
     'PALOALTO': PaloAltoParser(),
+    'WINDOWS_DNS': WindowsDNSParser(),
 }
 
 
