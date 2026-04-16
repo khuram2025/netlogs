@@ -290,6 +290,36 @@ ok "ClickHouse user configured"
 fi  # end non-appliance ClickHouse config
 
 # =============================================================================
+# Step 6b: Install Redis (Valkey)
+# =============================================================================
+step "Installing Redis"
+
+if command -v redis-server &>/dev/null || command -v valkey-server &>/dev/null; then
+    ok "Redis/Valkey already installed"
+else
+    apt-get install -y -qq redis-server > /dev/null 2>&1
+    ok "Redis installed"
+fi
+
+# Enable and configure Redis
+if systemctl list-unit-files | grep -q redis-server; then
+    systemctl enable --now redis-server 2>/dev/null || true
+    ok "Redis running"
+elif systemctl list-unit-files | grep -q valkey-server; then
+    systemctl enable --now valkey-server 2>/dev/null || true
+    ok "Valkey running"
+fi
+
+# Tune Redis for production: LRU eviction, 512MB max memory
+REDIS_CONF=$(find /etc/redis/ -name '*.conf' -type f 2>/dev/null | head -1)
+if [[ -n "$REDIS_CONF" ]]; then
+    grep -q '^maxmemory ' "$REDIS_CONF" || echo 'maxmemory 512mb' >> "$REDIS_CONF"
+    grep -q '^maxmemory-policy ' "$REDIS_CONF" || echo 'maxmemory-policy allkeys-lru' >> "$REDIS_CONF"
+    systemctl restart redis-server 2>/dev/null || systemctl restart valkey-server 2>/dev/null || true
+    ok "Redis tuned (512MB max, LRU eviction)"
+fi
+
+# =============================================================================
 # Step 7: Create system user and directories
 # =============================================================================
 step "Creating system user and directories"
@@ -389,6 +419,36 @@ fi
 ok "Python dependencies installed"
 
 # =============================================================================
+# Step 9b: Build frontend assets (Vite + Tailwind)
+# =============================================================================
+step "Building frontend assets"
+
+# Install Node.js 20 LTS if not present
+if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 18 ]]; then
+    if [[ "$OFFLINE_MODE" == true ]]; then
+        warn "Offline mode — skipping Node.js install (frontend assets must be pre-built in package)"
+    else
+        info "Installing Node.js 20 LTS..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
+        apt-get install -y -qq nodejs > /dev/null 2>&1
+        ok "Node.js $(node -v) installed"
+    fi
+fi
+
+# Build frontend if node is available and source files exist
+if command -v node &>/dev/null && [[ -f "$INSTALL_DIR/package.json" ]]; then
+    cd "$INSTALL_DIR"
+    npm ci --no-audit --silent 2>/dev/null || npm install --no-audit --silent 2>/dev/null
+    npm run build 2>/dev/null
+    cd "$OLDPWD"
+    ok "Frontend assets built (Vite + Tailwind CSS)"
+elif [[ -d "$INSTALL_DIR/fastapi_app/static/dist" ]]; then
+    ok "Pre-built frontend assets found"
+else
+    warn "Frontend assets not built — CSS/JS may be missing. Install Node.js and run: cd $INSTALL_DIR && npm run build"
+fi
+
+# =============================================================================
 # Step 10: Generate .env configuration
 # =============================================================================
 step "Generating configuration"
@@ -428,6 +488,9 @@ CLICKHOUSE_PORT=8123
 CLICKHOUSE_DB=default
 CLICKHOUSE_USER=zentryc
 CLICKHOUSE_PASSWORD=${CH_PASSWORD}
+
+# --- Redis ---
+REDIS_URL=redis://127.0.0.1:6379/0
 
 # --- Web Server ---
 WORKERS=4

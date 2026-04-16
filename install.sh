@@ -178,10 +178,10 @@ fi
 # =============================================================================
 echo ""
 info "Building Zentryc Docker image..."
-docker compose build --quiet
+docker compose --profile docker-deploy build --quiet
 
 info "Starting all services..."
-docker compose up -d
+docker compose --profile docker-deploy up -d
 
 # =============================================================================
 # Step 6: Wait for health
