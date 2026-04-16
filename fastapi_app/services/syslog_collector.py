@@ -900,7 +900,7 @@ def flush_to_clickhouse(
                 'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
                 'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
                 'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
-                'threat_id', 'vdom', 'parsed_data',
+                'threat_id', 'vdom', 'parsed_data', 'log_time',
             ])
             return True, attempt
         except Exception as e:
@@ -1056,10 +1056,17 @@ class SyslogCollector:
              action, policyname, log_type, application, src_zone, dst_zone,
              session_end_reason, threat_id, vdom, parsed_data) = parsed
 
+            # Extract device-local timestamp from parsed data for display
+            log_time = ''
+            if parsed_data:
+                log_time = parsed_data.get('log_datetime', '')
+                if not log_time and parsed_data.get('date') and parsed_data.get('time'):
+                    log_time = f"{parsed_data['date']} {parsed_data['time']}"
+
             logs.append((now, client_ip, facility, severity, message, raw,
                          srcip, dstip, srcport, dstport, proto, action, policyname,
                          log_type, application, src_zone, dst_zone, session_end_reason,
-                         threat_id, vdom, parsed_data))
+                         threat_id, vdom, parsed_data, log_time))
 
             # Accumulate device stats
             if client_ip not in self._device_stats:

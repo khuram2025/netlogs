@@ -1695,7 +1695,7 @@ class ClickHouseClient:
         return " AND ".join(where_clauses)
 
     # List columns for table view (excludes message, raw, parsed_data — the 3 heaviest columns)
-    LIST_COLUMNS = "timestamp, device_ip, vdom, facility, severity, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id"
+    LIST_COLUMNS = "timestamp, device_ip, vdom, facility, severity, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, log_time"
     # Light columns (includes message, excludes raw and parsed_data)
     LIGHT_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
     # Full columns including raw message

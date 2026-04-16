@@ -3117,7 +3117,7 @@
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td data-col="timestamp">
                                         <span class="timestamp">
-                                            {% if log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                            {% if log.get('log_time') %}{{ log.get('log_time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
                                         </span>
                                     </td>
                                     <td data-col="action">
