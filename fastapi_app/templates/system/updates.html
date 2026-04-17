@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}Updates — Zentryc{% endblock %}
+
+{% block extra_css %}
+<style>
+  .upd-wrap { padding: 1.25rem 1.5rem; max-width: 1100px; }
+  .upd-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+  .upd-head h1 { font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--text-color); }
+  .upd-head .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+  .upd-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .upd-tab {
+    padding: 0.6rem 1rem; cursor: pointer; color: var(--text-muted);
+    border-bottom: 2px solid transparent; font-size: 0.875rem;
+  }
+  .upd-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
+
+  .upd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+  .upd-card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.9rem 1rem;
+  }
+  .upd-card .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.3rem; }
+  .upd-card .v { font-size: 1.05rem; font-weight: 600; color: var(--text-color); word-break: break-all; }
+  .upd-card .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+  .pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 500; }
+  .pill.ok { background: #dcfce7; color: #166534; }
+  .pill.warn { background: #fef3c7; color: #92400e; }
+  .pill.err { background: #fee2e2; color: #991b1b; }
+  .pill.info { background: #dbeafe; color: #1e40af; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    padding: 0.55rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+    font-size: 0.85rem; font-weight: 500; cursor: pointer; background: var(--card-bg);
+    color: var(--text-color);
+  }
+  .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn.primary:hover { background: #2563eb; }
+  .btn.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .panel h3 { margin: 0 0 0.6rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+
+  table.upd-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.upd-tbl th, table.upd-tbl td { padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  table.upd-tbl th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+
+  pre.logbox {
+    background: #0f172a; color: #e2e8f0; padding: 0.8rem; border-radius: 6px;
+    font-size: 0.75rem; line-height: 1.35; max-height: 360px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  .row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .muted { color: var(--text-muted); }
+  .hidden { display: none; }
+
+  .toast {
+    position: fixed; right: 1rem; bottom: 1rem; background: #0f172a; color: #fff;
+    padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem;
+    opacity: 0; transform: translateY(10px); transition: all 0.2s;
+    z-index: 9999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err { background: #991b1b; }
+  .toast.ok { background: #166534; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="upd-wrap">
+  <div class="upd-head">
+    <div>
+      <h1>Updates</h1>
+      <div class="subtitle">OTA updates delivered from <code>{{ api_base }}</code></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnRefresh" onclick="refreshStatus()">Refresh</button>
+      <button class="btn primary" id="btnSync" onclick="doSync()">Sync now</button>
+    </div>
+  </div>
+
+  <div class="upd-tabs">
+    <div class="upd-tab active" data-tab="overview" onclick="showTab('overview')">Overview</div>
+    <div class="upd-tab" data-tab="release" onclick="showTab('release')">Pending release</div>
+    <div class="upd-tab" data-tab="history" onclick="showTab('history')">History</div>
+    <div class="upd-tab" data-tab="logs" onclick="showTab('logs')">Agent log</div>
+  </div>
+
+  <!-- Overview tab -->
+  <div id="tab-overview">
+    {% if not installed %}
+    <div class="panel">
+      <h3>Update agent not installed on this appliance</h3>
+      <p class="muted" style="margin:0 0 0.6rem 0;">
+        The ZenAI updater agent is not running. Install it with:
+      </p>
+      <pre class="logbox" style="max-height: none;">sudo /home/net/net-logs/deploy/updater/install-updater.sh
+# then set your registration token:
+sudo systemctl edit zenai-updater    # or edit /etc/zenai-updater.env
+sudo systemctl enable --now zenai-updater</pre>
+    </div>
+    {% endif %}
+
+    <div class="upd-grid">
+      <div class="upd-card">
+        <div class="k">App version (running)</div>
+        <div class="v" id="appVersion">{{ app_version }}</div>
+        <div class="sub">from <code>fastapi_app/__version__.py</code></div>
+      </div>
+      <div class="upd-card">
+        <div class="k">Agent-known version</div>
+        <div class="v" id="currentVersion">{{ updates_state.current_version or '—' }}</div>
+        <div class="sub">last successfully applied by the agent</div>
+      </div>
+      <div class="upd-card">
+        <div class="k">Appliance ID</div>
+        <div class="v" id="applianceId" style="font-size: 0.9rem; font-family: monospace;">
+          {{ updates_state.appliance_id or 'not registered' }}
+        </div>
+        <div class="sub">issued by the OTA server at registration</div>
+      </div>
+      <div class="upd-card">
+        <div class="k">Last check-in</div>
+        <div class="v" id="lastCheckin" style="font-size: 0.9rem;">
+          {{ updates_state.last_checkin_at or '—' }}
+        </div>
+        <div class="sub">agent polls every 15 min</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Subscription</h3>
+      {% set sub = updates_state.subscription or {} %}
+      {% if sub %}
+      <div class="row" style="gap:1.25rem;">
+        <div><span class="muted">Type:</span> <span class="pill info">{{ sub.type or 'zenai' }}</span></div>
+        {% if sub.license %}
+        <div><span class="muted">Max nodes:</span> <b>{{ sub.license.max_nodes or '—' }}</b></div>
+        <div><span class="muted">Expires:</span> {{ sub.license.expires_at or '—' }}</div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="muted">No subscription info cached. Click <b>Sync now</b>.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Pending release tab -->
+  <div id="tab-release" class="hidden">
+    <div class="panel" id="pendingPanel">
+      <div id="pendingNone" class="{% if updates_state.pending_release %}hidden{% endif %}">
+        <h3>No pending release</h3>
+        <div class="muted">You're on the latest version the server has offered us, or no rollout targets this appliance yet. Click <b>Sync now</b> to re-check.</div>
+      </div>
+      <div id="pendingHave" class="{% if not updates_state.pending_release %}hidden{% endif %}">
+        <h3>Release available</h3>
+        <div class="upd-grid" style="margin-bottom: 0.75rem;">
+          <div class="upd-card">
+            <div class="k">Version</div>
+            <div class="v" id="pendingVersion">{{ (updates_state.pending_release or {}).version or '—' }}</div>
+          </div>
+          <div class="upd-card">
+            <div class="k">Severity</div>
+            <div class="v" id="pendingSeverity">{{ (updates_state.pending_release or {}).severity or 'normal' }}</div>
+          </div>
+          <div class="upd-card">
+            <div class="k">Package size</div>
+            <div class="v" id="pendingSize">{{ (updates_state.pending_release or {}).size or '—' }}</div>
+            <div class="sub">bytes</div>
+          </div>
+        </div>
+        <div class="panel" style="background: var(--bg-color); margin-bottom: 0.75rem;">
+          <h3 style="font-size: 0.8rem;">Changelog</h3>
+          <pre id="pendingChangelog" style="white-space: pre-wrap; font-size: 0.85rem; margin: 0;">{{ (updates_state.pending_release or {}).changelog or '' }}</pre>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnApply" onclick="doApply()">Apply update</button>
+          <span class="muted" style="font-size: 0.8rem;">
+            Apply will stop services, snapshot code, install the new code, and restart. Your data (DB, logs, .env) is NOT modified.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History tab -->
+  <div id="tab-history" class="hidden">
+    <div class="panel">
+      <h3>Recent update history</h3>
+      <table class="upd-tbl">
+        <thead>
+          <tr><th>When</th><th>Version</th><th>Status</th><th>Release ID</th></tr>
+        </thead>
+        <tbody id="historyRows">
+          {% for h in (updates_state.history or []) %}
+          <tr>
+            <td>{{ h.applied_at }}</td>
+            <td><b>{{ h.version }}</b></td>
+            <td>
+              {% if h.status == 'success' %}<span class="pill ok">success</span>
+              {% elif h.status == 'rolled_back' %}<span class="pill warn">rolled back</span>
+              {% else %}<span class="pill err">{{ h.status }}</span>{% endif %}
+            </td>
+            <td style="font-family: monospace; font-size: 0.75rem;">{{ h.release_id }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No updates applied yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Logs tab -->
+  <div id="tab-logs" class="hidden">
+    <div class="panel">
+      <div class="row" style="justify-content: space-between; margin-bottom: 0.6rem;">
+        <h3 style="margin: 0;">Agent log tail</h3>
+        <button class="btn" onclick="loadLogs()">Reload</button>
+      </div>
+      <pre class="logbox" id="logbox">Click Reload to fetch the latest agent log...</pre>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showTab(name) {
+  document.querySelectorAll('.upd-tab').forEach(function(el){ el.classList.toggle('active', el.dataset.tab === name); });
+  ['overview','release','history','logs'].forEach(function(t){
+    var el = document.getElementById('tab-' + t);
+    if (el) el.classList.toggle('hidden', t !== name);
+  });
+  if (name === 'logs') loadLogs();
+}
+
+function toast(msg, kind) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + (kind || '') + ' show';
+  setTimeout(function(){ t.classList.remove('show'); }, 4500);
+}
+
+async function refreshStatus() {
+  try {
+    var r = await fetch('/api/system/updates/status');
+    if (!r.ok) { toast('Status fetch failed', 'err'); return; }
+    var d = await r.json();
+    document.getElementById('appVersion').textContent    = d.app_version || '—';
+    document.getElementById('currentVersion').textContent = d.current_version || '—';
+    document.getElementById('applianceId').textContent    = d.appliance_id || 'not registered';
+    document.getElementById('lastCheckin').textContent    = d.last_checkin_at || '—';
+
+    var pr = d.pending_release;
+    document.getElementById('pendingNone').classList.toggle('hidden', !!pr);
+    document.getElementById('pendingHave').classList.toggle('hidden', !pr);
+    if (pr) {
+      document.getElementById('pendingVersion').textContent   = pr.version || '—';
+      document.getElementById('pendingSeverity').textContent  = pr.severity || 'normal';
+      document.getElementById('pendingSize').textContent      = pr.size || '—';
+      document.getElementById('pendingChangelog').textContent = pr.changelog || '';
+    }
+
+    var rows = '';
+    (d.history || []).forEach(function(h){
+      var pill = h.status === 'success'
+        ? '<span class="pill ok">success</span>'
+        : (h.status === 'rolled_back' ? '<span class="pill warn">rolled back</span>'
+                                      : '<span class="pill err">' + h.status + '</span>');
+      rows += '<tr><td>' + (h.applied_at || '') + '</td><td><b>' + (h.version || '') + '</b></td><td>' + pill + '</td><td style="font-family:monospace;font-size:0.75rem;">' + (h.release_id || '') + '</td></tr>';
+    });
+    if (!rows) rows = '<tr><td colspan="4" class="muted">No updates applied yet.</td></tr>';
+    document.getElementById('historyRows').innerHTML = rows;
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function doSync() {
+  var btn = document.getElementById('btnSync');
+  btn.disabled = true; btn.textContent = 'Syncing…';
+  try {
+    var r = await fetch('/api/system/updates/sync', { method: 'POST' });
+    var d = await r.json();
+    if (d.ok) {
+      toast(d.pending_release ? 'Sync OK — update available' : 'Sync OK — up to date', 'ok');
+    } else {
+      toast('Sync failed (exit ' + d.exit_code + ')', 'err');
+      console.error(d);
+    }
+    await refreshStatus();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Sync now'; }
+}
+
+async function doApply() {
+  if (!confirm('Apply the pending update now? Services will restart; your data is preserved.')) return;
+  var btn = document.getElementById('btnApply');
+  btn.disabled = true; btn.textContent = 'Applying… (may take minutes)';
+  try {
+    var r = await fetch('/api/system/updates/apply', { method: 'POST' });
+    var d = await r.json();
+    if (d.ok) {
+      toast('Update applied: ' + (d.current_version || '?'), 'ok');
+    } else {
+      toast('Apply failed (exit ' + d.exit_code + ') — agent rolled back', 'err');
+    }
+    await refreshStatus();
+    loadLogs();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Apply update'; }
+}
+
+async function loadLogs() {
+  try {
+    var r = await fetch('/api/system/updates/logs');
+    var d = await r.json();
+    document.getElementById('logbox').textContent = (d.lines || []).join('\n') || '(log empty or not present yet)';
+  } catch (e) { document.getElementById('logbox').textContent = 'log fetch failed: ' + e.message; }
+}
+
+// Initial refresh — use values already rendered server-side as the source of truth
+</script>
+{% endblock %}
