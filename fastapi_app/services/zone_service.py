@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.device import Device
+from ..models.device import Device, ParserType
 from ..models.credential import DeviceCredential, DeviceVdom
 from ..models.zone import ZoneSnapshot, ZoneEntry, InterfaceEntry
 from ..models.device_ssh_settings import DeviceSshSettings
@@ -49,8 +49,22 @@ class ParsedInterface:
     vdom: Optional[str] = None  # VDOM this interface belongs to
 
 
+def _scrub_for_pg_text(s):
+    """Strip characters Postgres TEXT cannot store (NUL/0x00 + other C0
+    controls). SSH/terminal capture often includes these; without scrubbing
+    Postgres rejects the row with `CharacterNotInRepertoireError`."""
+    if s is None:
+        return None
+    if not isinstance(s, str):
+        try:
+            s = str(s)
+        except Exception:
+            return None
+    return s.translate({i: None for i in range(0x20) if i not in (0x09, 0x0A, 0x0D)})
+
+
 class ZoneService:
-    """Service for managing FortiGate zone/interface data."""
+    """Service for managing zone/interface data across vendors (Fortinet, PAN-OS)."""
 
     @staticmethod
     def parse_zone_output(raw_output: str) -> List[ParsedZone]:
@@ -308,6 +322,166 @@ class ZoneService:
 
         return interfaces
 
+    @staticmethod
+    def parse_paloalto_interface_output(
+        raw_output: str,
+        target_vsys: Optional[str] = None,
+    ) -> Tuple[List[ParsedZone], List[ParsedInterface]]:
+        """
+        Parse PAN-OS `show interface all` output.
+
+        The command emits two fixed-width tables:
+
+          total configured hardware interfaces: N
+          name                id   speed/duplex/state    mac address
+          ethernet1/1         16   10000/full/up         00:50:56:0b:68:05
+
+          total configured logical interfaces: N
+          name              id    vsys zone             forwarding         tag    address
+          ethernet1/3       18    1    INTERNET         vr:default         0      192.168.201.254/24
+          ethernet1/1       16    1                     ha                 0      192.168.200.2/28
+
+        Two tricky bits:
+          - the `zone` column is often empty (e.g. ha-link interfaces); a
+            naive .split() collapses the whitespace and shifts every column
+            to the left. We therefore parse by character positions taken
+            from the column header line.
+          - some interfaces have continuation lines holding additional IPs;
+            those lines have no name/id and we skip them (we only keep the
+            primary IP for the table view).
+        """
+        if not raw_output:
+            return [], []
+
+        # Strip ANSI/CR artefacts paramiko leaves behind.
+        cleaned = raw_output.replace("\r", "")
+        ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+        cleaned = ANSI_RE.sub("", cleaned)
+
+        ifaces_by_name: Dict[str, ParsedInterface] = {}
+
+        def _slice(line: str, start: int, end: Optional[int]) -> str:
+            return (line[start:end] if end is not None else line[start:]).strip()
+
+        def _header_columns(header: str, fields: List[str]) -> Optional[Dict[str, int]]:
+            """Return start position of each header field (or None if any missing)."""
+            positions: Dict[str, int] = {}
+            for f in fields:
+                m = re.search(r'\b' + re.escape(f) + r'\b', header)
+                if not m:
+                    return None
+                positions[f] = m.start()
+            return positions
+
+        lines = cleaned.splitlines()
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Hardware-interface table header → next data lines until blank.
+            if re.search(r'\bname\b\s+\bid\b\s+\bspeed/duplex/state\b', line):
+                positions = _header_columns(line, ['name', 'id', 'speed/duplex/state', 'mac address'])
+                # Build slice ranges from positions
+                sorted_cols = sorted(positions.items(), key=lambda kv: kv[1])
+                col_ranges = {}
+                for idx_c, (col, start) in enumerate(sorted_cols):
+                    end = sorted_cols[idx_c + 1][1] if idx_c + 1 < len(sorted_cols) else None
+                    col_ranges[col] = (start, end)
+                i += 1
+                # Skip optional separator line (---)
+                if i < len(lines) and set(lines[i].strip()) <= {'-'}:
+                    i += 1
+                while i < len(lines):
+                    row = lines[i]
+                    if not row.strip():
+                        break
+                    name = _slice(row, *col_ranges['name'])
+                    if not re.match(r'^[A-Za-z][\w./-]*$', name):
+                        break
+                    iface = ifaces_by_name.setdefault(name, ParsedInterface(name=name))
+                    state_field = _slice(row, *col_ranges['speed/duplex/state'])
+                    m = re.search(r'/([A-Za-z]+)$', state_field)
+                    if m:
+                        iface.status = m.group(1).lower()
+                    i += 1
+                continue
+
+            # Logical-interface table header.
+            if re.search(r'\bname\b.*\bvsys\b.*\bzone\b', line):
+                fields = ['name', 'id', 'vsys', 'zone', 'forwarding', 'tag', 'address']
+                positions = _header_columns(line, fields)
+                if not positions:
+                    i += 1
+                    continue
+                sorted_cols = sorted(positions.items(), key=lambda kv: kv[1])
+                col_ranges = {}
+                for idx_c, (col, start) in enumerate(sorted_cols):
+                    end = sorted_cols[idx_c + 1][1] if idx_c + 1 < len(sorted_cols) else None
+                    col_ranges[col] = (start, end)
+                i += 1
+                if i < len(lines) and set(lines[i].strip()) <= {'-', ' '}:
+                    i += 1
+                while i < len(lines):
+                    row = lines[i]
+                    if not row.strip():
+                        break
+                    name = _slice(row, *col_ranges['name'])
+                    # Continuation lines (extra IPs) have an empty name col.
+                    if not name or not re.match(r'^[A-Za-z][\w./-]*$', name):
+                        i += 1
+                        continue
+                    iface = ifaces_by_name.setdefault(name, ParsedInterface(name=name))
+                    vsys_val = _slice(row, *col_ranges['vsys'])
+                    zone_val = _slice(row, *col_ranges['zone'])
+                    addr_val = _slice(row, *col_ranges['address'])
+
+                    if vsys_val:
+                        iface.vdom = vsys_val  # repurpose vdom slot for vsys id
+                    if zone_val and zone_val.lower() != 'untagged':
+                        iface.zone_name = zone_val
+                    # The address column can drift past its header position when
+                    # earlier fields (forwarding, tag) overflow their width, so
+                    # prefer a regex search over the right portion of the line.
+                    addr_search_from = col_ranges['tag'][0] if 'tag' in col_ranges else 0
+                    addr_match = re.search(
+                        r'\b(\d{1,3}(?:\.\d{1,3}){3}/\d{1,2})\b',
+                        row[addr_search_from:],
+                    )
+                    if addr_match:
+                        cidr = addr_match.group(1)
+                        iface.subnet_cidr = cidr
+                        ip, _ = cidr.split('/', 1)
+                        iface.ip_address = ip
+                        try:
+                            iface.subnet_mask = str(
+                                ipaddress.IPv4Network(cidr, strict=False).netmask
+                            )
+                        except (ValueError, ipaddress.AddressValueError):
+                            pass
+                    i += 1
+                continue
+
+            i += 1
+
+        # Filter by vsys (PAN's vsys lives in the .vdom slot here).
+        interfaces = [
+            ifc for ifc in ifaces_by_name.values()
+            if target_vsys is None or ifc.vdom == target_vsys
+        ]
+
+        # Derive zones from distinct zone names referenced.
+        zone_to_intfs: Dict[str, List[str]] = {}
+        for ifc in interfaces:
+            if ifc.zone_name:
+                zone_to_intfs.setdefault(ifc.zone_name, []).append(ifc.name)
+        zones = [
+            ParsedZone(name=name, interfaces=intfs)
+            for name, intfs in sorted(zone_to_intfs.items())
+        ]
+
+        return zones, interfaces
+
     @classmethod
     async def fetch_zone_data(
         cls,
@@ -321,8 +495,8 @@ class ZoneService:
         """
         start_time = time.time()
 
-        # Check for SSH host override (same as routing service)
-        ssh_host = device.ip_address
+        # device.ip_address is INET → IPv4Address; coerce to str for paramiko.
+        ssh_host = str(device.ip_address)
         ssh_host_result = await db.execute(
             select(DeviceSshSettings.ssh_host)
             .where(DeviceSshSettings.device_id == device.id)
@@ -330,56 +504,66 @@ class ZoneService:
         )
         ssh_host_override = ssh_host_result.scalar_one_or_none()
         if ssh_host_override:
-            ssh_host = ssh_host_override.strip() or ssh_host
+            override = str(ssh_host_override).strip()
+            if override:
+                ssh_host = override
 
-        # Build commands
-        commands = []
+        vdom_display = f" (VDOM/vsys: {vdom})" if vdom else ""
+        logger.info(f"Fetching zone data from {device.ip_address} ({device.parser}){vdom_display}")
 
-        if vdom:
-            vdom_clean = str(vdom).strip()
-            vdom_arg = vdom_clean.replace('"', '\\"')
-            edit_cmd = f'edit "{vdom_arg}"' if re.search(r"\s", vdom_arg) else f"edit {vdom_arg}"
-            commands.append("config vdom")
-            commands.append(edit_cmd)
+        # Vendor-aware fetch.
+        if device.parser == ParserType.FORTINET:
+            commands = []
+            if vdom:
+                vdom_clean = str(vdom).strip()
+                vdom_arg = vdom_clean.replace('"', '\\"')
+                edit_cmd = f'edit "{vdom_arg}"' if re.search(r"\s", vdom_arg) else f"edit {vdom_arg}"
+                commands.append("config vdom")
+                commands.append(edit_cmd)
+            # `show system interface` returns only interfaces in current VDOM;
+            # `get system interface` returns all globally (wrong for VDOM scope).
+            commands.append("show system zone")
+            commands.append("show system interface")
+            if vdom:
+                commands.append("end")
 
-        # Get zone and interface configuration
-        # Note: "show system interface" returns only interfaces in current VDOM
-        # "get system interface" returns ALL interfaces globally (wrong for VDOM filtering)
-        commands.append("show system zone")
-        commands.append("show system interface")
-
-        if vdom:
-            commands.append("end")
-
-        vdom_display = f" (VDOM: {vdom})" if vdom else ""
-        ssh_display = ssh_host if ssh_host != device.ip_address else device.ip_address
-        logger.info(f"Fetching zone data from {device.ip_address} via {ssh_display}{vdom_display}")
-
-        # Execute SSH commands in a thread to avoid blocking the event loop
-        result = await asyncio.to_thread(
-            SSHService.connect_interactive,
-            host=ssh_host,
-            username=credential.username,
-            password=credential.password,
-            commands=commands,
-            port=credential.port or 22,
-            prompt_pattern=r'[#$>]\s*$'
-        )
+            result = await asyncio.to_thread(
+                SSHService.connect_interactive,
+                host=ssh_host,
+                username=credential.username,
+                password=credential.password,
+                commands=commands,
+                port=credential.port or 22,
+                prompt_pattern=r'[#$>]\s*$',
+                prompt_timeout=15,
+            )
+        elif device.parser == ParserType.PALOALTO:
+            result = await asyncio.to_thread(
+                SSHService.get_paloalto_zone_data,
+                host=ssh_host,
+                username=credential.username,
+                password=credential.password,
+                port=credential.port or 22,
+                vsys=vdom,  # PAN's vsys takes the same slot Fortinet uses for VDOM
+            )
+        else:
+            return False, f"Unsupported device type: {device.parser}", None
 
         fetch_duration = int((time.time() - start_time) * 1000)
 
         if not result.success:
-            # Create failed snapshot
+            # Create failed snapshot. Scrub raw output of NUL/control bytes
+            # that Postgres TEXT cannot store (CharacterNotInRepertoireError).
             snapshot = ZoneSnapshot(
                 device_id=device.id,
                 vdom=vdom,
-                raw_zone_output=result.output,
+                raw_zone_output=_scrub_for_pg_text(result.output),
                 raw_interface_output=None,
                 zone_count=0,
                 interface_count=0,
                 fetch_duration_ms=fetch_duration,
                 success=False,
-                error_message=result.error or "SSH command failed"
+                error_message=_scrub_for_pg_text(result.error) or "SSH command failed",
             )
             db.add(snapshot)
             await db.commit()
@@ -387,43 +571,37 @@ class ZoneService:
 
             return False, result.error or "SSH command failed", snapshot
 
-        # Split output to get zone and interface sections
         output = result.output
 
-        # Find zone section
-        zone_output = ""
-        intf_output = ""
+        # Vendor-aware parsing.
+        if device.parser == ParserType.PALOALTO:
+            zone_output = ""  # PAN gets both from one command
+            intf_output = output
+            zones, interfaces = cls.parse_paloalto_interface_output(output, target_vsys=vdom)
+        else:
+            # Fortinet: split into the two sub-outputs first.
+            zone_output = ""
+            intf_output = ""
+            zone_match = re.search(r'config system zone.*?(?=\n\S|$)', output, re.DOTALL)
+            if zone_match:
+                zone_output = zone_match.group(0)
+            intf_start = output.find('show system interface')
+            if intf_start == -1:
+                intf_start = output.find('get system interface')
+            if intf_start != -1:
+                intf_section = output[intf_start:]
+                lines = intf_section.split('\n')[1:]
+                intf_output = '\n'.join(lines)
+            zones = cls.parse_zone_output(zone_output)
+            interfaces = cls.parse_interface_output(intf_output, zones, target_vdom=vdom)
 
-        # Look for zone config section
-        zone_match = re.search(r'config system zone.*?(?=\n\S|$)', output, re.DOTALL)
-        if zone_match:
-            zone_output = zone_match.group(0)
-
-        # Look for interface output - handles both 'show system interface' and 'get system interface'
-        # First try to find 'show system interface' output
-        intf_start = output.find('show system interface')
-        if intf_start == -1:
-            # Fallback to 'get system interface' if show wasn't found
-            intf_start = output.find('get system interface')
-
-        if intf_start != -1:
-            # Get everything after the command
-            intf_section = output[intf_start:]
-            # Skip the command line itself
-            lines = intf_section.split('\n')[1:]
-            intf_output = '\n'.join(lines)
-
-        # Parse the outputs
-        zones = cls.parse_zone_output(zone_output)
-        # Pass target_vdom to filter interfaces by VDOM assignment
-        interfaces = cls.parse_interface_output(intf_output, zones, target_vdom=vdom)
-
-        # Create snapshot
+        # Create snapshot. Scrub raw output of NUL/control bytes that Postgres
+        # TEXT cannot store (CharacterNotInRepertoireError).
         snapshot = ZoneSnapshot(
             device_id=device.id,
             vdom=vdom,
-            raw_zone_output=zone_output,
-            raw_interface_output=intf_output,
+            raw_zone_output=_scrub_for_pg_text(zone_output),
+            raw_interface_output=_scrub_for_pg_text(intf_output),
             zone_count=len(zones),
             interface_count=len(interfaces),
             fetch_duration_ms=fetch_duration,

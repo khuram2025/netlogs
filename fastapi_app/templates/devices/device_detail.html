@@ -505,6 +505,38 @@
     .vdom-current strong {
         color: var(--primary);
     }
+
+    /* Inline result panel for Fetch Routes / Fetch Zones */
+    .fetch-result {
+        margin-top: 0.75rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+    .fetch-result-head {
+        display: flex; align-items: center; gap: 0.5rem; font-weight: 600;
+    }
+    .fetch-result-body {
+        margin-top: 0.5rem;
+        font-family: ui-monospace, monospace;
+        font-size: 0.78rem;
+        opacity: 0.85;
+    }
+    .fetch-result-body code { background: rgba(255,255,255,.06); padding: 0 4px; border-radius: 3px; }
+    .fetch-result-meta { font-size: 0.75rem; opacity: 0.7; margin-left: auto; }
+    .fetch-result-pending { background: rgba(59,130,246,.12); color: #93c5fd; }
+    .fetch-result-pass    { background: rgba(34,197,94,.15);  color: #86efac; }
+    .fetch-result-fail    { background: rgba(239,68,68,.15);  color: #fca5a5; }
+    .fetch-result-spinner {
+        width: 12px; height: 12px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: fr-spin 0.7s linear infinite;
+        display: inline-block;
+    }
+    @keyframes fr-spin { to { transform: rotate(360deg); } }
 </style>
 {% endblock %}
 
@@ -526,6 +558,9 @@
         </button>
         <button onclick="fetchZones()" class="btn btn-success" id="fetch-zones-btn">
             Fetch Zones
+        </button>
+        <button onclick="fetchPolicies()" class="btn btn-success" id="fetch-policies-btn">
+            Fetch Policies
         </button>
         {% endif %}
         <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary">
@@ -630,6 +665,7 @@
     <div class="tabs">
         <div class="tab {% if current_tab == 'routes' %}active{% endif %}" data-tab="routes">Routing Table</div>
         <div class="tab {% if current_tab == 'zones' %}active{% endif %}" data-tab="zones">Zone / Interface / Subnet</div>
+        <div class="tab {% if current_tab == 'policies' %}active{% endif %}" data-tab="policies">Firewall Policies</div>
         <div class="tab {% if current_tab == 'changes' %}active{% endif %}" data-tab="changes">Route Changes</div>
         <div class="tab {% if current_tab == 'snapshots' %}active{% endif %}" data-tab="snapshots">Fetch History</div>
     </div>
@@ -854,6 +890,183 @@
         {% endif %}
     </div>
 
+    <!-- Firewall Policies Tab -->
+    <div class="tab-content {% if current_tab == 'policies' %}active{% endif %}" id="tab-policies">
+        {% if fw_snapshot %}
+        <div class="zone-stats">
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.policy_count }}</div>
+                <div class="zone-stat-label">Policies</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }}</div>
+                <div class="zone-stat-label">Address Objects</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }}</div>
+                <div class="zone-stat-label">Service Objects</div>
+            </div>
+        </div>
+
+        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+            Last fetched: {{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            (took {{ fw_snapshot.fetch_duration_ms or 0 }}ms)
+        </p>
+
+        <div class="zone-search-box">
+            <input type="text" id="policy-search" placeholder="Filter policies (name, src, dst, service, action)…"
+                   onkeyup="filterPolicies()">
+        </div>
+
+        {% if fw_policies %}
+        <div style="max-height: 600px; overflow-y: auto;">
+            <table class="zone-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Rule ID / Name</th>
+                        <th>Src Zone</th>
+                        <th>Dst Zone</th>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>Service</th>
+                        <th>Action</th>
+                        <th>NAT</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="policies-tbody">
+                    {% for p in fw_policies %}
+                    <tr class="zone-row policy-row"
+                        data-row="{{ (p.name or '') ~ ' ' ~ (p.rule_id or '') ~ ' ' ~ (p.src_addresses|tojson if p.src_addresses else '') ~ ' ' ~ (p.dst_addresses|tojson if p.dst_addresses else '') ~ ' ' ~ (p.services|tojson if p.services else '') ~ ' ' ~ p.action }}">
+                        <td>{{ p.position }}</td>
+                        <td>
+                            {% if p.name %}<div style="font-weight:600">{{ p.name }}</div>{% endif %}
+                            <div class="text-muted text-sm">id: {{ p.rule_id or '-' }}</div>
+                        </td>
+                        <td>
+                            {% if p.src_zones %}
+                                {% for z in p.src_zones %}<span class="zone-badge">{{ z }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if p.dst_zones %}
+                                {% for z in p.dst_zones %}<span class="zone-badge">{{ z }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if p.src_addresses %}
+                                {% for a in p.src_addresses %}<span class="interface-badge">{{ a }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if p.dst_addresses %}
+                                {% for a in p.dst_addresses %}<span class="interface-badge">{{ a }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if p.services %}
+                                {% for s in p.services %}<span class="type-badge">{{ s }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if p.action == 'accept' or p.action == 'allow' %}
+                                <span class="status-badge up">{{ p.action }}</span>
+                            {% else %}
+                                <span class="status-badge down">{{ p.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if p.nat_enabled %}<span class="status-badge up">NAT</span>{% else %}—{% endif %}</td>
+                        <td>
+                            {% if p.enabled %}
+                                <span class="status-badge up">enabled</span>
+                            {% else %}
+                                <span class="status-badge down">disabled</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="no-data" style="padding:1rem;">
+            <p>No security policies parsed in the latest snapshot.</p>
+        </div>
+        {% endif %}
+
+        {% if fw_addresses %}
+        <h3 style="margin: 1.5rem 0 0.5rem 0;">Address Objects ({{ fw_addresses|length }})</h3>
+        <div style="max-height: 320px; overflow-y: auto;">
+            <table class="zone-table">
+                <thead>
+                    <tr><th>Name</th><th>Kind</th><th>Value / Members</th><th>Comment</th></tr>
+                </thead>
+                <tbody>
+                    {% for a in fw_addresses %}
+                    <tr>
+                        <td><span class="interface-badge">{{ a.name }}</span></td>
+                        <td><span class="type-badge">{{ a.kind }}</span></td>
+                        <td>
+                            {% if a.kind == 'group' %}
+                                {% for m in (a.members or []) %}<span class="zone-badge">{{ m }}</span>{% endfor %}
+                            {% else %}
+                                <code>{{ a.value or '-' }}</code>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted text-sm">{{ a.comment or '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if fw_services %}
+        <h3 style="margin: 1.5rem 0 0.5rem 0;">Service Objects ({{ fw_services|length }})</h3>
+        <div style="max-height: 320px; overflow-y: auto;">
+            <table class="zone-table">
+                <thead>
+                    <tr><th>Name</th><th>Protocol</th><th>Ports / Members</th><th>Category</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in fw_services %}
+                    <tr>
+                        <td><span class="interface-badge">{{ s.name }}</span></td>
+                        <td><span class="type-badge">{{ s.protocol }}</span></td>
+                        <td>
+                            {% if s.protocol == 'group' %}
+                                {% for m in (s.members or []) %}<span class="zone-badge">{{ m }}</span>{% endfor %}
+                            {% else %}
+                                <code>{{ s.ports or '-' }}</code>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted text-sm">{{ s.category or '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">📜</div>
+            <h3>No Firewall Policy Data</h3>
+            <p>No firewall policies have been fetched for this device yet.</p>
+            {% if has_credentials %}
+            <button onclick="fetchPolicies()" class="btn btn-primary" style="margin-top: 1rem;">
+                Fetch Firewall Policies Now
+            </button>
+            {% else %}
+            <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary" style="margin-top: 1rem;">
+                Add Credentials First
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Changes Tab -->
     <div class="tab-content {% if current_tab == 'changes' %}active{% endif %}" id="tab-changes">
         {% if changes %}
@@ -1042,78 +1255,168 @@ function filterZones() {
     });
 }
 
-// Fetch routing table
+// Fetch routing table — inline pending/result, no blocking alert.
 async function fetchRoutes() {
     const btn = document.getElementById('fetch-btn');
     if (!btn) return;
 
+    const out = ensureFetchResultPanel('fetch-result', btn);
     btn.disabled = true;
-    btn.textContent = 'Fetching...';
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
 
+    const t0 = performance.now();
     try {
         const response = await fetch('{{ url_for("fetch_routing_table", device_id=device.id) }}', {
             method: 'POST'
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
 
-        const vdomLines = (data.vdom_results || []).map(r => {
-            const status = r.success ? 'OK' : 'FAIL';
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
             const routes = (r.route_count ?? 0) + ' routes';
-            const msg = r.message ? (' - ' + r.message) : '';
-            return `${r.vdom}: ${status} (${routes})${msg}`;
-        });
-        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${routes}${escapeHtml(msg)}</div>`;
+        }).join('');
 
         if (data.success) {
-            alert(`Routing fetch completed.\n${data.message}\nTotal routes: ${data.route_count ?? 0}${details}`);
-            location.reload();
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.route_count ?? 0} routes`, lines, took);
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert(`Routing fetch failed.\n${data.message}${details}`);
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
             btn.disabled = false;
-            btn.textContent = 'Fetch Routing Table';
+            btn.textContent = origLabel;
         }
     } catch (error) {
-        alert('Error fetching routing table: ' + error.message);
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
         btn.disabled = false;
-        btn.textContent = 'Fetch Routing Table';
+        btn.textContent = origLabel;
     }
 }
 
+function ensureFetchResultPanel(id, anchor) {
+    let el = document.getElementById(id);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'fetch-result';
+        anchor.parentElement.insertAdjacentElement('afterend', el);
+    }
+    return el;
+}
+function setFetchPanel(el, kind, primary, html, took) {
+    el.className = 'fetch-result fetch-result-' + kind;
+    const meta = (took != null) ? `<span class="fetch-result-meta">${took} ms</span>` : '';
+    const spin = kind === 'pending' ? '<span class="fetch-result-spinner"></span>' : '';
+    el.innerHTML = `<div class="fetch-result-head">${spin}<span>${escapeHtml(primary)}</span>${meta}</div>${html ? '<div class="fetch-result-body">' + html + '</div>' : ''}`;
+}
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
 // Fetch zone data
+async function fetchPolicies() {
+    const btn = document.getElementById('fetch-policies-btn');
+    if (!btn) return;
+
+    const out = ensureFetchResultPanel('fetch-policies-result', btn);
+    btn.disabled = true;
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
+
+    const t0 = performance.now();
+    try {
+        const response = await fetch('{{ url_for("fetch_firewall_policies", device_id=device.id) }}', {
+            method: 'POST'
+        });
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
+
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
+            const counts = `${r.policy_count ?? 0} policies, ${r.address_count ?? 0} addrs, ${r.service_count ?? 0} svcs`;
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${counts}${escapeHtml(msg)}</div>`;
+        }).join('');
+
+        if (data.success) {
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.policy_count ?? 0} policies, ${data.address_count ?? 0} address objects, ${data.service_count ?? 0} service objects`,
+                lines, took);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
+            btn.disabled = false;
+            btn.textContent = origLabel;
+        }
+    } catch (error) {
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
+        btn.disabled = false;
+        btn.textContent = origLabel;
+    }
+}
+
+function filterPolicies() {
+    const q = (document.getElementById('policy-search')?.value || '').toLowerCase();
+    document.querySelectorAll('#policies-tbody .policy-row').forEach(r => {
+        const haystack = (r.dataset.row || r.innerText || '').toLowerCase();
+        r.style.display = q && !haystack.includes(q) ? 'none' : '';
+    });
+}
+
 async function fetchZones() {
     const btn = document.getElementById('fetch-zones-btn');
     if (!btn) return;
 
+    const out = ensureFetchResultPanel('fetch-zones-result', btn);
     btn.disabled = true;
-    btn.textContent = 'Fetching...';
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
 
+    const t0 = performance.now();
     try {
         const response = await fetch('{{ url_for("fetch_zone_data", device_id=device.id) }}', {
             method: 'POST'
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
 
-        const vdomLines = (data.vdom_results || []).map(r => {
-            const status = r.success ? 'OK' : 'FAIL';
-            const zones = (r.zone_count ?? 0) + ' zones';
-            const intfs = (r.interface_count ?? 0) + ' interfaces';
-            const msg = r.message ? (' - ' + r.message) : '';
-            return `${r.vdom}: ${status} (${zones}, ${intfs})${msg}`;
-        });
-        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
+            const z = (r.zone_count ?? 0) + ' zones';
+            const i = (r.interface_count ?? 0) + ' ifaces';
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${z}, ${i}${escapeHtml(msg)}</div>`;
+        }).join('');
 
         if (data.success) {
-            alert(`Zone fetch completed.\n${data.message}\nTotal: ${data.zone_count ?? 0} zones, ${data.interface_count ?? 0} interfaces${details}`);
-            location.reload();
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.zone_count ?? 0} zones, ${data.interface_count ?? 0} interfaces`,
+                lines, took);
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert(`Zone fetch failed.\n${data.message}${details}`);
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
             btn.disabled = false;
-            btn.textContent = 'Fetch Zones';
+            btn.textContent = origLabel;
         }
     } catch (error) {
-        alert('Error fetching zone data: ' + error.message);
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
         btn.disabled = false;
-        btn.textContent = 'Fetch Zones';
+        btn.textContent = origLabel;
     }
 }
 </script>

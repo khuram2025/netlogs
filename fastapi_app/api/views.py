@@ -5,6 +5,7 @@ HTML view routes for the web UI.
 import asyncio
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
@@ -12,11 +13,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
+from ..core.cache import get_redis
 from ..models.device import Device, DeviceStatus, ParserType, RetentionDays
 from ..models.credential import DeviceCredential, CredentialType, DeviceVdom
 from ..models.device_ssh_settings import DeviceSshSettings
@@ -227,147 +229,211 @@ def _sanitize(obj):
     return obj
 
 
+# Shared dashboard payload cache (Redis-backed so all uvicorn workers share it).
+_DASHBOARD_API_CACHE_KEY = "dashboard:api:stats:v1"
+_DASHBOARD_API_CACHE_TTL = 300        # serve fresh for 5 min
+_DASHBOARD_API_STALE_TTL = 600        # serve stale up to 10 min while refreshing
+_dashboard_api_refreshing = False     # in-process flag to dedupe refresh threads
+
+
+async def _compute_dashboard_payload() -> dict:
+    """Run all the dashboard queries and return the response payload."""
+    loop = asyncio.get_event_loop()
+    stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
+    logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
+
+    def _get_url_dns_stats():
+        try:
+            client = ClickHouseClient.get_client()
+            r = list(client.query("""
+                WITH combined AS (
+                    SELECT log_subtype, action, severity
+                    FROM pa_threat_logs
+                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                  UNION ALL
+                    SELECT
+                        CASE log_type
+                            WHEN 'utm/webfilter' THEN 'url'
+                            WHEN 'utm/dns'       THEN 'spyware'
+                            WHEN 'utm/virus'     THEN 'virus'
+                            WHEN 'utm/ips'       THEN 'vulnerability'
+                            ELSE log_type
+                        END as log_subtype,
+                        action,
+                        multiIf(
+                            parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
+                            parsed_data['level'] = 'error',   'high',
+                            parsed_data['level'] = 'warning', 'medium',
+                            parsed_data['level'] = 'notice',  'low',
+                            'informational'
+                        ) as severity
+                    FROM syslogs
+                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                      AND log_type IN ('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')
+                )
+                SELECT
+                    countIf(log_subtype = 'url') as url_total,
+                    countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
+                    countIf(log_subtype = 'spyware') as dns_total,
+                    countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
+                    countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
+                FROM combined
+            """).named_results())
+            if r:
+                return {k: _safe_int(v) for k, v in r[0].items()}
+            return {}
+        except Exception:
+            return {}
+
+    url_dns_future = loop.run_in_executor(_executor, _get_url_dns_stats)
+    stats, logs, url_dns = await asyncio.gather(stats_future, logs_future, url_dns_future)
+
+    severity_data = []
+    for item in stats.get('severity_breakdown', []):
+        severity_data.append({
+            'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
+            'count': _safe_int(item.get('count', 0)),
+            'severity': _safe_int(item.get('severity', 6))
+        })
+
+    timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
+    for item in stats.get('traffic_timeline', []):
+        hour = item.get('hour')
+        timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
+        timeline['total'].append(_safe_int(item.get('total', 0)))
+        timeline['critical'].append(_safe_int(item.get('critical', 0)))
+        timeline['denied'].append(_safe_int(item.get('denied', 0)))
+
+    realtime = {'labels': [], 'data': []}
+    for item in stats.get('realtime_traffic', []):
+        minute = item.get('minute')
+        realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
+        realtime['data'].append(_safe_int(item.get('count', 0)))
+
+    actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
+    protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
+    top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
+    top_dests = [{'ip': str(d.get('ip', '')), 'count': _safe_int(d.get('count', 0)), 'denied_count': _safe_int(d.get('denied_count', 0))} for d in stats.get('top_destinations', [])]
+    threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
+    ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
+    devices = []
+    for dv in stats.get('device_activity', []):
+        ls = dv.get('last_seen')
+        devices.append({
+            'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
+            'critical_count': _safe_int(dv.get('critical_count', 0)),
+            'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
+        })
+
+    recent = []
+    for log in (logs or [])[:15]:
+        ts = log.get('timestamp')
+        sev = log.get('severity', 6)
+        recent.append({
+            'timestamp': ts.strftime('%H:%M:%S') if hasattr(ts, 'strftime') else str(ts) if ts else '-',
+            'device_ip': log.get('device_ip', ''),
+            'severity': sev,
+            'severity_name': SEVERITY_MAP.get(sev, 'Unknown'),
+            'message': (log.get('message', '') or '')[:150],
+        })
+
+    payload = {
+        'kpi': {
+            'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
+            'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
+            'current_eps': round(float(stats.get('current_eps', 0)), 1),
+            'allowed': _safe_int(stats.get('allowed_count', 0)),
+            'denied': _safe_int(stats.get('denied_count', 0)),
+            'critical': _safe_int(stats.get('critical_count', 0)),
+            'active_devices': _safe_int(stats.get('active_devices', 0)),
+            'url_total': _safe_int(url_dns.get('url_total', 0)),
+            'url_blocked': _safe_int(url_dns.get('url_blocked', 0)),
+            'dns_total': _safe_int(url_dns.get('dns_total', 0)),
+            'dns_sinkholed': _safe_int(url_dns.get('dns_sinkholed', 0)),
+            'dns_critical': _safe_int(url_dns.get('dns_critical', 0)),
+        },
+        'severity_data': severity_data,
+        'timeline': timeline,
+        'realtime': realtime,
+        'actions': actions,
+        'protocols': protocols,
+        'top_sources': top_sources,
+        'top_destinations': top_dests,
+        'threats': threats,
+        'ports': ports,
+        'devices': devices,
+        'recent_logs': recent,
+    }
+    return _sanitize(payload)
+
+
+async def _refresh_dashboard_cache_async():
+    """Recompute the payload and store in Redis. Used as background refresh."""
+    global _dashboard_api_refreshing
+    try:
+        payload = await _compute_dashboard_payload()
+        try:
+            redis = await get_redis()
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY,
+                json.dumps(payload),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY + ":fresh_until",
+                str(int(time.time()) + _DASHBOARD_API_CACHE_TTL),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"Dashboard cache write failed: {e}")
+    finally:
+        _dashboard_api_refreshing = False
+
+
 @router.get("/api/dashboard/stats")
 async def api_dashboard_stats():
-    """JSON API for dashboard stats — called async after page load."""
+    """JSON API for dashboard stats — called async after page load.
+
+    Cached in Redis (shared across uvicorn workers). Stale-while-revalidate:
+    serves cached data instantly and refreshes in the background once the
+    fresh window expires, so the user never waits 12+s for the heavy
+    ClickHouse aggregations to run.
+    """
+    global _dashboard_api_refreshing
     try:
-        loop = asyncio.get_event_loop()
-        stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
-        logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
+        # Try the cache first.
+        try:
+            redis = await get_redis()
+            cached = await redis.get(_DASHBOARD_API_CACHE_KEY)
+            fresh_until_raw = await redis.get(_DASHBOARD_API_CACHE_KEY + ":fresh_until")
+            if cached:
+                now = time.time()
+                fresh_until = int(fresh_until_raw) if fresh_until_raw else 0
+                # Stale → kick off background refresh, return stale immediately.
+                if now > fresh_until and not _dashboard_api_refreshing:
+                    _dashboard_api_refreshing = True
+                    asyncio.create_task(_refresh_dashboard_cache_async())
+                return JSONResponse(json.loads(cached))
+        except Exception as e:
+            logger.warning(f"Dashboard cache read failed, recomputing: {e}")
 
-        # URL/DNS stats from pa_threat_logs + Fortinet UTM syslogs
-        def _get_url_dns_stats():
-            try:
-                client = ClickHouseClient.get_client()
-                r = list(client.query("""
-                    WITH combined AS (
-                        SELECT log_subtype, action, severity
-                        FROM pa_threat_logs
-                        WHERE timestamp > now() - INTERVAL 24 HOUR
-                      UNION ALL
-                        SELECT
-                            CASE log_type
-                                WHEN 'utm/webfilter' THEN 'url'
-                                WHEN 'utm/dns'       THEN 'spyware'
-                                WHEN 'utm/virus'     THEN 'virus'
-                                WHEN 'utm/ips'       THEN 'vulnerability'
-                                ELSE log_type
-                            END as log_subtype,
-                            action,
-                            multiIf(
-                                parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
-                                parsed_data['level'] = 'error',   'high',
-                                parsed_data['level'] = 'warning', 'medium',
-                                parsed_data['level'] = 'notice',  'low',
-                                'informational'
-                            ) as severity
-                        FROM syslogs
-                        WHERE timestamp > now() - INTERVAL 24 HOUR
-                          AND log_type IN ('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')
-                    )
-                    SELECT
-                        countIf(log_subtype = 'url') as url_total,
-                        countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
-                        countIf(log_subtype = 'spyware') as dns_total,
-                        countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
-                        countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
-                    FROM combined
-                """).named_results())
-                if r:
-                    return {k: _safe_int(v) for k, v in r[0].items()}
-                return {}
-            except Exception:
-                return {}
-
-        url_dns_future = loop.run_in_executor(_executor, _get_url_dns_stats)
-        stats, logs, url_dns = await asyncio.gather(stats_future, logs_future, url_dns_future)
-
-        # Prepare severity data
-        severity_data = []
-        for item in stats.get('severity_breakdown', []):
-            severity_data.append({
-                'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
-                'count': _safe_int(item.get('count', 0)),
-                'severity': _safe_int(item.get('severity', 6))
-            })
-
-        # Prepare timeline
-        timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
-        for item in stats.get('traffic_timeline', []):
-            hour = item.get('hour')
-            timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
-            timeline['total'].append(_safe_int(item.get('total', 0)))
-            timeline['critical'].append(_safe_int(item.get('critical', 0)))
-            timeline['denied'].append(_safe_int(item.get('denied', 0)))
-
-        # Prepare realtime
-        realtime = {'labels': [], 'data': []}
-        for item in stats.get('realtime_traffic', []):
-            minute = item.get('minute')
-            realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
-            realtime['data'].append(_safe_int(item.get('count', 0)))
-
-        # Actions
-        actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
-
-        # Protocols
-        protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
-
-        # Top sources / destinations / threats / ports / devices
-        top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
-        top_dests = [{'ip': str(d.get('ip', '')), 'count': _safe_int(d.get('count', 0)), 'denied_count': _safe_int(d.get('denied_count', 0))} for d in stats.get('top_destinations', [])]
-        threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
-        ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
-        devices = []
-        for dv in stats.get('device_activity', []):
-            ls = dv.get('last_seen')
-            devices.append({
-                'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
-                'critical_count': _safe_int(dv.get('critical_count', 0)),
-                'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
-            })
-
-        # Recent logs (get_recent_logs returns list of dicts)
-        recent = []
-        for log in (logs or [])[:15]:
-            ts = log.get('timestamp')
-            sev = log.get('severity', 6)
-            recent.append({
-                'timestamp': ts.strftime('%H:%M:%S') if hasattr(ts, 'strftime') else str(ts) if ts else '-',
-                'device_ip': log.get('device_ip', ''),
-                'severity': sev,
-                'severity_name': SEVERITY_MAP.get(sev, 'Unknown'),
-                'message': (log.get('message', '') or '')[:150],
-            })
-
-        payload = {
-            'kpi': {
-                'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
-                'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
-                'current_eps': round(float(stats.get('current_eps', 0)), 1),
-                'allowed': _safe_int(stats.get('allowed_count', 0)),
-                'denied': _safe_int(stats.get('denied_count', 0)),
-                'critical': _safe_int(stats.get('critical_count', 0)),
-                'active_devices': _safe_int(stats.get('active_devices', 0)),
-                'url_total': _safe_int(url_dns.get('url_total', 0)),
-                'url_blocked': _safe_int(url_dns.get('url_blocked', 0)),
-                'dns_total': _safe_int(url_dns.get('dns_total', 0)),
-                'dns_sinkholed': _safe_int(url_dns.get('dns_sinkholed', 0)),
-                'dns_critical': _safe_int(url_dns.get('dns_critical', 0)),
-            },
-            'severity_data': severity_data,
-            'timeline': timeline,
-            'realtime': realtime,
-            'actions': actions,
-            'protocols': protocols,
-            'top_sources': top_sources,
-            'top_destinations': top_dests,
-            'threats': threats,
-            'ports': ports,
-            'devices': devices,
-            'recent_logs': recent,
-        }
-        return JSONResponse(_sanitize(payload))
+        # No cache — compute synchronously and store.
+        payload = await _compute_dashboard_payload()
+        try:
+            redis = await get_redis()
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY,
+                json.dumps(payload),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY + ":fresh_until",
+                str(int(time.time()) + _DASHBOARD_API_CACHE_TTL),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"Dashboard cache write failed: {e}")
+        return JSONResponse(payload)
     except Exception as e:
         logger.error(f"Dashboard stats API error: {e}")
         import traceback
@@ -1061,6 +1127,60 @@ async def policy_builder(
         })
 
 
+def _suggest_rule_cli(parser: str, dstip: str, dstport: int,
+                       srcip: Optional[str], src_zone: Optional[str] = None,
+                       dst_zone: Optional[str] = None) -> str:
+    """Generate a minimal vendor-correct allow-rule CLI snippet.
+
+    Used by the Policy Lookup "Devices with Gap" panel so an operator can
+    copy-paste a starter rule that closes the gap.
+    """
+    src = (srcip or 'all').strip()
+    rule_name = f"Allow_{(srcip or 'any').replace('.', '_')}_to_{dstip.replace('.', '_')}_{dstport}"[:63]
+    p = (parser or '').upper()
+
+    if p == 'FORTINET':
+        srcaddr = f'"{srcip}"' if srcip else '"all"'
+        return (
+            "config firewall policy\n"
+            "    edit 0\n"
+            f'        set name "{rule_name}"\n'
+            f'        set srcintf "{src_zone or "any"}"\n'
+            f'        set dstintf "{dst_zone or "any"}"\n'
+            f'        set srcaddr {srcaddr}\n'
+            f'        set dstaddr "{dstip}"\n'
+            f'        set service "PORT_{dstport}_TCP"\n'
+            "        set action accept\n"
+            '        set schedule "always"\n'
+            "        set logtraffic all\n"
+            "    next\n"
+            "end\n"
+            f"# NOTE: define address objects for {dstip}"
+            f"{' and ' + srcip if srcip else ''} and a service object for tcp/{dstport} first."
+        )
+    if p == 'PALOALTO':
+        srcline = src
+        return (
+            "configure\n"
+            f"set rulebase security rules {rule_name} \\\n"
+            f"  from {src_zone or 'any'} to {dst_zone or 'any'} \\\n"
+            f"  source {srcline} destination {dstip} \\\n"
+            f"  application any service service-tcp-{dstport} \\\n"
+            "  action allow log-end yes\n"
+            "commit\n"
+            f"# NOTE: create service-tcp-{dstport} (or reuse service-https for 443) "
+            "and address objects as needed."
+        )
+    # Generic / unknown vendor — just describe the intent.
+    return (
+        f"# Suggested rule (vendor unknown, please adapt to your CLI)\n"
+        f"# Action : allow\n"
+        f"# Source : {src}{(' (zone ' + src_zone + ')') if src_zone else ''}\n"
+        f"# Destination: {dstip}{(' (zone ' + dst_zone + ')') if dst_zone else ''}\n"
+        f"# Service: tcp/{dstport}\n"
+    )
+
+
 @router.get("/policy-lookup/", response_class=HTMLResponse, name="policy_lookup")
 async def policy_lookup_page(
     request: Request,
@@ -1068,6 +1188,7 @@ async def policy_lookup_page(
     dstport: Optional[str] = Query(None),
     srcip: Optional[str] = Query(None),
     time_range: Optional[str] = Query("24h"),
+    db: AsyncSession = Depends(get_db),
 ):
     """Policy lookup — find existing allow/deny policies for a destination."""
     results = None
@@ -1114,6 +1235,39 @@ async def policy_lookup_page(
                     default_hours=default_hours,
                 )
             )
+
+            # ── Phase 2: vendor-aware suggested rule per gap device ──
+            # Look up parser type for each gap device's IP (strip the optional
+            # _vdom suffix), then render a starter CLI snippet.
+            gap_devices = results.get('gap_devices') or []
+            if gap_devices:
+                gap_ips = sorted({d.split('_', 1)[0] for d in gap_devices})
+                # ip_address column is INET; cast to text for the VARCHAR IN().
+                ip_text = cast(Device.ip_address, String)
+                rows = (await db.execute(
+                    select(ip_text.label('ip'), Device.parser).where(ip_text.in_(gap_ips))
+                )).all()
+                parser_by_ip = {ip: parser for ip, parser in rows}
+                # Pull a representative src_zone/dst_zone from any denied row
+                # for this device, when available (improves CLI quality).
+                zone_by_dev: dict = {}
+                for r in results.get('denied') or []:
+                    key = r['device_display']
+                    if key in gap_devices and key not in zone_by_dev:
+                        zone_by_dev[key] = (r.get('src_zone') or '', r.get('dst_zone') or '')
+                results['gap_suggestions'] = {
+                    dev: _suggest_rule_cli(
+                        parser_by_ip.get(dev.split('_', 1)[0], 'GENERIC'),
+                        dstip_clean, port_int, srcip_clean,
+                        zone_by_dev.get(dev, ('', ''))[0] or None,
+                        zone_by_dev.get(dev, ('', ''))[1] or None,
+                    )
+                    for dev in gap_devices
+                }
+                results['gap_parsers'] = {
+                    dev: parser_by_ip.get(dev.split('_', 1)[0], 'GENERIC')
+                    for dev in gap_devices
+                }
         except ValueError as ve:
             error = str(ve)
         except Exception as e:
@@ -1414,8 +1568,15 @@ async def device_detail(
     zone_snapshot = await ZoneService.get_latest_snapshot(device_id, db, vdom=selected_vdom)
     zone_table_data = await ZoneService.get_zone_interface_table(device_id, db, vdom=selected_vdom)
 
+    # Get firewall policy data (Phase 1: Fortinet only).
+    from ..services.firewall_policy_service import FirewallPolicyService
+    fw_snapshot = await FirewallPolicyService.get_latest_snapshot(device_id, db, vdom=selected_vdom)
+    fw_policies = await FirewallPolicyService.get_policies(device_id, db, vdom=selected_vdom, limit=500)
+    fw_addresses = await FirewallPolicyService.get_address_objects(device_id, db, vdom=selected_vdom)
+    fw_services = await FirewallPolicyService.get_service_objects(device_id, db, vdom=selected_vdom)
+
     # Validate and default current tab
-    valid_tabs = ['routes', 'zones', 'changes', 'snapshots']
+    valid_tabs = ['routes', 'zones', 'policies', 'changes', 'snapshots']
     current_tab = tab if tab in valid_tabs else 'routes'
 
     return _render("devices/device_detail.html", request, {
@@ -1432,6 +1593,10 @@ async def device_detail(
         "selected_vdom": selected_vdom,
         "zone_snapshot": zone_snapshot,
         "zone_table_data": zone_table_data,
+        "fw_snapshot": fw_snapshot,
+        "fw_policies": fw_policies,
+        "fw_addresses": fw_addresses,
+        "fw_services": fw_services,
         "current_tab": current_tab,
     })
 
@@ -1578,6 +1743,74 @@ async def fetch_zone_data(
         "zone_count": total_zones,
         "interface_count": total_interfaces,
         "vdom_results": vdom_results
+    })
+
+
+@router.post("/devices/{device_id}/fetch-policies/", name="fetch_firewall_policies")
+async def fetch_firewall_policies(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch firewall policy / rule base + objects from device via SSH."""
+    from ..services.firewall_policy_service import FirewallPolicyService
+
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
+
+    cred_result = await db.execute(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.is_active == True,
+            DeviceCredential.credential_type == 'SSH',
+        ).limit(1)
+    )
+    credential = cred_result.scalar_one_or_none()
+    if not credential:
+        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+
+    results = await FirewallPolicyService.fetch_all_vdom_policies(device, credential, db)
+
+    total_policies = 0
+    total_addrs = 0
+    total_services = 0
+    vdom_results = []
+    overall_success = False
+
+    for vdom_name, (success, message, snapshot) in results.items():
+        policy_count = snapshot.policy_count if snapshot else 0
+        addr_count = (snapshot.address_count + snapshot.addrgrp_count) if snapshot else 0
+        svc_count = (snapshot.service_count + snapshot.servicegrp_count) if snapshot else 0
+        total_policies += policy_count
+        total_addrs += addr_count
+        total_services += svc_count
+        vdom_results.append({
+            "vdom": vdom_name,
+            "success": success,
+            "message": message,
+            "policy_count": policy_count,
+            "address_count": addr_count,
+            "service_count": svc_count,
+        })
+        if success:
+            overall_success = True
+
+    failed = [r for r in vdom_results if not r["success"]]
+    if len(vdom_results) > 1:
+        summary = f"Policy fetch: {len(vdom_results) - len(failed)}/{len(vdom_results)} VDOM(s) succeeded"
+        if failed:
+            summary += "; failed: " + ", ".join(str(r["vdom"]) for r in failed)
+    else:
+        summary = vdom_results[0]["message"] if vdom_results else "No VDOMs configured"
+
+    return JSONResponse({
+        "success": overall_success,
+        "message": summary,
+        "policy_count": total_policies,
+        "address_count": total_addrs,
+        "service_count": total_services,
+        "vdom_results": vdom_results,
     })
 
 
@@ -1764,7 +1997,9 @@ async def test_credential(
     # Update last_used
     credential.last_used = datetime.utcnow()
 
-    ssh_host = device.ip_address
+    # device.ip_address comes back from the INET column as an ipaddress.IPv4Address
+    # object; paramiko/socket need a plain string.
+    ssh_host = str(device.ip_address)
     ssh_host_result = await db.execute(
         select(DeviceSshSettings.ssh_host)
         .where(DeviceSshSettings.device_id == device_id)
@@ -1772,7 +2007,9 @@ async def test_credential(
     )
     ssh_host_override = ssh_host_result.scalar_one_or_none()
     if ssh_host_override:
-        ssh_host = ssh_host_override.strip() or ssh_host
+        override = str(ssh_host_override).strip()
+        if override:
+            ssh_host = override
 
     # Test connection in thread pool (blocking operation)
     loop = asyncio.get_event_loop()

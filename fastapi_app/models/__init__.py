@@ -6,6 +6,10 @@ from .routing import (
     RouteType, ChangeType
 )
 from .zone import ZoneSnapshot, ZoneEntry, InterfaceEntry
+from .firewall_policy import (
+    FirewallPolicySnapshot, FirewallPolicy,
+    FirewallAddressObject, FirewallServiceObject,
+)
 from .llm_config import LLMConfig, LLMProvider
 
 __all__ = [
@@ -14,5 +18,7 @@ __all__ = [
     "RoutingTableSnapshot", "RoutingEntry", "RouteChange",
     "RouteType", "ChangeType",
     "ZoneSnapshot", "ZoneEntry", "InterfaceEntry",
+    "FirewallPolicySnapshot", "FirewallPolicy",
+    "FirewallAddressObject", "FirewallServiceObject",
     "LLMConfig", "LLMProvider",
 ]

@@ -22,6 +22,23 @@ from .routing_parser import RoutingTableParser, ParsedRoute
 logger = logging.getLogger(__name__)
 
 
+def _scrub_for_pg_text(s):
+    """Strip characters Postgres TEXT cannot store.
+
+    Postgres rejects strings containing the NUL byte (0x00) — common in raw
+    SSH/terminal output — with `CharacterNotInRepertoireError`. Also drop the
+    other C0 control characters except CR/LF/TAB which are legitimate."""
+    if s is None:
+        return None
+    if not isinstance(s, str):
+        try:
+            s = str(s)
+        except Exception:
+            return None
+    # Remove NUL and other forbidden control bytes; keep \t \n \r.
+    return s.translate({i: None for i in range(0x20) if i not in (0x09, 0x0A, 0x0D)})
+
+
 class RoutingService:
     """Service for collecting and managing routing tables."""
 
@@ -44,7 +61,9 @@ class RoutingService:
             vdom: Optional VDOM name for Fortinet devices
         """
         vdom_display = f" (VDOM: {vdom})" if vdom else ""
-        ssh_host = device.ip_address
+        # device.ip_address is a Postgres INET → IPv4Address; coerce to str
+        # so paramiko/socket.getaddrinfo accept it.
+        ssh_host = str(device.ip_address)
         ssh_host_result = await db.execute(
             select(DeviceSshSettings.ssh_host)
             .where(DeviceSshSettings.device_id == device.id)
@@ -52,20 +71,33 @@ class RoutingService:
         )
         ssh_host_override = ssh_host_result.scalar_one_or_none()
         if ssh_host_override:
-            ssh_host = ssh_host_override.strip() or ssh_host
+            override = str(ssh_host_override).strip()
+            if override:
+                ssh_host = override
 
-        ssh_display = ssh_host if ssh_host != device.ip_address else device.ip_address
+        ssh_display = ssh_host if ssh_host != str(device.ip_address) else device.ip_address
         logger.info(f"Fetching routing table for device {device.ip_address} via {ssh_display}{vdom_display}")
 
-        # Get routing table via SSH
+        # Get routing table via SSH (vendor-aware)
         if device.parser == ParserType.FORTINET:
             result = await asyncio.to_thread(
                 SSHService.get_fortinet_routing_table,
-                host=ssh_host,
+                host=str(ssh_host),
                 username=credential.username,
                 password=credential.password,
                 port=credential.port,
                 vdom=vdom,
+            )
+        elif device.parser == ParserType.PALOALTO:
+            # PAN-OS calls them "virtual routers"; reuse the vdom slot in the
+            # request signature so existing per-VR fetch code paths still work.
+            result = await asyncio.to_thread(
+                SSHService.get_paloalto_routing_table,
+                host=str(ssh_host),
+                username=credential.username,
+                password=credential.password,
+                port=credential.port,
+                virtual_router=vdom,
             )
         else:
             return False, f"Unsupported device type: {device.parser}", None
@@ -78,10 +110,10 @@ class RoutingService:
             snapshot = RoutingTableSnapshot(
                 device_id=device.id,
                 vdom=vdom,
-                raw_output=result.output or "",
+                raw_output=_scrub_for_pg_text(result.output) or "",
                 route_count=0,
                 success=False,
-                error_message=result.error,
+                error_message=_scrub_for_pg_text(result.error),
                 fetch_duration_ms=result.duration_ms
             )
             db.add(snapshot)
@@ -94,11 +126,13 @@ class RoutingService:
         # Parse the routing table
         routes = RoutingTableParser.parse(result.output, device.parser)
 
-        # Create snapshot
+        # Create snapshot. raw_output goes through _scrub_for_pg_text because
+        # terminal capture often contains NUL/control bytes that Postgres TEXT
+        # rejects (CharacterNotInRepertoireError).
         snapshot = RoutingTableSnapshot(
             device_id=device.id,
             vdom=vdom,
-            raw_output=result.output,
+            raw_output=_scrub_for_pg_text(result.output),
             route_count=len(routes),
             success=True,
             fetch_duration_ms=result.duration_ms
@@ -126,7 +160,7 @@ class RoutingService:
                 vrf=parsed_route.vrf,
                 is_recursive=parsed_route.is_recursive,
                 recursive_via=parsed_route.recursive_via,
-                raw_line=parsed_route.raw_line
+                raw_line=_scrub_for_pg_text(parsed_route.raw_line),
             )
             db.add(entry)
 

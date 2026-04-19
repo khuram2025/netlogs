@@ -3320,6 +3320,76 @@ class ClickHouseClient:
         else:
             return ("any", 5)
 
+    @staticmethod
+    def _compute_ip_specificity(distinct_count: int) -> str:
+        """Map IP-set diversity per policy to a label.
+        IPs span a much larger value space than ports, so the thresholds are
+        intentionally generous before flagging a policy as overly broad."""
+        if distinct_count <= 1:
+            return "specific"
+        elif distinct_count <= 10:
+            return "narrow"
+        elif distinct_count <= 100:
+            return "broad"
+        else:
+            return "any"
+
+    @classmethod
+    def _collapse_action_rows(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Merge rows that share (device, vdom, policy, src_zone, dst_zone)
+        and differ only by action. The merged row carries an `actions` list
+        of (name, event_count) tuples used to render chips in the UI."""
+        merged: Dict[tuple, Dict[str, Any]] = {}
+        for r in rows:
+            key = (r['device_ip_str'], r['vdom'], r['policyname'],
+                   r['src_zone'], r['dst_zone'])
+            existing = merged.get(key)
+            if existing is None:
+                r['actions'] = [(r['action'], int(r['event_count']))]
+                merged[key] = r
+                continue
+            existing['actions'].append((r['action'], int(r['event_count'])))
+            existing['event_count'] = int(existing['event_count']) + int(r['event_count'])
+            existing['unique_src_count'] = max(
+                int(existing['unique_src_count']), int(r['unique_src_count']))
+            # Union sample sources (cap at 10).
+            seen = set(existing['sample_sources'])
+            for s in r['sample_sources']:
+                if s not in seen and len(existing['sample_sources']) < 10:
+                    existing['sample_sources'].append(s)
+                    seen.add(s)
+            # Sum byte counters.
+            existing['sent_bytes'] = int(existing.get('sent_bytes') or 0) + int(r.get('sent_bytes') or 0)
+            existing['recv_bytes'] = int(existing.get('recv_bytes') or 0) + int(r.get('recv_bytes') or 0)
+            # Earliest first_seen, latest last_seen (string compare works for ISO dates).
+            if r['first_seen'] and (not existing['first_seen'] or r['first_seen'] < existing['first_seen']):
+                existing['first_seen'] = r['first_seen']
+            if r['last_seen'] and (not existing['last_seen'] or r['last_seen'] > existing['last_seen']):
+                existing['last_seen'] = r['last_seen']
+            # Prefer non-empty application/category/NAT values from any contributing row.
+            for col in ('application', 'category',
+                        'nat_srcip', 'nat_dstip', 'nat_srcport', 'nat_dstport'):
+                if not existing.get(col) and r.get(col):
+                    existing[col] = r[col]
+        # Re-sort by total events desc.
+        out = list(merged.values())
+        out.sort(key=lambda r: r['event_count'], reverse=True)
+        return out
+
+    # Action classes used for diff comparison and CLI generation.
+    _ALLOW_ACTIONS = ('accept','allow','pass','close','client-rst','server-rst')
+    _DENY_ACTIONS  = ('deny','drop','block','reject','blocked','reset-both')
+
+    @classmethod
+    def _action_class(cls, actions: List[Tuple[str, int]]) -> str:
+        """Reduce a (action, count) list to a single class label."""
+        has_allow = any((a or '').lower() in cls._ALLOW_ACTIONS for a, _ in actions)
+        has_deny  = any((a or '').lower() in cls._DENY_ACTIONS  for a, _ in actions)
+        if has_allow and has_deny: return 'mixed'
+        if has_allow: return 'allow'
+        if has_deny:  return 'deny'
+        return 'unknown'
+
     @classmethod
     def policy_lookup(
         cls,
@@ -3329,6 +3399,7 @@ class ClickHouseClient:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         default_hours: int = 24,
+        compute_diff: bool = True,
     ) -> Dict[str, Any]:
         """
         Look up existing firewall policies for a destination IP:port.
@@ -3354,6 +3425,22 @@ class ClickHouseClient:
         time_clause = cls._build_time_prewhere(start_time, end_time, default_hours)
         device_expr = cls._DEVICE_DISPLAY_EXPR
 
+        # Volume / NAT / category come from parsed_data (Map). Different vendors
+        # use different keys, so we coalesce the common ones.
+        extra_cols = """
+            sum(toUInt64OrZero(parsed_data['sent_bytes'])
+              + toUInt64OrZero(parsed_data['sentbyte'])
+              + toUInt64OrZero(parsed_data['bytes_sent']))             as sent_bytes,
+            sum(toUInt64OrZero(parsed_data['recv_bytes'])
+              + toUInt64OrZero(parsed_data['rcvdbyte'])
+              + toUInt64OrZero(parsed_data['bytes_received']))         as recv_bytes,
+            anyIf(parsed_data['srcnat'],     parsed_data['srcnat']     != '') as nat_srcip,
+            anyIf(parsed_data['dstnat'],     parsed_data['dstnat']     != '') as nat_dstip,
+            anyIf(parsed_data['srcnatport'], parsed_data['srcnatport'] != '') as nat_srcport,
+            anyIf(parsed_data['dstnatport'], parsed_data['dstnatport'] != '') as nat_dstport,
+            anyIf(parsed_data['category'],   parsed_data['category']   != '') as category
+        """
+
         # ── Query 1: Allowed traffic ──
         srcip_where = f"AND srcip = '{srcip_safe}'" if srcip_safe else ""
         q_allowed = f"""
@@ -3370,7 +3457,8 @@ class ClickHouseClient:
             uniq(srcip)           as unique_src_count,
             groupUniqArray(10)(toString(srcip)) as sample_sources,
             min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen
+            max(timestamp)        as last_seen,
+            {extra_cols}
         FROM syslogs
         PREWHERE {time_clause}
             AND dstip = '{dstip_safe}'
@@ -3398,7 +3486,8 @@ class ClickHouseClient:
             uniq(srcip)           as unique_src_count,
             groupUniqArray(5)(toString(srcip)) as sample_sources,
             min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen
+            max(timestamp)        as last_seen,
+            {extra_cols}
         FROM syslogs
         PREWHERE {time_clause}
             AND dstip = '{dstip_safe}'
@@ -3417,21 +3506,30 @@ class ClickHouseClient:
             policy_keys.add((r['device_ip_str'], r['vdom'], r['policyname']))
 
         specificity_map: Dict[tuple, Tuple[str, int]] = {}
+        # Per policy, the diversity of src and dst IPs the rule has matched.
+        # Lets the UI flag overly-permissive any/any rules (FireMon-style).
+        src_specificity_map: Dict[tuple, str] = {}
+        dst_specificity_map: Dict[tuple, str] = {}
         if policy_keys:
             # Build an IN clause for the (device_ip, vdom, policyname) tuples
             in_values = ", ".join(
                 f"(toIPv4('{k[0]}'), '{k[1].replace(chr(39), '')}', '{k[2].replace(chr(39), '')}')"
                 for k in policy_keys
             )
+            # Pull port + src + dst diversity in a single scan. Note: this
+            # query is NOT scoped to dstip — that's intentional, because we
+            # want to know the rule's full footprint, not just its hits on
+            # the IP we're looking up.
             q_specificity = f"""
             SELECT
                 toString(device_ip) as device_ip_str,
                 vdom,
                 policyname,
-                uniq(dstport) as distinct_ports
+                uniq(dstport) as distinct_ports,
+                uniq(srcip)   as distinct_srcs,
+                uniq(dstip)   as distinct_dsts
             FROM syslogs
             PREWHERE {time_clause}
-                AND dstip = '{dstip_safe}'
                 AND action IN ('accept','allow','pass','close','client-rst','server-rst')
             WHERE (device_ip, vdom, policyname) IN ({in_values})
             GROUP BY device_ip, vdom, policyname
@@ -3439,6 +3537,8 @@ class ClickHouseClient:
             for row in client.query(q_specificity).named_results():
                 key = (row['device_ip_str'], row['vdom'], row['policyname'])
                 specificity_map[key] = cls._compute_specificity(row['distinct_ports'])
+                src_specificity_map[key] = cls._compute_ip_specificity(row['distinct_srcs'])
+                dst_specificity_map[key] = cls._compute_ip_specificity(row['distinct_dsts'])
 
         # ── Query 4: Source coverage (only when srcip provided) ──
         source_coverage: Dict[tuple, bool] = {}
@@ -3461,6 +3561,28 @@ class ClickHouseClient:
                 key = (row['device_ip_str'], row['vdom'], row['policyname'])
                 source_coverage[key] = row['src_events'] > 0
 
+        # ── Query 5: Reverse-flow / asymmetric detection ──
+        # Look for events where the original src/dst are swapped, on the same
+        # device. If a device sees the forward flow but never the reverse,
+        # that's a clue the return path goes through a different firewall —
+        # i.e. the path is asymmetric.
+        bidirectional_devices: set = set()
+        if srcip_safe:
+            q_reverse = f"""
+            SELECT DISTINCT
+                {device_expr} as device_display
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND srcip = '{dstip_safe}'
+                AND dstip = '{srcip_safe}'
+                AND action IN (
+                    'accept','allow','pass','close','client-rst','server-rst',
+                    'deny','drop','block','reject','blocked','reset-both'
+                )
+            """
+            for row in client.query(q_reverse).named_results():
+                bidirectional_devices.add(row['device_display'])
+
         # ── Post-processing ──
         allowed_devices = set()
         denied_devices = set()
@@ -3470,7 +3592,11 @@ class ClickHouseClient:
             label, score = specificity_map.get(key, ("unknown", 0))
             r['specificity_label'] = label
             r['specificity_score'] = score
+            r['src_specificity'] = src_specificity_map.get(key)
+            r['dst_specificity'] = dst_specificity_map.get(key)
             r['source_covered'] = source_coverage.get(key, None)
+            # Bidirectional only meaningful when srcip was provided.
+            r['bidirectional'] = (r['device_display'] in bidirectional_devices) if srcip_safe else None
             # Convert datetime objects to strings for template
             r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
             r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
@@ -3478,10 +3604,97 @@ class ClickHouseClient:
             allowed_devices.add(r['device_display'])
 
         for r in denied_rows:
+            r['bidirectional'] = (r['device_display'] in bidirectional_devices) if srcip_safe else None
             r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
             r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
             r['sample_sources'] = list(r.get('sample_sources', []))
             denied_devices.add(r['device_display'])
+
+        # Collapse rows that share the same (device, vdom, policy, src_zone,
+        # dst_zone) but differ only by action — present them as a single row
+        # with an `actions` list of (name, count) chips. This deduplicates the
+        # close/client-rst/server-rst pairs that ClickHouse emits separately.
+        allowed_rows = cls._collapse_action_rows(allowed_rows)
+        denied_rows = cls._collapse_action_rows(denied_rows)
+
+        # Hop ordering: the device that first observed the flow is closest to
+        # the source. Sort by first_seen ASC and tag each row with its
+        # position in the inferred path. This isn't perfect with log-buffering
+        # jitter, but for most multi-firewall paths it gives a usable picture.
+        path: List[Dict[str, Any]] = []
+        seen_devices: set = set()
+        for hop_idx, r in enumerate(sorted(
+            allowed_rows, key=lambda x: x.get('first_seen') or '',
+        ), start=1):
+            r['hop_index'] = hop_idx
+            if r['device_display'] not in seen_devices:
+                path.append({
+                    'device': r['device_display'],
+                    'src_zone': r.get('src_zone') or '',
+                    'dst_zone': r.get('dst_zone') or '',
+                    'first_seen': r.get('first_seen') or '',
+                })
+                seen_devices.add(r['device_display'])
+        # Restore the original (event-count desc) ordering of the table itself —
+        # path breadcrumb is independent of table sort.
+        allowed_rows.sort(key=lambda r: r['event_count'], reverse=True)
+
+        # ── Optional: snapshot diff over the prior window of equal length ──
+        # Lets the UI flag "this used to be denied / used to be allowed".
+        prior_class: Dict[Tuple[str, str, str], str] = {}
+        if compute_diff:
+            duration = end_time - start_time if (start_time and end_time) else (
+                datetime.now(timezone.utc) - start_time if start_time else timedelta(hours=default_hours)
+            )
+            prior_end = start_time if start_time else (datetime.now(timezone.utc) - duration)
+            prior_start = prior_end - duration
+            prior_clause = cls._build_time_prewhere(prior_start, prior_end, default_hours)
+            q_prior = f"""
+            SELECT
+                toString(device_ip) as device_ip_str,
+                vdom,
+                policyname,
+                groupArray(action) as actions
+            FROM (
+                SELECT device_ip, vdom, policyname, action
+                FROM syslogs
+                PREWHERE {prior_clause}
+                    AND dstip = '{dstip_safe}'
+                    AND dstport = {dstport}
+                    AND action IN (
+                        'accept','allow','pass','close','client-rst','server-rst',
+                        'deny','drop','block','reject','blocked','reset-both'
+                    )
+                GROUP BY device_ip, vdom, policyname, action
+            )
+            GROUP BY device_ip, vdom, policyname
+            """
+            for row in client.query(q_prior).named_results():
+                key = (row['device_ip_str'], row['vdom'], row['policyname'])
+                prior_class[key] = cls._action_class([(a, 1) for a in row['actions']])
+
+        def _tag(rows: List[Dict[str, Any]]):
+            for r in rows:
+                key = (r['device_ip_str'], r['vdom'], r['policyname'])
+                cur = cls._action_class(r['actions'])
+                prior = prior_class.get(key)
+                r['prior_class'] = prior  # may be None (= unseen in prior window)
+                if not compute_diff:
+                    r['change'] = None
+                elif prior is None:
+                    r['change'] = 'new_allow' if cur == 'allow' else (
+                                  'new_deny'  if cur == 'deny'  else 'new')
+                elif prior == cur:
+                    r['change'] = 'unchanged'
+                elif prior == 'allow' and cur == 'deny':
+                    r['change'] = 'became_denied'
+                elif prior == 'deny' and cur == 'allow':
+                    r['change'] = 'became_allowed'
+                else:
+                    r['change'] = 'changed'
+
+        _tag(allowed_rows)
+        _tag(denied_rows)
 
         gap_devices = sorted(denied_devices - allowed_devices)
 
@@ -3499,6 +3712,7 @@ class ClickHouseClient:
             "allowed": allowed_rows,
             "denied": denied_rows,
             "gap_devices": gap_devices,
+            "path": path,
             "summary": {
                 "total_devices_checked": len(allowed_devices | denied_devices),
                 "devices_with_allow": len(allowed_devices),
