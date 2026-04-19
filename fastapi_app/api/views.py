@@ -782,6 +782,11 @@ async def log_detail_panel(
     timestamp: str = Query(..., description="Log timestamp in ISO format"),
     device: str = Query(..., description="Device IP"),
     index: int = Query(1, description="Row index for element IDs"),
+    srcip: Optional[str] = Query(None),
+    dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
+    proto: Optional[str] = Query(None),
 ):
     """Return rendered HTML for a single log's detail panel (lazy-loaded on row expand)."""
     try:
@@ -789,6 +794,11 @@ async def log_detail_panel(
             timestamp=timestamp,
             device_ip=device,
             include_raw=True,
+            srcip=srcip,
+            dstip=dstip,
+            srcport=srcport,
+            dstport=dstport,
+            proto=proto,
         )
         if not log:
             return HTMLResponse('<div class="detail-empty">Log entry not found</div>')

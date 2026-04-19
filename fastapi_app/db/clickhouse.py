@@ -951,20 +951,20 @@ class ClickHouseClient:
         cls,
         timestamp: str,
         device_ip: str,
-        include_raw: bool = True
+        include_raw: bool = True,
+        srcip: Optional[str] = None,
+        dstip: Optional[str] = None,
+        srcport: Optional[Any] = None,
+        dstport: Optional[Any] = None,
+        proto: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Get a single log entry by timestamp and device IP.
 
         Used for fetching full log details including raw message on demand.
-
-        Args:
-            timestamp: ISO format timestamp of the log
-            device_ip: Device IP that logged the entry
-            include_raw: If True (default), includes raw and parsed_data
-
-        Returns:
-            Log entry dict or None if not found
+        When multiple logs share the same timestamp window on the same device,
+        the optional flow tuple (srcip, dstip, srcport, dstport, proto) is used
+        to disambiguate and return the exact matching record.
         """
         client = cls.get_client()
         device_where = cls._device_where(device_ip)
@@ -978,14 +978,41 @@ class ClickHouseClient:
 
         columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
 
+        def _esc(v: str) -> str:
+            return str(v).replace("\\", "\\\\").replace("'", "\\'")
+
+        flow_filters = ""
+        if srcip:
+            flow_filters += f" AND srcip = '{_esc(srcip)}'"
+        if dstip:
+            flow_filters += f" AND dstip = '{_esc(dstip)}'"
+        if srcport not in (None, "", 0, "0"):
+            try:
+                flow_filters += f" AND srcport = {int(srcport)}"
+            except (TypeError, ValueError):
+                pass
+        if dstport not in (None, "", 0, "0"):
+            try:
+                flow_filters += f" AND dstport = {int(dstport)}"
+            except (TypeError, ValueError):
+                pass
+        if proto not in (None, ""):
+            proto_str = str(proto).strip()
+            if proto_str:
+                try:
+                    flow_filters += f" AND proto = {int(proto_str)}"
+                except (TypeError, ValueError):
+                    flow_filters += f" AND proto = '{_esc(proto_str)}'"
+
         # Use a small window to handle timestamp precision issues
         query = f"""
         SELECT {columns}
         FROM syslogs
         WHERE {device_where}
-          AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
-          AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
-        ORDER BY timestamp ASC
+          AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 500 MILLISECOND
+          AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 500 MILLISECOND
+          {flow_filters}
+        ORDER BY abs(toUnixTimestamp64Milli(timestamp) - toUnixTimestamp64Milli(toDateTime64('{clean_timestamp}', 3))) ASC
         LIMIT 1
         """
 

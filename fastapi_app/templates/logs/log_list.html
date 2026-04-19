@@ -3204,6 +3204,11 @@
                                 <tr class="detail-row" id="detail-{{ loop.index }}"
                                     data-timestamp="{{ log.get('timestamp', '').isoformat() if log.get('timestamp', '') and log.get('timestamp', '').isoformat else log.get('timestamp', '') }}"
                                     data-device="{{ dev_display }}"
+                                    data-srcip="{{ log_srcip or '' }}"
+                                    data-dstip="{{ log_dstip or '' }}"
+                                    data-srcport="{{ log_srcport or '' }}"
+                                    data-dstport="{{ log_dstport or '' }}"
+                                    data-proto="{{ log_proto if log_proto not in (None, '', 0) else '' }}"
                                     data-loaded="false">
                                     <td colspan="99">
                                         <div class="detail-panel-placeholder" id="detail-content-{{ loop.index }}">
@@ -3561,6 +3566,13 @@
             document.head.appendChild(this._styleEl);
             this._buildChooserUI();
             this.apply();
+            // Re-scale columns when the table wrapper resizes (e.g., the
+            // Advanced Filters panel toggles open/closed).
+            const wrapper = document.querySelector('.table-wrapper');
+            if (wrapper && typeof ResizeObserver !== 'undefined') {
+                this._ro = new ResizeObserver(() => this.apply());
+                this._ro.observe(wrapper);
+            }
         }
 
         _load() {
@@ -3577,12 +3589,32 @@
 
         apply() {
             const visible = new Set(this.columns.visible);
+            // Scale visible widths so they fill the wrapper. Setting widths in
+            // explicit pixels (instead of relying on the browser to distribute
+            // leftover space) keeps columns stable when the detail row's
+            // colspan cell becomes visible on expand.
+            const wrapper = document.querySelector('.table-wrapper');
+            const wrapperW = wrapper ? wrapper.clientWidth : 0;
+            // _expand has a fixed CSS width and lives outside COLUMN_DEFS, so
+            // subtract its width from the available space before scaling.
+            const FIXED_COLS_WIDTH = 40;
+            let totalDeclared = 0;
+            for (const col of COLUMN_DEFS) {
+                if (visible.has(col.id)) {
+                    totalDeclared += this.columns.widths[col.id] || col.defaultWidth;
+                }
+            }
+            const available = wrapperW - FIXED_COLS_WIDTH;
+            const scale = (available > 0 && totalDeclared > 0 && available > totalDeclared)
+                ? available / totalDeclared : 1;
+
             let css = '';
             for (const col of COLUMN_DEFS) {
                 if (!visible.has(col.id)) {
                     css += `[data-col="${col.id}"] { display: none !important; }\n`;
                 } else {
-                    const w = this.columns.widths[col.id] || col.defaultWidth;
+                    const declared = this.columns.widths[col.id] || col.defaultWidth;
+                    const w = Math.round(declared * scale);
                     css += `.log-table [data-col="${col.id}"] { width: ${w}px; min-width: ${Math.min(w, 60)}px; }\n`;
                 }
             }
@@ -3744,8 +3776,13 @@
                     const timestamp = detailRow.dataset.timestamp;
                     const device = detailRow.dataset.device;
                     const container = document.getElementById(`detail-content-${index}`);
+                    const params = new URLSearchParams({ timestamp, device, index });
+                    ['srcip', 'dstip', 'srcport', 'dstport', 'proto'].forEach(k => {
+                        const v = detailRow.dataset[k];
+                        if (v) params.set(k, v);
+                    });
                     try {
-                        const resp = await fetch(`/logs/detail-panel?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}&index=${index}`);
+                        const resp = await fetch(`/logs/detail-panel?${params.toString()}`);
                         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                         container.innerHTML = await resp.text();
                         detailRow.dataset.loaded = 'true';

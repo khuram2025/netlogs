@@ -306,6 +306,11 @@ async def get_recent_logs(
 async def get_log_detail(
     timestamp: str = Query(..., description="Log timestamp in ISO format"),
     device: str = Query(..., description="Device IP that logged the entry"),
+    srcip: Optional[str] = Query(None),
+    dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
+    proto: Optional[str] = Query(None),
 ):
     """
     Get full log details including raw message and parsed_data.
@@ -318,7 +323,12 @@ async def get_log_detail(
         log = ClickHouseClient.get_log_by_id(
             timestamp=timestamp,
             device_ip=device,
-            include_raw=True
+            include_raw=True,
+            srcip=srcip,
+            dstip=dstip,
+            srcport=srcport,
+            dstport=dstport,
+            proto=proto,
         )
 
         if not log:
