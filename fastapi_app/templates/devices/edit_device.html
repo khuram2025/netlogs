@@ -12,10 +12,12 @@
             </div>
 
             <div>
-                <label for="ssh_host">SSH Host (optional)</label>
+                <label for="ssh_host">Management IP (optional)</label>
                 <input type="text" id="ssh_host" name="ssh_host" value="{{ ssh_host or '' }}" placeholder="e.g., 10.12.50.10">
                 <small class="text-muted" style="display: block; margin-top: 0.25rem;">
-                    If SSH management is on a different IP than the syslog source, set it here. Leave blank to use {{ device.ip_address }}.
+                    Used by <strong>SSH and REST API fetches</strong> (routes, zones, policies, credential test).
+                    The device will keep sending syslogs from <code>{{ device.ip_address }}</code> regardless —
+                    log ingest is not affected. Leave blank to use the same IP for management.
                 </small>
             </div>
 

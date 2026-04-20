@@ -162,10 +162,18 @@ class FortinetAPIClient:
             for m in members:
                 zone_lookup[m] = z.get("name") or ""
 
+        # On a multi-VDOM FortiGate, /api/v2/cmdb/system/interface returns
+        # ALL interfaces globally — the `?vdom=` query param scopes the
+        # request context but doesn't filter the response. Each interface
+        # has its own `vdom` field showing membership; if a vdom was
+        # explicitly requested, drop interfaces that don't belong to it.
         interfaces: List[ParsedInterface] = []
         for i in (intf_resp.get("results") or []):
             name = i.get("name") or ""
             if not name:
+                continue
+            iface_vdom = (i.get("vdom") or "").strip() or None
+            if vdom and iface_vdom and iface_vdom != vdom:
                 continue
             ip_field = i.get("ip") or ""  # often "10.0.0.1 255.255.255.0"
             ip_address = subnet_mask = subnet_cidr = None
@@ -186,7 +194,7 @@ class FortinetAPIClient:
                 addressing_mode=(i.get("mode") or "").lower() or None,
                 status=(i.get("status") or "up").lower(),
                 zone_name=zone_lookup.get(name),
-                vdom=i.get("vdom") or vdom,
+                vdom=iface_vdom or vdom,
             ))
         return zones, interfaces
 

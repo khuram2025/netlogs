@@ -506,6 +506,74 @@
         color: var(--primary);
     }
 
+    /* ── Management-host inline editor ── */
+    .mgmt-host-card {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 0 0 1rem;
+    }
+    .mgmt-host-row {
+        display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .mgmt-host-col { flex: 1; min-width: 240px; }
+    .mgmt-host-label {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 4px;
+    }
+    .mgmt-host-label small { font-weight: 500; opacity: 0.7; }
+    .mgmt-host-value {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .mgmt-host-value code {
+        font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        color: #e5e7eb; font-weight: 600;
+        background: rgba(15,23,42,0.6); padding: 4px 8px; border-radius: 4px;
+    }
+    .mgmt-host-pin {
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;
+    }
+    .mgmt-host-pin {
+        background: rgba(100,116,139,0.18); color: #94a3b8; cursor: help;
+    }
+    .mgmt-host-pin-override { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .mgmt-host-pin-default { background: rgba(59,130,246,0.18); color: #93c5fd; }
+    .mgmt-host-arrow {
+        font-size: 18px; color: #6b7280; flex-shrink: 0;
+    }
+    .mgmt-host-edit-btn {
+        background: transparent; color: #93c5fd;
+        border: 1px solid rgba(59,130,246,0.4); border-radius: 4px;
+        padding: 3px 10px; font-size: 11px; font-weight: 600;
+        cursor: pointer; margin-left: auto;
+    }
+    .mgmt-host-edit-btn:hover { background: rgba(59,130,246,0.1); }
+    .mgmt-host-edit {
+        margin-top: 12px; padding-top: 12px;
+        border-top: 1px solid var(--border, #2a3242);
+    }
+    .mgmt-host-edit-row {
+        display: flex; gap: 8px; align-items: center;
+    }
+    .mgmt-host-edit input {
+        flex: 1; padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+        font-size: 13px; background: var(--bg-input, #0b1120);
+        color: #e5e7eb; border: 1px solid var(--border, #2a3242);
+        border-radius: 4px;
+    }
+    .mgmt-host-help {
+        margin-top: 8px; font-size: 11px; color: #9ca3af; line-height: 1.5;
+    }
+    .mgmt-host-help code { font-family: 'JetBrains Mono', monospace; color: #cbd5e1; }
+    .mgmt-host-result {
+        margin-top: 8px; padding: 6px 10px; border-radius: 4px;
+        font-size: 12px;
+    }
+    .mgmt-host-result-pass { background: rgba(34,197,94,0.15); color: #86efac; }
+    .mgmt-host-result-fail { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
     /* Inline result panel for Fetch Routes / Fetch Zones */
     .fetch-result {
         margin-top: 0.75rem;
@@ -1169,6 +1237,46 @@
     </a>
 </div>
 {% endif %}
+
+<!-- Management host: separate IP for SSH/API fetches if it differs from the syslog source IP -->
+<div class="mgmt-host-card" id="mgmt-host-card">
+    <div class="mgmt-host-row">
+        <div class="mgmt-host-col">
+            <div class="mgmt-host-label">Logging IP</div>
+            <div class="mgmt-host-value mgmt-host-locked">
+                <code>{{ device.ip_address }}</code>
+                <span class="mgmt-host-pin" title="The IP this device sends syslogs from. This cannot be changed — log identity depends on it.">syslog source</span>
+            </div>
+        </div>
+        <div class="mgmt-host-arrow">⇄</div>
+        <div class="mgmt-host-col">
+            <div class="mgmt-host-label">Management IP <small>(SSH / API)</small></div>
+            <div class="mgmt-host-value">
+                <code id="mgmt-host-display">{{ mgmt_host or device.ip_address }}</code>
+                {% if mgmt_host %}
+                <span class="mgmt-host-pin mgmt-host-pin-override">override</span>
+                {% else %}
+                <span class="mgmt-host-pin mgmt-host-pin-default">same as logging IP</span>
+                {% endif %}
+                <button type="button" class="mgmt-host-edit-btn" onclick="mgmtHostShowEdit()">Change</button>
+            </div>
+        </div>
+    </div>
+    <div class="mgmt-host-edit" id="mgmt-host-edit" hidden>
+        <div class="mgmt-host-edit-row">
+            <input type="text" id="mgmt-host-input"
+                   placeholder="Leave blank to use {{ device.ip_address }}"
+                   value="{{ mgmt_host or '' }}">
+            <button type="button" class="btn btn-primary btn-sm" onclick="mgmtHostSave()">Save</button>
+            <button type="button" class="btn btn-sm" onclick="mgmtHostCancel()" style="background: var(--border);">Cancel</button>
+        </div>
+        <div class="mgmt-host-help">
+            Routes / zones / firewall policies are fetched from this IP. Logs keep flowing from
+            <code>{{ device.ip_address }}</code> regardless. Leave blank to use the same IP for both.
+        </div>
+        <div class="mgmt-host-result" id="mgmt-host-result" hidden></div>
+    </div>
+</div>
 
 <!-- Global VDOM Selector - Outside tabs, applies to all data views -->
 {% if available_vdoms and available_vdoms|length > 0 %}
@@ -2473,6 +2581,45 @@ function setFetchPanel(el, kind, primary, html, took) {
 }
 function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ── Management host inline editor ──
+function mgmtHostShowEdit() {
+    document.getElementById('mgmt-host-edit').hidden = false;
+    document.getElementById('mgmt-host-input').focus();
+    const r = document.getElementById('mgmt-host-result');
+    if (r) r.hidden = true;
+}
+function mgmtHostCancel() {
+    document.getElementById('mgmt-host-edit').hidden = true;
+}
+async function mgmtHostSave() {
+    const input = document.getElementById('mgmt-host-input');
+    const out = document.getElementById('mgmt-host-result');
+    const value = (input.value || '').trim();
+    out.hidden = false;
+    out.className = 'mgmt-host-result mgmt-host-result-pass';
+    out.textContent = 'Saving…';
+    try {
+        const fd = new FormData();
+        fd.append('ssh_host', value);
+        const r = await fetch('{{ url_for("set_management_host", device_id=device.id) }}',
+                              { method: 'POST', body: fd });
+        const data = await r.json();
+        if (!data.success) {
+            out.className = 'mgmt-host-result mgmt-host-result-fail';
+            out.textContent = '✗ ' + (data.message || 'Failed');
+            return;
+        }
+        out.className = 'mgmt-host-result mgmt-host-result-pass';
+        out.textContent = '✓ ' + data.message;
+        // Reload after a brief delay so the rest of the page picks up the
+        // new value (fetch buttons, banner text, etc.)
+        setTimeout(() => location.reload(), 800);
+    } catch (e) {
+        out.className = 'mgmt-host-result mgmt-host-result-fail';
+        out.textContent = '✗ ' + (e.message || e);
+    }
 }
 
 // Fetch zone data

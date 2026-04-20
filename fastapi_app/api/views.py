@@ -1610,6 +1610,14 @@ async def device_detail(
     # Quick name → object lookups so the policy detail panel can resolve
     # `srcaddr=["AppServers"]` into the real CIDR/IPs without per-row queries.
     # Serialise to plain dicts here (Jinja can't do dict comprehensions).
+    # Pull the management-host override so the device-detail header can show
+    # both the syslog-source IP (device.ip_address) and the SSH/API target.
+    mgmt_q = await db.execute(
+        select(DeviceSshSettings.ssh_host)
+        .where(DeviceSshSettings.device_id == device_id).limit(1)
+    )
+    mgmt_host = (mgmt_q.scalar_one_or_none() or "").strip() or None
+
     fw_addr_map_json = {
         a.name: {
             "kind": a.kind, "value": a.value,
@@ -1669,6 +1677,7 @@ async def device_detail(
         "fw_addresses": fw_addresses,
         "fw_services": fw_services,
         "fw_addr_map_json": fw_addr_map_json,
+        "mgmt_host": mgmt_host,
         "fw_svc_map_json": fw_svc_map_json,
         "fw_analytics": fw_analytics,
         "current_tab": current_tab,
@@ -1819,6 +1828,54 @@ async def fetch_zone_data(
         "interface_count": total_interfaces,
         "vdom_results": vdom_results
     })
+
+
+@router.post("/devices/{device_id}/management-host/", name="set_management_host",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def set_management_host(
+    device_id: int,
+    ssh_host: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or clear the management IP override for SSH/API fetches.
+
+    The override only affects outbound SSH/REST calls — syslog ingest still
+    uses the original `device.ip_address` for log attribution. Clearing the
+    override (empty string) reverts to using the device IP for management."""
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
+
+    cleaned = (ssh_host or "").strip()
+
+    existing_q = await db.execute(
+        select(DeviceSshSettings).where(DeviceSshSettings.device_id == device_id).limit(1)
+    )
+    row = existing_q.scalar_one_or_none()
+
+    if cleaned:
+        if row:
+            row.ssh_host = cleaned
+        else:
+            db.add(DeviceSshSettings(device_id=device_id, ssh_host=cleaned))
+        await db.commit()
+        return JSONResponse({
+            "success": True,
+            "message": f"Management IP set to {cleaned}",
+            "ssh_host": cleaned,
+            "default_ip": str(device.ip_address),
+        })
+    else:
+        if row:
+            await db.delete(row)
+            await db.commit()
+        return JSONResponse({
+            "success": True,
+            "message": "Management IP cleared — using device IP",
+            "ssh_host": "",
+            "default_ip": str(device.ip_address),
+        })
 
 
 @router.post("/devices/{device_id}/fetch-policies/", name="fetch_firewall_policies")
