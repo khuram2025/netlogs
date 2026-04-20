@@ -117,10 +117,42 @@ def timesince(dt: datetime) -> str:
         return f"{seconds // 86400} days"
 
 
+def sparkline_svg(series, width: int = 90, height: int = 24,
+                   color: str = "#93c5fd") -> str:
+    """Render a list of ints as an inline SVG sparkline.
+
+    Why server-side instead of a JS lib? Keeps the dashboard a single HTML
+    document — no client-side render lag for 100s of rules, no flicker on
+    expand. Each sparkline is ~280 bytes.
+    """
+    if not series:
+        return f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}"></svg>'
+    n = len(series)
+    mx = max(series) or 1  # guard against all-zero
+    # Polyline points across the full width; clip top by 1px so the stroke
+    # doesn't get cut.
+    pts = []
+    for i, v in enumerate(series):
+        x = (i / (n - 1)) * (width - 2) + 1 if n > 1 else width / 2
+        y = (height - 2) - ((v / mx) * (height - 4)) + 1
+        pts.append(f"{x:.1f},{y:.1f}")
+    # Render a soft fill underneath the line — easier to scan in a table.
+    fill_pts = f"{pts[0].split(',')[0]},{height-1} " + " ".join(pts) + f" {pts[-1].split(',')[0]},{height-1}"
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
+        f'preserveAspectRatio="none" style="display:block">'
+        f'<polygon points="{fill_pts}" fill="{color}" fill-opacity="0.18"/>'
+        f'<polyline points="{" ".join(pts)}" fill="none" stroke="{color}" '
+        f'stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>'
+        f'</svg>'
+    )
+
+
 # Add custom filters to templates
 templates.env.filters['format_bytes'] = format_bytes
 templates.env.filters['format_number'] = format_number
 templates.env.filters['timesince'] = timesince
+templates.env.filters['sparkline'] = sparkline_svg
 
 
 @router.get("/", response_class=HTMLResponse, name="home")

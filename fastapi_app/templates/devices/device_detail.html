@@ -948,6 +948,62 @@
     .pa-mini-link:hover { text-decoration: underline; }
     .pa-mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 
+    /* Sparkline column */
+    .pa-spark-cell {
+        width: 130px; padding: 4px 8px !important;
+    }
+    .pa-spark-cell svg { vertical-align: middle; }
+
+    /* Drift / activity heatmap */
+    .pa-heat-wrap {
+        overflow-x: auto; overflow-y: visible;
+        background: rgba(15,23,42,0.4); border-radius: 6px;
+        padding: 12px;
+    }
+    .pa-heat-grid {
+        display: grid;
+        grid-template-columns: 220px repeat(var(--days, 30), minmax(14px, 1fr));
+        gap: 2px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .pa-heat-corner {}
+    .pa-heat-day-label {
+        font-size: 9px; color: #6b7280; text-align: center; padding-bottom: 4px;
+        white-space: nowrap; overflow: hidden;
+    }
+    .pa-heat-row-label {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px;
+        font-size: 11px; color: #cbd5e1; padding: 0 8px;
+        white-space: nowrap; overflow: hidden;
+    }
+    .pa-heat-row-name {
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .pa-heat-row-total {
+        font-size: 10px; color: #6b7280; flex-shrink: 0;
+    }
+    .pa-heat-cell {
+        height: 22px; min-width: 14px;
+        border-radius: 3px;
+        /* i ranges 0..1; use a green→amber→red palette mapped through HSL.
+           This makes "lots of activity" visually warm without yelling at low values. */
+        background: hsl(
+            calc(140 - (var(--i, 0) * 130)),
+            calc(20% + (var(--i, 0) * 60%)),
+            calc(14% + (var(--i, 0) * 36%))
+        );
+    }
+    .pa-heat-cell:hover {
+        outline: 1px solid #93c5fd; outline-offset: 1px; cursor: help;
+    }
+    .pa-heat-legend {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 10px; color: #6b7280; margin-top: 12px;
+    }
+    .pa-heat-legend-cell { min-width: 18px; height: 18px; }
+    .pa-heat-foot { margin-left: auto; }
+
     /* Tab badge for the sidebar Analytics tab */
     .tab-badge {
         display: inline-flex; align-items: center; justify-content: center;
@@ -1625,11 +1681,13 @@
                     <span>Zero-hit rules</span><span class="pa-side-count {% if A.kpi_zero_hit_30d %}pa-side-count-bad{% endif %}">{{ A.kpi_zero_hit_30d }}</span></a>
                 <a class="pa-side-link" href="#pa-implicit-deny">
                     <span>Implicit-deny hits</span><span class="pa-side-count {% if A.implicit_deny %}pa-side-count-bad{% endif %}">{{ A.implicit_deny|length }}</span></a>
+                {% if A.daily_hits %}
+                <a class="pa-side-link" href="#pa-heatmap">
+                    <span>Activity heatmap</span><span class="pa-side-count">{{ A.daily_window_days }}d</span></a>
+                {% endif %}
                 {% endif %}
 
                 <div class="pa-side-section">Coming soon</div>
-                <a class="pa-side-link pa-side-link-disabled" href="#">
-                    <span>Drift heatmap</span><span class="pa-side-count pa-side-count-soon">P3</span></a>
                 <a class="pa-side-link pa-side-link-disabled" href="#">
                     <span>Zone matrix</span><span class="pa-side-count pa-side-count-soon">P4</span></a>
 
@@ -1662,11 +1720,12 @@
                     </div>
                     <div class="pa-table-wrap">
                         <table class="pa-table">
-                            <thead><tr><th>#</th><th>Rule</th><th>Action</th><th>Flags</th><th>Score</th>{% if A.log_window_hours %}<th>Hits (30d)</th>{% endif %}</tr></thead>
+                            <thead><tr><th>#</th><th>Rule</th><th>Action</th><th>Flags</th><th>Score</th>{% if A.log_window_hours %}<th>Hits (30d)</th><th>Trend</th>{% endif %}</tr></thead>
                             <tbody>
                                 {% for r in A.permissiveness[:25] %}
                                 {% set rule_key = (r.rule.name or r.rule.rule_id or '') | lower %}
                                 {% set hit_info = A.hits_by_name.get(rule_key) %}
+                                {% set series = A.daily_hits.get(rule_key) %}
                                 <tr>
                                     <td class="pa-pos">#{{ r.rule.position }}</td>
                                     <td>
@@ -1697,6 +1756,9 @@
                                         {% else %}
                                             <span class="pa-hits-zero">no hits</span>
                                         {% endif %}
+                                    </td>
+                                    <td class="pa-spark-cell">
+                                        {% if series %}{{ series | sparkline(120, 26, '#93c5fd') | safe }}{% else %}<span class="pa-hits-zero">—</span>{% endif %}
                                     </td>
                                     {% endif %}
                                 </tr>
@@ -1882,7 +1944,71 @@
                     <div class="pa-empty pa-empty-good">✓ No implicit-deny noise in the time window.</div>
                     {% endif %}
                 </section>
-                {% endif %}
+
+                {# ── Drift heatmap (Phase 3) ──────────────────── #}
+                {% if A.daily_hits %}
+                <section class="pa-widget" id="pa-heatmap">
+                    <div class="pa-widget-head">
+                        <h3>Activity heatmap <span class="pa-window">{{ A.daily_window_days }}d × per rule</span></h3>
+                        <p class="pa-widget-desc">Hits per day per rule, log-scaled. Spot dying or spiking rules at a glance — empty rows are zero-hit candidates.</p>
+                    </div>
+                    {# Sort rules by total hits descending; show top 30 with traffic. #}
+                    {% set ranked = [] %}
+                    {% for p in fw_policies %}
+                        {% set k = (p.name or p.rule_id or '') | lower %}
+                        {% set s = A.daily_hits.get(k) %}
+                        {% if s and s | sum > 0 %}
+                            {% set _ = ranked.append((p, s, s | sum)) %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set ranked = ranked | sort(attribute=2, reverse=True) %}
+                    {% set top_total = ranked[0][2] if ranked else 1 %}
+                    {% if ranked %}
+                    <div class="pa-heat-wrap">
+                        <div class="pa-heat-grid" style="--days: {{ A.daily_window_days }};">
+                            <div class="pa-heat-corner"></div>
+                            {% for d in range(A.daily_window_days) %}
+                            <div class="pa-heat-day-label">{% if d % 5 == 0 or d == A.daily_window_days - 1 %}D-{{ A.daily_window_days - 1 - d }}{% endif %}</div>
+                            {% endfor %}
+
+                            {% for p, series, total in ranked[:30] %}
+                            <div class="pa-heat-row-label" title="{{ p.name or 'Rule ' ~ p.rule_id }}">
+                                <span class="pa-heat-row-name">{{ (p.name or 'Rule ' ~ p.rule_id)[:24] }}</span>
+                                <span class="pa-heat-row-total">{{ '{:,}'.format(total) if total < 1000000 else '%.1fM' | format(total / 1000000) }}</span>
+                            </div>
+                            {% set max_in_series = series | max %}
+                            {% for v in series %}
+                                {% if v == 0 %}
+                                    {% set intensity = 0 %}
+                                {% else %}
+                                    {# log-scale within this rule's own range — so a quiet rule
+                                       with consistent traffic looks consistent, while a noisy
+                                       rule's spikes still pop. #}
+                                    {% set intensity = ((v / max_in_series) ** 0.5) %}
+                                {% endif %}
+                                <div class="pa-heat-cell"
+                                     style="--i: {{ intensity }}"
+                                     title="D-{{ A.daily_window_days - 1 - loop.index0 }}: {{ '{:,}'.format(v) }} hits"></div>
+                            {% endfor %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="pa-heat-legend">
+                        <span>Less</span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.25"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.5"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.75"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 1"></span>
+                        <span>More</span>
+                        <span class="pa-heat-foot">Showing top {{ [ranked|length, 30] | min }} of {{ ranked|length }} rules with traffic.</span>
+                    </div>
+                    {% else %}
+                    <div class="pa-empty">No daily traffic data yet.</div>
+                    {% endif %}
+                </section>
+                {% endif %}{# end of A.daily_hits #}
+                {% endif %}{# end of A.log_window_hours wrapping zero-hit + implicit-deny + heatmap #}
 
                 {# ── Object hygiene ─────────────────────────────── #}
                 <section class="pa-widget" id="pa-objects">

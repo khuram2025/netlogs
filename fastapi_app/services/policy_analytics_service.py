@@ -142,6 +142,11 @@ class PolicyAnalyticsBundle:
     implicit_deny: List[ImplicitDenyRow] = field(default_factory=list)
     log_window_hours: int = 0                                       # 0 = unknown / not joined
 
+    # Phase 3: per-policy daily hits over N days for sparklines + heatmap.
+    # Same lowercase-name key as `hits_by_name`. Empty if log join skipped.
+    daily_hits: Dict[str, List[int]] = field(default_factory=dict)
+    daily_window_days: int = 0
+
 
 # ─────────────────────────────────────────────────────────────────────
 # The service
@@ -406,6 +411,46 @@ class PolicyAnalyticsService:
         ]
 
     @classmethod
+    def daily_hits_by_policy(cls, device_ip: str, days: int = 30
+                              ) -> Dict[str, List[int]]:
+        """Per-policy daily hit counts over the last N days.
+
+        Returns {lowercase policy_name: [count_day_-N, ..., count_day_today]}.
+        Missing days are filled with 0 so every series has the same length —
+        the sparkline / heatmap renderers can iterate without index dancing.
+        """
+        from ..db.clickhouse import ClickHouseClient
+        from datetime import date, timedelta
+        try:
+            client = ClickHouseClient.get_client()
+            rows = client.query(f"""
+                SELECT lower(policyname), toDate(timestamp) AS day, count() AS hits
+                FROM syslogs
+                PREWHERE timestamp > now() - INTERVAL {int(days)} DAY
+                  AND device_ip = toIPv4('{device_ip}')
+                  AND policyname != ''
+                GROUP BY policyname, day
+            """).result_rows
+        except Exception as e:
+            logger.warning(f"daily_hits_by_policy failed for {device_ip}: {e}")
+            return {}
+
+        # Build full date axis so every series is the same length (today inclusive).
+        today = date.today()
+        axis = [today - timedelta(days=days - 1 - i) for i in range(days)]
+        idx_for = {d: i for i, d in enumerate(axis)}
+
+        out: Dict[str, List[int]] = {}
+        for name, day, hits in rows:
+            if name is None:
+                continue
+            series = out.setdefault(name, [0] * days)
+            i = idx_for.get(day)
+            if i is not None:
+                series[i] = int(hits)
+        return out
+
+    @classmethod
     def implicit_deny_top(cls, device_ip: str, window_hours: int = 720,
                           limit: int = 25) -> List[ImplicitDenyRow]:
         """Top denied flows that hit no named policy — these are flows users
@@ -476,6 +521,7 @@ class PolicyAnalyticsService:
         hits_by_name: Dict[str, PolicyHits] = {}
         zero_hit: List[Any] = []
         implicit_deny: List[ImplicitDenyRow] = []
+        daily_hits: Dict[str, List[int]] = {}
         total_hits = 0
         if device_ip:
             hits_by_name = cls.hits_by_policy(device_ip, window_hours=log_window_hours)
@@ -490,6 +536,9 @@ class PolicyAnalyticsService:
                 key = (p.name or p.rule_id or "").lower()
                 if key and key not in hits_by_name:
                     zero_hit.append(p)
+            daily_hits = cls.daily_hits_by_policy(
+                device_ip, days=max(1, log_window_hours // 24),
+            )
 
         return PolicyAnalyticsBundle(
             kpi_active_rules=active,
@@ -511,4 +560,6 @@ class PolicyAnalyticsService:
             zero_hit_rules=zero_hit,
             implicit_deny=implicit_deny,
             log_window_hours=log_window_hours if device_ip else 0,
+            daily_hits=daily_hits,
+            daily_window_days=(log_window_hours // 24) if device_ip else 0,
         )
