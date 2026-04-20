@@ -67,6 +67,29 @@ class ZoneService:
     """Service for managing zone/interface data across vendors (Fortinet, PAN-OS)."""
 
     @staticmethod
+    def _fetch_zones_via_fortinet_api(host, credential, vdom):
+        """Sync helper run in a thread; returns
+        (success, message, zones, interfaces, duration_ms, raw_str)."""
+        import time as _time
+        from .fortinet_api_service import FortinetAPIClient, FortinetAPIError
+        client = FortinetAPIClient(
+            host=str(host), token=credential.password,
+            port=credential.port or 443,
+        )
+        t0 = _time.time()
+        try:
+            zones, interfaces = client.zones_and_interfaces(vdom=vdom)
+            ms = int((_time.time() - t0) * 1000)
+            return True, f"Fetched {len(zones)} zones, {len(interfaces)} interfaces", \
+                   zones, interfaces, ms, ""
+        except FortinetAPIError as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"FortiGate API: {e}", [], [], ms, ""
+        except Exception as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"{type(e).__name__}: {e}", [], [], ms, ""
+
+    @staticmethod
     def parse_zone_output(raw_output: str) -> List[ParsedZone]:
         """
         Parse FortiGate 'show system zone' output.
@@ -509,7 +532,65 @@ class ZoneService:
                 ssh_host = override
 
         vdom_display = f" (VDOM/vsys: {vdom})" if vdom else ""
-        logger.info(f"Fetching zone data from {device.ip_address} ({device.parser}){vdom_display}")
+        transport = (credential.credential_type or "SSH").upper()
+        logger.info(
+            f"Fetching zone data from {device.ip_address} ({device.parser}){vdom_display} [{transport}]"
+        )
+
+        # ── REST API fast-path (FortiGate today) ────────────────────
+        if transport == "API" and device.parser == ParserType.FORTINET:
+            api_result = await asyncio.to_thread(
+                cls._fetch_zones_via_fortinet_api,
+                ssh_host, credential, vdom,
+            )
+            success, message, zones, interfaces, duration_ms, raw = api_result
+            credential.last_used = __import__('datetime').datetime.utcnow()
+            if not success:
+                snap = ZoneSnapshot(
+                    device_id=device.id, vdom=vdom,
+                    raw_zone_output=_scrub_for_pg_text(raw),
+                    raw_interface_output=None,
+                    zone_count=0, interface_count=0,
+                    fetch_duration_ms=duration_ms,
+                    success=False,
+                    error_message=_scrub_for_pg_text(message),
+                )
+                db.add(snap); await db.commit(); await db.refresh(snap)
+                return False, message, snap
+            credential.last_success = __import__('datetime').datetime.utcnow()
+            snap = ZoneSnapshot(
+                device_id=device.id, vdom=vdom,
+                raw_zone_output=_scrub_for_pg_text(raw),
+                raw_interface_output=None,
+                zone_count=len(zones), interface_count=len(interfaces),
+                fetch_duration_ms=duration_ms, success=True,
+            )
+            db.add(snap); await db.flush()
+            await db.execute(delete(ZoneEntry).where(and_(
+                ZoneEntry.device_id == device.id,
+                ZoneEntry.vdom == vdom if vdom else ZoneEntry.vdom.is_(None),
+            )))
+            await db.execute(delete(InterfaceEntry).where(and_(
+                InterfaceEntry.device_id == device.id,
+                InterfaceEntry.vdom == vdom if vdom else InterfaceEntry.vdom.is_(None),
+            )))
+            for z in zones:
+                db.add(ZoneEntry(
+                    device_id=device.id, snapshot_id=snap.id,
+                    zone_name=z.name, description=z.description,
+                    intrazone=z.intrazone, interfaces=z.interfaces, vdom=vdom,
+                ))
+            for ifc in interfaces:
+                db.add(InterfaceEntry(
+                    device_id=device.id, snapshot_id=snap.id,
+                    interface_name=ifc.name, ip_address=ifc.ip_address,
+                    subnet_mask=ifc.subnet_mask, subnet_cidr=ifc.subnet_cidr,
+                    interface_type=ifc.interface_type,
+                    addressing_mode=ifc.addressing_mode,
+                    status=ifc.status, zone_name=ifc.zone_name, vdom=vdom,
+                ))
+            await db.commit(); await db.refresh(snap)
+            return True, f"Fetched {len(zones)} zones and {len(interfaces)} interfaces via API", snap
 
         # Vendor-aware fetch.
         if device.parser == ParserType.FORTINET:

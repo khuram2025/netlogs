@@ -1516,13 +1516,14 @@ async def device_detail(
     )
     credentials_count = creds_result.scalar() or 0
 
-    # Check if device has active SSH credentials
+    # Any active credential (SSH or API) is enough to drive routing/zone/policy
+    # fetches — the services pick the best transport per device.
     active_cred_result = await db.execute(
         select(DeviceCredential)
         .where(
             DeviceCredential.device_id == device_id,
             DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
+            DeviceCredential.credential_type.in_(['SSH', 'API']),
         )
         .limit(1)
     )
@@ -1574,9 +1575,32 @@ async def device_detail(
     fw_policies = await FirewallPolicyService.get_policies(device_id, db, vdom=selected_vdom, limit=500)
     fw_addresses = await FirewallPolicyService.get_address_objects(device_id, db, vdom=selected_vdom)
     fw_services = await FirewallPolicyService.get_service_objects(device_id, db, vdom=selected_vdom)
+    # Quick name → object lookups so the policy detail panel can resolve
+    # `srcaddr=["AppServers"]` into the real CIDR/IPs without per-row queries.
+    # Serialise to plain dicts here (Jinja can't do dict comprehensions).
+    fw_addr_map_json = {
+        a.name: {
+            "kind": a.kind, "value": a.value,
+            "members": a.members, "comment": a.comment,
+        } for a in fw_addresses
+    }
+    fw_svc_map_json = {
+        s.name: {
+            "protocol": s.protocol, "ports": s.ports,
+            "members": s.members, "category": s.category,
+        } for s in fw_services
+    }
+    # Policy analytics: Phase 1 (config-only) + Phase 2 (log join).
+    # Coerce INET → str so the ClickHouse query gets a clean IP.
+    from ..services.policy_analytics_service import PolicyAnalyticsService
+    fw_analytics = PolicyAnalyticsService.compute(
+        fw_policies, fw_addresses, fw_services,
+        device_ip=str(device.ip_address) if device else None,
+        log_window_hours=720,  # 30 days
+    )
 
     # Validate and default current tab
-    valid_tabs = ['routes', 'zones', 'policies', 'changes', 'snapshots']
+    valid_tabs = ['routes', 'zones', 'policies', 'analytics', 'changes', 'snapshots']
     current_tab = tab if tab in valid_tabs else 'routes'
 
     return _render("devices/device_detail.html", request, {
@@ -1597,8 +1621,34 @@ async def device_detail(
         "fw_policies": fw_policies,
         "fw_addresses": fw_addresses,
         "fw_services": fw_services,
+        "fw_addr_map_json": fw_addr_map_json,
+        "fw_svc_map_json": fw_svc_map_json,
+        "fw_analytics": fw_analytics,
         "current_tab": current_tab,
     })
+
+
+async def _pick_fetch_credential(device_id: int, db: AsyncSession):
+    """Return the best available credential for an automated fetch, preferring
+    API tokens over SSH (faster, more reliable, no shell-privilege issues)."""
+    api_q = await db.execute(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.is_active == True,
+            DeviceCredential.credential_type == 'API',
+        ).limit(1)
+    )
+    api_cred = api_q.scalar_one_or_none()
+    if api_cred:
+        return api_cred
+    ssh_q = await db.execute(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.is_active == True,
+            DeviceCredential.credential_type == 'SSH',
+        ).limit(1)
+    )
+    return ssh_q.scalar_one_or_none()
 
 
 @router.post("/devices/{device_id}/fetch-routes/", name="fetch_routing_table")
@@ -1616,20 +1666,9 @@ async def fetch_routing_table(
     if not device:
         return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
 
-    # Get active SSH credential
-    cred_result = await db.execute(
-        select(DeviceCredential)
-        .where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
-        )
-        .limit(1)
-    )
-    credential = cred_result.scalar_one_or_none()
-
+    credential = await _pick_fetch_credential(device_id, db)
     if not credential:
-        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     # Fetch routing tables for all VDOMs (or global if no VDOMs configured)
     results = await RoutingService.fetch_all_vdom_routing_tables(device, credential, db)
@@ -1686,20 +1725,9 @@ async def fetch_zone_data(
     if not device:
         return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
 
-    # Get active SSH credential
-    cred_result = await db.execute(
-        select(DeviceCredential)
-        .where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
-        )
-        .limit(1)
-    )
-    credential = cred_result.scalar_one_or_none()
-
+    credential = await _pick_fetch_credential(device_id, db)
     if not credential:
-        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     # Fetch zone data for all VDOMs (or global if no VDOMs configured)
     results = await ZoneService.fetch_all_vdom_zone_data(device, credential, db)
@@ -1759,16 +1787,9 @@ async def fetch_firewall_policies(
     if not device:
         return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
 
-    cred_result = await db.execute(
-        select(DeviceCredential).where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH',
-        ).limit(1)
-    )
-    credential = cred_result.scalar_one_or_none()
+    credential = await _pick_fetch_credential(device_id, db)
     if not credential:
-        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     results = await FirewallPolicyService.fetch_all_vdom_policies(device, credential, db)
 
@@ -2011,26 +2032,61 @@ async def test_credential(
         if override:
             ssh_host = override
 
-    # Test connection in thread pool (blocking operation)
+    # Vendor / transport branch: API test = quick auth-probe against the
+    # device's REST API; SSH test = TCP+auth handshake (defined elsewhere).
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor,
-        lambda: SSHService.test_connection(
-            host=ssh_host,
-            username=credential.username,
-            password=credential.password,
-            port=credential.port
+    if (credential.credential_type or "SSH").upper() == "API":
+        def _probe_fortinet_api():
+            import time as _t
+            from ..services.fortinet_api_service import FortinetAPIClient, FortinetAPIError
+            client = FortinetAPIClient(
+                host=ssh_host, token=credential.password,
+                port=credential.port or 443,
+            )
+            t0 = _t.time()
+            try:
+                status = client.system_status()
+                ms = int((_t.time() - t0) * 1000)
+                # Surface hostname/version when available so the operator
+                # can confirm they hit the right device.
+                hostname = (status.get("results") or {}).get("hostname") or status.get("hostname")
+                version = (status.get("results") or {}).get("version") or status.get("version")
+                msg = f"FortiGate API OK"
+                if hostname or version:
+                    msg += f" ({hostname or ''} {version or ''})".rstrip()
+                return type("R", (), {"success": True, "error": msg, "duration_ms": ms})()
+            except FortinetAPIError as e:
+                ms = int((_t.time() - t0) * 1000)
+                return type("R", (), {"success": False, "error": str(e), "duration_ms": ms})()
+            except Exception as e:
+                ms = int((_t.time() - t0) * 1000)
+                return type("R", (), {"success": False, "error": f"{type(e).__name__}: {e}", "duration_ms": ms})()
+        result = await loop.run_in_executor(_executor, _probe_fortinet_api)
+    else:
+        result = await loop.run_in_executor(
+            _executor,
+            lambda: SSHService.test_connection(
+                host=ssh_host,
+                username=credential.username,
+                password=credential.password,
+                port=credential.port
+            )
         )
-    )
 
     if result.success:
         credential.last_success = datetime.utcnow()
 
     await db.commit()
 
+    # When the test passes, the API path packs hostname/version into
+    # `result.error` for display; SSH path leaves it None.
+    if result.success:
+        message = result.error or "Connection successful"
+    else:
+        message = result.error or "Test failed"
     return JSONResponse({
         "success": result.success,
-        "message": result.error if not result.success else "Connection successful",
+        "message": message,
         "duration_ms": result.duration_ms
     })
 

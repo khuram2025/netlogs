@@ -42,6 +42,29 @@ def _scrub_for_pg_text(s):
 class RoutingService:
     """Service for collecting and managing routing tables."""
 
+    @staticmethod
+    def _fetch_routes_via_fortinet_api(host, credential, vdom):
+        """Synchronous helper run in a thread to keep httpx off the event loop.
+
+        Returns (success, message, routes, duration_ms, raw_str)."""
+        import time as _time
+        from .fortinet_api_service import FortinetAPIClient, FortinetAPIError
+        client = FortinetAPIClient(
+            host=str(host), token=credential.password,
+            port=credential.port or 443,
+        )
+        t0 = _time.time()
+        try:
+            routes = client.routing_table(vdom=vdom)
+            ms = int((_time.time() - t0) * 1000)
+            return True, f"Fetched {len(routes)} routes", routes, ms, str([r.raw_line for r in routes[:5]])
+        except FortinetAPIError as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"FortiGate API: {e}", [], ms, ""
+        except Exception as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"{type(e).__name__}: {e}", [], ms, ""
+
     @classmethod
     async def fetch_routing_table(
         cls,
@@ -76,8 +99,55 @@ class RoutingService:
                 ssh_host = override
 
         ssh_display = ssh_host if ssh_host != str(device.ip_address) else device.ip_address
-        logger.info(f"Fetching routing table for device {device.ip_address} via {ssh_display}{vdom_display}")
+        transport = (credential.credential_type or "SSH").upper()
+        logger.info(
+            f"Fetching routing table for device {device.ip_address} "
+            f"via {ssh_display}{vdom_display} [{transport}]"
+        )
 
+        # ── REST API fast-path (FortiGate today; PAN-OS XML API later) ──
+        if transport == "API" and device.parser == ParserType.FORTINET:
+            api_result = await asyncio.to_thread(
+                cls._fetch_routes_via_fortinet_api,
+                ssh_host, credential, vdom,
+            )
+            success, message, routes, duration_ms, raw = api_result
+            credential.last_used = datetime.utcnow()
+            if not success:
+                snap = RoutingTableSnapshot(
+                    device_id=device.id, vdom=vdom,
+                    raw_output=_scrub_for_pg_text(raw) or "",
+                    route_count=0, success=False,
+                    error_message=_scrub_for_pg_text(message),
+                    fetch_duration_ms=duration_ms,
+                )
+                db.add(snap); await db.commit()
+                return False, message, snap
+            credential.last_success = datetime.utcnow()
+            snap = RoutingTableSnapshot(
+                device_id=device.id, vdom=vdom,
+                raw_output=_scrub_for_pg_text(raw),
+                route_count=len(routes), success=True,
+                fetch_duration_ms=duration_ms,
+            )
+            db.add(snap); await db.flush()
+            for r in routes:
+                db.add(RoutingEntry(
+                    device_id=device.id, snapshot_id=snap.id,
+                    route_type=r.route_type, is_default=r.is_default,
+                    network=r.network, prefix_length=r.prefix_length,
+                    next_hop=r.next_hop, interface=r.interface,
+                    tunnel_name=r.tunnel_name, admin_distance=r.admin_distance,
+                    metric=r.metric, preference=r.preference, age=r.age,
+                    vdom=vdom, vrf=r.vrf,
+                    is_recursive=r.is_recursive, recursive_via=r.recursive_via,
+                    raw_line=_scrub_for_pg_text(r.raw_line),
+                ))
+            await cls._detect_changes(device.id, snap.id, routes, db)
+            await db.commit(); await db.refresh(snap)
+            return True, f"Fetched {len(routes)} routes via API", snap
+
+        # ── SSH fallback ─────────────────────────────────────────────
         # Get routing table via SSH (vendor-aware)
         if device.parser == ParserType.FORTINET:
             result = await asyncio.to_thread(

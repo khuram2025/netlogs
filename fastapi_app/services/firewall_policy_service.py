@@ -45,6 +45,33 @@ def _scrub_for_pg_text(s):
 class FirewallPolicyService:
     """Vendor-aware fetch + persist for the firewall rule base."""
 
+    @staticmethod
+    def _fetch_policies_via_fortinet_api(host, credential, vdom):
+        """Sync helper run in a thread.
+        Returns (success, message, parsed_config, duration_ms, raw_str)."""
+        import time as _time
+        from .fortinet_api_service import FortinetAPIClient, FortinetAPIError
+        client = FortinetAPIClient(
+            host=str(host), token=credential.password,
+            port=credential.port or 443,
+        )
+        t0 = _time.time()
+        try:
+            cfg = client.fetch_policy_bundle(vdom=vdom)
+            ms = int((_time.time() - t0) * 1000)
+            msg = (
+                f"Fetched {len(cfg.policies)} policies, "
+                f"{len(cfg.addresses) + len(cfg.address_groups)} address objects, "
+                f"{len(cfg.services) + len(cfg.service_groups)} service objects"
+            )
+            return True, msg, cfg, ms, ""
+        except FortinetAPIError as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"FortiGate API: {e}", None, ms, ""
+        except Exception as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"{type(e).__name__}: {e}", None, ms, ""
+
     @classmethod
     async def fetch_policies(
         cls,
@@ -69,9 +96,96 @@ class FirewallPolicyService:
                 ssh_host = o
 
         vdom_label = f" (VDOM: {vdom})" if vdom else ""
+        transport = (credential.credential_type or "SSH").upper()
         logger.info(
-            f"Fetching firewall policies from {device.ip_address} ({device.parser}){vdom_label}"
+            f"Fetching firewall policies from {device.ip_address} "
+            f"({device.parser}){vdom_label} [{transport}]"
         )
+
+        # ── REST API fast-path (FortiGate today) ────────────────────
+        if transport == "API" and device.parser == ParserType.FORTINET:
+            api_result = await asyncio.to_thread(
+                cls._fetch_policies_via_fortinet_api,
+                ssh_host, credential, vdom,
+            )
+            success, message, cfg, duration_ms, raw = api_result
+            credential.last_used = __import__('datetime').datetime.utcnow()
+            if not success:
+                snap = FirewallPolicySnapshot(
+                    device_id=device.id, vdom=vdom,
+                    raw_output=_scrub_for_pg_text(raw),
+                    policy_count=0, address_count=0, addrgrp_count=0,
+                    service_count=0, servicegrp_count=0,
+                    fetched_at=__import__('datetime').datetime.utcnow(),
+                    fetch_duration_ms=duration_ms,
+                    success=False,
+                    error_message=_scrub_for_pg_text(message),
+                )
+                db.add(snap); await db.commit(); await db.refresh(snap)
+                return False, message, snap
+            credential.last_success = __import__('datetime').datetime.utcnow()
+
+            snap = FirewallPolicySnapshot(
+                device_id=device.id, vdom=vdom,
+                raw_output=None,  # API path has no useful raw text
+                policy_count=len(cfg.policies),
+                address_count=len(cfg.addresses),
+                addrgrp_count=len(cfg.address_groups),
+                service_count=len(cfg.services),
+                servicegrp_count=len(cfg.service_groups),
+                fetched_at=__import__('datetime').datetime.utcnow(),
+                fetch_duration_ms=duration_ms,
+                success=True,
+            )
+            db.add(snap); await db.flush()
+            # Bulk-replace existing rows for this device/vdom.
+            await db.execute(delete(FirewallPolicy).where(and_(
+                FirewallPolicy.device_id == device.id,
+                FirewallPolicy.vdom == vdom if vdom else FirewallPolicy.vdom.is_(None),
+            )))
+            await db.execute(delete(FirewallAddressObject).where(and_(
+                FirewallAddressObject.device_id == device.id,
+                FirewallAddressObject.vdom == vdom if vdom else FirewallAddressObject.vdom.is_(None),
+            )))
+            await db.execute(delete(FirewallServiceObject).where(and_(
+                FirewallServiceObject.device_id == device.id,
+                FirewallServiceObject.vdom == vdom if vdom else FirewallServiceObject.vdom.is_(None),
+            )))
+            for a in cfg.addresses + cfg.address_groups:
+                db.add(FirewallAddressObject(
+                    snapshot_id=snap.id, device_id=device.id, vdom=vdom,
+                    name=a.name, kind=a.kind, value=a.value,
+                    members=a.members or None,
+                    comment=_scrub_for_pg_text(a.comment),
+                    raw_definition=_scrub_for_pg_text(a.raw_definition),
+                ))
+            for s in cfg.services + cfg.service_groups:
+                db.add(FirewallServiceObject(
+                    snapshot_id=snap.id, device_id=device.id, vdom=vdom,
+                    name=s.name, protocol=s.protocol, ports=s.ports,
+                    members=s.members or None, category=s.category,
+                    comment=_scrub_for_pg_text(s.comment),
+                    raw_definition=_scrub_for_pg_text(s.raw_definition),
+                ))
+            for p in cfg.policies:
+                db.add(FirewallPolicy(
+                    snapshot_id=snap.id, device_id=device.id, vdom=vdom,
+                    rule_id=p.rule_id, name=p.name, position=p.position,
+                    enabled=p.enabled, action=p.action,
+                    src_zones=p.src_zones or None,
+                    dst_zones=p.dst_zones or None,
+                    src_addresses=p.src_addresses or None,
+                    dst_addresses=p.dst_addresses or None,
+                    services=p.services or None,
+                    applications=p.applications or None,
+                    users=p.users or None,
+                    nat_enabled=p.nat_enabled,
+                    log_traffic=p.log_traffic, schedule=p.schedule,
+                    comment=_scrub_for_pg_text(p.comment),
+                    raw_definition=_scrub_for_pg_text(p.raw_definition),
+                ))
+            await db.commit(); await db.refresh(snap)
+            return True, message + " via API", snap
 
         # Vendor branch — Fortinet today; PAN-OS / Cisco land in P2/P3.
         if device.parser == ParserType.FORTINET:
