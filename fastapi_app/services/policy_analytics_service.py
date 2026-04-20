@@ -381,19 +381,24 @@ class PolicyAnalyticsService:
     def hits_by_policy(cls, device_ip: str, window_hours: int = 720) -> Dict[str, PolicyHits]:
         """Count log hits per policyname for one device over a window.
 
-        Returns {lowercase policy_name: PolicyHits}. Empty/null policyname is
-        excluded — that lives in `implicit_deny_top()`."""
+        Reads from the materialised `policy_hits_daily` aggregate (refreshed
+        in the background by a CH MV on every syslog INSERT). On a busy
+        device this is a 16k-row scan instead of 549M raw rows — ~1000×
+        faster.
+
+        Returns {lowercase policy_name: PolicyHits}.
+        """
         from ..db.clickhouse import ClickHouseClient
+        days = max(1, window_hours // 24)
         try:
             client = ClickHouseClient.get_client()
             rows = client.query(f"""
                 SELECT policyname,
-                       count() AS hits,
-                       toString(max(timestamp)) AS last_seen
-                FROM syslogs
-                PREWHERE timestamp > now() - INTERVAL {int(window_hours)} HOUR
-                  AND device_ip = toIPv4('{device_ip}')
-                  AND policyname != ''
+                       sum(hits) AS hits,
+                       toString(max(last_seen)) AS last_seen
+                FROM policy_hits_daily
+                WHERE device_ip = toIPv4('{device_ip}')
+                  AND day >= today() - {int(days) - 1}
                 GROUP BY policyname
             """).result_rows
         except Exception as e:
@@ -551,18 +556,19 @@ class PolicyAnalyticsService:
                 from ..db.clickhouse import ClickHouseClient
                 try:
                     client = ClickHouseClient.get_client()
-                    # Filter to v4-only rows — some syslog sources mix in
-                    # IPv6 link-local addresses that toIPv4() can't parse.
+                    # Reads from `flow_pairs_daily` aggregate (~5M rows total
+                    # vs 549M raw syslogs over 30d). The MV already pre-filters
+                    # to IPv4-only `srcip`/`dstip`, so we only need the
+                    # device + day filter here. multiIf still runs but on
+                    # ~100x fewer rows so it stays under 5s on a busy device.
+                    days = max(1, int(window_hours) // 24)
                     rows = client.query(f"""
                         SELECT {case_expr('srcip')} AS src_zone,
                                {case_expr('dstip')} AS dst_zone,
-                               count() AS hits
-                        FROM syslogs
-                        PREWHERE timestamp > now() - INTERVAL {int(window_hours)} HOUR
-                          AND device_ip = toIPv4('{device_ip}')
-                          AND srcip != '' AND dstip != ''
-                          AND match(srcip, '^[0-9.]+$')
-                          AND match(dstip, '^[0-9.]+$')
+                               sum(hits) AS hits
+                        FROM flow_pairs_daily
+                        WHERE device_ip = toIPv4('{device_ip}')
+                          AND day >= today() - {days - 1}
                         GROUP BY src_zone, dst_zone
                         HAVING hits > 0
                     """).result_rows
@@ -610,21 +616,21 @@ class PolicyAnalyticsService:
                               ) -> Dict[str, List[int]]:
         """Per-policy daily hit counts over the last N days.
 
+        Reads from `policy_hits_daily` aggregate — same 16k-row table as
+        `hits_by_policy()`, just without the GROUP BY-only-name reduction.
         Returns {lowercase policy_name: [count_day_-N, ..., count_day_today]}.
-        Missing days are filled with 0 so every series has the same length —
-        the sparkline / heatmap renderers can iterate without index dancing.
+        Missing days are filled with 0.
         """
         from ..db.clickhouse import ClickHouseClient
         from datetime import date, timedelta
         try:
             client = ClickHouseClient.get_client()
             rows = client.query(f"""
-                SELECT lower(policyname), toDate(timestamp) AS day, count() AS hits
-                FROM syslogs
-                PREWHERE timestamp > now() - INTERVAL {int(days)} DAY
-                  AND device_ip = toIPv4('{device_ip}')
-                  AND policyname != ''
-                GROUP BY policyname, day
+                SELECT lower(policyname) AS pname, day, sum(hits) AS hits
+                FROM policy_hits_daily
+                WHERE device_ip = toIPv4('{device_ip}')
+                  AND day >= today() - {int(days) - 1}
+                GROUP BY pname, day
             """).result_rows
         except Exception as e:
             logger.warning(f"daily_hits_by_policy failed for {device_ip}: {e}")
@@ -648,23 +654,21 @@ class PolicyAnalyticsService:
     @classmethod
     def implicit_deny_top(cls, device_ip: str, window_hours: int = 720,
                           limit: int = 25) -> List[ImplicitDenyRow]:
-        """Top denied flows that hit no named policy — these are flows users
-        likely WANT and need a rule for. The "missing rule" report.
+        """Top denied flows that hit no named policy — the "missing rule" report.
 
-        Uses lower(action) IN deny-set so we capture deny/drop/block/reset etc.
-        across vendors. Skips empty-srcip rows because they're noise from
-        UTM/utm sublogs that don't carry the original 5-tuple."""
+        Reads from `implicit_deny_daily` aggregate; the action/policyname/
+        srcip filtering already happened in the MV, so this is a small
+        bounded scan instead of 549M rows.
+        """
         from ..db.clickhouse import ClickHouseClient
+        days = max(1, window_hours // 24)
         try:
             client = ClickHouseClient.get_client()
             rows = client.query(f"""
-                SELECT toString(srcip), toString(dstip), dstport, proto, count() AS hits
-                FROM syslogs
-                PREWHERE timestamp > now() - INTERVAL {int(window_hours)} HOUR
-                  AND device_ip = toIPv4('{device_ip}')
-                  AND lower(action) IN ('deny','drop','block','reject','blocked','reset-both')
-                  AND srcip != ''
-                  AND (policyname = '' OR policyname = 'implicit deny' OR policyname IS NULL)
+                SELECT srcip, dstip, dstport, proto, sum(hits) AS hits
+                FROM implicit_deny_daily
+                WHERE device_ip = toIPv4('{device_ip}')
+                  AND day >= today() - {int(days) - 1}
                 GROUP BY srcip, dstip, dstport, proto
                 ORDER BY hits DESC
                 LIMIT {int(limit)}
