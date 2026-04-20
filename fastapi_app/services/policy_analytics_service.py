@@ -760,15 +760,21 @@ class PolicyAnalyticsService:
     _LOG_CACHE_TTL = 300  # seconds
 
     @classmethod
-    def _cache_key(cls, device_ip: str, vdom: Optional[str]) -> str:
-        return f"policy_analytics:logs:{device_ip}:{vdom or '_global'}"
+    def _cache_key(cls, device_ip: str) -> str:
+        # NOTE: cache key is per-device only, NOT per-VDOM. The cached log
+        # queries (hits_by_policy, daily_hits, implicit_deny, reachability)
+        # all filter by device_ip + timestamp — none of them filter by vdom
+        # in their SQL — so the result is identical for any VDOM of the same
+        # device. Including vdom here would force a redundant 90s compute
+        # on every VDOM switch, which is exactly the bug we just fixed.
+        return f"policy_analytics:logs:{device_ip}"
 
     @classmethod
-    def _load_log_cache(cls, device_ip: str, vdom: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _load_log_cache(cls, device_ip: str) -> Optional[Dict[str, Any]]:
         try:
             import redis as _redis
             r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
-            raw = r.get(cls._cache_key(device_ip, vdom))
+            raw = r.get(cls._cache_key(device_ip))
             if not raw:
                 return None
             import json as _json
@@ -777,27 +783,24 @@ class PolicyAnalyticsService:
             return None
 
     @classmethod
-    def _store_log_cache(cls, device_ip: str, vdom: Optional[str], payload: Dict[str, Any]):
+    def _store_log_cache(cls, device_ip: str, payload: Dict[str, Any]):
         try:
             import redis as _redis
             r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
             import json as _json
-            r.setex(cls._cache_key(device_ip, vdom), cls._LOG_CACHE_TTL, _json.dumps(payload))
+            r.setex(cls._cache_key(device_ip), cls._LOG_CACHE_TTL, _json.dumps(payload))
         except Exception as e:
             logger.warning(f"log-cache write failed: {e}")
 
     @classmethod
     def invalidate_log_cache(cls, device_ip: str, vdom: Optional[str] = None):
-        """Called after a fetch so the next page load sees fresh data."""
+        """Called after a fetch so the next page load sees fresh data.
+        `vdom` is accepted for API compatibility but ignored — the cache is
+        per-device, not per-VDOM."""
         try:
             import redis as _redis
             r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
-            if vdom is None:
-                # Wipe all VDOM variants for this device.
-                for k in r.scan_iter(f"policy_analytics:logs:{device_ip}:*"):
-                    r.delete(k)
-            else:
-                r.delete(cls._cache_key(device_ip, vdom))
+            r.delete(cls._cache_key(device_ip))
         except Exception:
             pass
 
@@ -853,7 +856,7 @@ class PolicyAnalyticsService:
         cache_hit = False
 
         if device_ip and use_cache:
-            cached = cls._load_log_cache(device_ip, vdom)
+            cached = cls._load_log_cache(device_ip)
             if cached:
                 cache_hit = True
                 hits_by_name = {
@@ -899,7 +902,7 @@ class PolicyAnalyticsService:
         # Persist freshly-computed log fields so the next page load is fast.
         if device_ip and not cache_hit:
             try:
-                cls._store_log_cache(device_ip, vdom, {
+                cls._store_log_cache(device_ip, {
                     "hits_by_name": {
                         k: {"policy_name": v.policy_name, "hits": v.hits, "last_seen": v.last_seen}
                         for k, v in hits_by_name.items()
