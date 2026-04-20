@@ -1622,13 +1622,28 @@ async def device_detail(
             "members": s.members, "category": s.category,
         } for s in fw_services
     }
-    # Policy analytics: Phase 1 (config-only) + Phase 2 (log join).
-    # Coerce INET → str so the ClickHouse query gets a clean IP.
+    # Policy analytics: Phase 1 (config-only) + Phase 2 (log join) + Phase 4
+    # (zone reachability matrix). Pull interface entries so the matrix can
+    # resolve log src/dst IPs back to a zone label.
     from ..services.policy_analytics_service import PolicyAnalyticsService
+    from sqlalchemy import select as _sel
+    from ..models.zone import InterfaceEntry as _IfaceEntry
+    from ..models.routing import RoutingEntry as _RouteEntry
+    iface_rows = (await db.execute(
+        _sel(_IfaceEntry).where(_IfaceEntry.device_id == device_id)
+    )).scalars().all()
+    # Routes give us the zone label for routed (non-directly-connected)
+    # subnets — vital for transit firewalls where most traffic comes from
+    # remote networks, not the device's own LAN.
+    route_rows = (await db.execute(
+        _sel(_RouteEntry).where(_RouteEntry.device_id == device_id)
+    )).scalars().all()
     fw_analytics = PolicyAnalyticsService.compute(
         fw_policies, fw_addresses, fw_services,
         device_ip=str(device.ip_address) if device else None,
         log_window_hours=720,  # 30 days
+        interfaces=iface_rows,
+        routes=route_rows,
     )
 
     # Validate and default current tab

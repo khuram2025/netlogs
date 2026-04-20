@@ -1004,6 +1004,62 @@
     .pa-heat-legend-cell { min-width: 18px; height: 18px; }
     .pa-heat-foot { margin-left: auto; }
 
+    /* Zone reachability matrix */
+    .pa-rm-wrap {
+        background: rgba(15,23,42,0.4); border-radius: 6px;
+        padding: 12px; overflow-x: auto;
+    }
+    .pa-rm-table {
+        border-collapse: separate; border-spacing: 2px;
+        font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    }
+    .pa-rm-corner {
+        font-size: 9px; color: #6b7280; font-weight: 600;
+        padding: 4px 8px; text-align: right; vertical-align: bottom;
+        white-space: nowrap;
+    }
+    .pa-rm-col-head {
+        padding: 4px 6px; vertical-align: bottom;
+        height: 90px; min-width: 32px;
+    }
+    .pa-rm-col-name {
+        display: inline-block; transform: rotate(-45deg);
+        transform-origin: left bottom;
+        white-space: nowrap; color: #cbd5e1; font-size: 10px;
+    }
+    .pa-rm-row-head {
+        padding: 4px 8px; text-align: right;
+        color: #cbd5e1; font-size: 11px; font-weight: 500;
+        white-space: nowrap; max-width: 180px;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .pa-rm-cell {
+        width: 56px; height: 38px;
+        padding: 2px 4px; text-align: center;
+        border-radius: 3px;
+        line-height: 1.1;
+        cursor: help;
+    }
+    .pa-rm-num { font-size: 10px; font-weight: 700; }
+    .pa-rm-rules { color: rgba(255,255,255,0.95); }
+    .pa-rm-hits  { color: rgba(255,255,255,0.65); font-size: 9px; }
+
+    /* Cell state palette — picked so red+green are unambiguous on dark bg */
+    .pa-rm-state-gap              { background: rgba(100,116,139,0.10); }
+    .pa-rm-state-aligned          { background: rgba(34,197,94,0.32); }
+    .pa-rm-state-over-provisioned { background: rgba(59,130,246,0.32); }
+    .pa-rm-state-unauthorised     { background: rgba(239,68,68,0.42); }
+    .pa-rm-state-denied           { background: rgba(245,158,11,0.32); }
+
+    .pa-rm-legend {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        margin-top: 12px; align-items: center;
+    }
+    .pa-rm-key {
+        font-size: 10px; padding: 3px 8px; border-radius: 3px;
+        color: rgba(255,255,255,0.92); font-weight: 600;
+    }
+
     /* Tab badge for the sidebar Analytics tab */
     .tab-badge {
         display: inline-flex; align-items: center; justify-content: center;
@@ -1687,9 +1743,11 @@
                 {% endif %}
                 {% endif %}
 
-                <div class="pa-side-section">Coming soon</div>
-                <a class="pa-side-link pa-side-link-disabled" href="#">
-                    <span>Zone matrix</span><span class="pa-side-count pa-side-count-soon">P4</span></a>
+                {% if A.reachability %}
+                <div class="pa-side-section">Coverage</div>
+                <a class="pa-side-link" href="#pa-reachability">
+                    <span>Zone reachability</span><span class="pa-side-count">{{ A.reachability.src_zones|length }}×{{ A.reachability.dst_zones|length }}</span></a>
+                {% endif %}
 
                 <div class="pa-side-foot">
                     Snapshot {{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M') }}<br>
@@ -2009,6 +2067,70 @@
                 </section>
                 {% endif %}{# end of A.daily_hits #}
                 {% endif %}{# end of A.log_window_hours wrapping zero-hit + implicit-deny + heatmap #}
+
+                {# ── Zone reachability matrix (Phase 4) ───────── #}
+                {% if A.reachability %}
+                {% set R = A.reachability %}
+                <section class="pa-widget" id="pa-reachability">
+                    <div class="pa-widget-head">
+                        <h3>Zone reachability matrix
+                            <span class="pa-window">
+                                {{ R.src_zones|length }} src × {{ R.dst_zones|length }} dst zones
+                                {% if R.has_observed %} · observed last 7d{% endif %}
+                            </span>
+                        </h3>
+                        <p class="pa-widget-desc">
+                            Each cell shows configured permits ↘ vs observed traffic ↗ between zone pairs.
+                            <strong>Red</strong> = traffic flows but no permit rule (deny / asymmetric).
+                            <strong>Blue</strong> = configured but unused (over-provisioned).
+                            <strong>Green</strong> = aligned. Empty = intended gap.
+                        </p>
+                    </div>
+                    <div class="pa-rm-wrap">
+                        <table class="pa-rm-table">
+                            <thead>
+                                <tr>
+                                    <th class="pa-rm-corner">SRC ↓ / DST →</th>
+                                    {% for d in R.dst_zones %}
+                                    <th class="pa-rm-col-head">
+                                        <span class="pa-rm-col-name">{{ d }}</span>
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in R.src_zones %}
+                                <tr>
+                                    <th class="pa-rm-row-head">{{ s }}</th>
+                                    {% for d in R.dst_zones %}
+                                    {% set c = R.cell(s, d) %}
+                                    <td class="pa-rm-cell pa-rm-state-{{ c.state }}"
+                                        title="{{ s }} → {{ d }} · {{ c.rule_count }} permit rule(s) · {{ c.deny_rule_count }} deny rule(s) · {{ '{:,}'.format(c.observed_hits) }} observed hits">
+                                        {% if c.rule_count or c.deny_rule_count or c.observed_hits %}
+                                            <div class="pa-rm-num pa-rm-rules">{{ c.rule_count if c.rule_count else (('-' ~ c.deny_rule_count) if c.deny_rule_count else '·') }}</div>
+                                            <div class="pa-rm-num pa-rm-hits">
+                                                {% if c.observed_hits >= 1000000 %}{{ '%.1fM' | format(c.observed_hits / 1000000) }}
+                                                {% elif c.observed_hits >= 1000 %}{{ '%.1fk' | format(c.observed_hits / 1000) }}
+                                                {% elif c.observed_hits %}{{ c.observed_hits }}
+                                                {% else %}·{% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pa-rm-legend">
+                        <span class="pa-rm-key pa-rm-state-aligned">aligned</span>
+                        <span class="pa-rm-key pa-rm-state-over-provisioned">over-provisioned</span>
+                        <span class="pa-rm-key pa-rm-state-unauthorised">unauthorised / asymmetric</span>
+                        <span class="pa-rm-key pa-rm-state-denied">explicit deny</span>
+                        <span class="pa-rm-key pa-rm-state-gap">no rule, no traffic</span>
+                    </div>
+                </section>
+                {% endif %}
 
                 {# ── Object hygiene ─────────────────────────────── #}
                 <section class="pa-widget" id="pa-objects">

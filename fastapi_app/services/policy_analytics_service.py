@@ -112,6 +112,28 @@ class ImplicitDenyRow:
 
 
 @dataclass
+class ReachabilityCell:
+    """One cell of the zone reachability matrix."""
+    src_zone: str
+    dst_zone: str
+    rule_count: int = 0       # # of permit rules that authorise this pair
+    deny_rule_count: int = 0
+    observed_hits: int = 0
+    state: str = "gap"        # gap | aligned | over-provisioned | unauthorised | denied
+
+
+@dataclass
+class ReachabilityMatrix:
+    src_zones: List[str]      # row order
+    dst_zones: List[str]      # column order
+    cells: Dict[Tuple[str, str], ReachabilityCell]
+    has_observed: bool        # True if log-resolved data is included
+
+    def cell(self, src: str, dst: str) -> ReachabilityCell:
+        return self.cells.get((src, dst), ReachabilityCell(src_zone=src, dst_zone=dst))
+
+
+@dataclass
 class PolicyAnalyticsBundle:
     """Everything the Analytics tab needs to render in one render pass."""
     # KPI tiles
@@ -146,6 +168,9 @@ class PolicyAnalyticsBundle:
     # Same lowercase-name key as `hits_by_name`. Empty if log join skipped.
     daily_hits: Dict[str, List[int]] = field(default_factory=dict)
     daily_window_days: int = 0
+
+    # Phase 4: zone-pair reachability matrix. Empty if no zone data.
+    reachability: Optional[ReachabilityMatrix] = None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -410,6 +435,172 @@ class PolicyAnalyticsService:
             for s, d, p, pr, h in rows
         ]
 
+    # ── Phase 4: zone reachability matrix ──────────────────────────
+
+    @staticmethod
+    def _interface_subnet_zones(interfaces: List[Any],
+                                  routes: Optional[List[Any]] = None
+                                  ) -> List[Tuple[int, int, str]]:
+        """Return [(ipv4_lo_int, ipv4_hi_int, zone_label), ...] for IP→zone
+        resolution.
+
+        For a transit firewall, directly-connected interface subnets only
+        cover a small slice of traffic — most flows come from routed
+        networks (BGP/static). We merge the routing table in too: each
+        route's destination network carries its egress interface, which
+        is exactly the zone label policies reference.
+
+        Sorted longest-prefix first so the lookup picks the most specific
+        match (matches what `multiIf` does top-down in ClickHouse).
+        """
+        import ipaddress
+        out: List[Tuple[int, int, str]] = []
+
+        def _add(cidr: str, label: str):
+            label = (label or "").strip()
+            cidr = (cidr or "").strip()
+            if not label or not cidr or cidr in ("0.0.0.0/0", "0.0.0.0"):
+                return
+            try:
+                net = ipaddress.IPv4Network(cidr, strict=False)
+            except (ValueError, ipaddress.AddressValueError):
+                return
+            out.append((int(net.network_address), int(net.broadcast_address), label))
+
+        for ifc in interfaces or []:
+            label = (getattr(ifc, "zone_name", None)
+                     or getattr(ifc, "interface_name", None) or "")
+            _add(getattr(ifc, "subnet_cidr", None), label)
+
+        for r in routes or []:
+            net = (getattr(r, "network", None) or "").strip()
+            iface = (getattr(r, "interface", None) or "").strip()
+            if not net or not iface:
+                continue
+            # `network` may already include the prefix — accept either form.
+            if "/" not in net:
+                pfx = getattr(r, "prefix_length", None)
+                if pfx is None:
+                    continue
+                net = f"{net}/{pfx}"
+            _add(net, iface)
+
+        # Longest-prefix first; on tie, prefer interface routes over default-ish.
+        out.sort(key=lambda t: (t[1] - t[0], -len(t[2])))
+        return out
+
+    @classmethod
+    def reachability_matrix(cls, policies: List[Any], interfaces: List[Any],
+                            device_ip: Optional[str] = None,
+                            window_hours: int = 168,
+                            routes: Optional[List[Any]] = None
+                            ) -> Optional[ReachabilityMatrix]:
+        """Build the src-zone × dst-zone matrix from policies + observed
+        traffic. Returns None when neither side has data.
+
+        Cell state legend used by the UI:
+          gap            — no permit rule + no observed traffic (intended)
+          aligned        — permit rule + traffic flows (working)
+          over-provisioned — permit rule but no traffic (cleanup candidate)
+          unauthorised   — traffic flows but no permit rule (denied / async)
+          denied         — explicit deny rule (not a permit gap)
+        """
+        cells: Dict[Tuple[str, str], ReachabilityCell] = {}
+
+        # ── Configured side (fast, pure config) ──
+        zones_seen: set = set()
+        for p in policies or []:
+            if not p.enabled:
+                continue
+            srcs = [z.strip() for z in (p.src_zones or []) if z and z.strip()]
+            dsts = [z.strip() for z in (p.dst_zones or []) if z and z.strip()]
+            if not srcs or not dsts:
+                continue
+            is_permit = (p.action or "").lower() in ("accept", "allow", "pass")
+            for s in srcs:
+                for d in dsts:
+                    zones_seen.add(s); zones_seen.add(d)
+                    key = (s, d)
+                    cell = cells.setdefault(key, ReachabilityCell(src_zone=s, dst_zone=d))
+                    if is_permit:
+                        cell.rule_count += 1
+                    else:
+                        cell.deny_rule_count += 1
+
+        # ── Observed side (ClickHouse, optional) ──
+        has_observed = False
+        if device_ip:
+            ranges = cls._interface_subnet_zones(interfaces, routes)
+            if ranges:
+                has_observed = True
+                # Build src/dst CASE expressions in ClickHouse using
+                # multiIf — single GROUP BY is way faster than per-pair queries.
+                # toUInt32(toIPv4(srcip)) gives us the integer form to range-test.
+                def case_expr(field: str) -> str:
+                    parts = []
+                    for lo, hi, label in ranges:
+                        safe = label.replace("'", "")
+                        parts.append(f"toUInt32(toIPv4({field})) BETWEEN {lo} AND {hi}, '{safe}'")
+                    parts.append("'unknown'")
+                    return "multiIf(" + ", ".join(parts) + ")"
+
+                from ..db.clickhouse import ClickHouseClient
+                try:
+                    client = ClickHouseClient.get_client()
+                    # Filter to v4-only rows — some syslog sources mix in
+                    # IPv6 link-local addresses that toIPv4() can't parse.
+                    rows = client.query(f"""
+                        SELECT {case_expr('srcip')} AS src_zone,
+                               {case_expr('dstip')} AS dst_zone,
+                               count() AS hits
+                        FROM syslogs
+                        PREWHERE timestamp > now() - INTERVAL {int(window_hours)} HOUR
+                          AND device_ip = toIPv4('{device_ip}')
+                          AND srcip != '' AND dstip != ''
+                          AND match(srcip, '^[0-9.]+$')
+                          AND match(dstip, '^[0-9.]+$')
+                        GROUP BY src_zone, dst_zone
+                        HAVING hits > 0
+                    """).result_rows
+                    for s, d, h in rows:
+                        if not s or not d:
+                            continue
+                        zones_seen.add(s); zones_seen.add(d)
+                        key = (s, d)
+                        cell = cells.setdefault(key, ReachabilityCell(src_zone=s, dst_zone=d))
+                        cell.observed_hits = int(h)
+                except Exception as e:
+                    logger.warning(f"reachability_matrix observed query failed: {e}")
+                    has_observed = False
+
+        if not cells and not zones_seen:
+            return None
+
+        # Classify each cell.
+        for cell in cells.values():
+            if cell.deny_rule_count and not cell.observed_hits:
+                cell.state = "denied"
+            elif cell.rule_count and cell.observed_hits:
+                cell.state = "aligned"
+            elif cell.rule_count and not cell.observed_hits:
+                cell.state = "over-provisioned"
+            elif not cell.rule_count and cell.observed_hits:
+                cell.state = "unauthorised"
+            else:
+                cell.state = "gap"
+
+        # Stable axis order: alphabetical, then 'unknown' last.
+        zones_sorted = sorted(z for z in zones_seen if z != "unknown")
+        if "unknown" in zones_seen:
+            zones_sorted.append("unknown")
+
+        return ReachabilityMatrix(
+            src_zones=zones_sorted,
+            dst_zones=zones_sorted,
+            cells=cells,
+            has_observed=has_observed,
+        )
+
     @classmethod
     def daily_hits_by_policy(cls, device_ip: str, days: int = 30
                               ) -> Dict[str, List[int]]:
@@ -488,13 +679,16 @@ class PolicyAnalyticsService:
     def compute(cls, policies: List[Any], addresses: List[Any],
                 services: List[Any],
                 device_ip: Optional[str] = None,
-                log_window_hours: int = 720) -> PolicyAnalyticsBundle:
+                log_window_hours: int = 720,
+                interfaces: Optional[List[Any]] = None,
+                routes: Optional[List[Any]] = None) -> PolicyAnalyticsBundle:
         """Compute the full bundle.
 
         If `device_ip` is provided, also run the log-join queries (Phase 2:
         hits_by_policy, zero-hit detection, implicit-deny spotlight).
-        Otherwise the log fields stay empty and the dashboard renders only
-        config-only (Phase 1) widgets.
+        If `interfaces` is provided, also build the Phase 4 zone reachability
+        matrix (configured-vs-observed). Both are independent — passing one
+        without the other still works.
         """
         if not policies:
             return PolicyAnalyticsBundle(
@@ -540,6 +734,14 @@ class PolicyAnalyticsService:
                 device_ip, days=max(1, log_window_hours // 24),
             )
 
+        # Phase 4 — zone reachability. Doesn't strictly need device_ip but
+        # the observed-traffic overlay does; pass through both either way.
+        reachability = cls.reachability_matrix(
+            policies, interfaces or [], device_ip=device_ip,
+            window_hours=min(log_window_hours, 168),  # cap observed window at 7d for perf
+            routes=routes or [],
+        )
+
         return PolicyAnalyticsBundle(
             kpi_active_rules=active,
             kpi_disabled_rules=len(policies) - active,
@@ -562,4 +764,5 @@ class PolicyAnalyticsService:
             log_window_hours=log_window_hours if device_ip else 0,
             daily_hits=daily_hits,
             daily_window_days=(log_window_hours // 24) if device_ip else 0,
+            reachability=reachability,
         )
