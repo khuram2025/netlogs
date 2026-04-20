@@ -487,7 +487,11 @@ class PolicyAnalyticsService:
 
         # Longest-prefix first; on tie, prefer interface routes over default-ish.
         out.sort(key=lambda t: (t[1] - t[0], -len(t[2])))
-        return out
+        # ClickHouse rejects multiIf SQL with >50k AST nodes; each range adds
+        # ~5 nodes × 2 fields. Cap at 200 ranges so the generated SQL stays
+        # well under that ceiling. With longest-prefix-first ordering we keep
+        # the most specific (and so most useful) routes.
+        return out[:200]
 
     @classmethod
     def reachability_matrix(cls, policies: List[Any], interfaces: List[Any],
@@ -675,13 +679,137 @@ class PolicyAnalyticsService:
 
     # ── Public entrypoint: compute everything ──────────────────────
 
+    @staticmethod
+    def _matrix_to_cache(m: Optional["ReachabilityMatrix"]) -> Optional[Dict[str, Any]]:
+        """Serialise just the observed-traffic slice of the matrix so we can
+        rebuild it on warm loads without re-running the 57s multiIf query."""
+        if m is None:
+            return None
+        return {
+            "has_observed": m.has_observed,
+            "observed_cells": [
+                {"src": c.src_zone, "dst": c.dst_zone, "hits": c.observed_hits}
+                for c in m.cells.values() if c.observed_hits > 0
+            ],
+        }
+
+    @classmethod
+    def _matrix_from_cached(cls, policies: List[Any], cached: Dict[str, Any]
+                              ) -> Optional["ReachabilityMatrix"]:
+        """Rebuild the matrix from fresh policies + cached observed cells.
+        Keeps rule counts fresh while skipping the expensive log query."""
+        cells: Dict[Tuple[str, str], ReachabilityCell] = {}
+        zones_seen: set = set()
+
+        # Fresh configured side (fast).
+        for p in policies or []:
+            if not p.enabled:
+                continue
+            srcs = [z.strip() for z in (p.src_zones or []) if z and z.strip()]
+            dsts = [z.strip() for z in (p.dst_zones or []) if z and z.strip()]
+            if not srcs or not dsts:
+                continue
+            is_permit = (p.action or "").lower() in ("accept", "allow", "pass")
+            for s in srcs:
+                for d in dsts:
+                    zones_seen.add(s); zones_seen.add(d)
+                    key = (s, d)
+                    cell = cells.setdefault(key, ReachabilityCell(src_zone=s, dst_zone=d))
+                    if is_permit:
+                        cell.rule_count += 1
+                    else:
+                        cell.deny_rule_count += 1
+
+        # Cached observed overlay.
+        for oc in (cached or {}).get("observed_cells", []):
+            s, d, h = oc.get("src"), oc.get("dst"), int(oc.get("hits") or 0)
+            if not s or not d:
+                continue
+            zones_seen.add(s); zones_seen.add(d)
+            key = (s, d)
+            cell = cells.setdefault(key, ReachabilityCell(src_zone=s, dst_zone=d))
+            cell.observed_hits = h
+
+        if not cells:
+            return None
+
+        for cell in cells.values():
+            if cell.deny_rule_count and not cell.observed_hits:
+                cell.state = "denied"
+            elif cell.rule_count and cell.observed_hits:
+                cell.state = "aligned"
+            elif cell.rule_count and not cell.observed_hits:
+                cell.state = "over-provisioned"
+            elif not cell.rule_count and cell.observed_hits:
+                cell.state = "unauthorised"
+            else:
+                cell.state = "gap"
+
+        zones_sorted = sorted(z for z in zones_seen if z != "unknown")
+        if "unknown" in zones_seen:
+            zones_sorted.append("unknown")
+        return ReachabilityMatrix(
+            src_zones=zones_sorted, dst_zones=zones_sorted, cells=cells,
+            has_observed=(cached or {}).get("has_observed", False),
+        )
+
+    # Redis-backed cache for the log-derived parts of the bundle. Keeps the
+    # device detail page fast after the first load — pure-config analytics
+    # (shadowed/redundant/permissiveness) are always recomputed since they
+    # change instantly when a new snapshot is fetched.
+    _LOG_CACHE_TTL = 300  # seconds
+
+    @classmethod
+    def _cache_key(cls, device_ip: str, vdom: Optional[str]) -> str:
+        return f"policy_analytics:logs:{device_ip}:{vdom or '_global'}"
+
+    @classmethod
+    def _load_log_cache(cls, device_ip: str, vdom: Optional[str]) -> Optional[Dict[str, Any]]:
+        try:
+            import redis as _redis
+            r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
+            raw = r.get(cls._cache_key(device_ip, vdom))
+            if not raw:
+                return None
+            import json as _json
+            return _json.loads(raw)
+        except Exception:
+            return None
+
+    @classmethod
+    def _store_log_cache(cls, device_ip: str, vdom: Optional[str], payload: Dict[str, Any]):
+        try:
+            import redis as _redis
+            r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
+            import json as _json
+            r.setex(cls._cache_key(device_ip, vdom), cls._LOG_CACHE_TTL, _json.dumps(payload))
+        except Exception as e:
+            logger.warning(f"log-cache write failed: {e}")
+
+    @classmethod
+    def invalidate_log_cache(cls, device_ip: str, vdom: Optional[str] = None):
+        """Called after a fetch so the next page load sees fresh data."""
+        try:
+            import redis as _redis
+            r = _redis.Redis(host="localhost", port=6379, decode_responses=True)
+            if vdom is None:
+                # Wipe all VDOM variants for this device.
+                for k in r.scan_iter(f"policy_analytics:logs:{device_ip}:*"):
+                    r.delete(k)
+            else:
+                r.delete(cls._cache_key(device_ip, vdom))
+        except Exception:
+            pass
+
     @classmethod
     def compute(cls, policies: List[Any], addresses: List[Any],
                 services: List[Any],
                 device_ip: Optional[str] = None,
                 log_window_hours: int = 720,
                 interfaces: Optional[List[Any]] = None,
-                routes: Optional[List[Any]] = None) -> PolicyAnalyticsBundle:
+                routes: Optional[List[Any]] = None,
+                vdom: Optional[str] = None,
+                use_cache: bool = True) -> PolicyAnalyticsBundle:
         """Compute the full bundle.
 
         If `device_ip` is provided, also run the log-join queries (Phase 2:
@@ -712,35 +840,80 @@ class PolicyAnalyticsService:
         crit = sum(1 for r in permissiveness if r.band == "critical")
 
         # Phase 2 — log-join (no-op when device_ip is None or query fails).
+        # The four log queries below can easily total 90s on a busy device
+        # (reachability multiIf alone is ~57s), so we cache the results per
+        # device+vdom. Config-only widgets always recompute because they're
+        # cheap and must reflect the latest snapshot immediately.
         hits_by_name: Dict[str, PolicyHits] = {}
         zero_hit: List[Any] = []
         implicit_deny: List[ImplicitDenyRow] = []
         daily_hits: Dict[str, List[int]] = {}
         total_hits = 0
-        if device_ip:
+        reachability_cached = None
+        cache_hit = False
+
+        if device_ip and use_cache:
+            cached = cls._load_log_cache(device_ip, vdom)
+            if cached:
+                cache_hit = True
+                hits_by_name = {
+                    k: PolicyHits(**v) for k, v in cached.get("hits_by_name", {}).items()
+                }
+                implicit_deny = [
+                    ImplicitDenyRow(**r) for r in cached.get("implicit_deny", [])
+                ]
+                daily_hits = cached.get("daily_hits", {})
+                total_hits = cached.get("total_hits", 0)
+                reachability_cached = cached.get("reachability")
+
+        if device_ip and not cache_hit:
             hits_by_name = cls.hits_by_policy(device_ip, window_hours=log_window_hours)
             implicit_deny = cls.implicit_deny_top(device_ip, window_hours=log_window_hours)
             total_hits = sum(h.hits for h in hits_by_name.values())
-            for p in policies:
-                if not p.enabled:
-                    continue
-                # A rule that hasn't fired isn't necessarily dead — a brand-new
-                # rule, an emergency cutover rule, a holiday-blocked one might
-                # all be legit. We just surface the candidates.
-                key = (p.name or p.rule_id or "").lower()
-                if key and key not in hits_by_name:
-                    zero_hit.append(p)
             daily_hits = cls.daily_hits_by_policy(
                 device_ip, days=max(1, log_window_hours // 24),
             )
 
-        # Phase 4 — zone reachability. Doesn't strictly need device_ip but
-        # the observed-traffic overlay does; pass through both either way.
-        reachability = cls.reachability_matrix(
-            policies, interfaces or [], device_ip=device_ip,
-            window_hours=min(log_window_hours, 168),  # cap observed window at 7d for perf
-            routes=routes or [],
-        )
+        # Zero-hit derivation uses the freshest policy list — not cached.
+        if device_ip:
+            for p in policies:
+                if not p.enabled:
+                    continue
+                key = (p.name or p.rule_id or "").lower()
+                if key and key not in hits_by_name:
+                    zero_hit.append(p)
+
+        # Phase 4 — zone reachability. If we have a cache hit, build the
+        # matrix from cached observed hits; otherwise run the live query.
+        if cache_hit and reachability_cached is not None:
+            reachability = cls._matrix_from_cached(
+                policies, reachability_cached,
+            )
+        else:
+            reachability = cls.reachability_matrix(
+                policies, interfaces or [], device_ip=device_ip,
+                window_hours=min(log_window_hours, 168),
+                routes=routes or [],
+            )
+
+        # Persist freshly-computed log fields so the next page load is fast.
+        if device_ip and not cache_hit:
+            try:
+                cls._store_log_cache(device_ip, vdom, {
+                    "hits_by_name": {
+                        k: {"policy_name": v.policy_name, "hits": v.hits, "last_seen": v.last_seen}
+                        for k, v in hits_by_name.items()
+                    },
+                    "implicit_deny": [
+                        {"srcip": r.srcip, "dstip": r.dstip, "dstport": r.dstport,
+                         "proto": r.proto, "hits": r.hits} for r in implicit_deny
+                    ],
+                    "daily_hits": daily_hits,
+                    "total_hits": total_hits,
+                    "reachability": cls._matrix_to_cache(reachability),
+                })
+            except Exception as e:
+                logger.warning(f"analytics cache store failed: {e}")
 
         return PolicyAnalyticsBundle(
             kpi_active_rules=active,

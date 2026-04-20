@@ -1581,6 +1581,7 @@
            in the inline detail panel — avoids one HTTP round-trip per row. #}
         <script id="fw-addr-map" type="application/json">{{ fw_addr_map_json | tojson }}</script>
         <script id="fw-svc-map" type="application/json">{{ fw_svc_map_json | tojson }}</script>
+        <script id="fw-pol-extras" type="application/json">{{ fw_policy_extras_json | tojson }}</script>
 
         <div class="fw-policies-list">
             {% for p in fw_policies %}
@@ -1621,74 +1622,10 @@
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                 </div>
-                <div class="fw-policy-detail" id="pol-{{ p.id }}-detail" hidden>
-                    <div class="fw-detail-grid">
-                        <div class="fw-detail-block">
-                            <div class="fw-detail-title">Source</div>
-                            <div class="fw-detail-sub">Zones</div>
-                            <div class="fw-detail-chips">
-                                {% if p.src_zones %}{% for z in p.src_zones %}<span class="fw-chip fw-chip-zone">{{ z }}</span>{% endfor %}
-                                {% else %}<span class="fw-detail-empty">—</span>{% endif %}
-                            </div>
-                            <div class="fw-detail-sub">Addresses</div>
-                            <div class="fw-detail-resolve" data-resolve-addrs="{{ p.src_addresses | tojson if p.src_addresses else '[]' }}">
-                                {% for a in (p.src_addresses or []) %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% else %}<span class="fw-detail-empty">—</span>{% endfor %}
-                            </div>
-                        </div>
-                        <div class="fw-detail-block">
-                            <div class="fw-detail-title">Destination</div>
-                            <div class="fw-detail-sub">Zones</div>
-                            <div class="fw-detail-chips">
-                                {% if p.dst_zones %}{% for z in p.dst_zones %}<span class="fw-chip fw-chip-zone">{{ z }}</span>{% endfor %}
-                                {% else %}<span class="fw-detail-empty">—</span>{% endif %}
-                            </div>
-                            <div class="fw-detail-sub">Addresses</div>
-                            <div class="fw-detail-resolve" data-resolve-addrs="{{ p.dst_addresses | tojson if p.dst_addresses else '[]' }}">
-                                {% for a in (p.dst_addresses or []) %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% else %}<span class="fw-detail-empty">—</span>{% endfor %}
-                            </div>
-                        </div>
-                        <div class="fw-detail-block">
-                            <div class="fw-detail-title">Service</div>
-                            <div class="fw-detail-resolve" data-resolve-svcs="{{ p.services | tojson if p.services else '[]' }}">
-                                {% for s in (p.services or []) %}<span class="fw-chip fw-chip-svc">{{ s }}</span>{% else %}<span class="fw-detail-empty">—</span>{% endfor %}
-                            </div>
-                            {% if p.applications %}
-                            <div class="fw-detail-sub">Applications</div>
-                            <div class="fw-detail-chips">
-                                {% for a in p.applications %}<span class="fw-chip">{{ a }}</span>{% endfor %}
-                            </div>
-                            {% endif %}
-                            {% if p.users %}
-                            <div class="fw-detail-sub">Users</div>
-                            <div class="fw-detail-chips">
-                                {% for u in p.users %}<span class="fw-chip">{{ u }}</span>{% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="fw-detail-block">
-                            <div class="fw-detail-title">Settings</div>
-                            <dl class="fw-detail-dl">
-                                <dt>Action</dt><dd><span class="fw-chip fw-chip-action fw-chip-action-{{ act_class }}">{{ p.action }}</span></dd>
-                                <dt>Status</dt><dd>{% if p.enabled %}<span class="fw-chip fw-chip-on">enabled</span>{% else %}<span class="fw-chip fw-chip-off">disabled</span>{% endif %}</dd>
-                                <dt>NAT</dt><dd>{{ 'enabled' if p.nat_enabled else 'disabled' }}</dd>
-                                <dt>Log Traffic</dt><dd>{{ p.log_traffic or '—' }}</dd>
-                                <dt>Schedule</dt><dd>{{ p.schedule or '—' }}</dd>
-                                <dt>Position</dt><dd>#{{ p.position }} of {{ fw_policies|length }}</dd>
-                                <dt>Rule ID</dt><dd>{{ p.rule_id or '—' }}</dd>
-                                <dt>VDOM</dt><dd>{{ p.vdom or 'global' }}</dd>
-                            </dl>
-                        </div>
-                    </div>
-                    {% if p.comment %}
-                    <div class="fw-detail-comment"><strong>Comment:</strong> {{ p.comment }}</div>
-                    {% endif %}
-                    {% if p.raw_definition %}
-                    <details class="fw-detail-raw">
-                        <summary>Raw definition</summary>
-                        <pre>{{ p.raw_definition }}</pre>
-                    </details>
-                    {% endif %}
-                </div>
+                {# Detail panel intentionally empty — built client-side from
+                   fw-pol-extras on first expand. Keeps the initial HTML
+                   ~5 KB per row instead of ~10 KB. #}
+                <div class="fw-policy-detail" id="pol-{{ p.id }}-detail" hidden></div>
             </div>
             {% endfor %}
         </div>
@@ -2676,8 +2613,8 @@ function filterPolicies() {
     });
 }
 
-// Lazy-parse the address/service maps once, then reuse on every expand.
-let _fwAddrMap = null, _fwSvcMap = null;
+// Lazy-parse the address/service/policy maps once, then reuse on every expand.
+let _fwAddrMap = null, _fwSvcMap = null, _fwPolMap = null;
 function _fwMaps() {
     if (_fwAddrMap === null) {
         try { _fwAddrMap = JSON.parse(document.getElementById('fw-addr-map')?.textContent || '{}'); }
@@ -2687,7 +2624,11 @@ function _fwMaps() {
         try { _fwSvcMap = JSON.parse(document.getElementById('fw-svc-map')?.textContent || '{}'); }
         catch { _fwSvcMap = {}; }
     }
-    return { addrs: _fwAddrMap, svcs: _fwSvcMap };
+    if (_fwPolMap === null) {
+        try { _fwPolMap = JSON.parse(document.getElementById('fw-pol-extras')?.textContent || '{}'); }
+        catch { _fwPolMap = {}; }
+    }
+    return { addrs: _fwAddrMap, svcs: _fwSvcMap, pols: _fwPolMap };
 }
 
 function _renderResolvedAddr(name, addrs) {
@@ -2721,26 +2662,95 @@ function _renderResolvedSvc(name, svcs) {
     return `<span class="fw-resolved"><span class="fw-resolved-name">${escapeHtml(name)} <small style="opacity:.6">[${escapeHtml(s.protocol)}]</small></span>${value}</span>`;
 }
 
+// Build the detail panel HTML for one policy on demand.
+// Previous incarnation rendered this server-side for all 500 rows (9.4 MB
+// HTML, 50s+ server time). Client-side from the policy-extras JSON map
+// keeps the initial HTML small and feels instant on expand.
+function _renderPolicyDetail(polId, pol, addrs, svcs) {
+    const chip = (txt, cls = 'fw-chip') => `<span class="${cls}">${escapeHtml(txt)}</span>`;
+    const zoneChips = list => (list && list.length)
+        ? list.map(z => chip(z, 'fw-chip fw-chip-zone')).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const resolveAddrs = list => (list && list.length)
+        ? list.map(n => _renderResolvedAddr(n, addrs)).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const resolveSvcs = list => (list && list.length)
+        ? list.map(n => _renderResolvedSvc(n, svcs)).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const plainChips = list => (list && list.length)
+        ? list.map(x => chip(x)).join('') : '';
+
+    const actClass = ['accept','allow','pass'].includes((pol.action || '').toLowerCase()) ? 'allow' : 'deny';
+    const applications = pol.applications || [];
+    const users = pol.users || [];
+
+    let appsBlock = '';
+    if (applications.length) {
+        appsBlock = `<div class="fw-detail-sub">Applications</div><div class="fw-detail-chips">${plainChips(applications)}</div>`;
+    }
+    let usersBlock = '';
+    if (users.length) {
+        usersBlock = `<div class="fw-detail-sub">Users</div><div class="fw-detail-chips">${plainChips(users)}</div>`;
+    }
+
+    const commentHtml = pol.comment
+        ? `<div class="fw-detail-comment"><strong>Comment:</strong> ${escapeHtml(pol.comment)}</div>` : '';
+    const rawHtml = pol.raw_definition
+        ? `<details class="fw-detail-raw"><summary>Raw definition</summary><pre>${escapeHtml(pol.raw_definition)}</pre></details>` : '';
+
+    return `
+        <div class="fw-detail-grid">
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Source</div>
+                <div class="fw-detail-sub">Zones</div>
+                <div class="fw-detail-chips">${zoneChips(pol.src_zones)}</div>
+                <div class="fw-detail-sub">Addresses</div>
+                <div class="fw-detail-resolve">${resolveAddrs(pol.src_addresses)}</div>
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Destination</div>
+                <div class="fw-detail-sub">Zones</div>
+                <div class="fw-detail-chips">${zoneChips(pol.dst_zones)}</div>
+                <div class="fw-detail-sub">Addresses</div>
+                <div class="fw-detail-resolve">${resolveAddrs(pol.dst_addresses)}</div>
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Service</div>
+                <div class="fw-detail-resolve">${resolveSvcs(pol.services)}</div>
+                ${appsBlock}${usersBlock}
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Settings</div>
+                <dl class="fw-detail-dl">
+                    <dt>Action</dt><dd><span class="fw-chip fw-chip-action fw-chip-action-${actClass}">${escapeHtml(pol.action || '')}</span></dd>
+                    <dt>Status</dt><dd>${pol.enabled ? '<span class="fw-chip fw-chip-on">enabled</span>' : '<span class="fw-chip fw-chip-off">disabled</span>'}</dd>
+                    <dt>NAT</dt><dd>${pol.nat_enabled ? 'enabled' : 'disabled'}</dd>
+                    <dt>Log Traffic</dt><dd>${escapeHtml(pol.log_traffic || '—')}</dd>
+                    <dt>Schedule</dt><dd>${escapeHtml(pol.schedule || '—')}</dd>
+                    <dt>Position</dt><dd>#${pol.position}</dd>
+                    <dt>Rule ID</dt><dd>${escapeHtml(pol.rule_id || '—')}</dd>
+                    <dt>VDOM</dt><dd>${escapeHtml(pol.vdom || 'global')}</dd>
+                </dl>
+            </div>
+        </div>
+        ${commentHtml}${rawHtml}
+    `;
+}
+
 function toggleFwPolicy(polId) {
     const card = document.querySelector(`[data-pol-id="${polId}"]`);
     if (!card) return;
     const detail = document.getElementById(`${polId}-detail`);
     const open = card.classList.toggle('fw-policy-open');
     if (detail) detail.hidden = !open;
-    if (open && !card.dataset.resolved) {
-        const { addrs, svcs } = _fwMaps();
-        // Walk the resolve placeholders and replace plain chips with rich
-        // resolved blocks (name → CIDR / port-range / group members).
-        card.querySelectorAll('[data-resolve-addrs]').forEach(el => {
-            const names = JSON.parse(el.dataset.resolveAddrs || '[]');
-            if (!names.length) return;
-            el.innerHTML = names.map(n => _renderResolvedAddr(n, addrs)).join('');
-        });
-        card.querySelectorAll('[data-resolve-svcs]').forEach(el => {
-            const names = JSON.parse(el.dataset.resolveSvcs || '[]');
-            if (!names.length) return;
-            el.innerHTML = names.map(n => _renderResolvedSvc(n, svcs)).join('');
-        });
+    if (open && !card.dataset.resolved && detail) {
+        const { addrs, svcs, pols } = _fwMaps();
+        const pol = pols[polId];
+        if (pol) {
+            detail.innerHTML = _renderPolicyDetail(polId, pol, addrs, svcs);
+        } else {
+            detail.innerHTML = '<div class="fw-detail-empty">Policy data not available.</div>';
+        }
         card.dataset.resolved = '1';
     }
 }

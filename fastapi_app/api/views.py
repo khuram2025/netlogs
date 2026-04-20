@@ -1630,6 +1630,26 @@ async def device_detail(
             "members": s.members, "category": s.category,
         } for s in fw_services
     }
+    # Compact per-policy detail map for client-side detail-panel render
+    # (fixes the 9.4 MB pages caused by 500 inline detail blocks). Only
+    # ship fields the panel actually displays; cap raw_definition.
+    fw_policy_extras_json = {
+        f"pol-{p.id}": {
+            "name": p.name, "rule_id": p.rule_id, "position": p.position,
+            "enabled": p.enabled, "action": p.action, "vdom": p.vdom,
+            "src_zones": p.src_zones or [], "dst_zones": p.dst_zones or [],
+            "src_addresses": p.src_addresses or [],
+            "dst_addresses": p.dst_addresses or [],
+            "services": p.services or [],
+            "applications": p.applications or [],
+            "users": p.users or [],
+            "nat_enabled": p.nat_enabled,
+            "log_traffic": p.log_traffic,
+            "schedule": p.schedule,
+            "comment": p.comment,
+            "raw_definition": (p.raw_definition or "")[:2000],
+        } for p in fw_policies
+    }
     # Policy analytics: Phase 1 (config-only) + Phase 2 (log join) + Phase 4
     # (zone reachability matrix). Pull interface entries so the matrix can
     # resolve log src/dst IPs back to a zone label.
@@ -1652,6 +1672,7 @@ async def device_detail(
         log_window_hours=720,  # 30 days
         interfaces=iface_rows,
         routes=route_rows,
+        vdom=selected_vdom,
     )
 
     # Validate and default current tab
@@ -1677,6 +1698,7 @@ async def device_detail(
         "fw_addresses": fw_addresses,
         "fw_services": fw_services,
         "fw_addr_map_json": fw_addr_map_json,
+        "fw_policy_extras_json": fw_policy_extras_json,
         "mgmt_host": mgmt_host,
         "fw_svc_map_json": fw_svc_map_json,
         "fw_analytics": fw_analytics,
@@ -1728,6 +1750,9 @@ async def fetch_routing_table(
 
     # Fetch routing tables for all VDOMs (or global if no VDOMs configured)
     results = await RoutingService.fetch_all_vdom_routing_tables(device, credential, db)
+    # Fresh snapshot → drop cached analytics so the next page load reflects it.
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
 
     # Aggregate results
     total_routes = 0
@@ -1787,6 +1812,8 @@ async def fetch_zone_data(
 
     # Fetch zone data for all VDOMs (or global if no VDOMs configured)
     results = await ZoneService.fetch_all_vdom_zone_data(device, credential, db)
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
 
     # Aggregate results
     total_zones = 0
@@ -1896,6 +1923,8 @@ async def fetch_firewall_policies(
         return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     results = await FirewallPolicyService.fetch_all_vdom_policies(device, credential, db)
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
 
     total_policies = 0
     total_addrs = 0
