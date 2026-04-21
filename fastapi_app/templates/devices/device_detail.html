@@ -1324,6 +1324,13 @@
             <span class="tab-badge">{{ fw_analytics.kpi_critical_permissiveness + fw_analytics.kpi_shadowed_count + fw_analytics.kpi_unlogged_permits }}</span>
             {% endif %}
         </div>
+        <div class="tab {% if current_tab == 'compliance' %}active{% endif %}" data-tab="compliance">
+            Compliance
+            {% if device_compliance %}
+            {% set _att_n = (device_compliance.values() | map(attribute='controls') | sum(start=[]) | selectattr('attested') | list | length) %}
+            {% if _att_n > 0 %}<span class="tab-badge" style="background:#059669;color:#fff">{{ _att_n }}</span>{% endif %}
+            {% endif %}
+        </div>
         <div class="tab {% if current_tab == 'changes' %}active{% endif %}" data-tab="changes">Route Changes</div>
         <div class="tab {% if current_tab == 'snapshots' %}active{% endif %}" data-tab="snapshots">Fetch History</div>
     </div>
@@ -2279,6 +2286,360 @@
                 Fetch Firewall Policies Now
             </button>
             {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Compliance Tab -->
+    <div class="tab-content {% if current_tab == 'compliance' %}active{% endif %}" id="tab-compliance">
+        {% if device_compliance %}
+        <style>
+            .cmp-intro { color: #94a3b8; font-size: 13px; margin: 4px 0 16px; max-width: 900px; line-height: 1.55; }
+            .cmp-intro strong { color: #e2e8f0; }
+            .cmp-fw { border: 1px solid #334155; border-radius: 8px; background: #0f172a; margin-bottom: 18px; overflow: hidden; }
+            .cmp-fw-hdr {
+                display: grid; grid-template-columns: 1fr auto auto;
+                gap: 16px; align-items: center;
+                padding: 14px 18px; background: #1e293b; border-bottom: 1px solid #334155;
+            }
+            .cmp-fw-title { font-weight: 700; font-size: 14px; color: #e2e8f0; letter-spacing: -0.01em; }
+            .cmp-fw-ver { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+            .cmp-fw-counts { display: flex; gap: 10px; font-size: 11px; font-weight: 700; }
+            .cmp-fw-counts .c-pass    { color: #4ade80; }
+            .cmp-fw-counts .c-partial { color: #fbbf24; }
+            .cmp-fw-counts .c-fail    { color: #f87171; }
+            .cmp-fw-counts .c-na      { color: #94a3b8; }
+            .cmp-fw-cov { font-size: 20px; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+            .cmp-row {
+                display: grid;
+                grid-template-columns: 80px 1fr 200px 120px;
+                gap: 14px;
+                padding: 14px 18px;
+                border-bottom: 1px solid rgba(148,163,184,0.1);
+                align-items: start;
+            }
+            .cmp-row:last-child { border-bottom: 0; }
+            .cmp-cid { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3b82f6; font-weight: 700; }
+            .cmp-cid-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3b82f6; font-weight: 700; }
+            .cmp-row.cmp-excluded { opacity: 0.55; }
+            .cmp-row.cmp-excluded .cmp-cid-text { color: #64748b; }
+            .cmp-title-body h5 { margin: 0 0 3px; font-size: 13px; color: #e2e8f0; font-weight: 600; }
+            .cmp-title-body p  { margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.45; }
+            .cmp-title-body .auto-ev { margin-top: 4px; font-size: 10.5px; color: #64748b; font-style: italic; }
+            .cmp-controls { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+            .cmp-controls select {
+                background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+                border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%;
+            }
+            .cmp-controls textarea {
+                background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+                border-radius: 4px; padding: 6px 8px; font-size: 12px;
+                resize: vertical; min-height: 36px; font-family: inherit;
+            }
+            .cmp-file-row { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+            .cmp-file-row input[type="file"] { flex: 1; color: #cbd5e1; font-size: 11px; }
+            .cmp-preview img { max-width: 100%; max-height: 80px; border-radius: 4px; border: 1px solid #334155; }
+            .cmp-save {
+                background: #3b82f6; color: #fff; border: 0; border-radius: 4px;
+                padding: 6px 10px; font-weight: 600; font-size: 11px; cursor: pointer;
+            }
+            .cmp-save.saving { background: #6b7280; }
+            .cmp-save.saved  { background: #059669; }
+            .cmp-clear {
+                background: transparent; color: #94a3b8; border: 1px solid #334155;
+                border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer;
+            }
+            .cmp-status-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12px; }
+            .cmp-pill {
+                display: inline-block; padding: 2px 8px; border-radius: 10px;
+                font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            }
+            .cmp-pill.pass    { background: rgba(34,197,94,.15);  color: #4ade80; }
+            .cmp-pill.partial { background: rgba(245,158,11,.15); color: #fbbf24; }
+            .cmp-pill.fail    { background: rgba(239,68,68,.15);  color: #f87171; }
+            .cmp-pill.na      { background: rgba(148,163,184,.2); color: #cbd5e1; }
+            .cmp-pill.auto    { background: rgba(59,130,246,.15); color: #93c5fd; }
+            .cmp-attested-tag {
+                font-size: 9px; color: #059669; font-weight: 700;
+                letter-spacing: 0.08em; text-transform: uppercase;
+            }
+            .cmp-attestor-line { font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.3; }
+            .cmp-attestor-line strong { color: #e2e8f0; }
+        </style>
+
+        <p class="cmp-intro">
+            Manual attestation lets a reviewer mark controls that can't be
+            proven from firewall config or logs alone (e.g. quarterly log
+            review, segmentation exceptions with sign-off). The reviewer's
+            status, notes, and attached screenshot flow into the
+            <strong>Compliance sections of the PDF report</strong> next to
+            the auto-evaluated findings. Leave the override as <em>Use
+            automatic</em> to let the analytics engine decide.
+        </p>
+
+        {% for fw_slug, fw in device_compliance.items() %}
+        <div class="cmp-fw" data-framework="{{ fw_slug }}">
+            <div class="cmp-fw-hdr">
+                <div>
+                    <div class="cmp-fw-title">{{ fw.title }}</div>
+                    <div class="cmp-fw-ver">{{ fw.version }} &middot; {{ fw.scope }}</div>
+                </div>
+                <div class="cmp-fw-counts">
+                    <span class="c-pass">{{ fw.pass }} pass</span>
+                    <span class="c-partial">{{ fw.partial }} partial</span>
+                    <span class="c-fail">{{ fw.fail }} fail</span>
+                    {% if fw.na %}<span class="c-na">{{ fw.na }} n/a</span>{% endif %}
+                    {% if fw.excluded %}<span class="c-na">{{ fw.excluded }} excluded</span>{% endif %}
+                </div>
+                <div class="cmp-fw-cov">{{ fw.coverage }}%</div>
+            </div>
+            {# ── Bulk-action toolbar ───────────────────────────────── #}
+            <div class="cmp-toolbar" style="display:flex;gap:12px;align-items:center;padding:10px 18px;background:rgba(59,130,246,.05);border-bottom:1px solid #334155;font-size:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px;color:#cbd5e1;cursor:pointer">
+                    <input type="checkbox" class="cmp-select-all">
+                    <span>Select all</span>
+                </label>
+                <span style="color:#94a3b8">Bulk:</span>
+                <select class="cmp-bulk-status" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:4px 8px">
+                    <option value="">&mdash; choose status &mdash;</option>
+                    <option value="pass">Pass</option>
+                    <option value="partial">Partial</option>
+                    <option value="fail">Fail</option>
+                    <option value="na">N/A</option>
+                    <option value="auto">Clear (use auto)</option>
+                </select>
+                <button type="button" class="cmp-bulk-apply" style="background:#3b82f6;color:#fff;border:0;border-radius:4px;padding:5px 14px;font-weight:600;font-size:12px;cursor:pointer">Apply to selected</button>
+                <span style="color:#64748b;font-size:11px">|</span>
+                <button type="button" class="cmp-bulk-include" data-action="include" style="background:transparent;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">✓ Include selected</button>
+                <button type="button" class="cmp-bulk-include" data-action="exclude" style="background:transparent;color:#f87171;border:1px solid #334155;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">✗ Exclude selected</button>
+                <span class="cmp-bulk-count" style="color:#94a3b8;margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums">0 selected</span>
+            </div>
+            {% for c in fw.controls %}
+            <div class="cmp-row{% if not c.include_in_report %} cmp-excluded{% endif %}" data-control-id="{{ c.id }}" data-framework="{{ fw_slug }}" data-include="{{ 'true' if c.include_in_report else 'false' }}">
+                <div class="cmp-cid" style="display:flex;flex-direction:column;gap:6px">
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:#94a3b8;font-family:inherit;font-weight:500;text-transform:uppercase;letter-spacing:0.06em">
+                        <input type="checkbox" class="cmp-select">
+                        <span>Select</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:#94a3b8;font-family:inherit;font-weight:500;text-transform:uppercase;letter-spacing:0.06em" title="Include this control in the PDF report">
+                        <input type="checkbox" class="cmp-include" {% if c.include_in_report %}checked{% endif %}>
+                        <span>In report</span>
+                    </label>
+                    <span class="cmp-cid-text">{{ c.id }}</span>
+                </div>
+                <div class="cmp-title-body">
+                    <h5>{{ c.title }}</h5>
+                    <p>{{ c.requirement }}</p>
+                    <div class="auto-ev">Auto-analysis: {{ c.auto_evidence }}</div>
+                </div>
+                <div class="cmp-controls">
+                    <select class="cmp-status">
+                        <option value="">Use automatic</option>
+                        <option value="pass"    {% if c.attested and c.status == 'pass' %}selected{% endif %}>Pass</option>
+                        <option value="partial" {% if c.attested and c.status == 'partial' %}selected{% endif %}>Partial</option>
+                        <option value="fail"    {% if c.attested and c.status == 'fail' %}selected{% endif %}>Fail</option>
+                        <option value="na"      {% if c.attested and c.status == 'na' %}selected{% endif %}>N/A</option>
+                    </select>
+                    <textarea class="cmp-notes" rows="2" placeholder="Reviewer notes (optional)">{{ c.notes or '' }}</textarea>
+                    <div class="cmp-file-row">
+                        <input type="file" class="cmp-proof" accept="image/png,image/jpeg,image/webp,image/gif">
+                        {% if c.proof_url %}
+                        <label style="color:#94a3b8;font-size:10px">
+                            <input type="checkbox" class="cmp-remove-proof"> remove
+                        </label>
+                        {% endif %}
+                    </div>
+                    {% if c.proof_url %}
+                    <div class="cmp-preview"><img src="{{ c.proof_url }}" alt="proof"></div>
+                    {% endif %}
+                    <div style="display:flex;gap:6px">
+                        <button type="button" class="cmp-save">Save</button>
+                        {% if c.attested %}
+                        <button type="button" class="cmp-clear" title="Revert to automatic evaluation">Clear</button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="cmp-status-col">
+                    <span class="cmp-pill {{ c.status }}">{{ c.status }}</span>
+                    {% if c.attested %}
+                    <span class="cmp-attested-tag">● Attested</span>
+                    <div class="cmp-attestor-line">
+                        <strong>{{ c.attested_by or 'unknown' }}</strong>
+                        {% if c.attested_at %}<br>{{ c.attested_at[:16] }}{% endif %}
+                    </div>
+                    {% else %}
+                    <span class="cmp-pill auto">auto</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        <script>
+        (function() {
+            const tab = document.getElementById('tab-compliance');
+            if (!tab) return;
+            const deviceId = {{ device.id }};
+
+            // ── Helpers ────────────────────────────────────────────────
+            function buildFormData(row, {statusOverride = null, includeOnly = false} = {}) {
+                const fd = new FormData();
+                const statusEl = row.querySelector('.cmp-status');
+                const status = statusOverride !== null ? statusOverride : (statusEl ? statusEl.value : '');
+                // "auto" (= clear) is expressed as empty status.
+                if (status && status !== 'auto') fd.append('status', status);
+                if (!includeOnly) {
+                    const notes = row.querySelector('.cmp-notes');
+                    if (notes && notes.value) fd.append('notes', notes.value);
+                    const fileInput = row.querySelector('.cmp-proof');
+                    if (fileInput && fileInput.files[0]) fd.append('proof', fileInput.files[0]);
+                    const remove = row.querySelector('.cmp-remove-proof');
+                    if (remove && remove.checked) fd.append('remove_proof', '1');
+                }
+                const inc = row.querySelector('.cmp-include');
+                fd.append('include_in_report', inc && inc.checked ? '1' : '0');
+                return fd;
+            }
+
+            async function putRow(row, fd, btn) {
+                const fw = row.dataset.framework;
+                const cid = row.dataset.controlId;
+                if (btn) { btn.classList.add('saving'); btn.textContent = 'Saving…'; }
+                const resp = await fetch(
+                    `/api/devices/${deviceId}/attestations/${fw}/${encodeURIComponent(cid)}`,
+                    { method: 'PUT', body: fd, credentials: 'same-origin' }
+                );
+                if (!resp.ok) {
+                    const err = await resp.text();
+                    if (btn) { btn.classList.remove('saving'); btn.textContent = 'Save'; }
+                    throw new Error(err || `HTTP ${resp.status}`);
+                }
+                if (btn) {
+                    btn.classList.remove('saving'); btn.classList.add('saved'); btn.textContent = 'Saved';
+                    setTimeout(() => { btn.classList.remove('saved'); btn.textContent = 'Save'; }, 1200);
+                }
+            }
+
+            async function deleteRow(row) {
+                const fw = row.dataset.framework;
+                const cid = row.dataset.controlId;
+                const resp = await fetch(
+                    `/api/devices/${deviceId}/attestations/${fw}/${encodeURIComponent(cid)}`,
+                    { method: 'DELETE', credentials: 'same-origin' }
+                );
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            }
+
+            // ── Per-row Save ───────────────────────────────────────────
+            tab.querySelectorAll('.cmp-save').forEach(btn => {
+                btn.addEventListener('click', async (ev) => {
+                    const row = ev.target.closest('.cmp-row');
+                    try {
+                        await putRow(row, buildFormData(row), btn);
+                        setTimeout(() => window.location.reload(), 500);
+                    } catch (e) { alert('Save failed: ' + e.message); }
+                });
+            });
+
+            // ── Per-row Clear ──────────────────────────────────────────
+            tab.querySelectorAll('.cmp-clear').forEach(btn => {
+                btn.addEventListener('click', async (ev) => {
+                    if (!confirm('Revert this control to the automatic evaluation?')) return;
+                    const row = ev.target.closest('.cmp-row');
+                    try { await deleteRow(row); window.location.reload(); }
+                    catch (e) { alert('Clear failed: ' + e.message); }
+                });
+            });
+
+            // ── Include-in-report auto-save (no manual Save needed) ───
+            tab.querySelectorAll('.cmp-include').forEach(cb => {
+                cb.addEventListener('change', async (ev) => {
+                    const row = ev.target.closest('.cmp-row');
+                    try {
+                        await putRow(row, buildFormData(row, {includeOnly: true}), null);
+                        row.classList.toggle('cmp-excluded', !cb.checked);
+                    } catch (e) {
+                        cb.checked = !cb.checked; // rollback
+                        alert('Update failed: ' + e.message);
+                    }
+                });
+            });
+
+            // ── Per-framework bulk toolbar ─────────────────────────────
+            tab.querySelectorAll('.cmp-fw').forEach(fwEl => {
+                const selAll    = fwEl.querySelector('.cmp-select-all');
+                const countLbl  = fwEl.querySelector('.cmp-bulk-count');
+                const bulkStat  = fwEl.querySelector('.cmp-bulk-status');
+                const bulkApply = fwEl.querySelector('.cmp-bulk-apply');
+                const incBtns   = fwEl.querySelectorAll('.cmp-bulk-include');
+                const rows      = fwEl.querySelectorAll('.cmp-row');
+                const checks    = fwEl.querySelectorAll('.cmp-select');
+
+                function refreshCount() {
+                    const n = [...checks].filter(c => c.checked).length;
+                    if (countLbl) countLbl.textContent = `${n} selected`;
+                }
+                if (selAll) {
+                    selAll.addEventListener('change', () => {
+                        checks.forEach(c => { c.checked = selAll.checked; });
+                        refreshCount();
+                    });
+                }
+                checks.forEach(c => c.addEventListener('change', refreshCount));
+
+                if (bulkApply) {
+                    bulkApply.addEventListener('click', async () => {
+                        const status = bulkStat.value;
+                        if (!status) { alert('Pick a status first.'); return; }
+                        const selectedRows = [...rows].filter(r => r.querySelector('.cmp-select').checked);
+                        if (!selectedRows.length) { alert('No rows selected.'); return; }
+                        if (!confirm(`Apply ${status.toUpperCase()} to ${selectedRows.length} control(s)?`)) return;
+                        bulkApply.disabled = true; const orig = bulkApply.textContent;
+                        bulkApply.textContent = `Saving 0/${selectedRows.length}…`;
+                        let ok = 0;
+                        for (const row of selectedRows) {
+                            try {
+                                if (status === 'auto') {
+                                    await deleteRow(row);
+                                } else {
+                                    await putRow(row, buildFormData(row, {statusOverride: status, includeOnly: true}), null);
+                                }
+                                ok++;
+                                bulkApply.textContent = `Saving ${ok}/${selectedRows.length}…`;
+                            } catch (e) { console.error('bulk save failed for row', row, e); }
+                        }
+                        bulkApply.textContent = `Saved ${ok}/${selectedRows.length}`;
+                        setTimeout(() => { window.location.reload(); }, 600);
+                    });
+                }
+
+                incBtns.forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const action = btn.dataset.action;  // 'include' | 'exclude'
+                        const selectedRows = [...rows].filter(r => r.querySelector('.cmp-select').checked);
+                        if (!selectedRows.length) { alert('No rows selected.'); return; }
+                        btn.disabled = true;
+                        for (const row of selectedRows) {
+                            const cb = row.querySelector('.cmp-include');
+                            cb.checked = (action === 'include');
+                            try {
+                                await putRow(row, buildFormData(row, {includeOnly: true}), null);
+                                row.classList.toggle('cmp-excluded', !cb.checked);
+                            } catch (e) { console.error(e); }
+                        }
+                        btn.disabled = false;
+                    });
+                });
+            });
+        })();
+        </script>
+
+        {% else %}
+        <div class="pl-empty" style="padding:40px">
+            <h3>Compliance data unavailable</h3>
+            <p>Fetch the firewall policies first so the compliance engine has
+            a snapshot to evaluate.</p>
         </div>
         {% endif %}
     </div>

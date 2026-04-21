@@ -34,6 +34,7 @@ from .api.correlation import router as correlation_router
 from .api.saved_searches import router as saved_searches_router
 from .api.dashboards import router as dashboards_router
 from .api.address_objects import router as address_objects_router
+from .api.compliance import router as compliance_router
 from .api.setup import router as setup_router
 from .api.health import router as health_router
 from .api.backup import router as backup_router
@@ -311,6 +312,7 @@ app.include_router(correlation_router)
 app.include_router(saved_searches_router)
 app.include_router(dashboards_router)
 app.include_router(address_objects_router)
+app.include_router(compliance_router, prefix="/api")
 
 # Include health check routes (public, no auth)
 app.include_router(health_router)

@@ -102,6 +102,362 @@ def format_number(num: int) -> str:
     return f"{num:,}"
 
 
+async def _load_attestations(db, device_id: int, *, embed_proofs: bool = False) -> dict:
+    """Load manual compliance attestations for a device.
+
+    Returns ``{(framework, control_id): row_dict}``. When ``embed_proofs``
+    is True any attached proof image is read from disk and converted to a
+    ``data:image/...;base64,...`` URL — used by the PDF generator so the
+    output is self-contained (Playwright's Chrome never has to reach back
+    to the web server). The web UI uses the regular ``/static/...`` URL
+    instead to keep payloads small.
+    """
+    from ..models.compliance_attestation import ComplianceAttestation
+    import base64 as _b64
+    from pathlib import Path as _Path
+
+    rows = (await db.execute(
+        select(ComplianceAttestation)
+        .where(ComplianceAttestation.device_id == device_id)
+    )).scalars().all()
+    out: dict = {}
+    static_root = _Path(__file__).resolve().parent.parent / "static"
+    for r in rows:
+        entry = {
+            "status":            r.status,
+            "include_in_report": r.include_in_report,
+            "notes":             r.notes,
+            "reviewed_by":       r.reviewed_by,
+            "reviewed_at":       r.reviewed_at.isoformat() if r.reviewed_at else None,
+            "proof_url":         f"/static/{r.proof_path}" if r.proof_path else None,
+            "proof_filename":    r.proof_filename,
+            "proof_mimetype":    r.proof_mimetype,
+        }
+        if embed_proofs and r.proof_path:
+            try:
+                f = static_root / r.proof_path
+                if f.is_file():
+                    b = f.read_bytes()
+                    mime = r.proof_mimetype or "image/png"
+                    entry["proof_data_url"] = (
+                        f"data:{mime};base64,{_b64.b64encode(b).decode('ascii')}"
+                    )
+            except OSError as e:
+                logger.warning(f"Could not embed proof {r.proof_path}: {e}")
+        out[(r.framework, r.control_id)] = entry
+    return out
+
+
+def _compute_compliance_findings(analytics, attestations: Optional[dict] = None) -> dict:
+    """Map the analytics bundle to relevant controls across four frameworks.
+
+    ``attestations`` — optional ``{(framework, control_id): row_dict}`` map
+    of manual reviewer overrides. When a control has a manual attestation,
+    the manual status + evidence text wins over the auto-evaluated one,
+    and an ``attested_by`` / ``attested_at`` / ``proof_url`` / ``proof_mimetype``
+    payload is attached so the UI and PDF can render the reviewer note.
+
+    Each framework section returns:
+        {
+          "title":      human-readable framework name,
+          "version":    publication / effective version,
+          "scope":      what part of the framework we cover,
+          "controls":   [ {id, title, requirement, status, evidence,
+                           auto_status, auto_evidence,
+                           attested, attested_by, attested_at,
+                           notes, proof_url, proof_mimetype}, ... ],
+          "pass":       # of controls with status == 'pass',
+          "partial":    # with status == 'partial',
+          "fail":       # with status == 'fail',
+          "na":         # with status == 'na' (not evidenceable from config),
+          "coverage":   int percent — pass counts full, partial counts half,
+        }
+
+    Status rubric:
+      pass    = evidence clearly meets the control
+      partial = evidence shows the control is partially met (reasonable
+                compensating posture exists, but gaps remain)
+      fail    = evidence shows a material control gap
+      na      = the control can't be evidenced from firewall analytics
+                alone (e.g. physical security, identity proofing) —
+                excluded from coverage %
+    """
+    a = analytics
+    perm = a.permissiveness or []
+    crit = sum(1 for r in perm if r.band == "critical")
+    high = sum(1 for r in perm if r.band == "high")
+    zr = getattr(a, "reachability", None)
+
+    # ---- shared evaluators ----
+    def _deny_by_default():
+        policies_with_pos = [(p, p.position) for p in getattr(a, "zero_hit_rules", []) or []]
+        # Can't easily know the bottom rule from the bundle alone, so rely on
+        # a heuristic: if the bundle reports zero implicit_deny hits it means
+        # traffic isn't falling through; plus the permissiveness rubric
+        # already catches any-any allows at the bottom.
+        if crit > 0 or high > 2:
+            return "partial", (
+                f"{crit} critical and {high} high-band permit rules; "
+                "bottom catch-all may be over-permissive"
+            )
+        return "pass", "No critical/high-band catch-all permits detected"
+
+    def _least_privilege():
+        if crit > 0:
+            return "fail", f"{crit} CRITICAL-band permit rule{'s' if crit != 1 else ''} combine multiple any-dimensions"
+        if high > 0:
+            return "partial", f"{high} HIGH-band permit rule{'s' if high != 1 else ''}; tighten src / dst / service"
+        return "pass", "Permissiveness avg {}/100, no CRITICAL or HIGH permits".format(a.kpi_avg_permissiveness)
+
+    def _logging_complete():
+        n = int(a.kpi_unlogged_permits or 0)
+        if n == 0:
+            return "pass", "All enabled permit rules have traffic logging enabled"
+        if n <= 2:
+            return "partial", f"{n} permit rule{'s' if n != 1 else ''} with logging disabled"
+        return "fail", f"{n} permit rules with logging disabled — SIEM blind spots"
+
+    def _rulebase_hygiene():
+        sd = int(a.kpi_shadowed_count or 0)
+        rd = int(a.kpi_redundant_count or 0)
+        zero = int(a.kpi_zero_hit_30d or 0)
+        debt = sd + rd
+        total_debt = debt + zero
+        if total_debt == 0:
+            return "pass", "No shadowed, redundant, or zero-hit rules"
+        if total_debt <= 10:
+            return "partial", f"{debt} shadowed/redundant + {zero} zero-hit rules"
+        return "fail", f"{debt} shadowed/redundant + {zero} zero-hit rules — periodic review overdue"
+
+    def _segmentation():
+        if not zr or not zr.src_zones:
+            return "na", "Zone snapshot not available"
+        counts = {"aligned": 0, "over-provisioned": 0, "unauthorised": 0, "gap": 0, "denied": 0}
+        total = 0
+        for sz in zr.src_zones:
+            for dz in zr.dst_zones:
+                total += 1
+                counts[(zr.cell(sz, dz).state or "gap")] = counts.get((zr.cell(sz, dz).state or "gap"), 0) + 1
+        if total == 0:
+            return "na", "No zone pairs to evaluate"
+        unauth = counts.get("unauthorised", 0)
+        over = counts.get("over-provisioned", 0)
+        unauth_pct = 100 * unauth / total
+        if unauth_pct >= 10:
+            return "fail", f"{unauth} unauthorised zone pairs ({unauth_pct:.1f}%) — traffic crossing zones without permits"
+        if unauth > 0 or over > 0:
+            return "partial", f"{unauth} unauthorised, {over} over-provisioned zone pairs"
+        return "pass", "No unauthorised zone-to-zone traffic; segmentation matches config"
+
+    def _object_hygiene():
+        oh = getattr(a, "object_hygiene", None)
+        if not oh or not (oh.total_addrs or oh.total_services):
+            return "na", "No object inventory"
+        ref_pct = 100 * (oh.referenced_addrs + oh.referenced_services) / max(1, oh.total_addrs + oh.total_services)
+        if ref_pct >= 70:
+            return "pass", f"{ref_pct:.0f}% of defined objects are referenced"
+        if ref_pct >= 40:
+            return "partial", f"Only {ref_pct:.0f}% of defined objects are referenced"
+        return "fail", f"Only {ref_pct:.0f}% of defined objects are referenced — stale inventory"
+
+    def _implicit_deny_visibility():
+        n = len(a.implicit_deny or [])
+        if not a.log_window_hours:
+            return "na", "Log-join not available"
+        if n == 0:
+            return "pass", "No significant implicit-deny hits in 30 days"
+        return "partial", f"{n} top-flow tuples hitting implicit deny — possible missing rules"
+
+    def _zero_hit_review():
+        n = int(a.kpi_zero_hit_30d or 0)
+        if not a.log_window_hours:
+            return "na", "Log-join not available"
+        if n == 0:
+            return "pass", "No zero-hit rules in 30 days"
+        if n <= 10:
+            return "partial", f"{n} zero-hit rules — review candidates"
+        return "fail", f"{n} zero-hit rules — rule-base review overdue"
+
+    # ---- Framework control lists ----
+    nca_ecc = {
+        "title":   "NCA Essential Cybersecurity Controls (ECC)",
+        "version": "ECC-1:2018 / ECC-2:2024",
+        "scope":   "Domain 2 — Cybersecurity Defence (Network Security + Logging)",
+        "controls": [
+            {"id": "2-3-1-1", "title": "Restrict network access",
+             "requirement": "Network access restricted by need-to-know; prohibit any-to-any permits",
+             **_eval_status(*_least_privilege())},
+            {"id": "2-3-1-3", "title": "Default-deny posture",
+             "requirement": "Firewall enforces an explicit deny-by-default baseline",
+             **_eval_status(*_deny_by_default())},
+            {"id": "2-3-2",   "title": "Network segmentation",
+             "requirement": "Different security classifications logically segmented with enforced controls",
+             **_eval_status(*_segmentation())},
+            {"id": "2-3-3-1", "title": "Configuration integrity",
+             "requirement": "Firewall configurations hardened and reviewed periodically (shadowed / redundant / zero-hit rules)",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "2-8-1-1", "title": "Security event logging",
+             "requirement": "Security-relevant events captured for critical systems; logging mandatory on permit rules",
+             **_eval_status(*_logging_complete())},
+            {"id": "2-8-1-4", "title": "Log review and analysis",
+             "requirement": "Periodic review of logs and rule base for anomalies",
+             **_eval_status(*_zero_hit_review())},
+            {"id": "2-8-1-5", "title": "Implicit-deny visibility",
+             "requirement": "Traffic hitting default-deny monitored for missing-rule indicators",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "2-12",    "title": "Asset / object inventory",
+             "requirement": "Accurate inventory of network objects maintained",
+             **_eval_status(*_object_hygiene())},
+        ],
+    }
+
+    pci_dss = {
+        "title":   "PCI DSS — Install and Maintain Network Security Controls",
+        "version": "v4.0 (effective 2024-03-31)",
+        "scope":   "Requirement 1 — Network Security Controls",
+        "controls": [
+            {"id": "1.2.1",  "title": "Configuration standards defined",
+             "requirement": "NSC configuration standards documented and consistently applied",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "1.2.5",  "title": "Allowed services/ports/protocols",
+             "requirement": "All allowed services, ports, and protocols identified and business-justified",
+             **_eval_status(*_least_privilege())},
+            {"id": "1.2.7",  "title": "Periodic NSC config review",
+             "requirement": "NSC configurations reviewed at least every 6 months; unused rules retired",
+             **_eval_status(*_zero_hit_review())},
+            {"id": "1.3.1",  "title": "Inbound traffic restriction",
+             "requirement": "Inbound traffic to CDE restricted to necessary authorised traffic",
+             **_eval_status(*_segmentation())},
+            {"id": "1.3.2",  "title": "Outbound traffic restriction",
+             "requirement": "Outbound traffic from CDE restricted to authorised destinations",
+             **_eval_status(*_segmentation())},
+            {"id": "1.4.1",  "title": "Network security controls deny-all default",
+             "requirement": "NSC configured to deny all inbound/outbound traffic by default",
+             **_eval_status(*_deny_by_default())},
+            {"id": "1.4.4",  "title": "Explicit deny for all other traffic",
+             "requirement": "Final rule explicitly denies anything not permitted above",
+             **_eval_status(*_deny_by_default())},
+            {"id": "10.2.1", "title": "Audit log events for network activity",
+             "requirement": "All individual access to network resources logged",
+             **_eval_status(*_logging_complete())},
+        ],
+    }
+
+    iso_27001 = {
+        "title":   "ISO/IEC 27001:2022 — Annex A (selected)",
+        "version": "2022 Edition",
+        "scope":   "Organisational / Technological network & logging controls",
+        "controls": [
+            {"id": "A.5.15", "title": "Access control",
+             "requirement": "Access-control rules implemented on least-privilege basis",
+             **_eval_status(*_least_privilege())},
+            {"id": "A.8.15", "title": "Logging",
+             "requirement": "Event logs produced, stored, protected and analysed",
+             **_eval_status(*_logging_complete())},
+            {"id": "A.8.16", "title": "Monitoring activities",
+             "requirement": "Networks, systems and applications monitored for anomalous behaviour",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "A.8.20", "title": "Networks security",
+             "requirement": "Networks and devices secured and managed to protect information",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "A.8.21", "title": "Security of network services",
+             "requirement": "Security mechanisms, service levels and requirements identified and applied",
+             **_eval_status(*_deny_by_default())},
+            {"id": "A.8.22", "title": "Segregation of networks",
+             "requirement": "Information services, users and systems separated on networks",
+             **_eval_status(*_segmentation())},
+            {"id": "A.8.9",  "title": "Configuration management",
+             "requirement": "Configurations including security configs established, documented, monitored",
+             **_eval_status(*_object_hygiene())},
+        ],
+    }
+
+    cis_v8 = {
+        "title":   "CIS Critical Security Controls",
+        "version": "v8.1 (2024)",
+        "scope":   "Controls 12 (Network Infrastructure Management) + 13 (Network Monitoring & Defence)",
+        "controls": [
+            {"id": "12.2",  "title": "Secure network architecture",
+             "requirement": "Establish and maintain secure network architecture",
+             **_eval_status(*_segmentation())},
+            {"id": "12.3",  "title": "Securely manage network infrastructure",
+             "requirement": "Securely manage network infrastructure; reviewed and updated",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "12.4",  "title": "Network object inventory",
+             "requirement": "Maintain and enforce up-to-date inventory of network objects and addresses",
+             **_eval_status(*_object_hygiene())},
+            {"id": "12.8",  "title": "Network access control to least privilege",
+             "requirement": "Least-privilege network access enforced; broad any-to-any rules flagged",
+             **_eval_status(*_least_privilege())},
+            {"id": "13.1",  "title": "Centralise security event alerting",
+             "requirement": "Security events from network infrastructure forwarded to central SIEM",
+             **_eval_status(*_logging_complete())},
+            {"id": "13.6",  "title": "Collect network traffic flow logs",
+             "requirement": "Network traffic flow logs collected, reviewed, and alerted on",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "13.10", "title": "Baseline of network behaviour",
+             "requirement": "Traffic patterns baselined; anomalies (zero-hit rules, implicit deny spikes) investigated",
+             **_eval_status(*_zero_hit_review())},
+        ],
+    }
+
+    frameworks = {"nca_ecc": nca_ecc, "pci_dss": pci_dss,
+                  "iso_27001": iso_27001, "cis_v8": cis_v8}
+
+    # ── Merge manual reviewer attestations ──────────────────────────
+    # The override applies one row at a time. We retain the auto-evaluated
+    # status in ``auto_status``/``auto_evidence`` so the UI can still show
+    # "auto says PARTIAL, reviewer says PASS" side-by-side, and the PDF
+    # shows the reviewer name + timestamp below the evidence line.
+    atts = attestations or {}
+    for fw_slug, fw in frameworks.items():
+        for c in fw["controls"]:
+            c["auto_status"] = c["status"]
+            c["auto_evidence"] = c["evidence"]
+            c["attested"] = False
+            c["include_in_report"] = True  # default — everything renders
+            key = (fw_slug, c["id"])
+            override = atts.get(key)
+            if override:
+                c["include_in_report"] = override.get("include_in_report", True)
+                # status may be None if the row exists only to carry the
+                # include-in-report flag. Only swap status / evidence when
+                # the reviewer actually picked one.
+                if override.get("status"):
+                    c["status"] = override["status"]
+                    c["evidence"] = override.get("notes") or c["auto_evidence"]
+                    c["attested"] = True
+                    c["attested_by"] = override.get("reviewed_by")
+                    c["attested_at"] = override.get("reviewed_at")
+                c["notes"] = override.get("notes")
+                c["proof_url"] = override.get("proof_url")
+                c["proof_mimetype"] = override.get("proof_mimetype")
+                c["proof_data_url"] = override.get("proof_data_url")
+
+    for fw in frameworks.values():
+        # Counts and coverage consider only controls the user opted to
+        # include in the report, so excluding an irrelevant control doesn't
+        # leave its auto-FAIL dragging the score down.
+        included = [c for c in fw["controls"] if c.get("include_in_report", True)]
+        p = sum(1 for c in included if c["status"] == "pass")
+        pa = sum(1 for c in included if c["status"] == "partial")
+        f = sum(1 for c in included if c["status"] == "fail")
+        na = sum(1 for c in included if c["status"] == "na")
+        evaluated = p + pa + f
+        coverage = int(round(100 * (p + 0.5 * pa) / evaluated)) if evaluated else 0
+        excluded = len(fw["controls"]) - len(included)
+        fw.update({"pass": p, "partial": pa, "fail": f, "na": na,
+                   "evaluated": evaluated, "coverage": coverage,
+                   "excluded": excluded})
+    return frameworks
+
+
+def _eval_status(status: str, evidence: str) -> dict:
+    """Helper — bundles (status, evidence) into the dict shape the template
+    expects on each control row."""
+    return {"status": status, "evidence": evidence}
+
+
 def _compute_risk_posture(analytics) -> dict:
     """Derive an overall 0–100 risk-posture score for the report cover.
 
@@ -2064,8 +2420,21 @@ async def device_detail(
     )
 
     # Validate and default current tab
-    valid_tabs = ['routes', 'zones', 'policies', 'analytics', 'changes', 'snapshots']
+    valid_tabs = ['routes', 'zones', 'policies', 'analytics', 'compliance', 'changes', 'snapshots']
     current_tab = tab if tab in valid_tabs else 'routes'
+
+    # Load compliance findings for the Compliance tab (always computed so
+    # the tab is populated without a second round-trip; the cost is
+    # bounded by the fixed control list).
+    device_compliance = None
+    compliance_attestations = {}
+    try:
+        compliance_attestations = await _load_attestations(db, device_id, embed_proofs=False)
+        device_compliance = _compute_compliance_findings(
+            fw_analytics, attestations=compliance_attestations,
+        )
+    except Exception as e:
+        logger.warning(f"Compliance bundle for device {device_id} skipped: {e}")
 
     return _render("devices/device_detail.html", request, {
         "device": device,
@@ -2090,6 +2459,7 @@ async def device_detail(
         "mgmt_host": mgmt_host,
         "fw_svc_map_json": fw_svc_map_json,
         "fw_analytics": fw_analytics,
+        "device_compliance": device_compliance,
         "current_tab": current_tab,
     })
 
@@ -2185,6 +2555,10 @@ async def device_analytics_pdf(
 
     risk_posture = _compute_risk_posture(fw_analytics)
     chart_data = _report_chart_data(fw_analytics)
+    # Embed proofs as data URLs so the PDF is self-contained (Chrome never
+    # needs to fetch from the app while rendering).
+    attestations = await _load_attestations(db, device_id, embed_proofs=True)
+    compliance = _compute_compliance_findings(fw_analytics, attestations=attestations)
 
     html = templates.get_template("devices/analytics_report.html").render({
         "request": request,
@@ -2196,6 +2570,7 @@ async def device_analytics_pdf(
         "fw_analytics": fw_analytics,
         "risk_posture": risk_posture,
         "chart_data": chart_data,
+        "compliance": compliance,
         "generated_at": datetime.now(timezone.utc),
         "format_number": format_number,
         "format_compact": format_compact,

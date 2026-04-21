@@ -927,6 +927,94 @@
         .zr-pair-meta .permit { font-weight: 700; color: var(--brand); }
         .zr-pair-meta .deny   { color: var(--red); }
 
+        /* ── Compliance status pills ───────────────────────────────── */
+        .pill.pass    { background: var(--green-bg); color: var(--green); }
+        .pill.partial { background: var(--amber-bg); color: var(--amber); }
+        .pill.fail    { background: var(--red-bg);   color: var(--red); }
+        .pill.na      { background: var(--rule-soft); color: var(--mute); }
+
+        /* ── Compliance page header summary ─────────────────────── */
+        .comp-head {
+            display: grid;
+            grid-template-columns: 36mm 1fr;
+            gap: 6mm;
+            align-items: center;
+            padding: 5mm 6mm;
+            border: 1pt solid var(--rule);
+            border-radius: 3pt;
+            background: var(--panel);
+            margin-bottom: 5mm;
+            page-break-inside: avoid;
+        }
+        .comp-gauge { width: 36mm; height: 36mm; }
+        .comp-gauge .pct {
+            font-size: 13pt; font-weight: 700; fill: var(--ink);
+            font-variant-numeric: tabular-nums;
+        }
+        .comp-gauge .sub { font-size: 3.3pt; fill: var(--mute); letter-spacing: 0.4; }
+        .comp-meta .title { font-size: 12pt; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; margin-bottom: 1mm; }
+        .comp-meta .ver   { font-size: 8.5pt; color: var(--mute); margin-bottom: 2mm; }
+        .comp-meta .scope { font-size: 9pt; color: var(--ink-soft); line-height: 1.45; margin-bottom: 3mm; }
+        .comp-meta .counts { display: flex; gap: 4mm; font-size: 8.5pt; }
+        .comp-meta .counts span { font-weight: 700; }
+        .comp-meta .counts .cnt-pass    { color: var(--green); }
+        .comp-meta .counts .cnt-partial { color: var(--amber); }
+        .comp-meta .counts .cnt-fail    { color: var(--red);   }
+        .comp-meta .counts .cnt-na      { color: var(--mute);  }
+
+        /* ── Compliance control-mapping table ───────────────────── */
+        table.comp-tbl {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5pt;
+            margin: 2mm 0 5mm;
+            table-layout: fixed;
+        }
+        table.comp-tbl col.c-id     { width: 18mm; }
+        table.comp-tbl col.c-title  { width: 40mm; }
+        table.comp-tbl col.c-req    { width: auto; }
+        table.comp-tbl col.c-status { width: 20mm; }
+        table.comp-tbl thead th {
+            text-align: left;
+            font-weight: 700;
+            font-size: 7pt;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--mute);
+            border-bottom: 1pt solid var(--rule);
+            padding: 2.5mm 2mm;
+            background: var(--panel);
+        }
+        table.comp-tbl tbody td {
+            padding: 3mm 2mm;
+            border-bottom: 0.4pt solid var(--rule-soft);
+            vertical-align: top;
+            word-break: break-word;
+        }
+        table.comp-tbl tbody tr { page-break-inside: avoid; }
+        table.comp-tbl .c-id-val {
+            font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+            font-size: 8pt;
+            color: var(--brand);
+            font-weight: 700;
+        }
+        table.comp-tbl .c-title-val {
+            font-weight: 700;
+            color: var(--ink);
+        }
+        table.comp-tbl .c-req-val {
+            color: var(--ink-soft);
+            font-size: 8.3pt;
+            line-height: 1.4;
+        }
+        table.comp-tbl .c-evidence {
+            color: var(--mute);
+            font-size: 7.8pt;
+            line-height: 1.4;
+            margin-top: 1.2mm;
+            font-style: italic;
+        }
+
         thead { display: table-header-group; }
         tfoot { display: table-footer-group; }
     </style>
@@ -1052,6 +1140,10 @@
         <li><span class="tnum">07</span><span><span class="ttitle">Zone Reachability</span> &nbsp; <span class="tsub">configured zone-to-zone connectivity</span></span><span class="tpage">&mdash;</span></li>
         {% endif %}
         <li><span class="tnum">08</span><span><span class="ttitle">Recommendations</span> &nbsp; <span class="tsub">prioritised cleanup actions</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">09</span><span><span class="ttitle">Compliance &mdash; NCA ECC</span> &nbsp; <span class="tsub">Saudi Essential Cybersecurity Controls mapping</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">10</span><span><span class="ttitle">Compliance &mdash; PCI DSS v4.0</span> &nbsp; <span class="tsub">Requirement 1 network security controls</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">11</span><span><span class="ttitle">Compliance &mdash; ISO 27001:2022</span> &nbsp; <span class="tsub">Annex A network &amp; logging controls</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">12</span><span><span class="ttitle">Compliance &mdash; CIS Controls v8.1</span> &nbsp; <span class="tsub">Controls 12 &amp; 13 network management and defence</span></span><span class="tpage">&mdash;</span></li>
         <li><span class="tnum">A</span><span><span class="ttitle">Appendix</span> &nbsp; <span class="tsub">methodology and data sources</span></span><span class="tpage">&mdash;</span></li>
     </ul>
 </section>
@@ -2052,6 +2144,156 @@
         {% endif %}
     </ul>
 </section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  COMPLIANCE — four frameworks, one page each                      ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% macro compliance_page(num, icon_svg, fw, page_ctx) -%}
+{# Coverage arc: radius 30, circumference 2π·30 = 188.50. #}
+{% set arc = (fw.coverage / 100.0) * 188.50 %}
+{% set band = 'pass' if fw.coverage >= 70 else ('partial' if fw.coverage >= 40 else 'fail') %}
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">{{ page_ctx }}</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">{{ num }}</span>
+        <span class="ico">{{ icon_svg|safe }}</span>
+        <span class="title">{{ fw.title }}</span>
+    </div>
+    <p class="section-intro">
+        Mapping of the controls that can be evidenced directly from the
+        firewall's configured rule base and logs against the
+        <strong>{{ fw.title }}</strong>. Controls outside this scope (physical
+        security, identity-proofing, patch cadence, etc.) are not included —
+        they require other Zentryc data sources or separate attestations.
+    </p>
+
+    <div class="comp-head">
+        <svg class="comp-gauge" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="30" fill="none" stroke="var(--rule-soft)" stroke-width="10"/>
+            <g transform="rotate(-90 50 50)">
+                <circle cx="50" cy="50" r="30" fill="none"
+                        stroke="{% if band == 'pass' %}#059669{% elif band == 'partial' %}#d97706{% else %}#b91c1c{% endif %}"
+                        stroke-width="10" stroke-linecap="round"
+                        stroke-dasharray="{{ '%.2f'|format(arc) }} {{ '%.2f'|format(188.50 - arc) }}"/>
+            </g>
+            <text class="pct" x="50" y="53" text-anchor="middle" dominant-baseline="middle">{{ fw.coverage }}%</text>
+            <text class="sub" x="50" y="66" text-anchor="middle">COVERAGE</text>
+        </svg>
+        <div class="comp-meta">
+            <div class="ver">{{ fw.version }}</div>
+            <div class="scope">{{ fw.scope }}</div>
+            <div class="counts">
+                <span><span class="cnt-pass">{{ fw.pass }}</span> pass</span>
+                <span><span class="cnt-partial">{{ fw.partial }}</span> partial</span>
+                <span><span class="cnt-fail">{{ fw.fail }}</span> fail</span>
+                {% if fw.na %}<span><span class="cnt-na">{{ fw.na }}</span> n/a</span>{% endif %}
+                <span class="mute" style="margin-left:auto">
+                    {{ fw.evaluated }} of {{ fw.controls|length }} evaluated{% if fw.excluded %} &middot; {{ fw.excluded }} excluded{% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <table class="comp-tbl">
+        <colgroup>
+            <col class="c-id"><col class="c-title"><col class="c-req"><col class="c-status">
+        </colgroup>
+        <thead><tr>
+            <th>Control</th>
+            <th>Title</th>
+            <th>Requirement &amp; Evidence</th>
+            <th>Status</th>
+        </tr></thead>
+        <tbody>
+            {% for c in fw.controls %}
+            {% if c.include_in_report %}
+            <tr>
+                <td class="c-id-val">{{ c.id }}</td>
+                <td class="c-title-val">{{ c.title }}</td>
+                <td>
+                    <div class="c-req-val">{{ c.requirement }}</div>
+                    {% if c.attested %}
+                    <div class="c-evidence">
+                        <strong>Reviewer:</strong>
+                        {% if c.notes %}{{ c.notes }}{% else %}Manually attested.{% endif %}
+                        {% if c.attested_by %} — {{ c.attested_by }}{% endif %}
+                        {% if c.attested_at %} ({{ c.attested_at[:10] }}){% endif %}
+                    </div>
+                    <div class="c-evidence" style="font-style:normal;color:var(--dim)">
+                        Auto-analysis: {{ c.auto_evidence }}
+                    </div>
+                    {% if c.proof_data_url %}
+                    <div style="margin-top:2mm">
+                        <img src="{{ c.proof_data_url }}"
+                             style="max-width:70mm;max-height:40mm;border:0.5pt solid var(--rule);border-radius:2pt;display:block">
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="c-evidence">Evidence: {{ c.evidence }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="pill {{ c.status }}">{{ c.status }}</span>
+                    {% if c.attested %}
+                    <div style="font-size:6.5pt;color:var(--mute);margin-top:1mm;text-align:center;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">
+                        Attested
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if band == 'pass' %}
+    <div class="callout green" style="margin-top: 3mm">
+        <strong>{{ fw.coverage }}% coverage</strong> on the evaluated subset
+        of controls. The rule base broadly satisfies the firewall-evidenced
+        portion of this framework; focus audit effort on the out-of-scope
+        controls (identity, patching, physical) listed in the introduction.
+    </div>
+    {% elif band == 'partial' %}
+    <div class="callout amber" style="margin-top: 3mm">
+        <strong>{{ fw.coverage }}% coverage</strong> — several evidenced
+        controls are <em>partial</em> or <em>fail</em>. The gaps map to the
+        cleanup actions in &sect; 08 Recommendations.
+    </div>
+    {% else %}
+    <div class="callout red" style="margin-top: 3mm">
+        <strong>{{ fw.coverage }}% coverage</strong> — material control gaps
+        detected. Prioritise the FAIL rows above; each one points back to a
+        concrete analytics section where the offending rules are listed.
+    </div>
+    {% endif %}
+</section>
+{%- endmacro %}
+
+{# ── 09 · NCA Essential Cybersecurity Controls ────────────────────── #}
+{% set _shield_ico %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>{% endset %}
+{{ compliance_page("09", _shield_ico, compliance.nca_ecc, "09 NCA ECC") }}
+
+{# ── 10 · PCI DSS v4.0 Requirement 1 ──────────────────────────────── #}
+{% set _lock_ico %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{% endset %}
+{{ compliance_page("10", _lock_ico, compliance.pci_dss, "10 PCI DSS") }}
+
+{# ── 11 · ISO/IEC 27001:2022 Annex A ──────────────────────────────── #}
+{% set _iso_ico %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg>{% endset %}
+{{ compliance_page("11", _iso_ico, compliance.iso_27001, "11 ISO 27001") }}
+
+{# ── 12 · CIS Controls v8.1 ───────────────────────────────────────── #}
+{% set _cis_ico %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>{% endset %}
+{{ compliance_page("12", _cis_ico, compliance.cis_v8, "12 CIS Controls") }}
 
 {# ╔═══════════════════════════════════════════════════════════════════╗ #}
 {# ║  APPENDIX                                                         ║ #}

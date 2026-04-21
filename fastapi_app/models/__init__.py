@@ -11,6 +11,7 @@ from .firewall_policy import (
     FirewallAddressObject, FirewallServiceObject,
 )
 from .llm_config import LLMConfig, LLMProvider
+from .compliance_attestation import ComplianceAttestation, ATTESTATION_STATUSES
 
 __all__ = [
     "Device", "DeviceStatus", "ParserType", "RetentionDays",
@@ -21,4 +22,5 @@ __all__ = [
     "FirewallPolicySnapshot", "FirewallPolicy",
     "FirewallAddressObject", "FirewallServiceObject",
     "LLMConfig", "LLMProvider",
+    "ComplianceAttestation", "ATTESTATION_STATUSES",
 ]
