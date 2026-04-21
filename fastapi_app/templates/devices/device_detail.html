@@ -1713,6 +1713,22 @@
         {% if fw_analytics and fw_snapshot %}
         {% set A = fw_analytics %}
 
+        {# Report actions — stays out of the KPI strip so it doesn't shift layout on narrow screens #}
+        <div class="pa-report-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+            <a href="{{ url_for('device_analytics_pdf', device_id=device.id) }}{% if selected_vdom %}?vdom={{ selected_vdom }}{% endif %}"
+               class="btn btn-primary"
+               target="_blank" rel="noopener"
+               title="Generate a printable PDF of this analytics view">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/>
+                    <polyline points="9 15 12 18 15 15"/>
+                </svg>
+                Download PDF Report
+            </a>
+        </div>
+
         {# Top KPI strip — what an analyst checks first thing in the morning #}
         <div class="pa-kpi-strip">
             <div class="pa-kpi pa-kpi-neutral">

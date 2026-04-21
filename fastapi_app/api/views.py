@@ -5,11 +5,13 @@ HTML view routes for the web UI.
 import asyncio
 import json
 import logging
+import re
+import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional
+from typing import List, Optional, Tuple
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -18,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
+from ..services.policy_match_engine import MatchQuery, match_all_devices
 from ..core.cache import get_redis
 from ..models.device import Device, DeviceStatus, ParserType, RetentionDays
 from ..models.credential import DeviceCredential, CredentialType, DeviceVdom
@@ -97,6 +100,207 @@ def format_bytes(size) -> str:
 def format_number(num: int) -> str:
     """Format large numbers with commas."""
     return f"{num:,}"
+
+
+def _compute_risk_posture(analytics) -> dict:
+    """Derive an overall 0–100 risk-posture score for the report cover.
+
+    Scored by deducting from a perfect 100:
+      - each critical permissive rule  → −12
+      - each high permissive rule      → −5  (capped at −20)
+      - each unlogged permit            → −3  (capped at −15)
+      - average permissiveness KPI      → −0.3× (so a 40/100 avg shaves 12pt)
+      - implicit-deny spotlights active → −5  (one-shot)
+      - shadowed rules                  → −0.05× (capped at −8)
+      - redundant rules                 → −0.1×  (capped at −5)
+    The weights lean hardest on "something is actively lying about what
+    the firewall will accept" (critical permissives, unlogged permits) and
+    soft-penalise rulebase clutter (shadowed / redundant).
+    """
+    score = 100.0
+    crit = int(analytics.kpi_critical_permissiveness or 0)
+    score -= crit * 12
+    highs = sum(1 for r in (analytics.permissiveness or []) if r.band == "high")
+    score -= min(highs * 5, 20)
+    score -= min(int(analytics.kpi_unlogged_permits or 0) * 3, 15)
+    score -= 0.3 * float(analytics.kpi_avg_permissiveness or 0)
+    if analytics.implicit_deny:
+        score -= 5
+    score -= min(int(analytics.kpi_shadowed_count or 0) * 0.05, 8)
+    score -= min(int(analytics.kpi_redundant_count or 0) * 0.1, 5)
+    score = max(0.0, min(100.0, score))
+    rounded = int(round(score))
+    if rounded >= 80:
+        band, label = "low", "Low Risk"
+    elif rounded >= 60:
+        band, label = "medium", "Moderate Risk"
+    elif rounded >= 40:
+        band, label = "high", "High Risk"
+    else:
+        band, label = "critical", "Critical Risk"
+    return {"score": rounded, "band": band, "label": label}
+
+
+def _report_chart_data(analytics) -> dict:
+    """Pre-compute chart inputs for the report template.
+
+    Kept in Python so the template stays declarative — no arithmetic in
+    Jinja. Emits:
+      - ``perm_distribution``: 4 slices (critical/high/medium/low) with
+        absolute count, percent-of-total, and the SVG arc endpoints for
+        a donut chart.
+      - ``top_risk_bars``: top-10 permit rules by score with the bar
+        width in percent (normalised to max score in the window).
+    """
+    rows = list(analytics.permissiveness or [])
+    buckets = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for r in rows:
+        buckets[r.band] = buckets.get(r.band, 0) + 1
+    total = sum(buckets.values()) or 1
+
+    # Donut arc math — radius 36, stroke 12, circumference 2πr = 226.19
+    import math
+    r_radius = 36
+    circumference = 2 * math.pi * r_radius
+    perm_distribution = []
+    cursor = 0.0
+    # Emit in visual order (critical first so it lands at 12 o'clock).
+    for key, colour in (("critical", "#dc2626"),
+                        ("high",     "#d97706"),
+                        ("medium",   "#f59e0b"),
+                        ("low",      "#059669")):
+        count = buckets.get(key, 0)
+        pct = (count / total) if total else 0
+        arc_len = pct * circumference
+        perm_distribution.append({
+            "band": key,
+            "count": count,
+            "pct": round(pct * 100, 1),
+            "colour": colour,
+            "stroke_dasharray": f"{arc_len:.2f} {circumference - arc_len:.2f}",
+            "stroke_dashoffset": f"{-cursor:.2f}",
+        })
+        cursor += arc_len
+
+    # Horizontal bar chart of the top 10 permit rules by score.
+    top = rows[:10]
+    max_score = max((r.score for r in top), default=100) or 100
+    top_risk_bars = [{
+        "name":    (r.rule.name or r.rule.rule_id or f"#{r.rule.position}"),
+        "position": r.rule.position,
+        "score":   r.score,
+        "band":    r.band,
+        "width":   round(100 * r.score / max_score, 1),
+    } for r in top]
+
+    # ── Implicit-deny stats + top-10 with bar widths ─────────────────
+    implicit_rows = list(analytics.implicit_deny or [])
+    implicit_stats = {
+        "total_hits":    sum(r.hits for r in implicit_rows) if implicit_rows else 0,
+        "unique_src":    len({r.srcip for r in implicit_rows}) if implicit_rows else 0,
+        "unique_dst":    len({r.dstip for r in implicit_rows}) if implicit_rows else 0,
+        "unique_ports":  len({r.dstport for r in implicit_rows}) if implicit_rows else 0,
+    }
+    max_hits = max((r.hits for r in implicit_rows), default=1) or 1
+    _PROTO_NAMES = {6: "tcp", 17: "udp", 1: "icmp", 47: "gre", 50: "esp", 51: "ah"}
+    implicit_top = [{
+        "srcip":   r.srcip,
+        "dstip":   r.dstip,
+        "dstport": r.dstport,
+        "proto":   _PROTO_NAMES.get(int(r.proto), str(r.proto)) if str(r.proto).isdigit() else r.proto,
+        "hits":    r.hits,
+        "width":   round(100 * r.hits / max_hits, 1),
+    } for r in implicit_rows[:10]]
+    # Top 5 source IPs aggregated
+    from collections import Counter as _Counter
+    src_counter = _Counter()
+    dst_counter = _Counter()
+    port_counter = _Counter()
+    for r in implicit_rows:
+        src_counter[r.srcip]  += r.hits
+        dst_counter[r.dstip]  += r.hits
+        port_counter[r.dstport] += r.hits
+    top5_src  = [{"key": k, "hits": v} for k, v in src_counter.most_common(5)]
+    top5_dst  = [{"key": k, "hits": v} for k, v in dst_counter.most_common(5)]
+    top5_port = [{"key": k, "hits": v} for k, v in port_counter.most_common(5)]
+
+    # ── Zone reachability: state counts + top zone pairs ─────────────
+    zr = getattr(analytics, "reachability", None)
+    zr_state_counts = {"aligned": 0, "over-provisioned": 0,
+                       "unauthorised": 0, "denied": 0, "gap": 0}
+    zr_top_pairs = []
+    if zr and zr.src_zones:
+        # Count states across all cells. Gap cells aren't stored explicitly
+        # (absence = gap), so derive from the src × dst grid.
+        considered = 0
+        for sz in zr.src_zones:
+            for dz in zr.dst_zones:
+                cell = zr.cell(sz, dz)
+                state = cell.state or "gap"
+                if state in zr_state_counts:
+                    zr_state_counts[state] += 1
+                else:
+                    zr_state_counts["gap"] += 1
+                considered += 1
+        # Top zone pairs by permit-rule count (most-authorised edges).
+        pairs_with_rules = []
+        for (sz, dz), cell in (zr.cells or {}).items():
+            if cell.rule_count or cell.deny_rule_count or cell.observed_hits:
+                pairs_with_rules.append({
+                    "src":         sz,
+                    "dst":         dz,
+                    "permits":     cell.rule_count,
+                    "denies":      cell.deny_rule_count,
+                    "observed":    cell.observed_hits,
+                    "state":       cell.state,
+                })
+        pairs_with_rules.sort(
+            key=lambda p: (p["permits"], p["observed"]), reverse=True
+        )
+        max_permits = max((p["permits"] for p in pairs_with_rules), default=1) or 1
+        for p in pairs_with_rules[:10]:
+            p["width"] = round(100 * p["permits"] / max_permits, 1)
+        zr_top_pairs = pairs_with_rules[:10]
+
+    return {
+        "perm_distribution": perm_distribution,
+        "perm_total": total,
+        "top_risk_bars": top_risk_bars,
+        "donut_circumference": round(circumference, 2),
+        # Implicit deny
+        "implicit_stats": implicit_stats,
+        "implicit_top":   implicit_top,
+        "implicit_top5_src":  top5_src,
+        "implicit_top5_dst":  top5_dst,
+        "implicit_top5_port": top5_port,
+        # Zone reachability
+        "zr_state_counts": zr_state_counts,
+        "zr_top_pairs":    zr_top_pairs,
+        "zr_total_pairs":  sum(zr_state_counts.values()),
+    }
+
+
+def format_compact(num: Optional[int]) -> str:
+    """Short human-scale number: 1_234_567 → ``1.2M``.
+
+    Used by print-oriented reports where KPI tiles can't wrap comma-
+    separated integers onto multiple lines.
+    """
+    if num is None:
+        return "—"
+    n = int(num)
+    for threshold, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+        if n >= threshold:
+            v = n / threshold
+            # 1.0 → "1", 1.2 → "1.2", 12.3 → "12", 123.4 → "123"
+            if v >= 100:
+                body = f"{v:.0f}"
+            elif v >= 10:
+                body = f"{v:.0f}"
+            else:
+                body = f"{v:.1f}".rstrip("0").rstrip(".")
+            return f"{body}{suffix}"
+    return str(n)
 
 
 def timesince(dt: datetime) -> str:
@@ -1213,22 +1417,167 @@ def _suggest_rule_cli(parser: str, dstip: str, dstport: int,
     )
 
 
+_IPV4_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+# Accept RFC-1123-ish hostnames. Strictness here matters: loose regex would
+# forward attacker-controlled content to getaddrinfo.
+_HOST_RE = re.compile(
+    r'^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?'
+    r'(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$'
+)
+_ALLOWED_PROTOS = ('any', 'tcp', 'udp', 'icmp')
+# Controls which result surfaces appear on the Policy Lookup page.
+# - ``both``   : run both log scan and config-match, merge results
+# - ``logs``   : log scan only (backward-compat default behavior)
+# - ``config`` : config-match only (fast path when there's no log history)
+_ALLOWED_MODES = ('both', 'logs', 'config')
+
+
+def _resolve_destination(value: str) -> Tuple[List[str], Optional[str], Optional[str]]:
+    """Resolve a Policy Lookup destination to one or more IPv4 addresses.
+
+    Returns ``(ips, fqdn, error)``:
+      - literal IPv4  -> ``([value], None, None)``
+      - hostname OK  -> ``(resolved_ips, hostname, None)``
+      - invalid/fail -> ``([], hostname_or_None, error_string)``
+
+    Blocking call — run inside a thread executor.
+    """
+    v = (value or '').strip()
+    if not v:
+        return [], None, "Destination is required"
+    if _IPV4_RE.match(v):
+        return [v], None, None
+    if not _HOST_RE.match(v):
+        return [], None, f"Invalid destination: {v!r}"
+    try:
+        infos = socket.getaddrinfo(v, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        return [], v, f"DNS lookup failed for {v!r}: {e}"
+    ips = sorted({info[4][0] for info in infos})
+    if not ips:
+        return [], v, f"No A records for {v!r}"
+    return ips, v, None
+
+
+def _empty_log_results() -> dict:
+    """Minimal shape the template expects when the log pass is skipped."""
+    return {
+        "allowed": [], "denied": [], "gap_devices": [], "path": [],
+        "summary": {
+            "total_devices_checked": 0, "devices_with_allow": 0,
+            "devices_with_deny_only": 0, "total_allow_policies": 0,
+            "total_allowed_events": 0, "total_denied_events": 0,
+            "source_already_covered": None,
+        },
+    }
+
+
+async def _run_config_match(db, resolved_ips, dst_port, proto, src_ip, fqdn):
+    """Run the config-match engine once per resolved IP and dedupe results.
+
+    FQDN inputs may resolve to multiple A records; the engine needs to run
+    per-IP because a rule may only cover some of them. We keep the most
+    specific / most recently-hit result per (device, vdom).
+    """
+    merged: dict = {}
+    for ip in resolved_ips:
+        q = MatchQuery(
+            dst_ip=ip,
+            dst_port=dst_port,
+            proto=proto,
+            src_ip=src_ip,
+            dst_fqdn=fqdn,
+        )
+        for r in await match_all_devices(db, q):
+            key = (r.device_id, r.vdom)
+            cur = merged.get(key)
+            # Prefer: matched over implicit-deny; higher hit_count wins ties.
+            if cur is None:
+                merged[key] = r
+                continue
+            if r.matched and not cur.matched:
+                merged[key] = r
+            elif r.matched and cur.matched:
+                if (r.hit_count or 0) > (cur.hit_count or 0):
+                    merged[key] = r
+    return list(merged.values())
+
+
+def _merge_config_into_results(results: dict, config_matches: list) -> None:
+    """Bolt config-match output onto the existing log-result payload.
+
+    Mutates ``results`` in place:
+    - ``would_match``: config hits that the log scan did not already
+      surface (no ``(device, policy)`` equivalent seen in allowed/denied).
+    - ``summary.config_match_devices``: count of devices with a predicted
+      match.
+    """
+    seen_keys: set = set()
+    for row in results.get('allowed', []) or []:
+        seen_keys.add((row.get('device_display'), row.get('policyname')))
+    for row in results.get('denied', []) or []:
+        seen_keys.add((row.get('device_display'), row.get('policyname')))
+
+    would_match: list = []
+    config_devices_matched = 0
+    for m in config_matches:
+        if m.matched:
+            config_devices_matched += 1
+        key = (m.device_display, m.policy_name)
+        if key in seen_keys:
+            continue
+        would_match.append({
+            'device_display': m.device_display,
+            'vdom': m.vdom,
+            'matched': m.matched,
+            'action': m.action,
+            'rule_id': m.rule_id,
+            'policyname': m.policy_name,
+            'position': m.position,
+            'hit_count': m.hit_count,
+            'last_hit_at': str(m.last_hit_at) if m.last_hit_at else '',
+            'snapshot_fetched_at': (
+                str(m.snapshot_fetched_at) if m.snapshot_fetched_at else ''
+            ),
+            'reason': m.reason,
+        })
+
+    results['would_match'] = would_match
+    summary = results.setdefault('summary', {})
+    summary['config_match_devices'] = config_devices_matched
+    summary['would_match_count'] = len(would_match)
+
+
 @router.get("/policy-lookup/", response_class=HTMLResponse, name="policy_lookup")
 async def policy_lookup_page(
     request: Request,
     dstip: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
     srcip: Optional[str] = Query(None),
+    proto: Optional[str] = Query("any"),
+    mode: Optional[str] = Query("both"),
     time_range: Optional[str] = Query("24h"),
     db: AsyncSession = Depends(get_db),
 ):
     """Policy lookup — find existing allow/deny policies for a destination."""
     results = None
     error = None
+    resolved_fqdn: Optional[str] = None
+    resolved_ips: List[str] = []
 
     dstip_clean = dstip.strip() if dstip and dstip.strip() else None
     dstport_clean = dstport.strip() if dstport and dstport.strip() else None
     srcip_clean = srcip.strip() if srcip and srcip.strip() else None
+
+    # Normalise proto. Anything outside the allowed set collapses to "any" so
+    # we never pass surprising values to the CH layer.
+    proto_clean = (proto or 'any').strip().lower()
+    if proto_clean not in _ALLOWED_PROTOS:
+        proto_clean = 'any'
+
+    mode_clean = (mode or 'both').strip().lower()
+    if mode_clean not in _ALLOWED_MODES:
+        mode_clean = 'both'
 
     if dstip_clean and dstport_clean:
         try:
@@ -1256,17 +1605,52 @@ async def policy_lookup_page(
                 default_hours = max(1, int((now - start_time).total_seconds() / 3600))
 
             loop = asyncio.get_event_loop()
-            results = await loop.run_in_executor(
-                _executor,
-                lambda: ClickHouseClient.policy_lookup(
-                    dstip=dstip_clean,
-                    dstport=port_int,
-                    srcip=srcip_clean,
-                    start_time=start_time,
-                    end_time=end_time,
-                    default_hours=default_hours,
-                )
+
+            # Resolve FQDN → A records (blocking → thread) so the CH query
+            # can scan across every IP the hostname maps to in one pass.
+            resolved_ips, resolved_fqdn, resolve_err = await loop.run_in_executor(
+                _executor, _resolve_destination, dstip_clean
             )
+            if resolve_err:
+                raise ValueError(resolve_err)
+
+            log_task = None
+            cfg_task = None
+            if mode_clean in ('both', 'logs'):
+                log_task = loop.run_in_executor(
+                    _executor,
+                    lambda: ClickHouseClient.policy_lookup(
+                        dstip=resolved_ips[0],
+                        dstips=resolved_ips if len(resolved_ips) > 1 else None,
+                        dstport=port_int,
+                        srcip=srcip_clean,
+                        start_time=start_time,
+                        end_time=end_time,
+                        default_hours=default_hours,
+                        proto=proto_clean,
+                    )
+                )
+            if mode_clean in ('both', 'config'):
+                # Engine runs once per resolved IP and merges the results so
+                # an FQDN lookup surfaces every rule that covers *any* of its
+                # A records, without running N independent CH passes.
+                cfg_task = _run_config_match(
+                    db,
+                    resolved_ips,
+                    port_int,
+                    proto_clean,
+                    srcip_clean,
+                    resolved_fqdn,
+                )
+
+            results = (await log_task) if log_task else _empty_log_results()
+            config_matches = (await cfg_task) if cfg_task else []
+
+            # Attach config-side info: add a ``would_match`` section for
+            # rules the engine predicts but logs haven't observed, and
+            # annotate log rows with the matching policy metadata when we
+            # can correlate them.
+            _merge_config_into_results(results, config_matches)
 
             # ── Phase 2: vendor-aware suggested rule per gap device ──
             # Look up parser type for each gap device's IP (strip the optional
@@ -1311,7 +1695,11 @@ async def policy_lookup_page(
         "current_dstip": dstip_clean,
         "current_dstport": dstport_clean,
         "current_srcip": srcip_clean,
+        "current_proto": proto_clean,
+        "current_mode": mode_clean,
         "current_time_range": (time_range or "24h").strip().lower(),
+        "resolved_fqdn": resolved_fqdn,
+        "resolved_ips": resolved_ips,
         "error": error,
         "format_number": format_number,
     })
@@ -1704,6 +2092,144 @@ async def device_detail(
         "fw_analytics": fw_analytics,
         "current_tab": current_tab,
     })
+
+
+@router.get(
+    "/devices/{device_id}/analytics/report.pdf",
+    name="device_analytics_pdf",
+)
+async def device_analytics_pdf(
+    request: Request,
+    device_id: int,
+    vdom: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Render a PDF firewall analytics report for a device.
+
+    Reuses the same ``PolicyAnalyticsService.compute`` call that powers
+    the Analytics tab, then renders a print-oriented Jinja2 template
+    (``devices/analytics_report.html``) to PDF via Playwright's
+    headless Chromium.
+
+    The ``vdom`` query parameter scopes multi-VDOM Fortinet devices;
+    omit it for single-VDOM or PAN-OS boxes.
+    """
+    device = (await db.execute(
+        select(Device).where(Device.id == device_id)
+    )).scalar_one_or_none()
+    if device is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    # Import here to keep cold-start cheap for non-PDF requests.
+    from ..services.policy_analytics_service import PolicyAnalyticsService
+    from ..services.pdf_report_service import render_html_to_pdf
+    from ..models.firewall_policy import (
+        FirewallPolicySnapshot as _FwSnap,
+        FirewallPolicy as _FwPol,
+        FirewallAddressObject as _FwAddr,
+        FirewallServiceObject as _FwSvc,
+    )
+    from ..models.zone import InterfaceEntry as _IfaceEntry
+    from ..models.routing import RoutingEntry as _RouteEntry
+
+    # Pick the latest successful policy snapshot, optionally vdom-scoped.
+    snap_q = (
+        select(_FwSnap)
+        .where(_FwSnap.device_id == device_id, _FwSnap.success.is_(True))
+        .order_by(_FwSnap.fetched_at.desc())
+        .limit(1)
+    )
+    if vdom:
+        snap_q = snap_q.where(_FwSnap.vdom == vdom)
+    fw_snapshot = (await db.execute(snap_q)).scalar_one_or_none()
+
+    fw_policies = []
+    fw_addresses = []
+    fw_services = []
+    if fw_snapshot:
+        fw_policies  = (await db.execute(
+            select(_FwPol).where(_FwPol.snapshot_id == fw_snapshot.id)
+                          .order_by(_FwPol.position.asc())
+        )).scalars().all()
+        fw_addresses = (await db.execute(
+            select(_FwAddr).where(_FwAddr.snapshot_id == fw_snapshot.id)
+        )).scalars().all()
+        fw_services  = (await db.execute(
+            select(_FwSvc).where(_FwSvc.snapshot_id == fw_snapshot.id)
+        )).scalars().all()
+
+    iface_rows = (await db.execute(
+        select(_IfaceEntry).where(_IfaceEntry.device_id == device_id)
+    )).scalars().all()
+    route_rows = (await db.execute(
+        select(_RouteEntry).where(_RouteEntry.device_id == device_id)
+    )).scalars().all()
+
+    fw_analytics = PolicyAnalyticsService.compute(
+        fw_policies, fw_addresses, fw_services,
+        device_ip=str(device.ip_address) if device else None,
+        log_window_hours=720,
+        interfaces=iface_rows,
+        routes=route_rows,
+        vdom=vdom,
+    )
+
+    # Friendly labels for the cover page. Parser is stored as an enum-ish
+    # string constant (e.g. "PALOALTO"); map to a display label.
+    parser_display = {
+        "FORTINET": "Fortinet FortiGate",
+        "PALOALTO": "Palo Alto Networks",
+        "GENERIC":  "Generic / Syslog",
+    }.get((device.parser or "").upper(), device.parser or "Unknown")
+
+    risk_posture = _compute_risk_posture(fw_analytics)
+    chart_data = _report_chart_data(fw_analytics)
+
+    html = templates.get_template("devices/analytics_report.html").render({
+        "request": request,
+        "device": device,
+        "parser_display": parser_display,
+        "device_model": None,     # Hook for later: fill from system-info probe.
+        "device_version": None,
+        "fw_snapshot": fw_snapshot,
+        "fw_analytics": fw_analytics,
+        "risk_posture": risk_posture,
+        "chart_data": chart_data,
+        "generated_at": datetime.now(timezone.utc),
+        "format_number": format_number,
+        "format_compact": format_compact,
+    })
+
+    # Header/footer templates for Chrome's print engine. The cover page
+    # sets ``@page :first { margin-top: 0 }`` so the footer here only
+    # appears from page 2 onward.
+    device_label = device.hostname or str(device.ip_address)
+    date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    footer_html = (
+        '<div style="font-size:8pt;color:#6b7280;width:100%;'
+        'padding:0 15mm;display:flex;justify-content:space-between;'
+        'font-family:-apple-system,Helvetica,Arial,sans-serif;">'
+        f'<span>Zentryc · {device_label} · {date_label}</span>'
+        '<span>Page <span class="pageNumber"></span> / '
+        '<span class="totalPages"></span></span>'
+        '</div>'
+    )
+
+    pdf_bytes = await render_html_to_pdf(html, footer_html=footer_html)
+
+    filename = (
+        f"zentryc-analytics-"
+        f"{str(device.ip_address).replace('/', '_')}-{date_label}.pdf"
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 async def _pick_fetch_credential(device_id: int, db: AsyncSession):

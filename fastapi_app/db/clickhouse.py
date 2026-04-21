@@ -3390,6 +3390,9 @@ class ClickHouseClient:
         if has_deny:  return 'deny'
         return 'unknown'
 
+    # IANA protocol numbers for the proto column (UInt8).
+    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1}
+
     @classmethod
     def policy_lookup(
         cls,
@@ -3400,17 +3403,38 @@ class ClickHouseClient:
         end_time: Optional[datetime] = None,
         default_hours: int = 24,
         compute_diff: bool = True,
+        proto: Optional[str] = None,
+        dstips: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Look up existing firewall policies for a destination IP:port.
 
         Runs 4 sequential queries against indexed columns (PREWHERE) for
         sub-second performance even on 250M+ row tables.
+
+        Args:
+            dstip: Destination IPv4. Used when ``dstips`` is None.
+            dstips: Multiple destination IPs (e.g. the A-record results for
+                an FQDN). When provided, ``dstip`` is ignored.
+            proto: ``tcp`` | ``udp`` | ``icmp`` | ``any`` | None. When None
+                or ``any`` the proto column is not constrained (preserves
+                prior behavior — the dstport alone was previously enough
+                to disambiguate in practice).
         """
         # --- Input validation ---
         ip_re = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
-        if not ip_re.match(dstip):
-            raise ValueError(f"Invalid destination IP: {dstip}")
+        # Accept either a single IP or a list of IPs (from FQDN resolution).
+        if dstips:
+            for ip in dstips:
+                if not ip_re.match(ip):
+                    raise ValueError(f"Invalid destination IP: {ip}")
+            dstips_safe = [ip.replace("'", "") for ip in dstips]
+            dstip_safe = dstips_safe[0]  # used by NAT-display code paths
+        else:
+            if not ip_re.match(dstip):
+                raise ValueError(f"Invalid destination IP: {dstip}")
+            dstips_safe = [dstip.replace("'", "")]
+            dstip_safe = dstips_safe[0]
         dstport = int(dstport)
         if not (0 <= dstport <= 65535):
             raise ValueError(f"Invalid port: {dstport}")
@@ -3418,8 +3442,22 @@ class ClickHouseClient:
             raise ValueError(f"Invalid source IP: {srcip}")
 
         # Escape single quotes for SQL safety
-        dstip_safe = dstip.replace("'", "")
         srcip_safe = srcip.replace("'", "") if srcip else None
+
+        # dstip membership — single equality for one IP, IN-list for many.
+        # Keeps the PREWHERE plan cheap; ClickHouse short-circuits IN(1) to =.
+        if len(dstips_safe) == 1:
+            dstip_clause = f"dstip = '{dstips_safe[0]}'"
+            srcip_is_dst_clause = f"srcip = '{dstips_safe[0]}'"  # for reverse-flow
+        else:
+            dst_list = ", ".join(f"'{ip}'" for ip in dstips_safe)
+            dstip_clause = f"dstip IN ({dst_list})"
+            srcip_is_dst_clause = f"srcip IN ({dst_list})"
+
+        # Optional protocol filter. The proto column is UInt8 (IANA numbers).
+        proto_norm = (proto or '').strip().lower()
+        proto_num = cls._PROTO_NUMBERS.get(proto_norm)
+        proto_clause = f"AND proto = {proto_num}" if proto_num else ""
 
         client = cls.get_client()
         time_clause = cls._build_time_prewhere(start_time, end_time, default_hours)
@@ -3461,8 +3499,9 @@ class ClickHouseClient:
             {extra_cols}
         FROM syslogs
         PREWHERE {time_clause}
-            AND dstip = '{dstip_safe}'
+            AND {dstip_clause}
             AND dstport = {dstport}
+            {proto_clause}
             AND action IN ('accept','allow','pass','close','client-rst','server-rst')
         WHERE 1=1 {srcip_where}
         GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
@@ -3490,8 +3529,9 @@ class ClickHouseClient:
             {extra_cols}
         FROM syslogs
         PREWHERE {time_clause}
-            AND dstip = '{dstip_safe}'
+            AND {dstip_clause}
             AND dstport = {dstport}
+            {proto_clause}
             AND action IN ('deny','drop','block','reject','blocked','reset-both')
         GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
         ORDER BY event_count DESC
@@ -3551,7 +3591,8 @@ class ClickHouseClient:
                 count() as src_events
             FROM syslogs
             PREWHERE {time_clause}
-                AND dstip = '{dstip_safe}'
+                AND {dstip_clause}
+                {proto_clause}
                 AND action IN ('accept','allow','pass','close','client-rst','server-rst')
             WHERE srcip = '{srcip_safe}'
                 AND (device_ip, vdom, policyname) IN ({in_values})
@@ -3573,8 +3614,9 @@ class ClickHouseClient:
                 {device_expr} as device_display
             FROM syslogs
             PREWHERE {time_clause}
-                AND srcip = '{dstip_safe}'
+                AND {srcip_is_dst_clause}
                 AND dstip = '{srcip_safe}'
+                {proto_clause}
                 AND action IN (
                     'accept','allow','pass','close','client-rst','server-rst',
                     'deny','drop','block','reject','blocked','reset-both'
@@ -3659,8 +3701,9 @@ class ClickHouseClient:
                 SELECT device_ip, vdom, policyname, action
                 FROM syslogs
                 PREWHERE {prior_clause}
-                    AND dstip = '{dstip_safe}'
+                    AND {dstip_clause}
                     AND dstport = {dstport}
+                    {proto_clause}
                     AND action IN (
                         'accept','allow','pass','close','client-rst','server-rst',
                         'deny','drop','block','reject','blocked','reset-both'

@@ -72,6 +72,59 @@ class FirewallPolicyService:
             ms = int((_time.time() - t0) * 1000)
             return False, f"{type(e).__name__}: {e}", None, ms, ""
 
+    @staticmethod
+    def _fetch_policies_via_paloalto_api(host, credential, vdom):
+        """Sync helper run in a thread — PAN-OS XML API.
+
+        PAN-OS doesn't care whether the stored credential is labelled
+        SSH or API; both routes end at the same admin account. We always
+        try the XML API on HTTPS (port 443 unless the credential explicitly
+        overrides to an HTTPS mgmt port). Credential semantics:
+
+        - If ``credential.username`` is set, treat it as an admin user and
+          call ``keygen`` with (username, password).
+        - Otherwise, treat ``credential.password`` as a pre-issued API key.
+        """
+        import time as _time
+        from .paloalto_api_service import PaloAltoAPIClient, PaloAltoAPIError
+
+        # SSH port 22 is meaningless for the XML API. Fall back to 443
+        # unless the credential carries an explicit HTTPS mgmt port.
+        port = credential.port or 443
+        if port == 22:
+            port = 443
+
+        if credential.username:
+            client = PaloAltoAPIClient(
+                host=str(host),
+                username=credential.username,
+                password=credential.password,
+                port=port,
+            )
+        else:
+            client = PaloAltoAPIClient(
+                host=str(host),
+                api_key=credential.password,
+                port=port,
+            )
+
+        t0 = _time.time()
+        try:
+            cfg = client.fetch_policy_bundle(vdom=vdom)
+            ms = int((_time.time() - t0) * 1000)
+            msg = (
+                f"Fetched {len(cfg.policies)} policies, "
+                f"{len(cfg.addresses) + len(cfg.address_groups)} address objects, "
+                f"{len(cfg.services) + len(cfg.service_groups)} service objects"
+            )
+            return True, msg, cfg, ms, ""
+        except PaloAltoAPIError as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"PAN-OS API: {e}", None, ms, ""
+        except Exception as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"{type(e).__name__}: {e}", None, ms, ""
+
     @classmethod
     async def fetch_policies(
         cls,
@@ -102,12 +155,32 @@ class FirewallPolicyService:
             f"({device.parser}){vdom_label} [{transport}]"
         )
 
-        # ── REST API fast-path (FortiGate today) ────────────────────
+        # ── REST/XML API fast-path ─────────────────────────────────
+        # FortiGate: opt-in when the credential is labelled "API".
+        # PAN-OS: mandatory — there is no SSH policy-fetch flow for it,
+        # so we always hit the XML API on HTTPS regardless of credential
+        # label (admin user/password works for both SSH and API auth
+        # against the same device).
+        use_api = False
+        api_vendor = None
         if transport == "API" and device.parser == ParserType.FORTINET:
-            api_result = await asyncio.to_thread(
-                cls._fetch_policies_via_fortinet_api,
-                ssh_host, credential, vdom,
-            )
+            use_api = True
+            api_vendor = "FORTINET"
+        elif device.parser == ParserType.PALOALTO:
+            use_api = True
+            api_vendor = "PALOALTO"
+
+        if use_api:
+            if api_vendor == "PALOALTO":
+                api_result = await asyncio.to_thread(
+                    cls._fetch_policies_via_paloalto_api,
+                    ssh_host, credential, vdom,
+                )
+            else:
+                api_result = await asyncio.to_thread(
+                    cls._fetch_policies_via_fortinet_api,
+                    ssh_host, credential, vdom,
+                )
             success, message, cfg, duration_ms, raw = api_result
             credential.last_used = __import__('datetime').datetime.utcnow()
             if not success:

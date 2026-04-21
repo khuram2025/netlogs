@@ -77,8 +77,26 @@
     .pl-field input:focus { border-color: var(--pl-blue); }
     .pl-field input::placeholder { color: var(--pl-dim); }
 
-    /* Time pills */
-    .pl-time-pills { display: flex; gap: 4px; }
+    /* Pill groups (time range, protocol, …) */
+    .pl-pill-group { display: flex; gap: 4px; }
+    .pl-resolved-banner {
+        margin-top: 10px;
+        padding: 6px 10px;
+        background: rgba(59,130,246,.08);
+        border: 1px solid rgba(59,130,246,.25);
+        border-radius: 6px;
+        color: var(--pl-muted);
+        font-size: 12px;
+    }
+    .pl-resolved-banner code {
+        background: var(--pl-input);
+        border: 1px solid var(--pl-border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        color: var(--pl-text);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+    }
     .pl-pill {
         padding: 7px 14px;
         border-radius: 6px;
@@ -170,6 +188,7 @@
     .pl-badge-green  { background: rgba(34,197,94,.15); color: #4ade80; }
     .pl-badge-red    { background: rgba(239,68,68,.15); color: #f87171; }
     .pl-badge-amber  { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pl-badge-blue   { background: rgba(59,130,246,.15); color: #93c5fd; }
 
     /* ── Tables ── */
     .pl-table-wrap {
@@ -480,15 +499,27 @@
     <form class="pl-form-card" method="get" action="{{ url_for('policy_lookup') }}" id="plForm">
         <div class="pl-form-row">
             <div class="pl-field">
-                <label>Destination IP *</label>
+                <label>Destination (IP or FQDN) *</label>
                 <input type="text" name="dstip" value="{{ current_dstip or '' }}"
-                       placeholder="10.10.122.31" required
-                       pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
+                       placeholder="10.10.122.31 or example.com" required
+                       pattern="(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)"
+                       style="width:220px">
             </div>
             <div class="pl-field">
                 <label>Destination Port *</label>
                 <input type="number" name="dstport" value="{{ current_dstport or '' }}"
                        placeholder="443" required min="0" max="65535" style="width:110px">
+            </div>
+            <div class="pl-field">
+                <label>Protocol</label>
+                <div class="pl-pill-group" data-target="plProto">
+                    {% set _proto = (current_proto or 'any') %}
+                    <button type="button" class="pl-pill{% if _proto == 'any' %} active{% endif %}" data-value="any">Any</button>
+                    <button type="button" class="pl-pill{% if _proto == 'tcp' %} active{% endif %}" data-value="tcp">TCP</button>
+                    <button type="button" class="pl-pill{% if _proto == 'udp' %} active{% endif %}" data-value="udp">UDP</button>
+                    <button type="button" class="pl-pill{% if _proto == 'icmp' %} active{% endif %}" data-value="icmp">ICMP</button>
+                </div>
+                <input type="hidden" name="proto" id="plProto" value="{{ _proto }}">
             </div>
             <div class="pl-field">
                 <label>Source IP (optional)</label>
@@ -497,12 +528,22 @@
                        pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
             </div>
             <div class="pl-field">
+                <label>Mode</label>
+                <div class="pl-pill-group" data-target="plMode">
+                    {% set _mode = (current_mode or 'both') %}
+                    <button type="button" class="pl-pill{% if _mode == 'both' %} active{% endif %}" data-value="both" title="Logs + Config">Both</button>
+                    <button type="button" class="pl-pill{% if _mode == 'logs' %} active{% endif %}" data-value="logs" title="Logs only">Logs</button>
+                    <button type="button" class="pl-pill{% if _mode == 'config' %} active{% endif %}" data-value="config" title="Config only">Config</button>
+                </div>
+                <input type="hidden" name="mode" id="plMode" value="{{ _mode }}">
+            </div>
+            <div class="pl-field">
                 <label>Time Range</label>
-                <div class="pl-time-pills">
-                    <button type="button" class="pl-pill{% if current_time_range == '1h' %} active{% endif %}" data-range="1h">1H</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '24h' %} active{% endif %}" data-range="24h">24H</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '7d' %} active{% endif %}" data-range="7d">7D</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '30d' %} active{% endif %}" data-range="30d">30D</button>
+                <div class="pl-pill-group" data-target="plTimeRange">
+                    <button type="button" class="pl-pill{% if current_time_range == '1h' %} active{% endif %}" data-value="1h">1H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '24h' %} active{% endif %}" data-value="24h">24H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '7d' %} active{% endif %}" data-value="7d">7D</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '30d' %} active{% endif %}" data-value="30d">30D</button>
                 </div>
                 <input type="hidden" name="time_range" id="plTimeRange" value="{{ current_time_range or '24h' }}">
             </div>
@@ -514,6 +555,13 @@
                 </button>
             </div>
         </div>
+        {% if resolved_fqdn and resolved_ips %}
+        <div class="pl-resolved-banner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            Resolved <code>{{ resolved_fqdn }}</code> &rarr;
+            {% for ip in resolved_ips %}<code>{{ ip }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
     </form>
 
     {% if error %}
@@ -801,6 +849,64 @@
     </div>
     {% endif %}
 
+    <!-- Would Match (config-simulated, no traffic yet) -->
+    {% if results.would_match %}
+    <div class="pl-section-hdr">
+        <h3>Would Match <span class="pl-small" style="font-weight:400">— predicted from rule base, no logs yet</span></h3>
+        <span class="pl-section-badge pl-badge-blue">{{ results.would_match|length }} results</span>
+    </div>
+    <div class="pl-table-wrap">
+        <table class="pl-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Policy</th>
+                    <th>Pos</th>
+                    <th>Action</th>
+                    <th>Evidence</th>
+                    <th>Config Hits</th>
+                    <th>Last Hit</th>
+                    <th>Snapshot</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in results.would_match %}
+                <tr>
+                    <td>
+                        <div style="font-weight:600">{{ row.device_display }}</div>
+                        {% if row.vdom %}<div class="pl-small pl-dim">vdom: {{ row.vdom }}</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if row.matched %}
+                            <div style="font-weight:600">{{ row.policyname or '-' }}</div>
+                            {% if row.rule_id %}<div class="pl-small pl-dim">id: {{ row.rule_id }}</div>{% endif %}
+                        {% else %}
+                            <div class="pl-dim pl-small">{{ row.reason }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="pl-mono">{{ row.position if row.position is not none else '-' }}</td>
+                    <td>
+                        {% if row.action == 'accept' or row.action == 'allow' %}
+                            <span class="pl-action-chip allow">{{ row.action }}</span>
+                        {% elif row.action == 'implicit-deny' %}
+                            <span class="pl-action-chip deny" title="No rule matched; vendor default applies">implicit&nbsp;deny</span>
+                        {% else %}
+                            <span class="pl-action-chip deny">{{ row.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="pl-nat-chip"><span class="pl-nat-label">CONFIG</span></span>
+                    </td>
+                    <td class="pl-mono">{{ format_number(row.hit_count) if row.hit_count else '-' }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ row.last_hit_at[:19] if row.last_hit_at and row.last_hit_at|length > 19 else (row.last_hit_at or '-') }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ row.snapshot_fetched_at[:19] if row.snapshot_fetched_at and row.snapshot_fetched_at|length > 19 else (row.snapshot_fetched_at or '-') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
     <!-- Gap Analysis -->
     {% if results.gap_devices %}
     <div class="pl-gap-card">
@@ -892,13 +998,19 @@
 {% block extra_js %}
 <script>
 (function() {
-    const pills = document.querySelectorAll('.pl-pill');
-    const hidden = document.getElementById('plTimeRange');
-    pills.forEach(pill => {
-        pill.addEventListener('click', () => {
-            pills.forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
-            hidden.value = pill.dataset.range;
+    // Each pill group writes into the hidden input identified by its
+    // `data-target` attribute. Using groups lets us have multiple pill
+    // rows (time range, protocol, …) without their click handlers stepping
+    // on each other.
+    document.querySelectorAll('.pl-pill-group').forEach(group => {
+        const hidden = document.getElementById(group.dataset.target);
+        const pills = group.querySelectorAll('.pl-pill');
+        pills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                pills.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                if (hidden) hidden.value = pill.dataset.value;
+            });
         });
     });
 })();

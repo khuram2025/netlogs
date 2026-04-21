@@ -1,0 +1,2127 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Zentryc Analytics Report — {{ device.ip_address }}</title>
+    <style>
+        /* ================================================================
+           ZENTRYC · FIREWALL ANALYTICS REPORT
+           Print-oriented stylesheet. All sizes in mm/pt so layout is
+           identical across Chromium versions.
+           ================================================================ */
+
+        @page {
+            size: A4;
+            margin: 18mm 14mm 18mm 14mm;
+        }
+        @page :first {
+            margin: 0;
+        }
+
+        * { box-sizing: border-box; }
+
+        :root {
+            --ink:        #0f172a;
+            --ink-soft:   #334155;
+            --mute:       #64748b;
+            --dim:        #94a3b8;
+            --rule:       #e2e8f0;
+            --rule-soft:  #f1f5f9;
+            --panel:      #f8fafc;
+            --paper:      #ffffff;
+
+            --brand:      #1d4ed8;
+            --brand-dk:   #1e3a8a;
+            --brand-bg:   #eff6ff;
+
+            --green:      #059669;
+            --green-bg:   #ecfdf5;
+            --amber:      #d97706;
+            --amber-bg:   #fffbeb;
+            --red:        #b91c1c;
+            --red-bg:     #fef2f2;
+            --red-ink:    #991b1b;
+            --purple:     #6d28d9;
+            --purple-bg:  #f5f3ff;
+            --teal:       #0d9488;
+            --teal-bg:    #f0fdfa;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                         'Inter', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 9.5pt;
+            line-height: 1.5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: inherit;
+            color: var(--ink);
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin: 0;
+        }
+        h1 { font-size: 32pt; font-weight: 700; line-height: 1.08; letter-spacing: -0.025em; }
+        h2 { font-size: 17pt; font-weight: 700; line-height: 1.2; margin: 0 0 4mm; }
+        h3 { font-size: 12pt; line-height: 1.3; margin: 0 0 3mm; letter-spacing: -0.005em; }
+        h4 { font-size: 9.5pt; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.07em; margin: 0 0 2mm; }
+        p  { margin: 0 0 3mm; }
+
+        .mono { font-family: 'JetBrains Mono','SF Mono','Menlo','Consolas',monospace; }
+        .mute { color: var(--mute); }
+        .dim  { color: var(--dim); }
+
+        /* ── Cover ─────────────────────────────────────────────────── */
+        .cover {
+            position: relative;
+            width: 210mm;
+            height: 297mm;
+            page-break-after: always;
+            overflow: hidden;
+        }
+        .cover-band {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 95mm;
+            background:
+                radial-gradient(ellipse at 20% 0%, rgba(255,255,255,.14), transparent 55%),
+                linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #2563eb 100%);
+            color: #fff;
+            padding: 16mm 16mm 0;
+        }
+        .cover-brand {
+            display: flex;
+            align-items: center;
+            gap: 3mm;
+            color: #fff;
+        }
+        .cover-brand-mark {
+            width: 11mm; height: 11mm;
+            background: rgba(255,255,255,.15);
+            border: 0.6pt solid rgba(255,255,255,.35);
+            border-radius: 2.5pt;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800;
+            font-size: 17pt;
+            letter-spacing: -0.02em;
+        }
+        .cover-brand-name { font-size: 13pt; font-weight: 700; letter-spacing: -0.01em; }
+        .cover-brand-sub  { font-size: 8.5pt; color: rgba(255,255,255,.75); letter-spacing: 0.04em; }
+        .cover-kicker {
+            margin-top: 18mm;
+            font-size: 8.5pt;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: rgba(255,255,255,.8);
+            font-weight: 700;
+        }
+        .cover-title {
+            color: #fff;
+            margin-top: 2mm;
+            font-size: 30pt;
+        }
+        .cover-title-small { color: rgba(255,255,255,.85); font-weight: 500; font-size: 13pt; margin-top: 2mm; }
+
+        .cover-body {
+            padding: 14mm 16mm 0;
+            position: relative;
+        }
+        .cover-sub {
+            font-size: 11pt;
+            color: var(--ink-soft);
+            line-height: 1.5;
+            max-width: 165mm;
+            margin-bottom: 12mm;
+        }
+
+        /* Risk-posture gauge card on the cover */
+        .cover-posture {
+            display: grid;
+            grid-template-columns: 58mm 1fr;
+            gap: 8mm;
+            align-items: center;
+            padding: 7mm 8mm;
+            border: 1pt solid var(--rule);
+            border-radius: 3pt;
+            background: var(--panel);
+            margin-bottom: 12mm;
+            page-break-inside: avoid;
+        }
+        .gauge {
+            width: 58mm; height: 36mm;
+            position: relative;
+        }
+        .gauge .label {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            text-align: center;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--mute);
+            font-weight: 700;
+        }
+        .gauge .score {
+            position: absolute;
+            top: 15mm; left: 0; right: 0;
+            text-align: center;
+            font-size: 20pt;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }
+        .gauge .score.low      { color: var(--green); }
+        .gauge .score.medium   { color: var(--amber); }
+        .gauge .score.high     { color: #ea580c; }
+        .gauge .score.critical { color: var(--red); }
+        .posture-meta { font-size: 10pt; }
+        .posture-pill {
+            display: inline-block;
+            padding: 1.2mm 3mm;
+            border-radius: 2pt;
+            font-size: 8.5pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 2mm;
+        }
+        .posture-pill.low      { background: var(--green-bg); color: var(--green); }
+        .posture-pill.medium   { background: var(--amber-bg); color: var(--amber); }
+        .posture-pill.high     { background: var(--amber-bg); color: #ea580c; }
+        .posture-pill.critical { background: var(--red-bg);   color: var(--red); }
+        .posture-title { font-size: 13pt; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; margin-bottom: 1mm; }
+        .posture-caption { font-size: 9pt; color: var(--mute); line-height: 1.45; }
+
+        .cover-facts {
+            display: grid;
+            grid-template-columns: 50mm 1fr;
+            row-gap: 3mm;
+            column-gap: 6mm;
+            border-top: 1pt solid var(--rule);
+            padding-top: 6mm;
+            font-size: 10pt;
+        }
+        .cover-facts dt {
+            color: var(--mute);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 8.5pt;
+            font-weight: 700;
+        }
+        .cover-facts dd {
+            margin: 0;
+            color: var(--ink);
+            font-weight: 500;
+        }
+        .cover-foot {
+            position: absolute;
+            bottom: 14mm;
+            left: 16mm;
+            right: 16mm;
+            font-size: 7.5pt;
+            color: var(--dim);
+            border-top: 1pt solid var(--rule);
+            padding-top: 3mm;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ── Running page header (at top of every non-cover section) ─ */
+        .section {
+            page-break-before: always;
+        }
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 2.5mm;
+            margin-bottom: 7mm;
+            border-bottom: 0.75pt solid var(--rule);
+            font-size: 8pt;
+            color: var(--mute);
+        }
+        .page-header-left {
+            display: flex; align-items: center; gap: 2mm;
+        }
+        .page-header-mark {
+            width: 4.5mm; height: 4.5mm;
+            background: var(--brand);
+            border-radius: 0.8pt;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: #fff;
+            font-weight: 800;
+            font-size: 6pt;
+        }
+        .page-header-brand { font-weight: 700; color: var(--ink-soft); letter-spacing: 0.02em; }
+        .page-header-ctx {
+            color: var(--mute);
+            font-variant-numeric: tabular-nums;
+        }
+        .page-header-sep { color: var(--dim); margin: 0 1.5mm; }
+
+        /* ── Section heading ───────────────────────────────────────── */
+        .section-hdr {
+            margin-bottom: 5mm;
+            padding-bottom: 3mm;
+            border-bottom: 2pt solid var(--brand);
+            display: flex;
+            align-items: center;
+            gap: 4mm;
+        }
+        .section-hdr .num {
+            font-size: 10pt;
+            font-weight: 800;
+            color: #fff;
+            background: var(--brand);
+            border-radius: 2pt;
+            padding: 0 2.5mm;
+            line-height: 8mm;
+            letter-spacing: 0.04em;
+            min-width: 13mm;
+            text-align: center;
+        }
+        .section-hdr .title {
+            font-size: 18pt;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+        .section-hdr .ico {
+            width: 8mm; height: 8mm;
+            color: var(--brand);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .section-hdr .ico svg { width: 7mm; height: 7mm; }
+        .section-intro {
+            color: var(--mute);
+            font-size: 9.5pt;
+            max-width: 175mm;
+            margin-bottom: 6mm;
+        }
+
+        .subsection {
+            margin-top: 8mm;
+            page-break-inside: avoid;
+        }
+        .subsection h3 {
+            border-left: 2.5pt solid var(--brand);
+            padding-left: 3mm;
+            font-size: 11.5pt;
+        }
+        .subsection-caption {
+            font-size: 9pt;
+            color: var(--mute);
+            margin-bottom: 3mm;
+            max-width: 170mm;
+        }
+
+        /* ── KPI grid ──────────────────────────────────────────────── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3.5mm;
+            margin-bottom: 7mm;
+        }
+        .kpi {
+            border: 1pt solid var(--rule);
+            border-radius: 3pt;
+            padding: 4mm 4.5mm 3.5mm;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+        .kpi::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3pt;
+            background: var(--brand);
+        }
+        .kpi.green::before  { background: var(--green); }
+        .kpi.amber::before  { background: var(--amber); }
+        .kpi.red::before    { background: var(--red); }
+        .kpi.purple::before { background: var(--purple); }
+        .kpi.teal::before   { background: var(--teal); }
+        .kpi-label {
+            font-size: 7pt;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--mute);
+            font-weight: 700;
+            margin-bottom: 1.5mm;
+        }
+        .kpi-value {
+            font-size: 20pt;
+            font-weight: 700;
+            color: var(--ink);
+            line-height: 1;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi-unit {
+            font-size: 11pt;
+            color: var(--mute);
+            font-weight: 500;
+            margin-left: 0.5mm;
+        }
+        .kpi-sub {
+            font-size: 8pt;
+            color: var(--mute);
+            margin-top: 1.5mm;
+            line-height: 1.35;
+        }
+
+        /* ── Table of Contents ─────────────────────────────────────── */
+        .toc { list-style: none; padding: 0; margin: 0; }
+        .toc li {
+            display: grid;
+            grid-template-columns: 12mm 1fr auto;
+            align-items: baseline;
+            gap: 3mm;
+            padding: 2.5mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+            font-size: 10.5pt;
+        }
+        .toc li:last-child { border-bottom: 0; }
+        .toc .tnum  { font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+        .toc .ttitle { font-weight: 600; color: var(--ink); }
+        .toc .tsub  { font-weight: 500; color: var(--mute); font-size: 9pt; }
+        .toc .tpage { color: var(--mute); font-variant-numeric: tabular-nums; font-size: 9.5pt; }
+
+        /* ── Findings cards ────────────────────────────────────────── */
+        .findings {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .findings li {
+            display: grid;
+            grid-template-columns: 10mm 1fr;
+            gap: 4mm;
+            padding: 4mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+            page-break-inside: avoid;
+        }
+        .findings li:last-child { border-bottom: 0; }
+        .findings .ind {
+            font-weight: 800;
+            font-size: 11pt;
+            text-align: center;
+            border-radius: 2pt;
+            padding: 2mm 0;
+            color: #fff;
+            line-height: 1.15;
+            letter-spacing: 0;
+        }
+        .findings .ind.red    { background: var(--red); }
+        .findings .ind.amber  { background: var(--amber); }
+        .findings .ind.green  { background: var(--green); }
+        .findings .ind.blue   { background: var(--brand); }
+        .findings .ind.purple { background: var(--purple); }
+        .findings .title {
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 0.8mm;
+            font-size: 10pt;
+        }
+        .findings .body {
+            color: var(--mute);
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+
+        /* ── Tables ────────────────────────────────────────────────── */
+        table.tbl {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5pt;
+            margin: 2mm 0 5mm;
+        }
+        table.tbl thead th {
+            text-align: left;
+            font-weight: 700;
+            font-size: 7pt;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--mute);
+            border-bottom: 1pt solid var(--rule);
+            padding: 2.5mm 2mm;
+            background: var(--panel);
+        }
+        table.tbl tbody td {
+            padding: 2.2mm 2mm;
+            border-bottom: 0.4pt solid var(--rule-soft);
+            vertical-align: top;
+        }
+        table.tbl tbody tr:nth-child(even) td {
+            background: #fcfcfd;
+        }
+        table.tbl tbody tr { page-break-inside: avoid; }
+        table.tbl td.num  { text-align: right; font-variant-numeric: tabular-nums; }
+        table.tbl td.mono { font-family: 'JetBrains Mono','Menlo','Consolas',monospace; font-size: 8pt; }
+        table.tbl td.wrap { word-break: break-word; }
+        table.tbl .rule-pos  { color: var(--mute); font-size: 7.5pt; font-variant-numeric: tabular-nums; }
+        table.tbl .rule-name { font-weight: 600; color: var(--ink); }
+
+        /* ── Pills ─────────────────────────────────────────────────── */
+        .pill {
+            display: inline-block;
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.8mm 1.8mm;
+            border-radius: 2pt;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+        .pill.accept { background: var(--green-bg);  color: var(--green); }
+        .pill.deny   { background: var(--red-bg);    color: var(--red); }
+        .pill.implicit-deny { background: var(--amber-bg); color: var(--amber); }
+        .pill.critical { background: var(--red-bg);    color: var(--red); }
+        .pill.high     { background: #ffedd5;          color: #9a3412; }
+        .pill.medium   { background: var(--amber-bg);  color: var(--amber); }
+        .pill.low      { background: var(--green-bg); color: var(--green); }
+        .pill.neutral  { background: var(--rule-soft); color: var(--ink-soft); }
+        .pill.muted    { background: var(--panel); color: var(--mute); border: 0.5pt solid var(--rule); }
+
+        .flags { display: inline-flex; flex-wrap: wrap; gap: 1.5mm; }
+        .flag {
+            display: inline-block;
+            background: var(--red-bg);
+            color: var(--red-ink);
+            font-size: 6.8pt;
+            font-weight: 600;
+            padding: 0.5mm 1.4mm;
+            border-radius: 1.5pt;
+            line-height: 1.3;
+        }
+
+        /* ── Distribution bar ──────────────────────────────────────── */
+        .dist-bar {
+            display: flex;
+            width: 100%;
+            height: 8mm;
+            border-radius: 3pt;
+            overflow: hidden;
+            margin: 2mm 0 5mm;
+            border: 0.5pt solid var(--rule);
+            background: var(--panel);
+        }
+        .dist-seg {
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: 8pt;
+            letter-spacing: 0.03em;
+            min-width: 22mm;  /* ensures small bands stay readable */
+            padding: 0 3mm;
+        }
+        .dist-seg.critical { background: var(--red); }
+        .dist-seg.high     { background: #ea580c; }
+        .dist-seg.medium   { background: var(--amber); }
+        .dist-seg.low      { background: var(--green); }
+
+        /* ── Score cell (inline rule tables) ───────────────────────── */
+        .score-cell {
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+            width: 28mm;
+        }
+        .score-track {
+            flex: 1;
+            height: 2.5mm;
+            background: var(--rule-soft);
+            border-radius: 1.2pt;
+            overflow: hidden;
+        }
+        .score-fill {
+            height: 100%;
+            border-radius: 1.2pt;
+        }
+        .score-fill.critical { background: var(--red); }
+        .score-fill.high     { background: #ea580c; }
+        .score-fill.medium   { background: var(--amber); }
+        .score-fill.low      { background: var(--green); }
+        .score-num {
+            font-variant-numeric: tabular-nums;
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: var(--ink);
+            min-width: 6mm;
+            text-align: right;
+        }
+
+        /* ── Empty + callout ───────────────────────────────────────── */
+        .empty {
+            padding: 5mm 4mm;
+            background: var(--panel);
+            border: 0.5pt dashed var(--rule);
+            color: var(--mute);
+            font-size: 9pt;
+            text-align: center;
+            margin: 2mm 0 5mm;
+            border-radius: 2pt;
+        }
+        .callout {
+            background: var(--brand-bg);
+            border-left: 3pt solid var(--brand);
+            padding: 3.5mm 4.5mm;
+            margin: 3mm 0 5mm;
+            font-size: 9pt;
+            color: var(--ink-soft);
+            border-radius: 0 2pt 2pt 0;
+        }
+        .callout.red    { background: var(--red-bg);    border-left-color: var(--red); }
+        .callout.amber  { background: var(--amber-bg);  border-left-color: var(--amber); }
+        .callout.green  { background: var(--green-bg);  border-left-color: var(--green); }
+
+        /* ── Dashboard cards (Section 02) ──────────────────────────── */
+        .dash-grid {
+            display: grid;
+            grid-template-columns: 82mm 1fr;
+            gap: 5mm;
+            margin-bottom: 6mm;
+        }
+        .dash-card {
+            border: 1pt solid var(--rule);
+            border-radius: 3pt;
+            padding: 5mm 5.5mm;
+            background: #fff;
+            page-break-inside: avoid;
+        }
+        .dash-card h4 { margin-bottom: 3mm; }
+        .donut-wrap {
+            display: flex;
+            align-items: center;
+            gap: 4mm;
+        }
+        .donut-svg { width: 38mm; height: 38mm; flex-shrink: 0; }
+        .donut-legend { flex: 1; font-size: 8.5pt; }
+        .donut-legend .row {
+            display: grid;
+            grid-template-columns: 3mm 1fr auto;
+            gap: 2mm;
+            align-items: baseline;
+            padding: 1.2mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+        }
+        .donut-legend .row:last-child { border-bottom: 0; }
+        .donut-legend .sw {
+            width: 3mm; height: 3mm; border-radius: 0.5pt;
+            display: inline-block;
+            margin-top: 1.2mm;
+        }
+        .donut-legend .lbl   { color: var(--ink-soft); font-weight: 600; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.06em; }
+        .donut-legend .val   { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 700; }
+        .donut-legend .pct   { color: var(--mute); font-size: 8pt; margin-left: 1mm; }
+
+        /* ── Top-10 risk rules (full-width card) ───────────────────── */
+        .risk-list { margin: 0; padding: 0; list-style: none; }
+        .risk-row {
+            padding: 3.5mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+            page-break-inside: avoid;
+        }
+        .risk-row:last-child { border-bottom: 0; }
+        .risk-head {
+            display: grid;
+            grid-template-columns: 10mm 1fr auto;
+            align-items: baseline;
+            gap: 3mm;
+            margin-bottom: 2mm;
+        }
+        .risk-pos {
+            font-size: 9pt; font-weight: 700;
+            color: var(--mute);
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
+        .risk-name {
+            font-size: 10.5pt; font-weight: 600;
+            color: var(--ink);
+            letter-spacing: -0.005em;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+        .risk-action { justify-self: end; }
+        .risk-meta {
+            display: grid;
+            grid-template-columns: 1fr 55mm 18mm;
+            align-items: center;
+            gap: 4mm;
+            padding-left: 13mm;   /* line up under risk-name column */
+        }
+        .risk-flags { display: flex; flex-wrap: wrap; gap: 1.5mm; min-height: 4mm; }
+        .risk-flags .flag { font-size: 6.8pt; padding: 0.5mm 1.6mm; }
+        .risk-flags .flag-empty { color: var(--dim); font-size: 7.5pt; font-style: italic; font-weight: 500; }
+
+        .risk-score-cell {
+            display: grid;
+            grid-template-columns: 1fr 8mm;
+            align-items: center;
+            gap: 2.5mm;
+        }
+        .risk-score-track {
+            height: 3mm;
+            background: var(--rule-soft);
+            border-radius: 1.5pt;
+            overflow: hidden;
+        }
+        .risk-score-fill { height: 100%; border-radius: 1.5pt; }
+        .risk-score-fill.critical { background: var(--red); }
+        .risk-score-fill.high     { background: #ea580c; }
+        .risk-score-fill.medium   { background: var(--amber); }
+        .risk-score-fill.low      { background: var(--green); }
+        .risk-score-num {
+            font-weight: 700; font-variant-numeric: tabular-nums;
+            text-align: right; color: var(--ink); font-size: 10pt;
+        }
+        .risk-score-num.critical { color: var(--red); }
+        .risk-score-num.high     { color: #ea580c; }
+        .risk-score-num.medium   { color: var(--amber); }
+        .risk-score-num.low      { color: var(--green); }
+        .risk-band { justify-self: end; }
+
+        /* ── Reachability matrix ───────────────────────────────────── */
+        .matrix {
+            display: grid;
+            gap: 0.3mm;
+            font-size: 6.2pt;
+            margin: 2mm 0 3mm;
+        }
+        .matrix .cell {
+            width: 5.5mm;
+            height: 4.5mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.8pt;
+            font-weight: 600;
+        }
+        .matrix .cell.label {
+            background: transparent;
+            color: var(--mute);
+            font-size: 6pt;
+            font-weight: 600;
+            justify-content: flex-end;
+            padding-right: 1mm;
+            width: auto;
+        }
+        .matrix .cell.gap          { background: var(--rule-soft); color: var(--mute); }
+        .matrix .cell.aligned      { background: var(--green-bg);  color: var(--green); }
+        .matrix .cell.over         { background: var(--amber-bg);  color: var(--amber); }
+        .matrix .cell.unauthorised { background: var(--red-bg);    color: var(--red); }
+        .matrix .cell.denied       { background: var(--red-bg);    color: var(--red); }
+
+        .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+
+        /* ── Stats strip (inline KPIs at top of a section) ─────────── */
+        .stats-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3mm;
+            margin-bottom: 6mm;
+        }
+        .stat-tile {
+            border: 1pt solid var(--rule);
+            border-radius: 2.5pt;
+            padding: 3.5mm 4mm;
+            background: #fff;
+            page-break-inside: avoid;
+        }
+        .stat-tile .lbl {
+            font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--mute); font-weight: 700; margin-bottom: 1mm;
+        }
+        .stat-tile .val {
+            font-size: 15pt; font-weight: 700; line-height: 1;
+            color: var(--ink); letter-spacing: -0.015em;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-tile .hint {
+            font-size: 8pt; color: var(--mute); margin-top: 1mm;
+        }
+
+        /* ── Object-hygiene richer summary ─────────────────────────── */
+        .oh-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5mm;
+            margin-bottom: 6mm;
+        }
+        .oh-card {
+            border: 1pt solid var(--rule);
+            border-radius: 3pt;
+            padding: 5mm 5.5mm;
+            background: #fff;
+            display: grid;
+            grid-template-columns: 30mm 1fr;
+            gap: 5mm;
+            align-items: center;
+            page-break-inside: avoid;
+        }
+        .oh-gauge { width: 30mm; height: 30mm; }
+        .oh-gauge .score {
+            font-size: 13pt; font-weight: 700; fill: var(--ink);
+            font-variant-numeric: tabular-nums;
+        }
+        .oh-gauge .sub {
+            font-size: 3.3pt; fill: var(--mute); letter-spacing: 0.4;
+        }
+        .oh-meta h4 { margin-bottom: 2mm; font-size: 9.5pt; }
+        .oh-meta .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: baseline;
+            font-size: 9pt;
+            padding: 1.2mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+        }
+        .oh-meta .row:last-child { border-bottom: 0; }
+        .oh-meta .rlbl { color: var(--mute); }
+        .oh-meta .rval {
+            font-weight: 700; font-variant-numeric: tabular-nums;
+            color: var(--ink);
+        }
+        .oh-meta .rval.warn { color: var(--amber); }
+        .oh-meta .rval.bad  { color: var(--red); }
+
+        /* ── Flow list (implicit-deny top entries) ─────────────────── */
+        .flow-list { margin: 0; padding: 0; list-style: none; }
+        .flow-row {
+            padding: 3mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+            page-break-inside: avoid;
+        }
+        .flow-row:last-child { border-bottom: 0; }
+        .flow-head {
+            display: grid;
+            grid-template-columns: 6mm 1fr auto;
+            gap: 3mm;
+            align-items: baseline;
+            margin-bottom: 1.5mm;
+        }
+        .flow-idx {
+            font-size: 8pt; color: var(--mute); font-variant-numeric: tabular-nums;
+            font-weight: 700; text-align: right;
+        }
+        .flow-tuple {
+            font-family: 'JetBrains Mono','Menlo','Consolas',monospace;
+            font-size: 9.5pt;
+            color: var(--ink);
+        }
+        .flow-tuple .arrow { color: var(--mute); margin: 0 1.5mm; }
+        .flow-tuple .port { color: var(--brand); font-weight: 700; }
+        .flow-tuple .proto {
+            text-transform: uppercase; font-size: 7pt; letter-spacing: 0.06em;
+            color: var(--mute); margin-left: 1.5mm; font-weight: 600;
+        }
+        .flow-hits {
+            font-size: 9pt; font-weight: 700; font-variant-numeric: tabular-nums;
+            color: var(--red);
+        }
+        .flow-bar-wrap { padding-left: 9mm; }
+        .flow-bar-track {
+            height: 2.5mm; background: var(--rule-soft);
+            border-radius: 1.2pt; overflow: hidden;
+        }
+        .flow-bar-fill {
+            height: 100%; background: linear-gradient(90deg, #f87171, #b91c1c);
+            border-radius: 1.2pt;
+        }
+
+        /* ── Aggregated breakdown columns ──────────────────────────── */
+        .break-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4mm;
+        }
+        .break-card {
+            border: 1pt solid var(--rule);
+            border-radius: 2.5pt;
+            padding: 4mm 4.5mm;
+            background: #fff;
+            page-break-inside: avoid;
+        }
+        .break-card h4 { margin-bottom: 3mm; font-size: 9pt; }
+        .break-list { margin: 0; padding: 0; list-style: none; font-size: 8.5pt; }
+        .break-list li {
+            display: grid;
+            grid-template-columns: 1fr 22mm auto;
+            gap: 2mm;
+            align-items: center;
+            padding: 1.2mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+        }
+        .break-list li:last-child { border-bottom: 0; }
+        .break-key  { color: var(--ink); font-family: 'JetBrains Mono','Menlo','Consolas',monospace; font-size: 8pt;
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .break-track {
+            height: 2mm; background: var(--rule-soft); border-radius: 1pt; overflow: hidden;
+        }
+        .break-fill { height: 100%; background: var(--red); border-radius: 1pt; }
+        .break-val  { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); font-size: 8pt; }
+
+        /* ── Zone reachability state distribution + top pairs ──────── */
+        .zr-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3mm;
+            margin-bottom: 5mm;
+        }
+        .zr-state {
+            border: 1pt solid var(--rule);
+            border-top-width: 3pt;
+            border-radius: 2.5pt;
+            padding: 3.5mm 4mm;
+            background: #fff;
+        }
+        .zr-state.aligned      { border-top-color: var(--green); }
+        .zr-state.over         { border-top-color: var(--amber); }
+        .zr-state.unauthorised { border-top-color: var(--red); }
+        .zr-state.gap          { border-top-color: var(--dim); }
+        .zr-state .lbl {
+            font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--mute); font-weight: 700; margin-bottom: 1mm;
+        }
+        .zr-state .val {
+            font-size: 17pt; font-weight: 700; color: var(--ink);
+            line-height: 1; letter-spacing: -0.015em; font-variant-numeric: tabular-nums;
+        }
+        .zr-state .pct {
+            font-size: 8pt; color: var(--mute); margin-top: 1mm;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .zr-pair-list { margin: 0; padding: 0; list-style: none; }
+        .zr-pair {
+            padding: 2.5mm 0;
+            border-bottom: 0.5pt solid var(--rule-soft);
+            display: grid;
+            grid-template-columns: 60mm 1fr 20mm;
+            gap: 4mm;
+            align-items: center;
+            page-break-inside: avoid;
+        }
+        .zr-pair:last-child { border-bottom: 0; }
+        .zr-pair-label { font-size: 9pt; color: var(--ink); }
+        .zr-pair-label .src { font-weight: 600; }
+        .zr-pair-label .dst { font-weight: 600; }
+        .zr-pair-label .arr { color: var(--mute); margin: 0 2mm; }
+        .zr-pair-track {
+            height: 3mm; background: var(--rule-soft);
+            border-radius: 1.2pt; overflow: hidden;
+        }
+        .zr-pair-fill {
+            height: 100%; background: var(--brand);
+            border-radius: 1.2pt;
+        }
+        .zr-pair-meta {
+            font-size: 8pt; text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .zr-pair-meta .permit { font-weight: 700; color: var(--brand); }
+        .zr-pair-meta .deny   { color: var(--red); }
+
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+    </style>
+</head>
+<body>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  COVER                                                            ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="cover">
+    <div class="cover-band">
+        <div class="cover-brand">
+            <span class="cover-brand-mark">Z</span>
+            <div>
+                <div class="cover-brand-name">Zentryc</div>
+                <div class="cover-brand-sub">SOAR / SIEM PLATFORM</div>
+            </div>
+        </div>
+        <div class="cover-kicker">Firewall Analytics Report</div>
+        <h1 class="cover-title">{{ device.hostname or device.ip_address }}</h1>
+        {% if device.hostname %}
+        <div class="cover-title-small">{{ device.ip_address }}</div>
+        {% endif %}
+    </div>
+
+    <div class="cover-body" style="margin-top: 95mm;">
+        <p class="cover-sub">
+            Posture assessment of the configured rule base — shadowed and redundant rules,
+            permissiveness scoring, object hygiene, and zone-level reachability — generated
+            from the live device snapshot shown below.
+        </p>
+
+        {# Risk-posture gauge #}
+        <div class="cover-posture">
+            <div class="gauge">
+                {# Semicircular SVG gauge, score 0..100 #}
+                {% set rp = risk_posture %}
+                {% set angle = (rp.score / 100.0) * 180 %}
+                <svg viewBox="0 0 200 120" style="width:100%;height:100%">
+                    {# Track #}
+                    <path d="M 20 100 A 80 80 0 0 1 180 100"
+                          fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round"/>
+                    {# Value arc — drawn via stroke-dasharray so we can 'fill' a fraction of the 180° path.
+                       Path length for a 80-radius semicircle = π·r = 251.33 #}
+                    {% set arc_len = (rp.score / 100.0) * 251.33 %}
+                    <path d="M 20 100 A 80 80 0 0 1 180 100"
+                          fill="none"
+                          stroke="{% if rp.band == 'low' %}#059669{% elif rp.band == 'medium' %}#d97706{% elif rp.band == 'high' %}#ea580c{% else %}#b91c1c{% endif %}"
+                          stroke-width="14" stroke-linecap="round"
+                          stroke-dasharray="{{ '%.2f'|format(arc_len) }} 251.33"/>
+                </svg>
+                <div class="score {{ rp.band }}">{{ rp.score }}<span style="font-size:11pt;color:var(--mute);font-weight:500">/100</span></div>
+                <div class="label">Posture Score</div>
+            </div>
+            <div class="posture-meta">
+                <span class="posture-pill {{ rp.band }}">{{ rp.label }}</span>
+                <div class="posture-title">
+                    {% if rp.band == 'low' %}The rule base is in good shape.
+                    {% elif rp.band == 'medium' %}Some hygiene items warrant attention.
+                    {% elif rp.band == 'high' %}Material risks are present in the rule base.
+                    {% else %}Critical exposure — immediate review recommended.
+                    {% endif %}
+                </div>
+                <div class="posture-caption">
+                    Score blends permissiveness average, count of critical permit rules,
+                    logging gaps, and rule-base clutter. See Appendix A for the full
+                    weighting.
+                </div>
+            </div>
+        </div>
+
+        <dl class="cover-facts">
+            <dt>Device</dt>            <dd>{{ device.ip_address }}{% if device.hostname %} &middot; {{ device.hostname }}{% endif %}</dd>
+            <dt>Vendor</dt>            <dd>{{ parser_display }}</dd>
+            {% if fw_snapshot %}
+            <dt>Snapshot taken</dt>    <dd>{{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M UTC') if fw_snapshot.fetched_at else '—' }}</dd>
+            <dt>Rule base</dt>         <dd>{{ fw_snapshot.policy_count }} policies &middot; {{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }} address objects &middot; {{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }} service objects</dd>
+            {% endif %}
+            <dt>Analytics window</dt>  <dd>30 days of traffic logs (where available)</dd>
+            <dt>Report generated</dt>  <dd>{{ generated_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+        </dl>
+    </div>
+
+    <div class="cover-foot">
+        <span>Findings reflect the state of the configured rule base at the snapshot time shown.</span>
+        <span>zentryc.com</span>
+    </div>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  TABLE OF CONTENTS                                                ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% set has_implicit_deny = fw_analytics.implicit_deny|length > 0 %}
+{% set has_reachability = fw_analytics.reachability and fw_analytics.reachability.src_zones|length > 0 %}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">{{ generated_at.strftime('%Y-%m-%d') }}</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+        <span class="title">Contents</span>
+    </div>
+    <ul class="toc">
+        <li><span class="tnum">01</span><span><span class="ttitle">Executive Summary</span> &nbsp; <span class="tsub">headline KPIs, top findings</span></span><span class="tpage">3</span></li>
+        <li><span class="tnum">02</span><span><span class="ttitle">Risk Dashboard</span> &nbsp; <span class="tsub">permissiveness distribution, top risk rules</span></span><span class="tpage">4</span></li>
+        <li><span class="tnum">03</span><span><span class="ttitle">Rule Base Hygiene</span> &nbsp; <span class="tsub">shadowed, redundant, unlogged, zero-hit</span></span><span class="tpage">5</span></li>
+        <li><span class="tnum">04</span><span><span class="ttitle">Risk Analysis — Permissiveness</span> &nbsp; <span class="tsub">ranked overly-permissive permit rules</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">05</span><span><span class="ttitle">Object Hygiene</span> &nbsp; <span class="tsub">usage summary &amp; duplicate address values</span></span><span class="tpage">&mdash;</span></li>
+        {% if has_implicit_deny %}
+        <li><span class="tnum">06</span><span><span class="ttitle">Implicit-Deny Hits</span> &nbsp; <span class="tsub">traffic hitting the vendor default</span></span><span class="tpage">&mdash;</span></li>
+        {% endif %}
+        {% if has_reachability %}
+        <li><span class="tnum">07</span><span><span class="ttitle">Zone Reachability</span> &nbsp; <span class="tsub">configured zone-to-zone connectivity</span></span><span class="tpage">&mdash;</span></li>
+        {% endif %}
+        <li><span class="tnum">08</span><span><span class="ttitle">Recommendations</span> &nbsp; <span class="tsub">prioritised cleanup actions</span></span><span class="tpage">&mdash;</span></li>
+        <li><span class="tnum">A</span><span><span class="ttitle">Appendix</span> &nbsp; <span class="tsub">methodology and data sources</span></span><span class="tpage">&mdash;</span></li>
+    </ul>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  01 · EXECUTIVE SUMMARY                                           ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% set a = fw_analytics %}
+{% set total_graded = (a.permissiveness|length) %}
+{% set perm_critical = (a.permissiveness | selectattr('band','equalto','critical') | list | length) %}
+{% set perm_high     = (a.permissiveness | selectattr('band','equalto','high')     | list | length) %}
+{% set perm_medium   = (a.permissiveness | selectattr('band','equalto','medium')   | list | length) %}
+{% set perm_low      = (a.permissiveness | selectattr('band','equalto','low')      | list | length) %}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">01 Executive Summary</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">01</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+        <span class="title">Executive Summary</span>
+    </div>
+    <p class="section-intro">
+        Headline indicators derived from the device snapshot. Each tile
+        corresponds to a dedicated section later in the report where the
+        contributing rules are listed.
+    </p>
+
+    <div class="kpi-grid">
+        <div class="kpi">
+            <div class="kpi-label">Active rules</div>
+            <div class="kpi-value">{{ a.kpi_active_rules }}</div>
+            <div class="kpi-sub">{{ a.kpi_disabled_rules }} disabled</div>
+        </div>
+        <div class="kpi {% if a.kpi_avg_permissiveness >= 60 %}red{% elif a.kpi_avg_permissiveness >= 40 %}amber{% else %}green{% endif %}">
+            <div class="kpi-label">Avg permissiveness</div>
+            <div class="kpi-value">{{ a.kpi_avg_permissiveness }}<span class="kpi-unit">/100</span></div>
+            <div class="kpi-sub">{{ a.kpi_critical_permissiveness }} critical permit rule{{ 's' if a.kpi_critical_permissiveness != 1 }}</div>
+        </div>
+        <div class="kpi {% if a.kpi_shadowed_count > 0 %}amber{% else %}green{% endif %}">
+            <div class="kpi-label">Shadowed rules</div>
+            <div class="kpi-value">{{ a.kpi_shadowed_count }}</div>
+            <div class="kpi-sub">never reachable</div>
+        </div>
+        <div class="kpi {% if a.kpi_redundant_count > 0 %}amber{% else %}green{% endif %}">
+            <div class="kpi-label">Redundant rules</div>
+            <div class="kpi-value">{{ a.kpi_redundant_count }}</div>
+            <div class="kpi-sub">duplicate work</div>
+        </div>
+        <div class="kpi {% if a.kpi_unlogged_permits > 0 %}red{% else %}green{% endif %}">
+            <div class="kpi-label">Unlogged permits</div>
+            <div class="kpi-value">{{ a.kpi_unlogged_permits }}</div>
+            <div class="kpi-sub">SIEM blind spot</div>
+        </div>
+        <div class="kpi {% if a.kpi_unreferenced_objects > 100 %}amber{% endif %}">
+            <div class="kpi-label">Unused objects</div>
+            <div class="kpi-value">{{ a.kpi_unreferenced_objects }}</div>
+            <div class="kpi-sub">addr + svc, unreferenced</div>
+        </div>
+        <div class="kpi {% if a.kpi_zero_hit_30d > 0 %}amber{% endif %}">
+            <div class="kpi-label">Zero-hit rules (30d)</div>
+            <div class="kpi-value">{{ a.kpi_zero_hit_30d }}</div>
+            <div class="kpi-sub">cleanup candidates</div>
+        </div>
+        <div class="kpi purple">
+            <div class="kpi-label">Total hits (30d)</div>
+            <div class="kpi-value">{{ format_compact(a.kpi_total_hits_30d) }}</div>
+            <div class="kpi-sub">across all rules</div>
+        </div>
+    </div>
+
+    <h3 style="margin-top:6mm">Top findings</h3>
+    <ul class="findings">
+        {% if perm_critical or perm_high %}
+        <li>
+            <div class="ind red">!</div>
+            <div>
+                <div class="title">{{ perm_critical + perm_high }} overly-permissive permit rule{{ 's' if (perm_critical + perm_high) != 1 }}</div>
+                <div class="body">
+                    {{ perm_critical }} CRITICAL and {{ perm_high }} HIGH rules combine multiple
+                    <em>any</em> dimensions in a single allow. See &sect; 04 for the ranked list.
+                </div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_shadowed_count %}
+        <li>
+            <div class="ind amber">S</div>
+            <div>
+                <div class="title">{{ a.kpi_shadowed_count }} shadowed rule{{ 's' if a.kpi_shadowed_count != 1 }}</div>
+                <div class="body">An earlier rule with a different action already matches every flow these would have. Safe to disable after review.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_redundant_count %}
+        <li>
+            <div class="ind amber">R</div>
+            <div>
+                <div class="title">{{ a.kpi_redundant_count }} redundant rule{{ 's' if a.kpi_redundant_count != 1 }}</div>
+                <div class="body">Fully covered by an earlier rule with the same action. Removing them reduces rule-base size without changing behaviour.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_unlogged_permits %}
+        <li>
+            <div class="ind red">L</div>
+            <div>
+                <div class="title">{{ a.kpi_unlogged_permits }} permit rule{{ 's' if a.kpi_unlogged_permits != 1 }} with logging disabled</div>
+                <div class="body">Traffic matched by these rules is invisible to the SIEM. Enable traffic logging to restore detection coverage.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_zero_hit_30d %}
+        <li>
+            <div class="ind blue">Z</div>
+            <div>
+                <div class="title">{{ a.kpi_zero_hit_30d }} zero-hit rule{{ 's' if a.kpi_zero_hit_30d != 1 }} in the last 30 days</div>
+                <div class="body">Candidates for retirement after confirming no quarterly / seasonal traffic would use them.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if has_implicit_deny %}
+        <li>
+            <div class="ind red">D</div>
+            <div>
+                <div class="title">{{ a.implicit_deny|length }} top flow{{ 's' if a.implicit_deny|length != 1 }} hitting the implicit deny</div>
+                <div class="body">These traffic tuples don't match any rule and are falling to the vendor default. Either a rule is missing or traffic is arriving that shouldn't.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if not (perm_critical or perm_high or a.kpi_shadowed_count or a.kpi_redundant_count or a.kpi_unlogged_permits or a.kpi_zero_hit_30d or has_implicit_deny) %}
+        <li>
+            <div class="ind green">&#10003;</div>
+            <div>
+                <div class="title">No material findings from the configured rule base.</div>
+                <div class="body">Analytics ran cleanly against the snapshot — no shadowed, redundant, unlogged, or overly-permissive rules detected.</div>
+            </div>
+        </li>
+        {% endif %}
+    </ul>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  02 · RISK DASHBOARD (charts)                                     ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">02 Risk Dashboard</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">02</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        <span class="title">Risk Dashboard</span>
+    </div>
+    <p class="section-intro">
+        Visual distribution of permissiveness across the rule base and the
+        ten highest-risk permit rules. Use these as a quick triage for the
+        detailed listings that follow.
+    </p>
+
+    {# ── Row 1: donut (left) + band-distribution + total tile (right) ── #}
+    <div class="dash-grid">
+        <div class="dash-card">
+            <h4>Permissiveness Distribution</h4>
+            <div class="donut-wrap">
+                <svg class="donut-svg" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="36" fill="none" stroke="var(--rule-soft)" stroke-width="12"/>
+                    <g transform="rotate(-90 50 50)">
+                    {% for s in chart_data.perm_distribution %}
+                        {% if s.count > 0 %}
+                        <circle cx="50" cy="50" r="36" fill="none"
+                                stroke="{{ s.colour }}" stroke-width="12"
+                                stroke-dasharray="{{ s.stroke_dasharray }}"
+                                stroke-dashoffset="{{ s.stroke_dashoffset }}"/>
+                        {% endif %}
+                    {% endfor %}
+                    </g>
+                    <text x="50" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">{{ chart_data.perm_total }}</text>
+                    <text x="50" y="58" text-anchor="middle" font-size="4.5" fill="#64748b" letter-spacing="0.5">SCORED RULES</text>
+                </svg>
+                <div class="donut-legend">
+                    {% for s in chart_data.perm_distribution %}
+                    <div class="row">
+                        <span class="sw" style="background:{{ s.colour }}"></span>
+                        <span class="lbl">{{ s.band }}</span>
+                        <span><span class="val">{{ s.count }}</span><span class="pct">{{ s.pct }}%</span></span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <p class="mute" style="font-size:8.5pt;margin-top:3mm;margin-bottom:0">
+                Each permit rule is graded on five any-dimensions. Rules with
+                three or more <em>any</em> fields land in CRITICAL or HIGH.
+            </p>
+        </div>
+
+        <div class="dash-card">
+            <h4>Band distribution</h4>
+            {% if total_graded %}
+            <div class="dist-bar" style="margin-top: 3mm">
+                {% if perm_critical %}<div class="dist-seg critical">CRITICAL · {{ perm_critical }}</div>{% endif %}
+                {% if perm_high     %}<div class="dist-seg high">HIGH · {{ perm_high }}</div>{% endif %}
+                {% if perm_medium   %}<div class="dist-seg medium">MEDIUM · {{ perm_medium }}</div>{% endif %}
+                {% if perm_low      %}<div class="dist-seg low" style="flex:1">LOW · {{ perm_low }}</div>{% endif %}
+            </div>
+            <p class="mute" style="font-size:8.5pt;margin-top:3mm;margin-bottom:0">
+                Segment widths enforce a readable minimum; true counts appear
+                inside each segment. Sorting highest-risk first in the Top 10
+                below makes the CRITICAL/HIGH population immediately actionable.
+            </p>
+            {% else %}
+            <div class="empty">No scored rules.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Row 2: full-width Top-10 permit rules card ─────────────────── #}
+    {# page-break-inside: auto lets the 10-row list start on the current
+       page under the donut row instead of jumping to a fresh page and
+       leaving whitespace above. Individual rows still stay unbroken via
+       their own page-break-inside: avoid. #}
+    <div class="dash-card" style="margin-top: 5mm; page-break-inside: auto">
+        <h4>Top 10 Permit Rules by Risk Score</h4>
+        {% if a.permissiveness %}
+        <ul class="risk-list">
+            {% for r in a.permissiveness[:10] %}
+            <li class="risk-row">
+                <div class="risk-head">
+                    <div class="risk-pos">#{{ r.rule.position }}</div>
+                    <div class="risk-name">{{ r.rule.name or r.rule.rule_id or ('policy-' ~ r.rule.position) }}</div>
+                    <div class="risk-action"><span class="pill {{ r.rule.action }}">{{ r.rule.action }}</span></div>
+                </div>
+                <div class="risk-meta">
+                    <div class="risk-flags">
+                        {% if r.flags %}
+                            {% for f in r.flags %}<span class="flag">{{ f }}</span>{% endfor %}
+                        {% else %}
+                            <span class="flag-empty">no <em>any</em> dimensions</span>
+                        {% endif %}
+                    </div>
+                    <div class="risk-score-cell">
+                        <div class="risk-score-track"><div class="risk-score-fill {{ r.band }}" style="width:{{ r.score }}%"></div></div>
+                        <div class="risk-score-num {{ r.band }}">{{ r.score }}</div>
+                    </div>
+                    <div class="risk-band"><span class="pill {{ r.band }}">{{ r.band }}</span></div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="mute" style="font-size:8.5pt;margin-top:3mm;margin-bottom:0">
+            Score bar and number follow the band colour — <span class="pill critical">critical</span>
+            <span class="pill high">high</span> <span class="pill medium">medium</span>
+            <span class="pill low">low</span>. Full ranked list with position-based detail in &sect; 04.
+        </p>
+        {% else %}
+        <div class="empty">No permit rules to score.</div>
+        {% endif %}
+    </div>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  03 · RULE BASE HYGIENE                                           ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">03 Rule Base Hygiene</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">03</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 6 9 17.5 3.5 12"/></svg></span>
+        <span class="title">Rule Base Hygiene</span>
+    </div>
+    <p class="section-intro">
+        Structural problems in the rule base — unreachable rules, duplicates,
+        never-used rules, and permit rules that do not log. Cleaning these
+        up does not change what traffic the firewall accepts or denies; it
+        reduces rule-base size and closes SIEM blind spots.
+    </p>
+
+    <div class="subsection">
+        <h3>3.1 &nbsp; Shadowed rules <span class="mute" style="font-weight:500">&middot; {{ a.kpi_shadowed_count }} total</span></h3>
+        <div class="subsection-caption">
+            An earlier rule with a different action already matches every flow
+            each of these would have. PAN-OS App-ID narrowing is respected —
+            rules only surface here when the earlier rule also covers the
+            same application set.
+        </div>
+        {% if a.shadowed %}
+        <table class="tbl">
+            <thead><tr>
+                <th style="width:22%">Rule</th>
+                <th style="width:7%">Pos</th>
+                <th style="width:9%">Action</th>
+                <th style="width:26%">Shadowed by</th>
+                <th>Reason</th>
+            </tr></thead>
+            <tbody>
+                {% for s in a.shadowed[:20] %}
+                <tr>
+                    <td class="wrap"><span class="rule-name">{{ s.rule.name or s.rule.rule_id or '—' }}</span></td>
+                    <td class="num">#{{ s.rule.position }}</td>
+                    <td><span class="pill {{ s.rule.action }}">{{ s.rule.action }}</span></td>
+                    <td class="wrap">
+                        <span class="rule-name">{{ s.shadowed_by.name or s.shadowed_by.rule_id or '—' }}</span>
+                        <span class="rule-pos">#{{ s.shadowed_by.position }}</span>
+                        <span class="pill {{ s.shadowed_by.action }}" style="margin-left:1mm">{{ s.shadowed_by.action }}</span>
+                    </td>
+                    <td>{{ s.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if a.shadowed|length > 20 %}
+        <p class="mute" style="font-size:8.5pt;margin-top:-2mm">Showing the first 20 of {{ a.shadowed|length }} shadowed rules.</p>
+        {% endif %}
+        {% else %}
+        <div class="empty">No shadowed rules detected.</div>
+        {% endif %}
+    </div>
+
+    <div class="subsection">
+        <h3>3.2 &nbsp; Redundant rules <span class="mute" style="font-weight:500">&middot; {{ a.kpi_redundant_count }} total</span></h3>
+        <div class="subsection-caption">
+            Rules fully covered by an earlier rule with the same action. They
+            fire the same way whether they exist or not — removing them
+            does not change the firewall's behaviour.
+        </div>
+        {% if a.redundant %}
+        <table class="tbl">
+            <thead><tr>
+                <th style="width:24%">Rule</th>
+                <th style="width:7%">Pos</th>
+                <th style="width:9%">Action</th>
+                <th style="width:30%">Duplicate of</th>
+                <th>Reason</th>
+            </tr></thead>
+            <tbody>
+                {% for r in a.redundant[:20] %}
+                <tr>
+                    <td class="wrap"><span class="rule-name">{{ r.rule.name or r.rule.rule_id or '—' }}</span></td>
+                    <td class="num">#{{ r.rule.position }}</td>
+                    <td><span class="pill {{ r.rule.action }}">{{ r.rule.action }}</span></td>
+                    <td class="wrap">
+                        <span class="rule-name">{{ r.duplicate_of.name or r.duplicate_of.rule_id or '—' }}</span>
+                        <span class="rule-pos">#{{ r.duplicate_of.position }}</span>
+                    </td>
+                    <td>{{ r.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if a.redundant|length > 20 %}
+        <p class="mute" style="font-size:8.5pt;margin-top:-2mm">Showing the first 20 of {{ a.redundant|length }} redundant rules.</p>
+        {% endif %}
+        {% else %}
+        <div class="empty">No redundant rules detected.</div>
+        {% endif %}
+    </div>
+
+    <div class="subsection">
+        <h3>3.3 &nbsp; Unlogged permit rules <span class="mute" style="font-weight:500">&middot; {{ a.kpi_unlogged_permits }} total</span></h3>
+        <div class="subsection-caption">
+            Permit rules with traffic logging disabled. Any flow they accept
+            is invisible to the SIEM — an obvious gap for incident response
+            and threat hunting.
+        </div>
+        {% if a.unlogged_permits %}
+        <table class="tbl">
+            <thead><tr>
+                <th>Rule</th>
+                <th style="width:7%">Pos</th>
+                <th style="width:9%">Action</th>
+                <th>Why it matters</th>
+            </tr></thead>
+            <tbody>
+                {% for u in a.unlogged_permits[:20] %}
+                <tr>
+                    <td class="wrap"><span class="rule-name">{{ u.rule.name or u.rule.rule_id or '—' }}</span></td>
+                    <td class="num">#{{ u.rule.position }}</td>
+                    <td><span class="pill {{ u.rule.action }}">{{ u.rule.action }}</span></td>
+                    <td>{{ u.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Every enabled permit rule has traffic logging configured.</div>
+        {% endif %}
+    </div>
+
+    <div class="subsection">
+        <h3>3.4 &nbsp; Zero-hit rules (last 30 days) <span class="mute" style="font-weight:500">&middot; {{ a.kpi_zero_hit_30d }} total</span></h3>
+        <div class="subsection-caption">
+            Rules that matched no traffic in the last 30 days. Candidates for
+            retirement — confirm there's no quarterly or seasonal traffic
+            they'd legitimately serve before disabling.
+        </div>
+        {% if a.zero_hit_rules %}
+        <table class="tbl">
+            <thead><tr>
+                <th style="width:32%">Rule</th>
+                <th style="width:7%">Pos</th>
+                <th style="width:9%">Action</th>
+                <th>Notes</th>
+            </tr></thead>
+            <tbody>
+                {% for z in a.zero_hit_rules[:15] %}
+                <tr>
+                    <td class="wrap"><span class="rule-name">{{ z.name or z.rule_id or '—' }}</span></td>
+                    <td class="num">#{{ z.position }}</td>
+                    <td><span class="pill {{ z.action }}">{{ z.action }}</span></td>
+                    <td>Enabled, no hits in the analytics window.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if a.zero_hit_rules|length > 15 %}
+        <p class="mute" style="font-size:8.5pt;margin-top:-2mm">Showing the first 15 of {{ a.zero_hit_rules|length }} zero-hit rules.</p>
+        {% endif %}
+        {% elif a.log_window_hours %}
+        <div class="empty">No zero-hit rules in the last 30 days.</div>
+        {% else %}
+        <div class="empty">Log data unavailable — hit counts not joined.</div>
+        {% endif %}
+    </div>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  04 · RISK ANALYSIS — PERMISSIVENESS                              ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">04 Risk Analysis</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">04</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="title">Risk Analysis — Permissiveness</span>
+    </div>
+    <p class="section-intro">
+        Each permit rule is scored 0–100 based on how many match dimensions
+        it leaves unconstrained (<em>any</em> source zone / address, <em>any</em>
+        destination zone / address, <em>any</em> service) plus a logging
+        penalty when traffic logging is disabled. Deny and disabled rules
+        are excluded — a broad deny is a control, not a risk.
+    </p>
+
+    {% if total_graded %}
+    <h4>Top {{ [a.permissiveness|length, 15]|min }} highest-risk rules</h4>
+    <table class="tbl">
+        <thead><tr>
+            <th style="width:24%">Rule</th>
+            <th style="width:5%">Pos</th>
+            <th style="width:8%">Action</th>
+            <th>Flags</th>
+            <th style="width:22%">Score</th>
+            <th style="width:9%">Band</th>
+        </tr></thead>
+        <tbody>
+            {% for r in a.permissiveness[:15] %}
+            <tr>
+                <td class="wrap"><span class="rule-name">{{ r.rule.name or r.rule.rule_id or '—' }}</span></td>
+                <td class="num">#{{ r.rule.position }}</td>
+                <td><span class="pill {{ r.rule.action }}">{{ r.rule.action }}</span></td>
+                <td><div class="flags">{% for f in r.flags %}<span class="flag">{{ f }}</span>{% endfor %}</div></td>
+                <td>
+                    <div class="score-cell">
+                        <div class="score-track"><div class="score-fill {{ r.band }}" style="width:{{ r.score }}%"></div></div>
+                        <div class="score-num">{{ r.score }}</div>
+                    </div>
+                </td>
+                <td><span class="pill {{ r.band }}">{{ r.band }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if a.permissiveness|length > 15 %}
+    <p class="mute" style="font-size:8.5pt">Showing the top 15 of {{ a.permissiveness|length }} scored permit rules.</p>
+    {% endif %}
+    {% else %}
+    <div class="empty">No enabled permit rules to score.</div>
+    {% endif %}
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  05 · OBJECT HYGIENE                                              ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% if a.object_hygiene %}
+{% set oh = a.object_hygiene %}
+{% set addr_pct = (100 * oh.referenced_addrs / oh.total_addrs) if oh.total_addrs else 0 %}
+{% set svc_pct  = (100 * oh.referenced_services / oh.total_services) if oh.total_services else 0 %}
+{# Ring-gauge arc math — matches the donut in section 02. Radius 34,
+   stroke 9, circumference = 2π·34 = 213.63. Python-side math not needed
+   because this is a single value per card. #}
+{% set addr_arc = (addr_pct / 100.0) * 213.63 %}
+{% set svc_arc  = (svc_pct  / 100.0) * 213.63 %}
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">05 Object Hygiene</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">05</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+        <span class="title">Object Hygiene</span>
+    </div>
+    <p class="section-intro">
+        Usage of address and service objects defined in the rule base.
+        Unreferenced objects clutter the object picker during rule
+        authoring and slow down day-to-day operations — a healthy
+        configuration keeps the in-use percentage above 70%.
+    </p>
+
+    {# ── Top-line stats strip ───────────────────────────────────── #}
+    <div class="stats-strip">
+        <div class="stat-tile">
+            <div class="lbl">Total address objects</div>
+            <div class="val">{{ format_number(oh.total_addrs) }}</div>
+            <div class="hint">includes groups &amp; literals</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Total service objects</div>
+            <div class="val">{{ format_number(oh.total_services) }}</div>
+            <div class="hint">includes service groups</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Unreferenced addresses</div>
+            <div class="val" style="color:{% if oh.unreferenced_addrs|length > 100 %}var(--red){% elif oh.unreferenced_addrs|length > 0 %}var(--amber){% else %}var(--green){% endif %}">
+                {{ format_number(oh.unreferenced_addrs|length) }}
+            </div>
+            <div class="hint">cleanup candidates</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Unreferenced services</div>
+            <div class="val" style="color:{% if oh.unreferenced_services|length > 50 %}var(--red){% elif oh.unreferenced_services|length > 0 %}var(--amber){% else %}var(--green){% endif %}">
+                {{ format_number(oh.unreferenced_services|length) }}
+            </div>
+            <div class="hint">cleanup candidates</div>
+        </div>
+    </div>
+
+    {# ── Visual gauge cards — one per object type ──────────────── #}
+    <div class="oh-grid">
+        <div class="oh-card">
+            <svg class="oh-gauge" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="34" fill="none" stroke="var(--rule-soft)" stroke-width="9"/>
+                <g transform="rotate(-90 50 50)">
+                    <circle cx="50" cy="50" r="34" fill="none"
+                            stroke="{% if addr_pct >= 70 %}#059669{% elif addr_pct >= 40 %}#d97706{% else %}#b91c1c{% endif %}"
+                            stroke-width="9" stroke-linecap="round"
+                            stroke-dasharray="{{ '%.2f'|format(addr_arc) }} {{ '%.2f'|format(213.63 - addr_arc) }}"/>
+                </g>
+                <text class="score" x="50" y="52" text-anchor="middle" dominant-baseline="middle">{{ '%.1f'|format(addr_pct) }}%</text>
+                <text class="sub"   x="50" y="63" text-anchor="middle">IN USE</text>
+            </svg>
+            <div class="oh-meta">
+                <h4>Address objects</h4>
+                <div class="row">
+                    <span class="rlbl">Total</span>
+                    <span class="rval">{{ format_number(oh.total_addrs) }}</span>
+                </div>
+                <div class="row">
+                    <span class="rlbl">Referenced</span>
+                    <span class="rval">{{ format_number(oh.referenced_addrs) }}</span>
+                </div>
+                <div class="row">
+                    <span class="rlbl">Unreferenced</span>
+                    <span class="rval {% if oh.unreferenced_addrs|length > 100 %}bad{% elif oh.unreferenced_addrs|length > 0 %}warn{% endif %}">
+                        {{ format_number(oh.unreferenced_addrs|length) }}
+                    </span>
+                </div>
+                {% if oh.duplicate_addr_groups %}
+                <div class="row">
+                    <span class="rlbl">Duplicate values</span>
+                    <span class="rval warn">{{ oh.duplicate_addr_groups|length }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="oh-card">
+            <svg class="oh-gauge" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="34" fill="none" stroke="var(--rule-soft)" stroke-width="9"/>
+                <g transform="rotate(-90 50 50)">
+                    <circle cx="50" cy="50" r="34" fill="none"
+                            stroke="{% if svc_pct >= 70 %}#059669{% elif svc_pct >= 40 %}#d97706{% else %}#b91c1c{% endif %}"
+                            stroke-width="9" stroke-linecap="round"
+                            stroke-dasharray="{{ '%.2f'|format(svc_arc) }} {{ '%.2f'|format(213.63 - svc_arc) }}"/>
+                </g>
+                <text class="score" x="50" y="52" text-anchor="middle" dominant-baseline="middle">{{ '%.1f'|format(svc_pct) }}%</text>
+                <text class="sub"   x="50" y="63" text-anchor="middle">IN USE</text>
+            </svg>
+            <div class="oh-meta">
+                <h4>Service objects</h4>
+                <div class="row">
+                    <span class="rlbl">Total</span>
+                    <span class="rval">{{ format_number(oh.total_services) }}</span>
+                </div>
+                <div class="row">
+                    <span class="rlbl">Referenced</span>
+                    <span class="rval">{{ format_number(oh.referenced_services) }}</span>
+                </div>
+                <div class="row">
+                    <span class="rlbl">Unreferenced</span>
+                    <span class="rval {% if oh.unreferenced_services|length > 50 %}bad{% elif oh.unreferenced_services|length > 0 %}warn{% endif %}">
+                        {{ format_number(oh.unreferenced_services|length) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout{% if addr_pct < 40 or svc_pct < 40 %} red{% elif addr_pct < 70 or svc_pct < 70 %} amber{% else %} green{% endif %}" style="margin-top:4mm">
+        {% if addr_pct < 40 %}
+        <strong>Cleanup recommended.</strong>
+        Address-object utilisation is below 40% — the rule base carries a large
+        inventory of objects that no enabled rule references. Prune unused
+        objects to reduce visual noise and speed up rule authoring.
+        {% elif addr_pct < 70 %}
+        Address-object utilisation is below 70% — consider a periodic cleanup
+        sweep of unreferenced objects.
+        {% else %}
+        Healthy utilisation. Unreferenced object counts are within normal
+        operational noise; a quarterly review is enough.
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  06 · IMPLICIT DENY HITS                                          ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% if has_implicit_deny %}
+{% set istats = chart_data.implicit_stats %}
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">06 Implicit-Deny Hits</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">06</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
+        <span class="title">Implicit-Deny Hits</span>
+    </div>
+    <p class="section-intro">
+        Traffic hitting the vendor's implicit-deny default — no rule matched.
+        Either a legitimate rule is missing (real traffic being dropped) or
+        unwanted traffic is reaching the firewall. Review the top talkers
+        below and the aggregated src / dst / port breakdowns.
+    </p>
+
+    {# ── Headline stats ─────────────────────────────────────────── #}
+    <div class="stats-strip">
+        <div class="stat-tile">
+            <div class="lbl">Total hits</div>
+            <div class="val">{{ format_compact(istats.total_hits) }}</div>
+            <div class="hint">across {{ a.implicit_deny|length }} unique tuples</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Unique sources</div>
+            <div class="val">{{ format_number(istats.unique_src) }}</div>
+            <div class="hint">distinct client IPs</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Unique destinations</div>
+            <div class="val">{{ format_number(istats.unique_dst) }}</div>
+            <div class="hint">distinct target IPs</div>
+        </div>
+        <div class="stat-tile">
+            <div class="lbl">Unique ports</div>
+            <div class="val">{{ format_number(istats.unique_ports) }}</div>
+            <div class="hint">distinct dst ports</div>
+        </div>
+    </div>
+
+    {# ── Aggregated breakdowns — who / where / what ─────────────── #}
+    <h3 style="margin-top:5mm">By top talker</h3>
+    <div class="break-grid">
+        {% set _sets = [('Top source IPs', chart_data.implicit_top5_src),
+                        ('Top destination IPs', chart_data.implicit_top5_dst),
+                        ('Top destination ports', chart_data.implicit_top5_port)] %}
+        {% for title, items in _sets %}
+        <div class="break-card">
+            <h4>{{ title }}</h4>
+            {% if items %}
+            {% set mx = items[0].hits or 1 %}
+            <ul class="break-list">
+                {% for it in items %}
+                <li>
+                    <span class="break-key">{{ it.key }}</span>
+                    <span class="break-track"><span class="break-fill" style="width:{{ (100 * it.hits / mx)|round(1) }}%"></span></span>
+                    <span class="break-val">{{ format_compact(it.hits) }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty">No data.</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── Top-10 detailed flows with visual bar ──────────────────── #}
+    <h3 style="margin-top:6mm">Top 10 flows</h3>
+    <div class="subsection-caption">
+        Each bar is scaled to the highest-hit tuple in the window, so the
+        relative magnitude across flows is directly comparable.
+    </div>
+    <ul class="flow-list">
+        {% for f in chart_data.implicit_top %}
+        <li class="flow-row">
+            <div class="flow-head">
+                <div class="flow-idx">#{{ loop.index }}</div>
+                <div class="flow-tuple">
+                    {{ f.srcip }}<span class="arrow">&rarr;</span>{{ f.dstip }}<span class="port">:{{ f.dstport }}</span><span class="proto">{{ f.proto }}</span>
+                </div>
+                <div class="flow-hits">{{ format_compact(f.hits) }} hits</div>
+            </div>
+            <div class="flow-bar-wrap">
+                <div class="flow-bar-track"><div class="flow-bar-fill" style="width:{{ f.width }}%"></div></div>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  07 · ZONE REACHABILITY                                           ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+{% if has_reachability %}
+{% set zc = chart_data.zr_state_counts %}
+{% set ztotal = chart_data.zr_total_pairs or 1 %}
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">07 Zone Reachability</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">07</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg></span>
+        <span class="title">Zone Reachability</span>
+    </div>
+    <p class="section-intro">
+        Zone-to-zone connectivity summary for the {{ a.reachability.src_zones|length }}
+        × {{ a.reachability.dst_zones|length }} zone grid.
+        <strong>Aligned</strong> = permit rule exists and traffic observed.
+        <strong>Over-provisioned</strong> = permit rule with no observed
+        traffic. <strong>Unauthorised</strong> = traffic observed without a
+        permit. <strong>Gap</strong> = neither configured nor observed.
+    </p>
+
+    {# ── State-count cards with percent-of-total ──────────────────── #}
+    <div class="zr-stats">
+        <div class="zr-state aligned">
+            <div class="lbl">Aligned</div>
+            <div class="val">{{ zc['aligned'] }}</div>
+            <div class="pct">{{ '%.1f'|format(100 * zc['aligned'] / ztotal) }}% of zone pairs</div>
+        </div>
+        <div class="zr-state over">
+            <div class="lbl">Over-provisioned</div>
+            <div class="val">{{ zc['over-provisioned'] }}</div>
+            <div class="pct">{{ '%.1f'|format(100 * zc['over-provisioned'] / ztotal) }}% &mdash; cleanup candidates</div>
+        </div>
+        <div class="zr-state unauthorised">
+            <div class="lbl">Unauthorised</div>
+            <div class="val">{{ zc['unauthorised'] }}</div>
+            <div class="pct">{{ '%.1f'|format(100 * zc['unauthorised'] / ztotal) }}% &mdash; security gaps</div>
+        </div>
+        <div class="zr-state gap">
+            <div class="lbl">Gap</div>
+            <div class="val">{{ zc['gap'] }}</div>
+            <div class="pct">{{ '%.1f'|format(100 * zc['gap'] / ztotal) }}% &mdash; no traffic, no rule</div>
+        </div>
+    </div>
+
+    {# ── Headline: top zone pairs by permit count ─────────────────── #}
+    {% if chart_data.zr_top_pairs %}
+    <div class="dash-card" style="margin-top: 3mm; page-break-inside: auto">
+        <h4>Top zone pairs by configured connectivity</h4>
+        <ul class="zr-pair-list">
+            {% for p in chart_data.zr_top_pairs %}
+            <li class="zr-pair">
+                <div class="zr-pair-label">
+                    <span class="src">{{ p.src }}</span><span class="arr">&rarr;</span><span class="dst">{{ p.dst }}</span>
+                </div>
+                <div class="zr-pair-track"><div class="zr-pair-fill" style="width:{{ p.width }}%"></div></div>
+                <div class="zr-pair-meta">
+                    <span class="permit">{{ p.permits }}</span> permit{{ 's' if p.permits != 1 }}{% if p.denies %}<br><span class="deny">{{ p.denies }} deny</span>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="mute" style="font-size:8pt;margin-top:3mm;margin-bottom:0">
+            Bar length encodes permit-rule count scaled to the top pair. Zone
+            pairs with only deny rules or observed traffic but no permits are
+            excluded from this list — they appear in the full matrix on the
+            next page.
+        </p>
+    </div>
+    {% endif %}
+
+    {# ── Secondary: compact matrix overview ───────────────────────── #}
+    {% set zsrc = a.reachability.src_zones[:18] %}
+    {% set zdst = a.reachability.dst_zones[:18] %}
+    {% set n = zdst|length %}
+    <h3 style="margin-top:8mm">Matrix overview</h3>
+    <div class="subsection-caption">
+        Every cell shows the permit-rule count for the source (row) &rarr;
+        destination (column) pair. Cell tint encodes the state.
+        <span class="pill" style="background:var(--green-bg);color:var(--green)">Aligned</span>
+        <span class="pill" style="background:var(--amber-bg);color:var(--amber)">Over-provisioned</span>
+        <span class="pill" style="background:var(--red-bg);color:var(--red)">Unauthorised</span>
+        <span class="pill muted">Gap</span>
+    </div>
+    <div class="matrix" style="grid-template-columns: 26mm repeat({{ n }}, 5.8mm);">
+        <div class="cell label"></div>
+        {% for dz in zdst %}
+        <div class="cell label" style="writing-mode:vertical-rl;text-orientation:mixed;padding-right:0;padding-bottom:1mm;align-items:flex-end;justify-content:center;height:14mm;">{{ dz[:10] }}</div>
+        {% endfor %}
+        {% for sz in zsrc %}
+        <div class="cell label">{{ sz[:14] }}</div>
+        {% for dz in zdst %}
+            {% set c = a.reachability.cell(sz, dz) %}
+            {% set state_class = c.state | replace('over-provisioned','over') %}
+            <div class="cell {{ state_class }}">
+                {% if c.rule_count %}{{ c.rule_count }}{% elif c.observed_hits %}·{% endif %}
+            </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    {% if a.reachability.src_zones|length > 18 or a.reachability.dst_zones|length > 18 %}
+    <p class="mute" style="font-size:8.5pt">
+        Matrix truncated to the first 18 zones per axis. The full
+        {{ a.reachability.src_zones|length }}&times;{{ a.reachability.dst_zones|length }}
+        grid is viewable on the web dashboard.
+    </p>
+    {% endif %}
+</section>
+{% endif %}
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  08 · RECOMMENDATIONS                                             ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">08 Recommendations</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">08</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <span class="title">Recommendations</span>
+    </div>
+    <p class="section-intro">
+        Prioritised cleanup actions derived from the findings above. Start
+        at the top — each item references the detailed section where the
+        contributing rules are listed.
+    </p>
+
+    <ul class="findings">
+        {% if perm_critical %}
+        <li>
+            <div class="ind red">1</div>
+            <div>
+                <div class="title">Tighten the {{ perm_critical }} CRITICAL-band permit rule{{ 's' if perm_critical != 1 }}.</div>
+                <div class="body">
+                    Each combines multiple <em>any</em> dimensions — the pattern attackers rely on for
+                    lateral movement. Replace <em>any</em> src/dst addresses with concrete objects or
+                    groups; replace <em>any</em> service with the real app's service list. See &sect; 04.
+                </div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_unlogged_permits %}
+        <li>
+            <div class="ind red">2</div>
+            <div>
+                <div class="title">Enable traffic logging on {{ a.kpi_unlogged_permits }} permit rule{{ 's' if a.kpi_unlogged_permits != 1 }}.</div>
+                <div class="body">Detection coverage for the flows they carry is currently zero. Log-to-session-end is the expected default on both Fortinet and PAN-OS; see &sect; 3.3.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_shadowed_count %}
+        <li>
+            <div class="ind amber">3</div>
+            <div>
+                <div class="title">Review and disable the {{ a.kpi_shadowed_count }} shadowed rule{{ 's' if a.kpi_shadowed_count != 1 }}.</div>
+                <div class="body">They cannot fire because an earlier rule with a different action already claims every flow they'd match. Disable after confirming no App-ID-specific scope is being overlooked. See &sect; 3.1.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_redundant_count %}
+        <li>
+            <div class="ind amber">4</div>
+            <div>
+                <div class="title">Consolidate the {{ a.kpi_redundant_count }} redundant rule{{ 's' if a.kpi_redundant_count != 1 }}.</div>
+                <div class="body">Removing them reduces rule-base size without changing behaviour. Many follow a textbook <code>-1</code> / <code>_TEMP</code> duplicate naming pattern. See &sect; 3.2.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_zero_hit_30d %}
+        <li>
+            <div class="ind blue">5</div>
+            <div>
+                <div class="title">Audit the {{ a.kpi_zero_hit_30d }} zero-hit rule{{ 's' if a.kpi_zero_hit_30d != 1 }} for retirement.</div>
+                <div class="body">No traffic has used them in 30 days. Confirm no quarterly / annual traffic would legitimately match, then disable. See &sect; 3.4.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if a.kpi_unreferenced_objects %}
+        <li>
+            <div class="ind blue">6</div>
+            <div>
+                <div class="title">Prune {{ a.kpi_unreferenced_objects }} unreferenced object{{ 's' if a.kpi_unreferenced_objects != 1 }}.</div>
+                <div class="body">Unused address and service objects clutter the object picker and make rule authoring error-prone. Safe to delete in bulk. See &sect; 05.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if has_implicit_deny %}
+        <li>
+            <div class="ind red">7</div>
+            <div>
+                <div class="title">Investigate top implicit-deny flows.</div>
+                <div class="body">Either a legitimate rule is missing or traffic is arriving that shouldn't. See &sect; 06.</div>
+            </div>
+        </li>
+        {% endif %}
+        {% if not (perm_critical or a.kpi_unlogged_permits or a.kpi_shadowed_count or a.kpi_redundant_count or a.kpi_zero_hit_30d or a.kpi_unreferenced_objects or has_implicit_deny) %}
+        <li>
+            <div class="ind green">&#10003;</div>
+            <div>
+                <div class="title">No cleanup actions required.</div>
+                <div class="body">The rule base passes every automated check Zentryc performs. Revisit after the next config change.</div>
+            </div>
+        </li>
+        {% endif %}
+    </ul>
+</section>
+
+{# ╔═══════════════════════════════════════════════════════════════════╗ #}
+{# ║  APPENDIX                                                         ║ #}
+{# ╚═══════════════════════════════════════════════════════════════════╝ #}
+
+<section class="section">
+    <div class="page-header">
+        <div class="page-header-left">
+            <span class="page-header-mark">Z</span>
+            <span class="page-header-brand">Zentryc Analytics</span>
+            <span class="page-header-sep">·</span>
+            <span>{{ device.hostname or device.ip_address }}</span>
+        </div>
+        <div class="page-header-ctx">Appendix</div>
+    </div>
+
+    <div class="section-hdr">
+        <span class="num">A</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+        <span class="title">Appendix — Methodology &amp; Data Sources</span>
+    </div>
+
+    <h3>Posture score</h3>
+    <p class="mute" style="font-size:9pt">
+        Overall score starts at 100 and is deducted for material findings:
+        critical permit rules (−12 each), high permit rules (−5 each, capped
+        at 20), unlogged permits (−3 each, capped at 15), average
+        permissiveness (−0.3× the KPI value), implicit-deny flows (−5 once),
+        and soft penalties for shadowed/redundant clutter. Bands: &ge;80 Low,
+        &ge;60 Moderate, &ge;40 High, below 40 Critical.
+    </p>
+
+    <h3>Permissiveness scoring</h3>
+    <p class="mute" style="font-size:9pt">
+        Weighted flag sum — any-src-zone (+10), any-dst-zone (+10),
+        any-src-addr (+25), any-dst-addr (+25), any-svc (+20), log-off on a
+        permit (+10). Bands: ≥80 CRITICAL, ≥60 HIGH, ≥40 MEDIUM, otherwise
+        LOW. Deny and disabled rules are excluded on the grounds that a broad
+        deny is a control, not an exposure.
+    </p>
+
+    <h3>Shadowed / redundant detection</h3>
+    <p class="mute" style="font-size:9pt">
+        Rule N is shadowed or redundant when every dimension of N is a
+        (non-strict) subset of an earlier rule M. Dimensions checked:
+        source/destination zone, source/destination address, service,
+        <em>and application</em> (PAN-OS App-ID). The App-ID check prevents
+        a broad <code>application:icmp-timestamp</code> deny from wrongly
+        claiming coverage over unrelated rules that share only <em>any</em>
+        match fields.
+    </p>
+
+    <h3>Data sources</h3>
+    <p class="mute" style="font-size:9pt">
+        Rule base, address objects and service objects come from the snapshot
+        listed on the cover page (SSH or XML/REST API fetch; for PAN-OS,
+        pre-rulebase + local rulebase + post-rulebase are merged in
+        evaluation order). Hit counts and implicit-deny flows come from the
+        ingested syslog stream over the 30-day window; when logs are not
+        yet joined, those sections are omitted.
+    </p>
+
+    <h3>Out of scope</h3>
+    <ul class="mute" style="font-size:9pt;padding-left:5mm">
+        <li>Per-packet simulation of ingress ACL, NAT, and egress paths — the engine uses first-match against the configured rule base.</li>
+        <li>Application-level signature accuracy (we record the configured App-ID, not the classifier's confidence).</li>
+        <li>Threat prevention profiles (IPS/AV/URL/DNS) — reviewed separately.</li>
+        <li>Panorama push history — only the committed state seen by the managed firewall is analysed.</li>
+    </ul>
+</section>
+
+</body>
+</html>

@@ -211,6 +211,91 @@ class PolicyAnalyticsService:
     def _covers_svc(cls, m, n) -> bool:
         return cls._covers(m, n, any_set=_ANY_SERVICE_NAMES)
 
+    # Compiled at class-load time so we don't pay regex-setup on every
+    # shadow/redundant comparison.
+    _CATEGORY_RE = __import__('re').compile(
+        r'<(?:url-)?category\b[^>]*>(.*?)</(?:url-)?category>',
+        __import__('re').IGNORECASE | __import__('re').DOTALL,
+    )
+    _MEMBER_RE = __import__('re').compile(
+        r'<member\b[^>]*>([^<]+)</member>',
+        __import__('re').IGNORECASE,
+    )
+
+    @classmethod
+    def _is_profile_narrowed(cls, rule: Any) -> bool:
+        """True when a rule's config-visible match set looks broad but
+        runtime behaviour is narrowed by an attached profile we can't see.
+
+        Two fingerprints catch the overwhelming majority of these:
+
+        1. **PAN-OS catch-all-with-profile pattern** — ``service=application-default``
+           with ``applications=any`` on a ``deny`` rule. In practice, such
+           rules are paired with URL-filtering, threat, or EDL profiles
+           and only fire on traffic matching those profiles. A genuine
+           "deny everything" rule uses ``service=any`` and has no
+           profiles attached.
+
+        2. **URL / category attachments in ``raw_definition``** — the
+           rule carries a ``<category>`` or ``<url-category>`` element
+           with specific members (anything other than ``any``/``all``).
+           The shadow-detector can't read these into its covers-check,
+           so it would wrongly conclude such a rule matches every flow.
+
+        False negatives (rules genuinely broad that we refuse to flag)
+        are strictly preferable to false positives here — a missed
+        shadow detection costs nothing; a wrong one erodes trust in the
+        analytic and gets the tool turned off.
+        """
+        # Fingerprint 1 — app-default + any-apps on a deny rule.
+        action = (rule.action or "").lower()
+        if action in ("deny", "drop", "block", "reject", "blocked", "reset-both"):
+            svcs = [(s or "").lower() for s in (rule.services or [])]
+            apps = (rule.applications or [])
+            has_app_default = any("application-default" in s for s in svcs)
+            apps_any = (not apps) or all((a or "").lower() in _ANY_NAMES for a in apps)
+            if has_app_default and apps_any:
+                return True
+
+        # Fingerprint 2 — URL / category attachment in raw_definition.
+        raw = rule.raw_definition or ""
+        if raw:
+            for match in cls._CATEGORY_RE.finditer(raw):
+                for m in cls._MEMBER_RE.findall(match.group(1)):
+                    token = (m or "").strip().lower()
+                    if token and token not in _ANY_NAMES:
+                        return True
+        return False
+
+    @classmethod
+    def _covers_app(cls, m_apps: Optional[List[str]],
+                    n_apps: Optional[List[str]]) -> bool:
+        """App-ID coverage check — symmetric to the other ``_covers_*`` helpers.
+
+        PAN-OS rules frequently constrain on L7 applications (e.g.
+        ``applications=['icmp-timestamp']``) while leaving ``services=any``.
+        Such a rule does NOT cover a later rule whose applications are
+        ``any`` or a different App-ID — the actual firewall evaluates
+        them independently because App-ID narrows the match at runtime.
+
+        Returns True (M covers N) when:
+          - M has no app constraint (empty / any / all), OR
+          - N's specific apps are a subset of M's specific apps.
+        Returns False when M constrains on specific apps but N's apps
+        include ``any`` or a different app — M cannot claim to match
+        every flow N would match.
+
+        Fortinet rules typically leave applications empty, so this is a
+        no-op for them: ``_covers_app(empty, empty)`` → True.
+        """
+        m_n = _norm_set(m_apps)
+        if not m_n or any(t in m_n for t in _ANY_NAMES):
+            return True
+        n_n = _norm_set(n_apps)
+        if not n_n or any(t in n_n for t in _ANY_NAMES):
+            return False
+        return n_n.issubset(m_n)
+
     @classmethod
     def find_shadowed_and_redundant(cls, policies: List[Any]
                                      ) -> Tuple[List[ShadowedRule], List[RedundantRule]]:
@@ -220,13 +305,25 @@ class PolicyAnalyticsService:
         # O(n²) on rule count — fine for hundreds of rules; if we ever cross
         # ~5k we'll need bucketing by zone-pair first.
         ordered = [p for p in sorted(policies, key=lambda r: r.position) if p.enabled]
+        # Pre-compute the profile-narrowed flag once per rule so the inner
+        # loop stays cheap — on a 400-rule device this is called O(n²).
+        narrowed = {p.id: cls._is_profile_narrowed(p) for p in ordered}
         for i, n in enumerate(ordered):
             for m in ordered[:i]:
+                # Profile-narrowed rules (URL category, app-default+any-apps
+                # deny pattern) have a runtime match set that's smaller than
+                # their visible config fields suggest. They may look like a
+                # catch-all and wrongly "cover" every later rule. Skip them
+                # as potential shadowers / duplicates to avoid the false
+                # positives these patterns produced on PAN-OS device 353452.
+                if narrowed.get(m.id):
+                    continue
                 if (cls._covers_zone(m.src_zones, n.src_zones)
                     and cls._covers_zone(m.dst_zones, n.dst_zones)
                     and cls._covers(m.src_addresses, n.src_addresses)
                     and cls._covers(m.dst_addresses, n.dst_addresses)
-                    and cls._covers_svc(m.services, n.services)):
+                    and cls._covers_svc(m.services, n.services)
+                    and cls._covers_app(m.applications, n.applications)):
                     if (m.action or "").lower() == (n.action or "").lower():
                         redundant.append(RedundantRule(
                             rule=n, duplicate_of=m,
@@ -259,6 +356,18 @@ class PolicyAnalyticsService:
     def score_permissiveness(cls, policies: List[Any]) -> List[PermissivenessRow]:
         rows: List[PermissivenessRow] = []
         for p in sorted(policies, key=lambda r: r.position):
+            # Scope the metric to rules that can actually permit too much:
+            # deny/drop/block/reset rules aren't "permissive" (they're
+            # controls), and disabled rules have no runtime effect. Both
+            # were previously scored, which inflated the KPIs and buried
+            # the genuinely risky permits — e.g. a broad `deny any/any`
+            # would rank CRITICAL even though it's a tight control.
+            # Over-broad denies are still caught by the Shadowed / Zero-hit
+            # panels, which is the right surface for that failure mode.
+            if not p.enabled:
+                continue
+            if (p.action or "").lower() not in ("accept", "allow", "pass"):
+                continue
             flags: List[str] = []
             score = 0
             if _is_any(p.src_zones, _ANY_ZONE_NAMES):
