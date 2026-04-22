@@ -124,7 +124,12 @@ def load_state() -> dict:
 def save_state(state: dict) -> None:
     tmp = STATE_FILE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
-    os.chmod(tmp, 0o600)
+    # 0640 so processes in the zenai-updater group (the FastAPI web
+    # user is added to it at install time) can read the state for the
+    # /system/updates UI. The file still contains api_key, but the web
+    # handler strips it before serialising to clients (see
+    # fastapi_app/api/updates.py :: _redact).
+    os.chmod(tmp, 0o640)
     tmp.replace(STATE_FILE)
 
 

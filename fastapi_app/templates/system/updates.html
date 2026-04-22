@@ -4,73 +4,189 @@
 
 {% block extra_css %}
 <style>
-  .upd-wrap { padding: 1.25rem 1.5rem; max-width: 1100px; }
+  :root {
+    --upd-bg: var(--bg-color, #0b1220);
+    --upd-card: var(--card-bg, #121a2e);
+    --upd-border: var(--border, rgba(51, 65, 85, 0.6));
+    --upd-text: var(--text-color, #e2e8f0);
+    --upd-muted: var(--text-muted, #94a3b8);
+    --upd-dim: #64748b;
+    --upd-primary: #3b82f6;
+    --upd-primary-ink: #60a5fa;
+    --upd-ok: #22c55e;
+    --upd-warn: #f59e0b;
+    --upd-err: #ef4444;
+  }
+  .upd-wrap { padding: 1.25rem 1.5rem; max-width: 1200px; }
   .upd-head {
     display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.25rem; gap: 1rem;
+  }
+  .upd-head h1 { font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--upd-text); letter-spacing: -0.01em; }
+  .upd-head .subtitle { color: var(--upd-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+  /* ------ Status banner ------ */
+  .banner {
+    border-radius: 12px;
+    padding: 1.1rem 1.35rem;
     margin-bottom: 1.25rem;
+    display: flex; align-items: center; gap: 1rem;
+    border: 1px solid transparent;
   }
-  .upd-head h1 { font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--text-color); }
-  .upd-head .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .banner.loading {
+    background: rgba(59, 130, 246, 0.06);
+    border-color: rgba(59, 130, 246, 0.25);
+    color: var(--upd-primary-ink);
+  }
+  .banner.ok {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+  }
+  .banner.update {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.12));
+    border-color: rgba(59, 130, 246, 0.45);
+    color: var(--upd-text);
+  }
+  .banner.err {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+  }
+  .banner .ic {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .banner .ic svg { width: 22px; height: 22px; }
+  .banner .body { flex: 1; min-width: 0; }
+  .banner .body h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  .banner .body p { margin: 0.25rem 0 0; font-size: 0.85rem; opacity: 0.82; }
+  .banner .body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; opacity: 0.95; }
+  .banner .actions { display: flex; gap: 0.6rem; flex-shrink: 0; }
 
-  .upd-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .ver-compare {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9rem; font-weight: 600;
+  }
+  .ver-compare .arrow { color: var(--upd-dim); }
+  .ver-compare .from { color: var(--upd-muted); text-decoration: line-through; }
+  .ver-compare .to { color: var(--upd-primary-ink); font-weight: 700; }
+
+  /* ------ Tabs ------ */
+  .upd-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--upd-border); margin-bottom: 1rem; }
   .upd-tab {
-    padding: 0.6rem 1rem; cursor: pointer; color: var(--text-muted);
+    padding: 0.65rem 1.1rem; cursor: pointer; color: var(--upd-muted);
     border-bottom: 2px solid transparent; font-size: 0.875rem;
+    transition: color 0.15s;
   }
-  .upd-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
+  .upd-tab:hover { color: var(--upd-text); }
+  .upd-tab.active { color: var(--upd-primary-ink); border-bottom-color: var(--upd-primary-ink); font-weight: 600; }
 
+  /* ------ Cards ------ */
   .upd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
   .upd-card {
-    background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px;
-    padding: 0.9rem 1rem;
+    background: var(--upd-card); border: 1px solid var(--upd-border); border-radius: 10px;
+    padding: 1rem 1.15rem;
+    position: relative;
   }
-  .upd-card .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.3rem; }
-  .upd-card .v { font-size: 1.05rem; font-weight: 600; color: var(--text-color); word-break: break-all; }
-  .upd-card .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+  .upd-card .k {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--upd-muted); margin-bottom: 0.4rem; font-weight: 600;
+  }
+  .upd-card .v {
+    font-size: 1.05rem; font-weight: 600; color: var(--upd-text);
+    word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .upd-card .v.big { font-size: 1.35rem; }
+  .upd-card .sub { font-size: 0.75rem; color: var(--upd-dim); margin-top: 0.3rem; }
 
-  .pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 500; }
-  .pill.ok { background: #dcfce7; color: #166534; }
-  .pill.warn { background: #fef3c7; color: #92400e; }
-  .pill.err { background: #fee2e2; color: #991b1b; }
-  .pill.info { background: #dbeafe; color: #1e40af; }
+  /* ------ Pills / badges ------ */
+  .pill { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+  .pill.ok   { background: rgba(34, 197, 94, 0.14); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+  .pill.warn { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .pill.err  { background: rgba(239, 68, 68, 0.14); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .pill.info { background: rgba(59, 130, 246, 0.14); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
 
+  /* ------ Buttons ------ */
   .btn {
     display: inline-flex; align-items: center; gap: 0.45rem;
-    padding: 0.55rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-    font-size: 0.85rem; font-weight: 500; cursor: pointer; background: var(--card-bg);
-    color: var(--text-color);
+    padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid var(--upd-border);
+    font-size: 0.85rem; font-weight: 500; cursor: pointer; background: var(--upd-card);
+    color: var(--upd-text); transition: all 0.15s;
   }
-  .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-  .btn.primary:hover { background: #2563eb; }
+  .btn:hover { border-color: rgba(96, 165, 250, 0.4); }
+  .btn.primary {
+    background: var(--upd-primary); color: #fff; border-color: var(--upd-primary);
+    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.25);
+  }
+  .btn.primary:hover { background: #2563eb; border-color: #2563eb; }
+  .btn.success { background: var(--upd-ok); color: #fff; border-color: var(--upd-ok); }
+  .btn.success:hover { background: #16a34a; border-color: #16a34a; }
   .btn.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
   .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn .spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
-  .panel h3 { margin: 0 0 0.6rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-color); }
+  /* ------ Panels ------ */
+  .panel {
+    background: var(--upd-card); border: 1px solid var(--upd-border); border-radius: 10px;
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .panel h3 {
+    margin: 0 0 0.75rem 0; font-size: 0.95rem; font-weight: 600;
+    color: var(--upd-text); display: flex; align-items: center; gap: 0.5rem;
+  }
 
+  /* ------ Tables ------ */
   table.upd-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  table.upd-tbl th, table.upd-tbl td { padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-  table.upd-tbl th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+  table.upd-tbl th, table.upd-tbl td {
+    padding: 0.6rem 0.8rem; text-align: left;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.35);
+  }
+  table.upd-tbl th {
+    color: var(--upd-muted); font-weight: 600; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  table.upd-tbl tbody tr:last-child td { border-bottom: none; }
+  table.upd-tbl tbody tr:hover td { background: rgba(59, 130, 246, 0.04); }
 
   pre.logbox {
-    background: #0f172a; color: #e2e8f0; padding: 0.8rem; border-radius: 6px;
-    font-size: 0.75rem; line-height: 1.35; max-height: 360px; overflow: auto;
+    background: #020617; color: #cbd5e1; padding: 0.9rem 1rem; border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem; line-height: 1.45; max-height: 420px; overflow: auto;
     white-space: pre-wrap; word-break: break-word;
+    border: 1px solid var(--upd-border);
   }
 
   .row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-  .muted { color: var(--text-muted); }
+  .muted { color: var(--upd-muted); }
+  .dim   { color: var(--upd-dim); font-size: 0.78rem; }
   .hidden { display: none; }
 
   .toast {
-    position: fixed; right: 1rem; bottom: 1rem; background: #0f172a; color: #fff;
-    padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem;
-    opacity: 0; transform: translateY(10px); transition: all 0.2s;
-    z-index: 9999;
+    position: fixed; right: 1rem; bottom: 1rem;
+    background: #0f172a; color: #fff; padding: 0.85rem 1.15rem; border-radius: 8px;
+    font-size: 0.85rem; opacity: 0; transform: translateY(10px); transition: all 0.2s;
+    z-index: 9999; border: 1px solid var(--upd-border);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.4);
+    max-width: 380px;
   }
   .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.err { background: #991b1b; }
-  .toast.ok { background: #166534; }
+  .toast.err { background: #7f1d1d; border-color: #991b1b; }
+  .toast.ok  { background: #14532d; border-color: #166534; }
+
+  .changelog-box {
+    background: var(--upd-bg); border: 1px solid var(--upd-border); border-radius: 8px;
+    padding: 0.85rem 1rem; margin-top: 0.75rem;
+    font-size: 0.85rem; white-space: pre-wrap; color: var(--upd-text);
+    max-height: 220px; overflow: auto;
+  }
 </style>
 {% endblock %}
 
@@ -78,32 +194,56 @@
 <div class="upd-wrap">
   <div class="upd-head">
     <div>
-      <h1>Updates</h1>
-      <div class="subtitle">OTA updates delivered from <code>{{ api_base }}</code></div>
+      <h1>System Updates</h1>
+      <div class="subtitle">Over-the-air releases from <code>{{ api_base }}</code></div>
     </div>
     <div class="row">
-      <button class="btn" id="btnRefresh" onclick="refreshStatus()">Refresh</button>
-      <button class="btn primary" id="btnSync" onclick="doSync()">Sync now</button>
+      <button class="btn" id="btnCheck" onclick="checkForUpdates()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Check for updates
+      </button>
     </div>
   </div>
 
+  {% if state_error %}
+  <div class="banner err">
+    <div class="ic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div class="body">
+      <h2>Updater state is unreadable</h2>
+      <p>{{ state_error }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Primary status banner (populated by JS from /remote-latest) -->
+  <div class="banner loading" id="mainBanner">
+    <div class="ic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="body">
+      <h2 id="bannerTitle">Checking the release server…</h2>
+      <p id="bannerBody">Asking <code>{{ api_base }}</code> what release is available for this appliance.</p>
+    </div>
+    <div class="actions" id="bannerActions"></div>
+  </div>
+
+  <!-- Tabs -->
   <div class="upd-tabs">
     <div class="upd-tab active" data-tab="overview" onclick="showTab('overview')">Overview</div>
-    <div class="upd-tab" data-tab="release" onclick="showTab('release')">Pending release</div>
-    <div class="upd-tab" data-tab="history" onclick="showTab('history')">History</div>
-    <div class="upd-tab" data-tab="logs" onclick="showTab('logs')">Agent log</div>
+    <div class="upd-tab" data-tab="release"  onclick="showTab('release')">Release details</div>
+    <div class="upd-tab" data-tab="history"  onclick="showTab('history')">History</div>
+    <div class="upd-tab" data-tab="logs"     onclick="showTab('logs')">Agent log</div>
   </div>
 
   <!-- Overview tab -->
   <div id="tab-overview">
     {% if not installed %}
     <div class="panel">
-      <h3>Update agent not installed on this appliance</h3>
-      <p class="muted" style="margin:0 0 0.6rem 0;">
-        The ZenAI updater agent is not running. Install it with:
-      </p>
+      <h3>Update agent not installed</h3>
+      <p class="muted" style="margin:0 0 0.6rem 0;">Install and register the agent:</p>
       <pre class="logbox" style="max-height: none;">sudo /home/net/net-logs/deploy/updater/install-updater.sh
-# then set your registration token:
 sudo systemctl edit zenai-updater    # or edit /etc/zenai-updater.env
 sudo systemctl enable --now zenai-updater</pre>
     </div>
@@ -111,25 +251,25 @@ sudo systemctl enable --now zenai-updater</pre>
 
     <div class="upd-grid">
       <div class="upd-card">
-        <div class="k">App version (running)</div>
-        <div class="v" id="appVersion">{{ app_version }}</div>
+        <div class="k">Running version</div>
+        <div class="v big" id="appVersion">{{ app_version }}</div>
         <div class="sub">from <code>fastapi_app/__version__.py</code></div>
       </div>
       <div class="upd-card">
-        <div class="k">Agent-known version</div>
-        <div class="v" id="currentVersion">{{ updates_state.current_version or '—' }}</div>
-        <div class="sub">last successfully applied by the agent</div>
+        <div class="k">Latest on server</div>
+        <div class="v big" id="latestVersion">…</div>
+        <div class="sub" id="latestSub">probing</div>
       </div>
       <div class="upd-card">
         <div class="k">Appliance ID</div>
-        <div class="v" id="applianceId" style="font-size: 0.9rem; font-family: monospace;">
+        <div class="v" id="applianceId" style="font-size:0.82rem;">
           {{ updates_state.appliance_id or 'not registered' }}
         </div>
         <div class="sub">issued by the OTA server at registration</div>
       </div>
       <div class="upd-card">
         <div class="k">Last check-in</div>
-        <div class="v" id="lastCheckin" style="font-size: 0.9rem;">
+        <div class="v" id="lastCheckin" style="font-size:0.82rem;">
           {{ updates_state.last_checkin_at or '—' }}
         </div>
         <div class="sub">agent polls every 15 min</div>
@@ -140,53 +280,75 @@ sudo systemctl enable --now zenai-updater</pre>
       <h3>Subscription</h3>
       {% set sub = updates_state.subscription or {} %}
       {% if sub %}
-      <div class="row" style="gap:1.25rem;">
+      <div class="row" style="gap:1.5rem;">
+        <div><span class="muted">Name:</span> <b>{{ sub.name or '—' }}</b></div>
         <div><span class="muted">Type:</span> <span class="pill info">{{ sub.type or 'zenai' }}</span></div>
+        <div><span class="muted">Plan:</span> <b>{{ sub.plan or '—' }}</b></div>
         {% if sub.license %}
         <div><span class="muted">Max nodes:</span> <b>{{ sub.license.max_nodes or '—' }}</b></div>
-        <div><span class="muted">Expires:</span> {{ sub.license.expires_at or '—' }}</div>
+        {% endif %}
+        {% if sub.expires_at %}
+        <div><span class="muted">Expires:</span> {{ sub.expires_at[:10] }}</div>
+        {% endif %}
+        {% if sub.days_remaining is not none %}
+        <div><span class="muted">Days left:</span> <b>{{ sub.days_remaining }}</b></div>
         {% endif %}
       </div>
       {% else %}
-      <div class="muted">No subscription info cached. Click <b>Sync now</b>.</div>
+      <div class="muted">No subscription info cached. Click <b>Check for updates</b>.</div>
       {% endif %}
+    </div>
+
+    <div class="panel">
+      <h3>What happens when you apply an update</h3>
+      <ol style="margin: 0.3rem 0 0 1.2rem; color: var(--upd-muted); font-size: 0.88rem; line-height: 1.7;">
+        <li>Services stop (<code>zentryc-web</code>, <code>zentryc-syslog</code>) — web UI goes briefly offline.</li>
+        <li>Current code tree is snapshot-backed-up; <code>.env</code>, <code>venv</code>, <code>db.sqlite3</code>, logs, backups are preserved.</li>
+        <li>New code is unpacked, Python dependencies installed, OS packages updated if the release requires them.</li>
+        <li>Services restart; a health-check confirms the new build is up.</li>
+        <li>On any failure the agent automatically rolls back to the previous snapshot and restarts the old version.</li>
+      </ol>
     </div>
   </div>
 
-  <!-- Pending release tab -->
+  <!-- Release details tab -->
   <div id="tab-release" class="hidden">
-    <div class="panel" id="pendingPanel">
-      <div id="pendingNone" class="{% if updates_state.pending_release %}hidden{% endif %}">
-        <h3>No pending release</h3>
-        <div class="muted">You're on the latest version the server has offered us, or no rollout targets this appliance yet. Click <b>Sync now</b> to re-check.</div>
+    <div class="panel" id="pendingNone">
+      <h3>No release available</h3>
+      <div class="muted">The server isn't offering a release for this appliance right now. Either you're up to date, or no rollout targets this appliance's group yet. Click <b>Check for updates</b> to re-probe.</div>
+    </div>
+    <div class="panel hidden" id="pendingHave">
+      <h3>Release available from server</h3>
+      <div class="upd-grid" style="margin-bottom: 0.75rem;">
+        <div class="upd-card">
+          <div class="k">Version</div>
+          <div class="v big" id="pendingVersion">—</div>
+        </div>
+        <div class="upd-card">
+          <div class="k">Severity</div>
+          <div class="v" id="pendingSeverity">normal</div>
+        </div>
+        <div class="upd-card">
+          <div class="k">Package size</div>
+          <div class="v" id="pendingSize">—</div>
+        </div>
+        <div class="upd-card">
+          <div class="k">Release ID</div>
+          <div class="v" id="pendingId" style="font-size:0.75rem;">—</div>
+        </div>
       </div>
-      <div id="pendingHave" class="{% if not updates_state.pending_release %}hidden{% endif %}">
-        <h3>Release available</h3>
-        <div class="upd-grid" style="margin-bottom: 0.75rem;">
-          <div class="upd-card">
-            <div class="k">Version</div>
-            <div class="v" id="pendingVersion">{{ (updates_state.pending_release or {}).version or '—' }}</div>
-          </div>
-          <div class="upd-card">
-            <div class="k">Severity</div>
-            <div class="v" id="pendingSeverity">{{ (updates_state.pending_release or {}).severity or 'normal' }}</div>
-          </div>
-          <div class="upd-card">
-            <div class="k">Package size</div>
-            <div class="v" id="pendingSize">{{ (updates_state.pending_release or {}).size or '—' }}</div>
-            <div class="sub">bytes</div>
-          </div>
-        </div>
-        <div class="panel" style="background: var(--bg-color); margin-bottom: 0.75rem;">
-          <h3 style="font-size: 0.8rem;">Changelog</h3>
-          <pre id="pendingChangelog" style="white-space: pre-wrap; font-size: 0.85rem; margin: 0;">{{ (updates_state.pending_release or {}).changelog or '' }}</pre>
-        </div>
-        <div class="row">
-          <button class="btn primary" id="btnApply" onclick="doApply()">Apply update</button>
-          <span class="muted" style="font-size: 0.8rem;">
-            Apply will stop services, snapshot code, install the new code, and restart. Your data (DB, logs, .env) is NOT modified.
-          </span>
-        </div>
+      <div>
+        <h3 style="font-size:0.85rem; margin-bottom:0.3rem;">Changelog</h3>
+        <div class="changelog-box" id="pendingChangelog">—</div>
+      </div>
+      <div class="row" style="margin-top: 1rem;">
+        <button class="btn primary" id="btnApply" onclick="doApply()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install update
+        </button>
+        <span class="dim">
+          Services restart briefly. Data (DB, logs, .env) is preserved. Agent rolls back automatically on failure.
+        </span>
       </div>
     </div>
   </div>
@@ -194,26 +356,13 @@ sudo systemctl enable --now zenai-updater</pre>
   <!-- History tab -->
   <div id="tab-history" class="hidden">
     <div class="panel">
-      <h3>Recent update history</h3>
+      <h3>Recent updates</h3>
       <table class="upd-tbl">
         <thead>
-          <tr><th>When</th><th>Version</th><th>Status</th><th>Release ID</th></tr>
+          <tr><th>Applied at</th><th>Version</th><th>Status</th><th>Release ID</th></tr>
         </thead>
         <tbody id="historyRows">
-          {% for h in (updates_state.history or []) %}
-          <tr>
-            <td>{{ h.applied_at }}</td>
-            <td><b>{{ h.version }}</b></td>
-            <td>
-              {% if h.status == 'success' %}<span class="pill ok">success</span>
-              {% elif h.status == 'rolled_back' %}<span class="pill warn">rolled back</span>
-              {% else %}<span class="pill err">{{ h.status }}</span>{% endif %}
-            </td>
-            <td style="font-family: monospace; font-size: 0.75rem;">{{ h.release_id }}</td>
-          </tr>
-          {% else %}
           <tr><td colspan="4" class="muted">No updates applied yet.</td></tr>
-          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -223,10 +372,10 @@ sudo systemctl enable --now zenai-updater</pre>
   <div id="tab-logs" class="hidden">
     <div class="panel">
       <div class="row" style="justify-content: space-between; margin-bottom: 0.6rem;">
-        <h3 style="margin: 0;">Agent log tail</h3>
+        <h3 style="margin: 0;">Agent log (last 300 lines)</h3>
         <button class="btn" onclick="loadLogs()">Reload</button>
       </div>
-      <pre class="logbox" id="logbox">Click Reload to fetch the latest agent log...</pre>
+      <pre class="logbox" id="logbox">(click Reload to fetch)</pre>
     </div>
   </div>
 </div>
@@ -236,97 +385,213 @@ sudo systemctl enable --now zenai-updater</pre>
 
 {% block extra_js %}
 <script>
+const API_BASE = {{ api_base | tojson }};
+const RUNNING_VERSION = {{ app_version | tojson }};
+
 function showTab(name) {
-  document.querySelectorAll('.upd-tab').forEach(function(el){ el.classList.toggle('active', el.dataset.tab === name); });
-  ['overview','release','history','logs'].forEach(function(t){
-    var el = document.getElementById('tab-' + t);
+  document.querySelectorAll('.upd-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === name));
+  ['overview','release','history','logs'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
     if (el) el.classList.toggle('hidden', t !== name);
   });
   if (name === 'logs') loadLogs();
 }
 
 function toast(msg, kind) {
-  var t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast ' + (kind || '') + ' show';
-  setTimeout(function(){ t.classList.remove('show'); }, 4500);
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (kind || '') + ' show';
+  setTimeout(() => t.classList.remove('show'), 4500);
 }
+
+function fmtBytes(n) {
+  if (!n || isNaN(n)) return '—';
+  const k = 1024;
+  if (n < k) return n + ' B';
+  if (n < k*k) return (n/k).toFixed(1) + ' KB';
+  if (n < k*k*k) return (n/(k*k)).toFixed(2) + ' MB';
+  return (n/(k*k*k)).toFixed(2) + ' GB';
+}
+
+function setBanner(kind, iconSvg, title, bodyHtml, actionsHtml) {
+  const b = document.getElementById('mainBanner');
+  b.className = 'banner ' + kind;
+  b.querySelector('.ic').innerHTML = iconSvg;
+  document.getElementById('bannerTitle').textContent = title;
+  document.getElementById('bannerBody').innerHTML = bodyHtml;
+  document.getElementById('bannerActions').innerHTML = actionsHtml || '';
+}
+
+const ICON_CHECK   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+const ICON_ARROW   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v14"/><polyline points="5 9 12 16 19 9"/><path d="M5 22h14"/></svg>';
+const ICON_ERROR   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+const ICON_LOADING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 
 async function refreshStatus() {
   try {
-    var r = await fetch('/api/system/updates/status');
-    if (!r.ok) { toast('Status fetch failed', 'err'); return; }
-    var d = await r.json();
-    document.getElementById('appVersion').textContent    = d.app_version || '—';
-    document.getElementById('currentVersion').textContent = d.current_version || '—';
-    document.getElementById('applianceId').textContent    = d.appliance_id || 'not registered';
-    document.getElementById('lastCheckin').textContent    = d.last_checkin_at || '—';
-
-    var pr = d.pending_release;
-    document.getElementById('pendingNone').classList.toggle('hidden', !!pr);
-    document.getElementById('pendingHave').classList.toggle('hidden', !pr);
-    if (pr) {
-      document.getElementById('pendingVersion').textContent   = pr.version || '—';
-      document.getElementById('pendingSeverity').textContent  = pr.severity || 'normal';
-      document.getElementById('pendingSize').textContent      = pr.size || '—';
-      document.getElementById('pendingChangelog').textContent = pr.changelog || '';
-    }
-
-    var rows = '';
-    (d.history || []).forEach(function(h){
-      var pill = h.status === 'success'
-        ? '<span class="pill ok">success</span>'
-        : (h.status === 'rolled_back' ? '<span class="pill warn">rolled back</span>'
-                                      : '<span class="pill err">' + h.status + '</span>');
-      rows += '<tr><td>' + (h.applied_at || '') + '</td><td><b>' + (h.version || '') + '</b></td><td>' + pill + '</td><td style="font-family:monospace;font-size:0.75rem;">' + (h.release_id || '') + '</td></tr>';
-    });
-    if (!rows) rows = '<tr><td colspan="4" class="muted">No updates applied yet.</td></tr>';
-    document.getElementById('historyRows').innerHTML = rows;
-  } catch (e) { toast('Error: ' + e.message, 'err'); }
+    const r = await fetch('/api/system/updates/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('appVersion').textContent = d.app_version || '—';
+    document.getElementById('applianceId').textContent = d.appliance_id || 'not registered';
+    document.getElementById('lastCheckin').textContent = d.last_checkin_at || '—';
+    renderHistory(d.history || []);
+  } catch (e) { /* best-effort */ }
 }
 
-async function doSync() {
-  var btn = document.getElementById('btnSync');
-  btn.disabled = true; btn.textContent = 'Syncing…';
+function renderHistory(rows) {
+  const tbody = document.getElementById('historyRows');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">No updates applied yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(h => {
+    let pill = '<span class="pill err">' + (h.status || '?') + '</span>';
+    if (h.status === 'success')      pill = '<span class="pill ok">success</span>';
+    else if (h.status === 'rolled_back') pill = '<span class="pill warn">rolled back</span>';
+    return '<tr><td>' + (h.applied_at || '') + '</td>'
+      + '<td><b>' + (h.version || '') + '</b></td>'
+      + '<td>' + pill + '</td>'
+      + '<td style="font-family:ui-monospace,monospace;font-size:0.74rem;">' + (h.release_id || '') + '</td></tr>';
+  }).join('');
+}
+
+let currentPendingReleaseId = null;
+
+async function checkForUpdates() {
+  const btn = document.getElementById('btnCheck');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Checking…';
+  setBanner('loading', ICON_LOADING, 'Checking the release server…',
+    'Asking <code>' + API_BASE + '</code> for the latest release for this appliance.');
+  document.getElementById('latestVersion').textContent = '…';
+  document.getElementById('latestSub').textContent = 'probing';
+
   try {
-    var r = await fetch('/api/system/updates/sync', { method: 'POST' });
-    var d = await r.json();
-    if (d.ok) {
-      toast(d.pending_release ? 'Sync OK — update available' : 'Sync OK — up to date', 'ok');
-    } else {
-      toast('Sync failed (exit ' + d.exit_code + ')', 'err');
-      console.error(d);
+    const r = await fetch('/api/system/updates/remote-latest');
+    const d = await r.json();
+
+    if (!d.ok) {
+      setBanner('err', ICON_ERROR, 'Could not reach the release server',
+        (d.error || 'Unknown error') + ' <span class="dim">(server: ' + (d.server || API_BASE) + ')</span>');
+      document.getElementById('latestVersion').textContent = '—';
+      document.getElementById('latestSub').textContent = 'server unreachable';
+      return;
     }
-    await refreshStatus();
-  } catch (e) { toast('Error: ' + e.message, 'err'); }
-  finally { btn.disabled = false; btn.textContent = 'Sync now'; }
+
+    const available = d.available_version;
+    const running = d.app_version;
+
+    if (!available) {
+      // Server said "none" — we're up to date.
+      setBanner('ok', ICON_CHECK, "You're up to date",
+        'Running <b>' + running + '</b>. The server has no newer release targeting this appliance.');
+      document.getElementById('latestVersion').textContent = available || running;
+      document.getElementById('latestSub').textContent = 'no rollout targets this appliance';
+      showPending(null);
+      toast('Up to date', 'ok');
+      return;
+    }
+
+    document.getElementById('latestVersion').textContent = available;
+
+    if (d.update_available) {
+      const rel = d.release || {};
+      const verCmp = '<span class="ver-compare">'
+        + '<span class="from">' + running + '</span>'
+        + '<span class="arrow">→</span>'
+        + '<span class="to">' + available + '</span></span>';
+      setBanner('update', ICON_ARROW, 'Update available: ' + available,
+        'Running ' + verCmp + ' · package ' + fmtBytes(rel.size || rel.package_size) +
+        ' · severity <b>' + (rel.severity || 'normal') + '</b>',
+        '<button class="btn" onclick="showTab(\'release\')">Details</button>'
+        + '<button class="btn success" onclick="doApply()">Install now</button>');
+      document.getElementById('latestSub').textContent = 'newer than running (' + running + ')';
+      showPending(rel);
+      toast('Update ' + available + ' available', 'ok');
+    } else {
+      setBanner('ok', ICON_CHECK, "You're up to date",
+        'Running <b>' + running + '</b>. Server offers <b>' + available + '</b> — already installed.');
+      document.getElementById('latestSub').textContent = 'same as running';
+      showPending(null);
+      toast('Up to date', 'ok');
+    }
+  } catch (e) {
+    setBanner('err', ICON_ERROR, 'Check failed', String(e));
+    toast('Check failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Check for updates';
+  }
+}
+
+function showPending(rel) {
+  const have = document.getElementById('pendingHave');
+  const none = document.getElementById('pendingNone');
+  if (!rel) {
+    have.classList.add('hidden');
+    none.classList.remove('hidden');
+    currentPendingReleaseId = null;
+    return;
+  }
+  currentPendingReleaseId = rel.id;
+  none.classList.add('hidden');
+  have.classList.remove('hidden');
+  document.getElementById('pendingVersion').textContent = rel.version || '—';
+  document.getElementById('pendingSeverity').textContent = rel.severity || 'normal';
+  document.getElementById('pendingSize').textContent = fmtBytes(rel.size || rel.package_size);
+  document.getElementById('pendingId').textContent = rel.id || '—';
+  document.getElementById('pendingChangelog').textContent = rel.changelog || '(no changelog)';
 }
 
 async function doApply() {
-  if (!confirm('Apply the pending update now? Services will restart; your data is preserved.')) return;
-  var btn = document.getElementById('btnApply');
-  btn.disabled = true; btn.textContent = 'Applying… (may take minutes)';
+  if (!confirm('Install the pending update now? Services will restart briefly; your data is preserved, and the agent will roll back automatically on failure.')) return;
+  // First trigger a sync so the agent picks up the pending release into its state.
+  const btn = document.getElementById('btnApply');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Applying… (may take minutes)';
+  }
   try {
-    var r = await fetch('/api/system/updates/apply', { method: 'POST' });
-    var d = await r.json();
-    if (d.ok) {
-      toast('Update applied: ' + (d.current_version || '?'), 'ok');
-    } else {
-      toast('Apply failed (exit ' + d.exit_code + ') — agent rolled back', 'err');
+    // Sync first (cheap, tells the agent to fetch release metadata).
+    const sr = await fetch('/api/system/updates/sync', { method: 'POST' });
+    const sd = await sr.json().catch(() => ({}));
+    if (!sd.pending_release) {
+      toast('Sync reported no pending release — aborting', 'err');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Install update'; }
+      return;
     }
-    await refreshStatus();
-    loadLogs();
-  } catch (e) { toast('Error: ' + e.message, 'err'); }
-  finally { btn.disabled = false; btn.textContent = 'Apply update'; }
+    // Now apply.
+    const r = await fetch('/api/system/updates/apply', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Update applied: now on ' + (d.current_version || '?'), 'ok');
+      setTimeout(() => location.reload(), 1800);
+    } else {
+      toast('Apply failed (exit ' + d.exit_code + ') — agent rolled back. See Agent log.', 'err');
+      showTab('logs');
+      loadLogs();
+    }
+    refreshStatus();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Install update'; }
+  }
 }
 
 async function loadLogs() {
   try {
-    var r = await fetch('/api/system/updates/logs');
-    var d = await r.json();
-    document.getElementById('logbox').textContent = (d.lines || []).join('\n') || '(log empty or not present yet)';
-  } catch (e) { document.getElementById('logbox').textContent = 'log fetch failed: ' + e.message; }
+    const r = await fetch('/api/system/updates/logs');
+    const d = await r.json();
+    document.getElementById('logbox').textContent = (d.lines || []).join('\n') || '(log empty)';
+  } catch (e) {
+    document.getElementById('logbox').textContent = 'log fetch failed: ' + e.message;
+  }
 }
 
-// Initial refresh — use values already rendered server-side as the source of truth
+// Auto-check on load so the page shows the real state immediately.
+refreshStatus();
+checkForUpdates();
 </script>
 {% endblock %}

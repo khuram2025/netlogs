@@ -8,6 +8,10 @@ AGENT_HOME=/opt/zenai/updater
 STATE_VAR=/var/lib/zenai/updater
 USER_NAME=zenai-updater
 PUBKEY_SRC="${ZENAI_PUBKEY:-/home/net/Doc/ZENAI/zentryc-zenai.pub}"
+# Web user that runs the FastAPI app. The /system/updates/ tab needs
+# to read state.json and invoke the agent, so this user is added to
+# the zenai-updater group and granted a narrow sudoers rule.
+WEB_USER="${ZENAI_WEB_USER:-net}"
 
 if [[ $EUID -ne 0 ]]; then
     echo "run as root (sudo)." >&2; exit 1
@@ -19,7 +23,12 @@ if ! id "$USER_NAME" &>/dev/null; then
 fi
 
 # 2. Layout
-install -d -o "$USER_NAME" -g "$USER_NAME" -m 0700 "$AGENT_HOME" "$AGENT_HOME/keys" "$AGENT_HOME/logs"
+# Group-traversable dirs (mode 0750) so the FastAPI web user — added
+# to the zenai-updater group below — can read state.json and the log
+# for the /system/updates page. Keys dir stays 0700: private-key
+# material must not be readable by the web.
+install -d -o "$USER_NAME" -g "$USER_NAME" -m 0750 "$AGENT_HOME" "$AGENT_HOME/logs"
+install -d -o "$USER_NAME" -g "$USER_NAME" -m 0700 "$AGENT_HOME/keys"
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 0755 "$STATE_VAR" "$STATE_VAR/staging" "$STATE_VAR/backups"
 
 # 3. Agent binary + public key
@@ -44,14 +53,42 @@ EOF
 chmod 0640 /etc/zenai-updater.env
 chown root:"$USER_NAME" /etc/zenai-updater.env
 
-# 6. Sudoers: agent needs to stop/start the app services and run rsync to /home/net/net-logs
+# 6. Sudoers: agent needs to stop/start app services, install OS
+#    packages, and unpack release archives. Keeping the list narrow —
+#    nothing else on the system should be granted through this rule.
 cat > /etc/sudoers.d/zenai-updater <<EOF
+# Installed by deploy/updater/install-updater.sh. Do not edit by hand.
 $USER_NAME ALL=(root) NOPASSWD: /bin/systemctl
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/systemctl
 $USER_NAME ALL=(root) NOPASSWD: /usr/bin/rsync
 $USER_NAME ALL=(root) NOPASSWD: /bin/tar
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/tar
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/apt-get
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/apt
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/dpkg
 EOF
 chmod 0440 /etc/sudoers.d/zenai-updater
 visudo -cf /etc/sudoers.d/zenai-updater
+
+# 7. Let the FastAPI web user drive the agent for the /system/updates
+#    tab — so an admin can "Install update" from the browser. The chain
+#    is: web ($WEB_USER) --sudo--> $USER_NAME --sudo--> root (for the
+#    narrow list above). Without this the UI can only show status.
+if id "$WEB_USER" &>/dev/null; then
+    usermod -a -G "$USER_NAME" "$WEB_USER"
+    cat > /etc/sudoers.d/netlogs-web-updater <<EOF
+# Installed by deploy/updater/install-updater.sh. Do not edit by hand.
+# Lets the FastAPI web ($WEB_USER) trigger the ZenAI updater agent for
+# the /system/updates page.
+$WEB_USER ALL=($USER_NAME) NOPASSWD: $AGENT_HOME/agent
+EOF
+    chmod 0440 /etc/sudoers.d/netlogs-web-updater
+    visudo -cf /etc/sudoers.d/netlogs-web-updater
+    echo "granted $WEB_USER → sudo -u $USER_NAME $AGENT_HOME/agent"
+else
+    echo "WARN: web user '$WEB_USER' does not exist on this host — skipped web-updater sudoers." >&2
+    echo "      Set ZENAI_WEB_USER=<your-fastapi-user> and re-run, or add the rule by hand." >&2
+fi
 
 systemctl daemon-reload
 echo ""
@@ -63,3 +100,7 @@ echo "       sudo systemctl enable --now zenai-updater"
 echo "  3. Confirm:"
 echo "       sudo systemctl status zenai-updater"
 echo "       sudo -u $USER_NAME /opt/zenai/updater/agent status"
+echo ""
+echo "Note: if the FastAPI web service was already running, restart it"
+echo "so it picks up the zenai-updater group membership:"
+echo "       sudo systemctl restart netlogs-web"
