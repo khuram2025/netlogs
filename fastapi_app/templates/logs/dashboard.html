@@ -10,78 +10,294 @@ window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
 {% endif %}
 </script>
 <style>
-    /* Full width override */
-    .container:has(.db-page) { max-width: 100%; padding: 0 1rem; margin: 1rem auto; }
+    /* ================================================================
+       SECURITY DASHBOARD — redesigned layout
+       ================================================================ */
+    .container:has(.db-page) {
+        max-width: 100%;
+        padding: 0 1.25rem;
+        margin: 1rem auto;
+    }
+    .db-page {
+        --db-bg: #0b1220;
+        --db-card: #121a2e;
+        --db-card-alt: #0f172a;
+        --db-border: rgba(51, 65, 85, 0.6);
+        --db-text: #e2e8f0;
+        --db-muted: #94a3b8;
+        --db-dim: #64748b;
+        font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+        color: var(--db-text);
+    }
 
-    .db-page { font-family: 'Segoe UI', system-ui, sans-serif; }
+    /* Header */
+    .db-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+        gap: 1rem;
+    }
+    .db-header h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.01em;
+    }
+    .db-header p {
+        margin: 0.2rem 0 0;
+        color: var(--db-muted);
+        font-size: 0.85rem;
+    }
+    .db-status {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .db-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+    }
+    .db-pill.online {
+        background: rgba(34, 197, 94, 0.12);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .db-pill.live {
+        background: rgba(59, 130, 246, 0.12);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .db-pill .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+        animation: db-pulse 2s ease-in-out infinite;
+    }
 
-    .db-grid { display: grid; gap: .85rem; margin-bottom: 1rem; }
-    .db-kpi { grid-template-columns: repeat(9, 1fr); }
-    .db-charts { grid-template-columns: 2fr 1fr; }
-    .db-charts3 { grid-template-columns: repeat(3, 1fr); }
-    .db-tables { grid-template-columns: repeat(2, 1fr); }
+    /* Grid layouts */
+    .db-grid {
+        display: grid;
+        gap: 0.85rem;
+        margin-bottom: 0.85rem;
+    }
+    .db-kpi {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .db-row-2 {
+        grid-template-columns: 2fr 1fr;
+    }
+    .db-row-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    .db-row-4 {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
 
-    @media (max-width: 1600px) { .db-kpi { grid-template-columns: repeat(5, 1fr); } }
-    @media (max-width: 1200px) { .db-kpi { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 1400px) {
+        .db-kpi { grid-template-columns: repeat(3, 1fr); }
+        .db-row-4 { grid-template-columns: 1fr 1fr; }
+    }
     @media (max-width: 900px) {
         .db-kpi { grid-template-columns: repeat(2, 1fr); }
-        .db-charts, .db-charts3, .db-tables { grid-template-columns: 1fr; }
+        .db-row-2, .db-row-3, .db-row-4 { grid-template-columns: 1fr; }
     }
 
     /* KPI cards */
-    .kpi { background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--border); border-radius: .75rem; padding: .85rem 1rem; position: relative; overflow: hidden; transition: transform .15s, box-shadow .15s; text-decoration: none; color: inherit; display: block; }
-    .kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -5px rgba(0,0,0,.3); }
-    .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-    .kpi.c-blue::before { background: linear-gradient(90deg,#3b82f6,#60a5fa); }
-    .kpi.c-green::before { background: linear-gradient(90deg,#22c55e,#4ade80); }
-    .kpi.c-red::before { background: linear-gradient(90deg,#ef4444,#f87171); }
-    .kpi.c-amber::before { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
-    .kpi.c-purple::before { background: linear-gradient(90deg,#8b5cf6,#a78bfa); }
-    .kpi.c-cyan::before { background: linear-gradient(90deg,#06b6d4,#22d3ee); }
-    .kpi.c-orange::before { background: linear-gradient(90deg,#f97316,#fb923c); }
-    .kpi.c-teal::before { background: linear-gradient(90deg,#14b8a6,#2dd4bf); }
-    .kpi.c-rose::before { background: linear-gradient(90deg,#f43f5e,#fb7185); }
-    .kpi-label { font-size: .7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .25rem; }
-    .kpi-val { font-size: 1.4rem; font-weight: 700; color: #fff; }
-    .kpi-sub { font-size: .68rem; color: #64748b; margin-top: .15rem; }
+    .kpi {
+        background: var(--db-card);
+        border: 1px solid var(--db-border);
+        border-radius: 0.85rem;
+        padding: 1.1rem 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.15s, border-color 0.15s;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        min-height: 112px;
+    }
+    .kpi:hover {
+        transform: translateY(-2px);
+        border-color: rgba(99, 102, 241, 0.4);
+    }
+    .kpi-label {
+        font-size: 0.72rem;
+        color: var(--db-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 600;
+        margin-bottom: 0.45rem;
+    }
+    .kpi-val {
+        font-size: 1.85rem;
+        line-height: 1.1;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.02em;
+    }
+    .kpi-sub {
+        font-size: 0.72rem;
+        color: var(--db-dim);
+        margin-top: 0.3rem;
+    }
+    .kpi-ic {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .kpi-ic svg { width: 18px; height: 18px; }
+    .kpi.c-blue .kpi-ic   { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .kpi.c-cyan .kpi-ic   { background: rgba(6, 182, 212, 0.15);  color: #22d3ee; }
+    .kpi.c-red .kpi-ic    { background: rgba(239, 68, 68, 0.15);  color: #f87171; }
+    .kpi.c-green .kpi-ic  { background: rgba(34, 197, 94, 0.15);  color: #4ade80; }
+    .kpi.c-purple .kpi-ic { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .kpi.c-teal .kpi-ic   { background: rgba(20, 184, 166, 0.15); color: #2dd4bf; }
 
-    /* Chart cards */
-    .db-card { background: #1e293b; border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; }
-    .db-card h3 { font-size: .85rem; font-weight: 600; color: #e2e8f0; margin: 0 0 .75rem 0; display: flex; align-items: center; gap: .5rem; }
-    .db-card h3 .ic { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .9rem; flex-shrink: 0; }
-    .ct-wrap { position: relative; height: 220px; }
-    .ct-sm { height: 180px; }
+    /* Chart / table cards */
+    .db-card {
+        background: var(--db-card);
+        border: 1px solid var(--db-border);
+        border-radius: 0.85rem;
+        padding: 1rem 1.15rem;
+        display: flex;
+        flex-direction: column;
+    }
+    .db-card-hdr {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+    }
+    .db-card-title {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+    .db-card-title .ic {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .db-card-title .ic svg { width: 14px; height: 14px; }
+    .db-card-sub {
+        font-size: 0.7rem;
+        color: var(--db-dim);
+        font-weight: 400;
+    }
+    .db-link {
+        font-size: 0.72rem;
+        color: #60a5fa;
+        text-decoration: none;
+    }
+    .db-link:hover { color: #93c5fd; }
+
+    .ct-wrap { position: relative; height: 230px; }
+    .ct-sm   { height: 200px; }
 
     /* Tables */
-    .db-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
-    .db-tbl th { text-align: left; padding: 6px 8px; color: #94a3b8; font-weight: 600; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
-    .db-tbl td { padding: 5px 8px; border-bottom: 1px solid rgba(51,65,85,.3); color: #e2e8f0; }
-    .db-tbl tr:hover td { background: rgba(59,130,246,.04); }
-    .db-tbl .mono { font-family: 'JetBrains Mono', monospace; font-size: .72rem; }
+    .db-tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+    }
+    .db-tbl thead th {
+        text-align: left;
+        padding: 6px 10px 8px;
+        color: var(--db-muted);
+        font-weight: 600;
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid var(--db-border);
+    }
+    .db-tbl td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.35);
+        color: #cbd5e1;
+    }
+    .db-tbl tbody tr:last-child td { border-bottom: none; }
+    .db-tbl tbody tr:hover td { background: rgba(59, 130, 246, 0.04); }
+    .db-tbl .mono {
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.74rem;
+    }
     .db-tbl .ip { color: #60a5fa; }
     .db-tbl .danger { color: #f87171; }
     .db-tbl .clickable { cursor: pointer; }
-    .db-tbl .empty { text-align: center; color: #475569; padding: 1.5rem; }
+    .db-tbl .empty {
+        text-align: center;
+        color: var(--db-dim);
+        padding: 1.5rem;
+        font-style: italic;
+    }
 
-    .badge-s { padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
-    .badge-crit { background: rgba(239,68,68,.15); color: #f87171; }
-    .badge-warn { background: rgba(245,158,11,.15); color: #fbbf24; }
-    .badge-info { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .badge-s {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.68rem;
+        font-weight: 600;
+    }
+    .badge-crit { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .badge-ok   { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
 
-    .mini-bar { width: 60px; height: 6px; background: rgba(51,65,85,.4); border-radius: 3px; overflow: hidden; }
-    .mini-bar-fill { height: 100%; border-radius: 3px; background: #3b82f6; }
+    .mini-bar {
+        width: 64px;
+        height: 6px;
+        background: rgba(51, 65, 85, 0.4);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .mini-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    }
+    .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
 
-    /* Loading skeleton */
-    @keyframes db-pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }
-    .db-skel { background: rgba(51,65,85,.3); border-radius: 6px; animation: db-pulse 1.5s ease-in-out infinite; }
-    .skel-val { height: 1.4rem; width: 60%; margin-bottom: .15rem; }
-    .skel-sub { height: .65rem; width: 40%; }
+    /* Skeleton */
+    @keyframes db-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+    .db-skel {
+        background: rgba(51, 65, 85, 0.3);
+        border-radius: 6px;
+        animation: db-pulse 1.5s ease-in-out infinite;
+    }
+    .skel-val { height: 1.85rem; width: 55%; margin-bottom: 0.3rem; }
+    .skel-sub { height: 0.7rem; width: 40%; }
     .skel-chart { height: 100%; }
-    .skel-row { height: 1.2rem; width: 100%; margin-bottom: .5rem; }
-
-    /* Refresh indicator */
-    .db-live { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: #94a3b8; }
-    .db-live .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: db-pulse 2s ease-in-out infinite; }
+    .skel-row { height: 1.1rem; width: 100%; margin-bottom: 0.55rem; }
 </style>
 {% endblock %}
 
@@ -89,57 +305,178 @@ window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
 <div class="db-page">
 
 <!-- Header -->
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+<div class="db-header">
     <div>
-        <h2 style="margin:0;font-size:1.4rem;color:#fff;">Security Dashboard</h2>
-        <p style="margin:.2rem 0 0;color:#94a3b8;font-size:.82rem;">Real-time network security monitoring</p>
+        <h1>Security Dashboard</h1>
+        <p>Real-time network security monitoring</p>
     </div>
-    <div class="db-live"><span class="dot"></span>Live<span style="color:#475569;margin:0 .25rem;">|</span>Last 24 hours</div>
+    <div class="db-status">
+        <span class="db-pill online"><span class="dot"></span>System Online</span>
+        <span class="db-pill live">Live</span>
+    </div>
 </div>
 
-<!-- KPI Cards -->
-<div class="db-grid db-kpi" id="db-kpi">
-    <a class="kpi c-blue" href="/logs/"><div class="kpi-label">Total Events (24h)</div><div class="kpi-val" id="k-total"><div class="db-skel skel-val"></div></div><div class="kpi-sub" id="k-eps-sub">-</div></a>
-    <a class="kpi c-cyan" href="/logs/"><div class="kpi-label">Current EPS</div><div class="kpi-val" id="k-eps"><div class="db-skel skel-val"></div></div><div class="kpi-sub">Events per second</div></a>
-    <a class="kpi c-green" href="/logs/?action=accept"><div class="kpi-label">Allowed</div><div class="kpi-val" id="k-allowed"><div class="db-skel skel-val"></div></div><div class="kpi-sub">Permitted connections</div></a>
-    <a class="kpi c-red" href="/logs/?action=deny"><div class="kpi-label">Blocked</div><div class="kpi-val" id="k-denied"><div class="db-skel skel-val"></div></div><div class="kpi-sub">Denied connections</div></a>
-    <a class="kpi c-amber" href="/logs/?severity=3"><div class="kpi-label">Critical Events</div><div class="kpi-val" id="k-critical"><div class="db-skel skel-val"></div></div><div class="kpi-sub">Severity 0-3</div></a>
-    <a class="kpi c-purple" href="/logs/"><div class="kpi-label">Active Devices</div><div class="kpi-val" id="k-devices"><div class="db-skel skel-val"></div></div><div class="kpi-sub">Sending logs</div></a>
-    <a class="kpi c-orange" href="/threats/url-dns/"><div class="kpi-label">URL Filtering</div><div class="kpi-val" id="k-url"><div class="db-skel skel-val"></div></div><div class="kpi-sub" id="k-url-sub">-</div></a>
-    <a class="kpi c-teal" href="/threats/url-dns/"><div class="kpi-label">DNS Security</div><div class="kpi-val" id="k-dns"><div class="db-skel skel-val"></div></div><div class="kpi-sub" id="k-dns-sub">-</div></a>
-    <a class="kpi c-rose" href="/threats/"><div class="kpi-label">Threats Detected</div><div class="kpi-val" id="k-threats"><div class="db-skel skel-val"></div></div><div class="kpi-sub" id="k-threats-sub">-</div></a>
+<!-- KPI Cards — 6 across -->
+<div class="db-grid db-kpi">
+    <a class="kpi c-blue" href="/logs/">
+        <div class="kpi-label">Total Logs</div>
+        <div class="kpi-val" id="k-total"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-total-sub">—</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+    </a>
+    <a class="kpi c-cyan" href="/logs/">
+        <div class="kpi-label">Events Processed</div>
+        <div class="kpi-val" id="k-processed"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-processed-sub">—</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+    </a>
+    <a class="kpi c-red" href="/logs/?action=deny">
+        <div class="kpi-label">Total Blocked</div>
+        <div class="kpi-val" id="k-blocked"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-blocked-sub">—</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 18l-9.5-9.5-5 5L1 6"/><polyline points="17 18 23 18 23 12"/></svg></div>
+    </a>
+    <a class="kpi c-green" href="/logs/">
+        <div class="kpi-label">Unique IPs</div>
+        <div class="kpi-val" id="k-unique"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-unique-sub">—</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    </a>
+    <a class="kpi c-purple" href="/logs/?severity=3">
+        <div class="kpi-label">Critical Events</div>
+        <div class="kpi-val" id="k-critical"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-critical-sub">Severity 0-3</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+    </a>
+    <a class="kpi c-teal" href="/logs/?action=accept">
+        <div class="kpi-label">Ok Events</div>
+        <div class="kpi-val" id="k-ok"><div class="db-skel skel-val"></div></div>
+        <div class="kpi-sub" id="k-ok-sub">Permitted</div>
+        <div class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+    </a>
 </div>
 
-<!-- Charts Row 1 -->
-<div class="db-grid db-charts">
-    <div class="db-card"><h3><span class="ic" style="background:rgba(59,130,246,.2);color:#60a5fa;">&#128200;</span>Traffic Timeline (24 Hours)</h3><div class="ct-wrap" id="ct-timeline"><div class="db-skel skel-chart"></div></div></div>
-    <div class="db-card"><h3><span class="ic" style="background:rgba(139,92,246,.2);color:#a78bfa;">&#128202;</span>Event Severity</h3><div class="ct-wrap" id="ct-severity"><div class="db-skel skel-chart"></div></div></div>
+<!-- Row 2: Traffic Trends (wide) + Event Severity (narrow) -->
+<div class="db-grid db-row-2">
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(59,130,246,0.15);color:#60a5fa;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                </span>
+                Traffic Trends <span class="db-card-sub">(24 Hours)</span>
+            </div>
+        </div>
+        <div class="ct-wrap" id="ct-timeline"><div class="db-skel skel-chart"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(168,85,247,0.15);color:#c084fc;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                </span>
+                Event Severity
+            </div>
+        </div>
+        <div class="ct-wrap" id="ct-severity"><div class="db-skel skel-chart"></div></div>
+    </div>
 </div>
 
-<!-- Charts Row 2 -->
-<div class="db-grid db-charts3">
-    <div class="db-card"><h3><span class="ic" style="background:rgba(6,182,212,.2);color:#22d3ee;">&#9889;</span>Real-time Traffic (1 Hour)</h3><div class="ct-wrap ct-sm" id="ct-realtime"><div class="db-skel skel-chart"></div></div></div>
-    <div class="db-card"><h3><span class="ic" style="background:rgba(34,197,94,.2);color:#4ade80;">&#128736;</span>Firewall Actions</h3><div class="ct-wrap ct-sm" id="ct-actions"><div class="db-skel skel-chart"></div></div></div>
-    <div class="db-card"><h3><span class="ic" style="background:rgba(245,158,11,.2);color:#fbbf24;">&#128279;</span>Protocol Distribution</h3><div class="ct-wrap ct-sm" id="ct-protocols"><div class="db-skel skel-chart"></div></div></div>
+<!-- Row 3: Real-time + Threat Actions + Protocols (3 cols) -->
+<div class="db-grid db-row-3">
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(6,182,212,0.15);color:#22d3ee;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </span>
+                Real-time Traffic <span class="db-card-sub">(1 Hour)</span>
+            </div>
+        </div>
+        <div class="ct-wrap ct-sm" id="ct-realtime"><div class="db-skel skel-chart"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(239,68,68,0.15);color:#f87171;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                Threat Actions
+            </div>
+        </div>
+        <div class="ct-wrap ct-sm" id="ct-actions"><div class="db-skel skel-chart"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(245,158,11,0.15);color:#fbbf24;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                </span>
+                Protocol Distribution
+            </div>
+        </div>
+        <div class="ct-wrap ct-sm" id="ct-protocols"><div class="db-skel skel-chart"></div></div>
+    </div>
 </div>
 
-<!-- Tables Row 1 -->
-<div class="db-grid db-tables">
-    <div class="db-card"><h3><span class="ic" style="background:rgba(59,130,246,.2);color:#60a5fa;">&#127760;</span>Top Source IPs</h3><div id="tbl-sources"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div></div>
-    <div class="db-card"><h3><span class="ic" style="background:rgba(239,68,68,.2);color:#f87171;">&#128737;</span>Potential Threats (Denied Sources)</h3><div id="tbl-threats"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div></div>
+<!-- Row 4: 4 tables -->
+<div class="db-grid db-row-4">
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(59,130,246,0.15);color:#60a5fa;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </span>
+                Top Source IPs
+            </div>
+        </div>
+        <div id="tbl-sources"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(239,68,68,0.15);color:#f87171;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </span>
+                Potential Threats
+            </div>
+        </div>
+        <div id="tbl-threats"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(168,85,247,0.15);color:#c084fc;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </span>
+                Top Destination Ports
+            </div>
+        </div>
+        <div id="tbl-ports"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div>
+    </div>
+    <div class="db-card">
+        <div class="db-card-hdr">
+            <div class="db-card-title">
+                <span class="ic" style="background:rgba(34,197,94,0.15);color:#4ade80;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </span>
+                Device Activity
+            </div>
+        </div>
+        <div id="tbl-devices"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div>
+    </div>
 </div>
 
-<!-- Tables Row 2 -->
-<div class="db-grid db-tables">
-    <div class="db-card"><h3><span class="ic" style="background:rgba(139,92,246,.2);color:#a78bfa;">&#128268;</span>Top Destination Ports</h3><div id="tbl-ports"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div></div>
-    <div class="db-card"><h3><span class="ic" style="background:rgba(34,197,94,.2);color:#4ade80;">&#128421;</span>Device Activity</h3><div id="tbl-devices"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div></div>
-</div>
-
-<!-- Recent Logs -->
+<!-- Recent Events — full width -->
 <div class="db-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
-        <h3 style="margin:0;"><span class="ic" style="background:rgba(148,163,184,.2);color:#94a3b8;">&#128196;</span>Recent Events</h3>
-        <a href="/logs/" style="font-size:.75rem;color:#3b82f6;text-decoration:none;">View All Logs &rarr;</a>
+    <div class="db-card-hdr">
+        <div class="db-card-title">
+            <span class="ic" style="background:rgba(148,163,184,0.15);color:#94a3b8;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </span>
+            Recent Events
+        </div>
+        <a href="/logs/" class="db-link">View All Logs &rarr;</a>
     </div>
     <div id="tbl-recent"><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div><div class="db-skel skel-row"></div></div>
 </div>
@@ -149,11 +486,22 @@ window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
 
 {% block extra_js %}
 <script>
-(function(){
-    const fmt = n => (n||0).toLocaleString();
-    const esc = s => { if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
+(function() {
+    const fmt = n => (n || 0).toLocaleString();
+    const fmtCompact = n => {
+        const v = Number(n || 0);
+        if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+        if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+        return v.toString();
+    };
+    const esc = s => {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    };
 
-    // Load Chart.js dynamically (non-blocking)
     const chartReady = new Promise(resolve => {
         const s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
@@ -161,67 +509,127 @@ window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
         document.head.appendChild(s);
     });
 
-    // Use the prefetched data promise from <head>
     const dataReady = window.__dashData || fetch('/api/dashboard/stats').then(r => r.json());
 
-    // Populate KPIs and tables immediately when data arrives (no Chart.js needed)
-    dataReady.then(d => {
-        if (d.error) { console.error('Dashboard error:', d.error); return; }
+    function renderKpis(d) {
         const k = d.kpi;
+        const total = k.total_24h || 0;
+        const allowed = k.allowed || 0;
+        const denied = k.denied || 0;
+        const critical = k.critical || 0;
+        const devices = k.active_devices || 0;
+        const uniqueIps = (d.top_sources ? d.top_sources.length : 0) + (d.threats ? d.threats.length : 0);
 
-        // KPI cards — render instantly
-        document.getElementById('k-total').textContent = fmt(k.total_24h);
-        document.getElementById('k-eps-sub').textContent = k.avg_eps + ' avg EPS';
-        document.getElementById('k-eps').textContent = k.current_eps;
-        document.getElementById('k-allowed').textContent = fmt(k.allowed);
-        document.getElementById('k-denied').textContent = fmt(k.denied);
-        document.getElementById('k-critical').textContent = fmt(k.critical);
-        document.getElementById('k-devices').textContent = fmt(k.active_devices);
-        document.getElementById('k-url').textContent = fmt(k.url_total);
-        document.getElementById('k-url-sub').textContent = fmt(k.url_blocked) + ' blocked';
-        document.getElementById('k-dns').textContent = fmt(k.dns_total);
-        document.getElementById('k-dns-sub').textContent = fmt(k.dns_sinkholed) + ' sinkholed';
-        document.getElementById('k-threats').textContent = fmt(k.dns_critical);
-        document.getElementById('k-threats-sub').textContent = 'Critical/High severity';
+        document.getElementById('k-total').textContent = fmt(total);
+        document.getElementById('k-total-sub').textContent = (k.avg_eps || 0) + ' avg EPS';
+        document.getElementById('k-processed').textContent = fmt(allowed);
+        document.getElementById('k-processed-sub').textContent = 'Permitted this window';
+        document.getElementById('k-blocked').textContent = fmt(denied);
+        document.getElementById('k-blocked-sub').textContent = 'Denied connections';
+        document.getElementById('k-unique').textContent = fmt(uniqueIps);
+        document.getElementById('k-unique-sub').textContent = devices + ' active devices';
+        document.getElementById('k-critical').textContent = fmt(critical);
+        document.getElementById('k-ok').textContent = fmt(Math.max(0, allowed - critical));
+        document.getElementById('k-ok-sub').textContent = k.current_eps + ' EPS live';
+    }
 
-        // Tables — render instantly (no Chart.js dependency)
-        const maxSrc = d.top_sources[0]?.count || 1;
-        document.getElementById('tbl-sources').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Events</th><th>Denied</th><th>Activity</th></tr></thead><tbody>' +
-            (d.top_sources.length ? d.top_sources.slice(0,8).map(s => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(s.ip)}'"><td class="ip mono">${esc(s.ip)}</td><td class="mono">${fmt(s.count)}</td><td class="${s.denied_count?'danger':''} mono">${fmt(s.denied_count)}</td><td><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(s.count/maxSrc*100)}%"></div></div></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No source data</td></tr>') +
-            '</tbody></table>';
+    function renderTables(d) {
+        const maxSrc = (d.top_sources[0] && d.top_sources[0].count) || 1;
+        document.getElementById('tbl-sources').innerHTML =
+            '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Events</th><th>%</th></tr></thead><tbody>' +
+            (d.top_sources.length
+                ? d.top_sources.slice(0, 6).map(s => {
+                    const pct = Math.round((s.count / maxSrc) * 100);
+                    return '<tr class="clickable" onclick="location.href=\'/logs/?srcip=' + esc(s.ip) + '\'">'
+                        + '<td class="ip mono">' + esc(s.ip) + '</td>'
+                        + '<td class="mono">' + fmt(s.count) + '</td>'
+                        + '<td><div class="mini-bar"><div class="mini-bar-fill" style="width:' + pct + '%"></div></div></td>'
+                        + '</tr>';
+                }).join('')
+                : '<tr><td colspan="3" class="empty">No source data</td></tr>'
+            ) + '</tbody></table>';
 
-        document.getElementById('tbl-threats').innerHTML = '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Denied</th><th>Targets</th><th>Ports</th></tr></thead><tbody>' +
-            (d.threats.length ? d.threats.slice(0,8).map(t => `<tr class="clickable" onclick="location.href='/logs/?srcip=${esc(t.ip)}&action=deny'"><td class="ip mono">${esc(t.ip)}</td><td class="danger mono">${fmt(t.denied_count)}</td><td class="mono">${fmt(t.unique_targets)}</td><td class="mono">${fmt(t.unique_ports)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No threats detected</td></tr>') +
-            '</tbody></table>';
+        document.getElementById('tbl-threats').innerHTML =
+            '<table class="db-tbl"><thead><tr><th>Source IP</th><th>Denied</th><th>Targets</th></tr></thead><tbody>' +
+            (d.threats.length
+                ? d.threats.slice(0, 6).map(t =>
+                    '<tr class="clickable" onclick="location.href=\'/logs/?srcip=' + esc(t.ip) + '&action=deny\'">'
+                    + '<td class="ip mono">' + esc(t.ip) + '</td>'
+                    + '<td class="danger mono">' + fmt(t.denied_count) + '</td>'
+                    + '<td class="mono">' + fmt(t.unique_targets) + '</td>'
+                    + '</tr>'
+                ).join('')
+                : '<tr><td colspan="3" class="empty">No threats detected</td></tr>'
+            ) + '</tbody></table>';
 
-        document.getElementById('tbl-ports').innerHTML = '<table class="db-tbl"><thead><tr><th>Port</th><th>Service</th><th>Events</th><th>Denied</th></tr></thead><tbody>' +
-            (d.ports.length ? d.ports.slice(0,8).map(p => `<tr class="clickable" onclick="location.href='/logs/?dstport=${p.port}'"><td class="mono">${p.port}</td><td>${esc(p.service)}</td><td class="mono">${fmt(p.count)}</td><td class="${p.denied_count?'danger':''} mono">${fmt(p.denied_count)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No port data</td></tr>') +
-            '</tbody></table>';
+        document.getElementById('tbl-ports').innerHTML =
+            '<table class="db-tbl"><thead><tr><th>Port</th><th>Service</th><th>Events</th></tr></thead><tbody>' +
+            (d.ports.length
+                ? d.ports.slice(0, 6).map(p =>
+                    '<tr class="clickable" onclick="location.href=\'/logs/?dstport=' + p.port + '\'">'
+                    + '<td class="mono">' + p.port + '</td>'
+                    + '<td>' + esc(p.service) + '</td>'
+                    + '<td class="mono">' + fmt(p.count) + '</td>'
+                    + '</tr>'
+                ).join('')
+                : '<tr><td colspan="3" class="empty">No port data</td></tr>'
+            ) + '</tbody></table>';
 
-        document.getElementById('tbl-devices').innerHTML = '<table class="db-tbl"><thead><tr><th>Device</th><th>Events</th><th>Critical</th><th>Status</th></tr></thead><tbody>' +
-            (d.devices.length ? d.devices.slice(0,8).map(dv => `<tr class="clickable" onclick="location.href='/logs/?device=${esc(dv.device)}'"><td class="ip mono">${esc(dv.device)}</td><td class="mono">${fmt(dv.log_count)}</td><td class="${dv.critical_count?'danger':''} mono">${fmt(dv.critical_count)}</td><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dv.last_seen?'#22c55e':'#64748b'};margin-right:4px;"></span><span style="font-size:.7rem;color:#94a3b8;">${dv.last_seen?'Active':'Unknown'}</span></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No devices</td></tr>') +
-            '</tbody></table>';
+        document.getElementById('tbl-devices').innerHTML =
+            '<table class="db-tbl"><thead><tr><th>Device</th><th>Events</th><th>Status</th></tr></thead><tbody>' +
+            (d.devices.length
+                ? d.devices.slice(0, 6).map(dv =>
+                    '<tr class="clickable" onclick="location.href=\'/logs/?device=' + esc(dv.device) + '\'">'
+                    + '<td class="ip mono">' + esc(dv.device) + '</td>'
+                    + '<td class="mono">' + fmt(dv.log_count) + '</td>'
+                    + '<td><span class="status-dot" style="background:' + (dv.last_seen ? '#22c55e' : '#64748b') + '"></span>'
+                    + '<span style="font-size:0.7rem;color:#94a3b8;">' + (dv.last_seen ? 'Active' : 'Unknown') + '</span></td>'
+                    + '</tr>'
+                ).join('')
+                : '<tr><td colspan="3" class="empty">No devices</td></tr>'
+            ) + '</tbody></table>';
 
-        document.getElementById('tbl-recent').innerHTML = '<div style="overflow-x:auto;"><table class="db-tbl"><thead><tr><th>Time</th><th>Device</th><th>Severity</th><th>Message</th></tr></thead><tbody>' +
-            (d.recent_logs.length ? d.recent_logs.map(l => {
-                let bc = 'badge-info';
-                if (l.severity <= 3) bc = 'badge-crit';
-                else if (l.severity === 4) bc = 'badge-warn';
-                return `<tr class="clickable" onclick="location.href='/logs/?device=${esc(l.device_ip)}&severity=${l.severity}'"><td class="mono" style="white-space:nowrap;">${esc(l.timestamp)}</td><td class="ip mono">${esc(l.device_ip)}</td><td><span class="badge-s ${bc}">${esc(l.severity_name)}</span></td><td style="max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(l.message)}">${esc(l.message)}</td></tr>`;
-            }).join('') : '<tr><td colspan="4" class="empty">No recent logs</td></tr>') +
-            '</tbody></table></div>';
+        document.getElementById('tbl-recent').innerHTML =
+            '<div style="overflow-x:auto;"><table class="db-tbl"><thead><tr><th>Time</th><th>Device</th><th>Severity</th><th>Message</th></tr></thead><tbody>' +
+            (d.recent_logs.length
+                ? d.recent_logs.map(l => {
+                    let bc = 'badge-info';
+                    if (l.severity <= 3) bc = 'badge-crit';
+                    else if (l.severity === 4) bc = 'badge-warn';
+                    else if (l.severity >= 6) bc = 'badge-ok';
+                    return '<tr class="clickable" onclick="location.href=\'/logs/?device=' + esc(l.device_ip) + '&severity=' + l.severity + '\'">'
+                        + '<td class="mono" style="white-space:nowrap;">' + esc(l.timestamp) + '</td>'
+                        + '<td class="ip mono">' + esc(l.device_ip) + '</td>'
+                        + '<td><span class="badge-s ' + bc + '">' + esc(l.severity_name) + '</span></td>'
+                        + '<td style="max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(l.message) + '">' + esc(l.message) + '</td>'
+                        + '</tr>';
+                }).join('')
+                : '<tr><td colspan="4" class="empty">No recent logs</td></tr>'
+            ) + '</tbody></table></div>';
+    }
+
+    dataReady.then(d => {
+        if (d.error) {
+            console.error('Dashboard error:', d.error);
+            return;
+        }
+        renderKpis(d);
+        renderTables(d);
     }).catch(e => {
         console.error('Dashboard load error:', e);
-        document.querySelectorAll('.db-skel').forEach(el => { el.style.background = 'rgba(239,68,68,.1)'; el.style.animation = 'none'; });
+        document.querySelectorAll('.db-skel').forEach(el => {
+            el.style.background = 'rgba(239, 68, 68, 0.1)';
+            el.style.animation = 'none';
+        });
     });
 
-    // Render charts once BOTH data AND Chart.js are ready
     Promise.all([dataReady, chartReady]).then(([d]) => {
         if (d.error) return;
         Chart.defaults.color = '#94a3b8';
-        Chart.defaults.borderColor = 'rgba(51,65,85,0.5)';
+        Chart.defaults.borderColor = 'rgba(51, 65, 85, 0.4)';
+        Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
 
-        // Traffic Timeline
+        // Traffic Trends
         const tlEl = document.getElementById('ct-timeline');
         tlEl.innerHTML = '<canvas></canvas>';
         new Chart(tlEl.querySelector('canvas'), {
@@ -229,74 +637,126 @@ window.__dashData = fetch('/api/dashboard/stats').then(r => r.json());
             data: {
                 labels: d.timeline.labels,
                 datasets: [
-                    { label:'Total', data:d.timeline.total, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.1)', tension:.4, fill:true, pointRadius:0, borderWidth:2 },
-                    { label:'Denied', data:d.timeline.denied, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.1)', tension:.4, fill:true, pointRadius:0, borderWidth:2 },
-                    { label:'Critical', data:d.timeline.critical, borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.05)', tension:.4, fill:false, pointRadius:0, borderWidth:1.5, borderDash:[5,5] }
-                ]
+                    { label: 'Total',    data: d.timeline.total,    borderColor: '#60a5fa', backgroundColor: 'rgba(96, 165, 250, 0.12)', tension: 0.4, fill: true,  pointRadius: 0, borderWidth: 2 },
+                    { label: 'Denied',   data: d.timeline.denied,   borderColor: '#f87171', backgroundColor: 'rgba(248, 113, 113, 0.1)', tension: 0.4, fill: true,  pointRadius: 0, borderWidth: 2 },
+                    { label: 'Critical', data: d.timeline.critical, borderColor: '#fbbf24', backgroundColor: 'rgba(251, 191, 36, 0.05)', tension: 0.4, fill: false, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 5] },
+                ],
             },
-            options: { responsive:true, maintainAspectRatio:false, interaction:{intersect:false,mode:'index'}, plugins:{legend:{position:'top',align:'end',labels:{boxWidth:12,padding:15}}}, scales:{y:{beginAtZero:true,grid:{color:'rgba(51,65,85,.3)'},ticks:{callback:v=>v.toLocaleString()}},x:{grid:{display:false}}} }
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 14, font: { size: 11 } } },
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { callback: v => fmtCompact(v), font: { size: 10 } } },
+                    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+                },
+            },
         });
 
-        // Severity
+        // Severity donut
         const svEl = document.getElementById('ct-severity');
         svEl.innerHTML = '<canvas></canvas>';
-        const sevColors = {0:'#dc2626',1:'#ef4444',2:'#f87171',3:'#fb923c',4:'#fbbf24',5:'#22c55e',6:'#3b82f6',7:'#8b5cf6'};
+        const sevColors = { 0: '#dc2626', 1: '#ef4444', 2: '#f87171', 3: '#fb923c', 4: '#fbbf24', 5: '#22c55e', 6: '#3b82f6', 7: '#8b5cf6' };
         new Chart(svEl.querySelector('canvas'), {
             type: 'doughnut',
             data: {
-                labels: d.severity_data.map(s=>s.name),
-                datasets: [{ data:d.severity_data.map(s=>s.count), backgroundColor:d.severity_data.map(s=>sevColors[s.severity]||'#64748b'), borderWidth:0, hoverOffset:4 }]
+                labels: d.severity_data.map(s => s.name),
+                datasets: [{
+                    data: d.severity_data.map(s => s.count),
+                    backgroundColor: d.severity_data.map(s => sevColors[s.severity] || '#64748b'),
+                    borderWidth: 0,
+                    hoverOffset: 6,
+                }],
             },
-            options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{legend:{position:'right',labels:{boxWidth:12,padding:8,font:{size:11}}}} }
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '65%',
+                plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } } },
+            },
         });
 
-        // Realtime
+        // Realtime area
         const rtEl = document.getElementById('ct-realtime');
         rtEl.innerHTML = '<canvas></canvas>';
         new Chart(rtEl.querySelector('canvas'), {
             type: 'line',
-            data: { labels:d.realtime.labels, datasets:[{data:d.realtime.data,borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:2}] },
-            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,grid:{color:'rgba(51,65,85,.3)'}},x:{grid:{display:false},ticks:{maxTicksLimit:6}}} }
+            data: {
+                labels: d.realtime.labels,
+                datasets: [{
+                    data: d.realtime.data,
+                    borderColor: '#22d3ee',
+                    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+                    tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { callback: v => fmtCompact(v), font: { size: 10 } } },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
+                },
+            },
         });
 
-        // Actions
+        // Threat Actions bars
         const acEl = document.getElementById('ct-actions');
         acEl.innerHTML = '<canvas></canvas>';
-        const acColors = {accept:'#22c55e',allow:'#22c55e',pass:'#22c55e',close:'#3b82f6','client-rst':'#3b82f6','server-rst':'#3b82f6',deny:'#ef4444',drop:'#ef4444',block:'#ef4444',reject:'#ef4444',timeout:'#f59e0b'};
+        const acColors = {
+            accept: '#22c55e', allow: '#22c55e', pass: '#22c55e',
+            close: '#60a5fa', 'client-rst': '#60a5fa', 'server-rst': '#60a5fa',
+            deny: '#f87171', drop: '#f87171', block: '#f87171', reject: '#f87171',
+            timeout: '#fbbf24',
+        };
         new Chart(acEl.querySelector('canvas'), {
             type: 'bar',
-            data: { labels:d.actions.map(a=>a.action), datasets:[{data:d.actions.map(a=>a.count),backgroundColor:d.actions.map(a=>acColors[a.action]||'#64748b'),borderRadius:4,borderSkipped:false}] },
-            options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{grid:{color:'rgba(51,65,85,.3)'}},y:{grid:{display:false}}} }
+            data: {
+                labels: d.actions.map(a => a.action),
+                datasets: [{
+                    data: d.actions.map(a => a.count),
+                    backgroundColor: d.actions.map(a => acColors[a.action] || '#64748b'),
+                    borderRadius: 4,
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { callback: v => fmtCompact(v), font: { size: 10 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 10 } } },
+                },
+            },
         });
 
-        // Protocols
+        // Protocols donut
         const prEl = document.getElementById('ct-protocols');
         prEl.innerHTML = '<canvas></canvas>';
         new Chart(prEl.querySelector('canvas'), {
             type: 'doughnut',
-            data: { labels:d.protocols.map(p=>p.protocol), datasets:[{data:d.protocols.map(p=>p.count),backgroundColor:['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#06b6d4'],borderWidth:0}] },
-            options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{legend:{position:'right',labels:{boxWidth:12,padding:8,font:{size:11}}}} }
+            data: {
+                labels: d.protocols.map(p => p.protocol),
+                datasets: [{
+                    data: d.protocols.map(p => p.count),
+                    backgroundColor: ['#60a5fa', '#4ade80', '#fbbf24', '#c084fc', '#22d3ee', '#f87171'],
+                    borderWidth: 0,
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '65%',
+                plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } } },
+            },
         });
     });
 
-    // Soft auto-refresh every 60 seconds (no skeleton flash)
+    // Soft refresh every 60s
     function softRefresh() {
         fetch('/api/dashboard/stats').then(r => r.json()).then(d => {
             if (d.error) return;
-            const k = d.kpi;
-            document.getElementById('k-total').textContent = fmt(k.total_24h);
-            document.getElementById('k-eps-sub').textContent = k.avg_eps + ' avg EPS';
-            document.getElementById('k-eps').textContent = k.current_eps;
-            document.getElementById('k-allowed').textContent = fmt(k.allowed);
-            document.getElementById('k-denied').textContent = fmt(k.denied);
-            document.getElementById('k-critical').textContent = fmt(k.critical);
-            document.getElementById('k-devices').textContent = fmt(k.active_devices);
-            document.getElementById('k-url').textContent = fmt(k.url_total);
-            document.getElementById('k-url-sub').textContent = fmt(k.url_blocked) + ' blocked';
-            document.getElementById('k-dns').textContent = fmt(k.dns_total);
-            document.getElementById('k-dns-sub').textContent = fmt(k.dns_sinkholed) + ' sinkholed';
-            document.getElementById('k-threats').textContent = fmt(k.dns_critical);
-            document.getElementById('k-threats-sub').textContent = 'Critical/High severity';
+            renderKpis(d);
         }).catch(() => {});
         setTimeout(softRefresh, 60000);
     }
