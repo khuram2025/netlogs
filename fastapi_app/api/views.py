@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
-from ..services.policy_match_engine import MatchQuery, match_all_devices
+from ..services.policy_match_engine import (
+    MatchQuery,
+    match_all_devices,
+    match_path,
+)
 from ..core.cache import get_redis
 from ..models.device import Device, DeviceStatus, ParserType, RetentionDays
 from ..models.credential import DeviceCredential, CredentialType, DeviceVdom
@@ -1883,6 +1887,7 @@ def _merge_config_into_results(results: dict, config_matches: list) -> None:
         if key in seen_keys:
             continue
         would_match.append({
+            'device_id': m.device_id,
             'device_display': m.device_display,
             'vdom': m.vdom,
             'matched': m.matched,
@@ -1902,6 +1907,133 @@ def _merge_config_into_results(results: dict, config_matches: list) -> None:
     summary = results.setdefault('summary', {})
     summary['config_match_devices'] = config_devices_matched
     summary['would_match_count'] = len(would_match)
+
+
+def _serialize_path(evaluation) -> Optional[dict]:
+    """Flatten a PathEvaluation into a plain dict for the Jinja template.
+
+    Template avoids touching dataclass internals; this keeps rendering
+    purely data-driven and makes the shape easy to unit-test.
+    """
+    if evaluation is None:
+        return None
+    hops = []
+    for idx, hv in enumerate(evaluation.hops):
+        hop = hv.hop
+        m = hv.match
+        hops.append({
+            'index': idx + 1,
+            'device_id': hop.device_id,
+            'device_display': hop.device_display,
+            'vdom': hop.vdom,
+            'ingress_iface': hop.ingress_iface,
+            'ingress_zone': hop.ingress_zone,
+            'egress_iface': hop.egress_iface,
+            'egress_zone': hop.egress_zone,
+            'next_hop': hop.next_hop,
+            'route_type': hop.route_type,
+            'route_network': hop.route_network,
+            'src_ip': hop.src_ip,
+            'dst_ip': hop.dst_ip,
+            'matched': m.matched,
+            'action': m.action,
+            'rule_id': m.rule_id,
+            'policyname': m.policy_name,
+            'position': m.position,
+            'hit_count': m.hit_count,
+            'last_hit_at': str(m.last_hit_at) if m.last_hit_at else '',
+            'snapshot_fetched_at': (
+                str(m.snapshot_fetched_at) if m.snapshot_fetched_at else ''
+            ),
+            'reason': m.reason,
+            'is_effective_hop': (
+                evaluation.effective_at_hop_index is not None
+                and idx == evaluation.effective_at_hop_index
+            ),
+        })
+    return {
+        'hops': hops,
+        'hop_count': len(hops),
+        'path_complete': evaluation.path_complete,
+        'path_stop_reason': evaluation.path_stop_reason,
+        'effective_action': evaluation.effective_action,
+        'effective_reason': evaluation.effective_reason,
+        'effective_at_hop_index': evaluation.effective_at_hop_index,
+    }
+
+
+def _filter_would_match_off_path(
+    results: dict, path_data: Optional[dict]
+) -> None:
+    """Drop Would-Match rows for devices the walker already evaluated.
+
+    Before path-aware lookup existed, Would-Match surfaced every
+    firewall that *could* accept the flow by its rule base. Now that
+    the resolved path evaluates each hop with its own zone context,
+    re-listing those same devices in a separate table is confusing —
+    users see "Deny-ALL at pos 391 on 192.168.100.102" twice, once
+    inside the path card (where it's the effective verdict) and once
+    under Would-Match (where the context is lost). We keep the
+    section only for firewalls *not* on the path: rules on boxes the
+    packet never crosses are genuinely new information ("a second
+    firewall in your fabric also has a rule for this flow, though
+    this specific src doesn't reach it").
+    """
+    if not path_data or not path_data.get('hops'):
+        return
+    on_path_ids = {
+        h.get('device_id') for h in path_data['hops'] if h.get('device_id')
+    }
+    if not on_path_ids:
+        return
+    would_match = results.get('would_match') or []
+    filtered = [
+        row for row in would_match
+        if row.get('device_id') not in on_path_ids
+    ]
+    results['would_match'] = filtered
+    summary = results.setdefault('summary', {})
+    summary['would_match_count'] = len(filtered)
+
+
+def _apply_path_to_summary(results: dict, path_data: Optional[dict]) -> None:
+    """Backfill the KPI cards with path-based counts when log data is empty.
+
+    The old cards were wired to log-hit counters only, so config-only
+    lookups showed four zeroes next to a populated Would-Match table.
+    When we have path data we compute per-hop counts and promote them
+    to the summary so the cards agree with what the page actually
+    renders below.
+    """
+    summary = results.setdefault('summary', {})
+    if not path_data or not path_data.get('hops'):
+        return
+
+    hops = path_data['hops']
+    logs_empty = not (results.get('allowed') or results.get('denied'))
+
+    allow_hops = sum(
+        1 for h in hops if h['action'] in ('accept', 'allow')
+    )
+    deny_hops = sum(
+        1 for h in hops if h['action'] in ('deny', 'implicit-deny')
+    )
+
+    if logs_empty:
+        summary['total_devices_checked'] = path_data['hop_count']
+        summary['devices_with_allow'] = allow_hops
+        summary['total_allow_policies'] = allow_hops
+        summary['devices_with_deny_only'] = deny_hops
+
+    # Source coverage: yes when the first hop recognises the src subnet
+    # (an ingress zone was resolved for it); no when the path had to
+    # fall back to "closest device" because no firewall owns the src.
+    if summary.get('source_already_covered') is None:
+        first = hops[0]
+        if first.get('ingress_zone') or first.get('ingress_iface'):
+            summary['source_already_covered'] = True
+        elif path_data.get('path_stop_reason') in ('no_src_owner', 'no_routes'):
+            summary['source_already_covered'] = False
 
 
 @router.get("/policy-lookup/", response_class=HTMLResponse, name="policy_lookup")
@@ -2007,6 +2139,31 @@ async def policy_lookup_page(
             # annotate log rows with the matching policy metadata when we
             # can correlate them.
             _merge_config_into_results(results, config_matches)
+
+            # Path-aware evaluation: only when both endpoints known and
+            # config evaluation is in scope. This traces the hop-by-hop
+            # firewall chain and aggregates per-hop verdicts into an
+            # effective allow/deny for the whole flow.
+            path_data = None
+            if (
+                srcip_clean
+                and resolved_ips
+                and mode_clean in ('both', 'config')
+            ):
+                path_eval = await match_path(
+                    db,
+                    MatchQuery(
+                        dst_ip=resolved_ips[0],
+                        dst_port=port_int,
+                        proto=proto_clean,
+                        src_ip=srcip_clean,
+                        dst_fqdn=resolved_fqdn,
+                    ),
+                )
+                path_data = _serialize_path(path_eval)
+                _apply_path_to_summary(results, path_data)
+                _filter_would_match_off_path(results, path_data)
+            results['path_evaluation'] = path_data
 
             # ── Phase 2: vendor-aware suggested rule per gap device ──
             # Look up parser type for each gap device's IP (strip the optional

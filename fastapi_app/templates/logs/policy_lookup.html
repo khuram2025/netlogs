@@ -472,10 +472,151 @@
         margin-bottom: 1rem;
     }
 
+    /* ── Path-Aware Flow Visualisation ── */
+    .pl-path-card {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-bottom: 1rem;
+    }
+    .pl-path-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .pl-path-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    .pl-verdict-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+    }
+    .pl-verdict-chip.allow { background: rgba(34,197,94,.14); color: #4ade80; border: 1px solid rgba(34,197,94,.35); }
+    .pl-verdict-chip.deny  { background: rgba(239,68,68,.14); color: #f87171; border: 1px solid rgba(239,68,68,.35); }
+    .pl-verdict-chip.indet { background: rgba(245,158,11,.14); color: #fbbf24; border: 1px solid rgba(245,158,11,.35); }
+    .pl-path-reason {
+        font-size: 12.5px;
+        color: var(--pl-muted);
+        margin-bottom: 14px;
+    }
+    .pl-path-flow {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        overflow-x: auto;
+        padding-bottom: 6px;
+    }
+    .pl-hop {
+        flex: 0 0 240px;
+        background: var(--pl-card-alt);
+        border: 1px solid var(--pl-border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        position: relative;
+    }
+    .pl-hop.allow { border-color: rgba(34,197,94,.5); box-shadow: 0 0 0 1px rgba(34,197,94,.15) inset; }
+    .pl-hop.deny  { border-color: rgba(239,68,68,.6); box-shadow: 0 0 0 1px rgba(239,68,68,.2) inset; }
+    .pl-hop.indet { border-color: rgba(245,158,11,.5); box-shadow: 0 0 0 1px rgba(245,158,11,.15) inset; }
+    .pl-hop-idx {
+        display: inline-block;
+        background: rgba(59,130,246,.18);
+        color: #93c5fd;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+    }
+    .pl-hop-dev {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--pl-text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        margin-bottom: 6px;
+        word-break: break-all;
+    }
+    .pl-hop-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--pl-muted);
+        gap: 6px;
+        margin-top: 3px;
+    }
+    .pl-hop-row code {
+        background: rgba(59,130,246,.1);
+        color: #bfdbfe;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 10.5px;
+    }
+    .pl-hop-action {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--pl-border);
+        font-size: 11.5px;
+    }
+    .pl-hop-rule {
+        font-size: 11px;
+        color: var(--pl-muted);
+        margin-top: 2px;
+        word-break: break-all;
+    }
+    .pl-hop-arrow {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        color: var(--pl-dim);
+        font-size: 18px;
+    }
+    .pl-hop-arrow.deny { color: var(--pl-red); }
+    .pl-path-endpoints {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        padding: 12px 10px;
+        background: rgba(59,130,246,.05);
+        border: 1px dashed rgba(59,130,246,.3);
+        border-radius: 10px;
+        color: var(--pl-muted);
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+    }
+    .pl-hop-unresolved {
+        flex: 0 0 180px;
+        border: 1px dashed rgba(245,158,11,.5);
+        border-radius: 10px;
+        padding: 12px;
+        color: #fbbf24;
+        font-size: 12px;
+        font-style: italic;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 900px) {
         .pl-form-row { flex-direction: column; }
         .pl-summary { grid-template-columns: 1fr 1fr; }
+        .pl-path-flow { flex-wrap: wrap; }
     }
 </style>
 {% endblock %}
@@ -502,7 +643,7 @@
                 <label>Destination (IP or FQDN) *</label>
                 <input type="text" name="dstip" value="{{ current_dstip or '' }}"
                        placeholder="10.10.122.31 or example.com" required
-                       pattern="(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)"
+                       pattern="(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*)"
                        style="width:220px">
             </div>
             <div class="pl-field">
@@ -618,6 +759,98 @@
             </div>
         </div>
     </div>
+
+    {# ── Resolved Path (src → dst hop-by-hop) ───────────────────── #}
+    {% if results.path_evaluation and results.path_evaluation.hops %}
+    {% set pe = results.path_evaluation %}
+    <div class="pl-path-card">
+        <div class="pl-path-header">
+            <div class="pl-path-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><polyline points="12 19 20 11 12 3"/></svg>
+                Resolved Path
+                <span class="pl-small pl-dim">— {{ pe.hop_count }} hop{{ 's' if pe.hop_count != 1 }} via routing table{% if not pe.path_complete %} (partial){% endif %}</span>
+            </div>
+            <span class="pl-verdict-chip {% if pe.effective_action == 'allow' %}allow{% elif pe.effective_action == 'deny' %}deny{% else %}indet{% endif %}">
+                {% if pe.effective_action == 'allow' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg> Allow
+                {% elif pe.effective_action == 'deny' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Deny
+                {% else %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Indeterminate
+                {% endif %}
+            </span>
+        </div>
+        {% if pe.effective_reason %}
+        <div class="pl-path-reason">{{ pe.effective_reason }}</div>
+        {% endif %}
+        <div class="pl-path-flow">
+            <div class="pl-path-endpoints">
+                <div>
+                    <div style="color:var(--pl-text);font-weight:600;margin-bottom:2px">Source</div>
+                    {{ current_srcip }}
+                </div>
+            </div>
+            {% for hop in pe.hops %}
+            {% set hop_class = 'allow' if hop.action in ['accept','allow'] else ('deny' if hop.action in ['deny','implicit-deny'] else 'indet') %}
+            <div class="pl-hop-arrow {% if hop_class == 'deny' %}deny{% endif %}">&rarr;</div>
+            <div class="pl-hop {{ hop_class }}">
+                <span class="pl-hop-idx">HOP {{ hop.index }}</span>
+                <div class="pl-hop-dev">{{ hop.device_display }}</div>
+                <div class="pl-hop-row">
+                    <span>In:</span>
+                    <span>
+                        {% if hop.ingress_zone %}<code>{{ hop.ingress_zone }}</code>{% endif %}
+                        {% if hop.ingress_iface %}<span class="pl-dim">{{ hop.ingress_iface }}</span>{% endif %}
+                        {% if not hop.ingress_zone and not hop.ingress_iface %}<span class="pl-dim">—</span>{% endif %}
+                    </span>
+                </div>
+                <div class="pl-hop-row">
+                    <span>Out:</span>
+                    <span>
+                        {% if hop.egress_zone %}<code>{{ hop.egress_zone }}</code>{% endif %}
+                        {% if hop.egress_iface %}<span class="pl-dim">{{ hop.egress_iface }}</span>{% endif %}
+                        {% if not hop.egress_zone and not hop.egress_iface %}<span class="pl-dim">—</span>{% endif %}
+                    </span>
+                </div>
+                {% if hop.next_hop %}
+                <div class="pl-hop-row"><span>Next:</span><code>{{ hop.next_hop }}</code></div>
+                {% endif %}
+                {% if hop.route_network %}
+                <div class="pl-hop-row"><span>Route:</span><code>{{ hop.route_network }}</code>{% if hop.route_type %} <span class="pl-dim">[{{ hop.route_type }}]</span>{% endif %}</div>
+                {% endif %}
+                <div class="pl-hop-action">
+                    {% if hop.action in ['accept','allow'] %}
+                        <span class="pl-action-chip allow">{{ hop.action }}</span>
+                    {% elif hop.action == 'implicit-deny' %}
+                        <span class="pl-action-chip deny" title="No rule matched; vendor default applies">implicit&nbsp;deny</span>
+                    {% elif hop.action == 'no-policy-data' %}
+                        <span class="pl-action-chip" style="background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.35)">no policy data</span>
+                    {% else %}
+                        <span class="pl-action-chip deny">{{ hop.action }}</span>
+                    {% endif %}
+                    {% if hop.matched and hop.policyname %}
+                        <div class="pl-hop-rule">{{ hop.policyname }}{% if hop.position is not none %} <span class="pl-dim">(pos {{ hop.position }})</span>{% endif %}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if not pe.path_complete %}
+            <div class="pl-hop-arrow">&rarr;</div>
+            <div class="pl-hop-unresolved">
+                Path unresolved:<br>{{ pe.path_stop_reason or 'unknown' }}
+            </div>
+            {% else %}
+            <div class="pl-hop-arrow">&rarr;</div>
+            <div class="pl-path-endpoints">
+                <div>
+                    <div style="color:var(--pl-text);font-weight:600;margin-bottom:2px">Destination</div>
+                    {{ current_dstip }}:{{ current_dstport }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     {# ── Macro: bidirectional / unidirectional chip ─────────────── #}
     {% macro dir_chip(bi) %}
@@ -849,10 +1082,15 @@
     </div>
     {% endif %}
 
-    <!-- Would Match (config-simulated, no traffic yet) -->
+    <!-- Would Match (config-simulated, no traffic yet)
+         Filtered: only firewalls that are NOT on the resolved path. -->
     {% if results.would_match %}
     <div class="pl-section-hdr">
+        {% if results.path_evaluation and results.path_evaluation.hops %}
+        <h3>Off-path matches <span class="pl-small" style="font-weight:400">— other firewalls with a rule for this flow; traffic does not traverse these</span></h3>
+        {% else %}
         <h3>Would Match <span class="pl-small" style="font-weight:400">— predicted from rule base, no logs yet</span></h3>
+        {% endif %}
         <span class="pl-section-badge pl-badge-blue">{{ results.would_match|length }} results</span>
     </div>
     <div class="pl-table-wrap">
@@ -969,14 +1207,26 @@
     </script>
     {% endif %}
 
-    <!-- No results with query -->
-    {% if results and not results.allowed and not results.denied %}
+    <!-- No results with query — only show when every section is empty -->
+    {% if results
+          and not results.allowed
+          and not results.denied
+          and not results.would_match
+          and not (results.path_evaluation and results.path_evaluation.hops) %}
     <div class="pl-empty">
         <div class="pl-empty-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         </div>
         <h3>No Traffic Found</h3>
-        <p>No allowed or denied traffic to {{ current_dstip }}:{{ current_dstport }} in the selected time range. Try expanding the time range or check the destination.</p>
+        <p>No allowed or denied traffic to {{ current_dstip }}:{{ current_dstport }} in the selected time range, and no device rule base predicts a match. Try expanding the time range, widening the source scope, or confirm routing/zone snapshots exist for the firewalls in the path.</p>
+    </div>
+    {% elif results
+          and not results.allowed
+          and not results.denied
+          and (results.would_match or (results.path_evaluation and results.path_evaluation.hops)) %}
+    <div class="pl-resolved-banner" style="margin-top:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        No log hits in this window — verdict above is predicted from rule base + routing configuration. Expand the time range if you want to see real traffic too.
     </div>
     {% endif %}
 

@@ -43,6 +43,7 @@ from ..models.firewall_policy import (
 )
 from ..models.routing import RoutingEntry, RoutingTableSnapshot
 from ..models.zone import InterfaceEntry, ZoneSnapshot
+from .path_resolver import Hop, Path, resolve_path
 
 logger = logging.getLogger(__name__)
 
@@ -782,3 +783,214 @@ async def match_all_devices(
             snapshot_fetched_at=snap.fetched_at,
         ))
     return results
+
+
+# ── Path-aware orchestrator ─────────────────────────────────────────────
+
+@dataclass
+class HopVerdict:
+    """One hop on the resolved path + the policy decision at that hop."""
+    hop: Hop
+    match: MatchResult
+
+
+@dataclass
+class PathEvaluation:
+    """End-to-end path decision for a ``src → dst`` flow.
+
+    ``effective_action`` is the aggregate verdict: ``allow`` only when
+    every hop permits the flow; ``deny`` once any hop rejects it
+    (``effective_at_hop_index`` points to that hop);
+    ``indeterminate`` when the path can't be fully resolved or one of
+    the hops lacks policy data.
+    """
+    hops: List[HopVerdict] = field(default_factory=list)
+    path_complete: bool = False
+    path_stop_reason: str = ""
+    effective_action: str = "indeterminate"
+    effective_reason: str = ""
+    effective_at_hop_index: Optional[int] = None
+
+
+async def match_path(
+    db: AsyncSession,
+    query: MatchQuery,
+) -> PathEvaluation:
+    """Resolve the flow's path then evaluate policy at every hop.
+
+    Requires both ``src_ip`` and ``dst_ip``. Each hop is evaluated with
+    its own ``src_zone`` / ``dst_zone`` taken from the resolved path
+    (interfaces are authoritative about zone membership). The first
+    ``deny`` verdict short-circuits the effective action; if every hop
+    permits and the path reaches the destination, the effective action
+    is ``allow``; otherwise ``indeterminate`` with the stop reason.
+    """
+    if not query.src_ip or not query.dst_ip:
+        return PathEvaluation(
+            path_complete=False,
+            path_stop_reason="missing_endpoints",
+            effective_action="indeterminate",
+            effective_reason="src and dst required for path-aware lookup",
+        )
+
+    path = await resolve_path(db, query.src_ip, query.dst_ip)
+    if not path.hops:
+        return PathEvaluation(
+            path_complete=path.complete,
+            path_stop_reason=path.stop_reason,
+            effective_action="indeterminate",
+            effective_reason=f"no path resolvable ({path.stop_reason or 'no data'})",
+        )
+
+    hop_dev_ids = sorted({h.device_id for h in path.hops})
+    # Preload latest successful snapshot per (device, vdom). Multi-VDOM
+    # Fortinets store policies separately per VDOM: e.g. 192.168.47.1
+    # has Campus (578 rules), WAN (173), and root (0). Evaluating a
+    # Campus-ingress hop against the root snapshot would always return
+    # implicit-deny — each hop is matched against its *own* VDOM.
+    snap_rows = (await db.execute(
+        select(FirewallPolicySnapshot)
+        .where(
+            FirewallPolicySnapshot.device_id.in_(hop_dev_ids),
+            FirewallPolicySnapshot.success.is_(True),
+        )
+        .order_by(desc(FirewallPolicySnapshot.fetched_at))
+    )).scalars().all()
+    latest_snap_by_devvdom: Dict[
+        Tuple[int, Optional[str]], FirewallPolicySnapshot
+    ] = {}
+    # Also keep a per-device fallback for single-VDOM devices (Palo
+    # Alto, generic parsers) whose hops may not carry a VDOM.
+    any_snap_by_dev: Dict[int, FirewallPolicySnapshot] = {}
+    for s in snap_rows:
+        latest_snap_by_devvdom.setdefault((s.device_id, s.vdom), s)
+        any_snap_by_dev.setdefault(s.device_id, s)
+
+    dev_rows = (await db.execute(
+        select(Device).where(Device.id.in_(hop_dev_ids))
+    )).scalars().all() if hop_dev_ids else []
+    dev_by_id = {d.id: d for d in dev_rows}
+
+    def _pick_snap(device_id: int, vdom: Optional[str]
+                   ) -> Optional[FirewallPolicySnapshot]:
+        # Exact (device, vdom) match preferred. If the hop's VDOM has
+        # no snapshot, fall back to any snapshot for this device so we
+        # still produce *some* verdict instead of silently dropping
+        # the hop from evaluation.
+        if vdom is not None:
+            snap = latest_snap_by_devvdom.get((device_id, vdom))
+            if snap is not None:
+                return snap
+        snap = latest_snap_by_devvdom.get((device_id, None))
+        if snap is not None:
+            return snap
+        return any_snap_by_dev.get(device_id)
+
+    verdicts: List[HopVerdict] = []
+    effective_action = "allow"
+    effective_reason = "all hops permit this flow"
+    effective_at: Optional[int] = None
+
+    for idx, hop in enumerate(path.hops):
+        dev = dev_by_id.get(hop.device_id)
+        snap = _pick_snap(hop.device_id, hop.vdom)
+
+        if dev is None or snap is None:
+            placeholder = MatchResult(
+                device_id=hop.device_id,
+                device_display=hop.device_display or f"device-{hop.device_id}",
+                vdom=hop.vdom,
+                matched=False,
+                action="no-policy-data",
+                reason="no policy snapshot for this device",
+            )
+            verdicts.append(HopVerdict(hop=hop, match=placeholder))
+            if effective_action == "allow":
+                effective_action = "indeterminate"
+                effective_reason = (
+                    f"no policy snapshot for {placeholder.device_display} "
+                    f"at hop {idx + 1}"
+                )
+                effective_at = idx
+            continue
+
+        policies = (await db.execute(
+            select(FirewallPolicy)
+            .where(FirewallPolicy.snapshot_id == snap.id)
+            .order_by(FirewallPolicy.position.asc())
+        )).scalars().all()
+        addr_objs = (await db.execute(
+            select(FirewallAddressObject)
+            .where(FirewallAddressObject.snapshot_id == snap.id)
+        )).scalars().all()
+        svc_objs = (await db.execute(
+            select(FirewallServiceObject)
+            .where(FirewallServiceObject.snapshot_id == snap.id)
+        )).scalars().all()
+
+        device_display = (
+            f"{dev.ip_address}_{snap.vdom}" if snap.vdom else str(dev.ip_address)
+        )
+
+        # Hop-specific query: zones come from the resolved path, not
+        # from the caller. Caller-supplied zones would apply to the
+        # first hop only and can't represent an egress firewall's view.
+        hop_query = MatchQuery(
+            dst_ip=query.dst_ip,
+            dst_port=query.dst_port,
+            proto=query.proto,
+            src_ip=query.src_ip,
+            src_zone=hop.ingress_zone,
+            dst_zone=hop.egress_zone,
+            dst_fqdn=query.dst_fqdn,
+            app=query.app,
+        )
+
+        result = match_device(
+            device_id=dev.id,
+            device_display=device_display,
+            vdom=snap.vdom,
+            policies=policies,
+            addr_objs=addr_objs,
+            svc_objs=svc_objs,
+            query=hop_query,
+            snapshot_fetched_at=snap.fetched_at,
+        )
+        verdicts.append(HopVerdict(hop=hop, match=result))
+
+        if effective_action == "allow" and result.action in (
+            "deny", "implicit-deny"
+        ):
+            effective_action = "deny"
+            if result.matched:
+                rule_ref = result.policy_name or result.rule_id or (
+                    f"pos {result.position}" if result.position is not None
+                    else "?"
+                )
+                effective_reason = (
+                    f"denied at hop {idx + 1} ({device_display}) "
+                    f"by rule {rule_ref}"
+                    + (f" (pos {result.position})"
+                       if result.position is not None else "")
+                )
+            else:
+                effective_reason = (
+                    f"implicit-deny at hop {idx + 1} ({device_display}) — "
+                    f"no rule matched on this firewall"
+                )
+            effective_at = idx
+
+    if effective_action == "allow" and not path.complete:
+        effective_action = "indeterminate"
+        effective_reason = (
+            f"path did not reach destination ({path.stop_reason or 'unknown'})"
+        )
+
+    return PathEvaluation(
+        hops=verdicts,
+        path_complete=path.complete,
+        path_stop_reason=path.stop_reason,
+        effective_action=effective_action,
+        effective_reason=effective_reason,
+        effective_at_hop_index=effective_at,
+    )
