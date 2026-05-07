@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Windows Firewall rules for the Zentryc DNS Agent.
+  Creates an outbound UDP rule to allow syslog traffic to the Zentryc server.
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Fragment>
+    <ComponentGroup Id="FirewallComponents" Directory="INSTALLFOLDER">
+
+      <Component Id="FirewallRule" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560005">
+
+        <!-- Dummy keypath for the component -->
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Zentryc\DnsAgent\Firewall"
+                       Name="Installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+
+        <!-- Outbound UDP rule for syslog -->
+        <fw:FirewallException Id="SyslogOutbound"
+                              Name="Zentryc DNS Agent - Syslog (UDP Out)"
+                              Description="Allow Zentryc DNS Agent to send syslog messages to the SIEM server"
+                              Protocol="udp"
+                              Scope="any"
+                              Profile="all"
+                              Direction="out"
+                              Program="[INSTALLFOLDER]ZentrycDnsAgent.exe" />
+
+        <!-- Outbound TCP rule for HTTPS transport (future) -->
+        <fw:FirewallException Id="HttpsOutbound"
+                              Name="Zentryc DNS Agent - HTTPS (TCP Out)"
+                              Description="Allow Zentryc DNS Agent to send logs via HTTPS to the SIEM server"
+                              Protocol="tcp"
+                              Port="443"
+                              Scope="any"
+                              Profile="all"
+                              Direction="out"
+                              Program="[INSTALLFOLDER]ZentrycDnsAgent.exe" />
+
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

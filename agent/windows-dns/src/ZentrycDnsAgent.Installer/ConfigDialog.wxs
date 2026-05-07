@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Custom configuration dialog for the Zentryc DNS Agent installer.
+  Collects Zentryc server IP and port during interactive install.
+
+  For silent install, these are set via MSI properties:
+    msiexec /i ZentrycDnsAgent.msi /qn ZENTRYC_HOST=10.0.0.1 ZENTRYC_PORT=514
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Fragment>
+    <UI>
+      <!-- Custom dialog for Zentryc server configuration -->
+      <Dialog Id="ZentrycConfigDlg" Width="370" Height="270"
+              Title="Zentryc DNS Agent - Server Configuration">
+
+        <!-- Title banner -->
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="{\WixUI_Font_Title}Zentryc SIEM Server Configuration" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="20"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="Enter the connection details for your Zentryc SIEM server." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <!-- Server Host -->
+        <Control Id="HostLabel" Type="Text" X="25" Y="60" Width="100" Height="15"
+                 Text="Server Address:" />
+        <Control Id="HostEdit" Type="Edit" X="25" Y="76" Width="200" Height="18"
+                 Property="ZENTRYC_HOST"
+                 Text="{80}" />
+        <Control Id="HostHelp" Type="Text" X="230" Y="78" Width="130" Height="15"
+                 Text="IP or hostname" />
+
+        <!-- Server Port -->
+        <Control Id="PortLabel" Type="Text" X="25" Y="104" Width="100" Height="15"
+                 Text="Syslog Port:" />
+        <Control Id="PortEdit" Type="Edit" X="25" Y="120" Width="80" Height="18"
+                 Property="ZENTRYC_PORT"
+                 Text="{5}" />
+        <Control Id="PortHelp" Type="Text" X="110" Y="122" Width="200" Height="15"
+                 Text="Default: 514 (UDP)" />
+
+        <!-- API Key (optional) -->
+        <Control Id="ApiKeyLabel" Type="Text" X="25" Y="148" Width="100" Height="15"
+                 Text="API Key (optional):" />
+        <Control Id="ApiKeyEdit" Type="Edit" X="25" Y="164" Width="300" Height="18"
+                 Property="ZENTRYC_APIKEY"
+                 Text="{200}" />
+        <Control Id="ApiKeyHelp" Type="Text" X="25" Y="184" Width="320" Height="15"
+                 Text="Required for HTTPS transport. Leave blank for UDP syslog." />
+
+        <!-- DNS Server warning -->
+        <Control Id="DnsWarning" Type="Text" X="25" Y="208" Width="320" Height="25"
+                 Text="Note: The DNS Server role must be installed on this server. The agent will start automatically after installation." />
+
+        <!-- Navigation buttons -->
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="&amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="&amp;Next" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <!-- Insert our config dialog into the install sequence -->
+      <InstallUISequence>
+        <Show Dialog="ZentrycConfigDlg" After="InstallDirDlg" />
+      </InstallUISequence>
+
+    </UI>
+  </Fragment>
+
+</Wix>
