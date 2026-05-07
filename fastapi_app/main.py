@@ -40,6 +40,7 @@ from .api.health import router as health_router
 from .api.backup import router as backup_router
 from .api.updates import router as updates_router
 from .api.llm_config import router as llm_config_router
+from .api.policy_narrowing import router as policy_narrowing_router
 from .api.threat_dashboard import router as threat_dashboard_router
 from .api.user_activity import router as user_activity_router
 from .services.scheduler import start_scheduler, stop_scheduler
@@ -325,6 +326,9 @@ app.include_router(updates_router)
 
 # Include LLM configuration routes
 app.include_router(llm_config_router)
+
+# Include Learning Mode (policy narrowing) routes — JSON + HTML page
+app.include_router(policy_narrowing_router)
 
 # Include Palo Alto threat/URL dashboard routes
 app.include_router(threat_dashboard_router)

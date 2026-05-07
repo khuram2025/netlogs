@@ -1043,3 +1043,64 @@ async def edl_bulk_toggle(
 
     await db.commit()
     return JSONResponse({"success": True, "updated": len(entries)})
+
+
+@router.post("/api/edl/{edl_id}/entries/bulk-add/", name="api_edl_bulk_add")
+async def api_edl_bulk_add(
+    edl_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk-add entries to an EDL — used by the Logs aggregate "🚫 Block source"
+    action chip. Accepts JSON ``{values: [...], description: "..."}``. Skips
+    duplicates and entries that fail per-type validation; reports counts.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"success": False, "error": "invalid JSON"}, status_code=400)
+
+    raw_values = payload.get("values") or []
+    description = (payload.get("description") or "").strip() or None
+    if not isinstance(raw_values, list) or not raw_values:
+        return JSONResponse({"success": False, "error": "values must be a non-empty list"}, status_code=400)
+
+    edl = (await db.execute(select(EDLList).where(EDLList.id == edl_id))).scalar_one_or_none()
+    if not edl:
+        raise HTTPException(status_code=404, detail="EDL list not found")
+
+    # Existing values in this EDL (for dedupe in a single round-trip)
+    existing_q = await db.execute(
+        select(EDLEntry.value).where(EDLEntry.edl_list_id == edl_id)
+    )
+    existing = {v for (v,) in existing_q.all()}
+
+    added = 0
+    skipped_duplicate = 0
+    skipped_invalid: list = []
+    for v in raw_values:
+        v = (str(v) or "").strip()
+        if not v:
+            continue
+        if v in existing:
+            skipped_duplicate += 1
+            continue
+        ok, err = validate_entry_for_type(v, edl.list_type)
+        if not ok:
+            skipped_invalid.append({"value": v, "error": err})
+            continue
+        db.add(EDLEntry(
+            edl_list_id=edl_id, value=v, description=description,
+            is_active=True, source="logs-aggregate-block",
+        ))
+        existing.add(v)
+        added += 1
+
+    await db.commit()
+    return JSONResponse({
+        "success": True,
+        "added": added,
+        "skipped_duplicate": skipped_duplicate,
+        "skipped_invalid": skipped_invalid,
+        "edl_id": edl_id,
+    })

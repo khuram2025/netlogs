@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -1069,6 +1069,9 @@ async def log_list(
     view: Optional[str] = Query(None),
     group_by: Optional[str] = Query(None),
     subnet_rollup: Optional[str] = Query(None),
+    # Compare-windows mode (Tier 1 enhancement to aggregate view)
+    compare: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """Log list view with filtering."""
     try:
@@ -1376,11 +1379,142 @@ async def log_list(
         }
 
         if is_aggregate:
+            # Tier 1 aggregate enrichment:
+            #  • prior-window aggregate → anomaly state (NEW / SPIKE) + Δ%
+            #  • device IP → device.id map → Learning-Mode + drill-in URLs
+            agg_rows = list(logs_or_agg)
+            is_compare_mode = bool(compare and compare.strip().lower() in ('1', 'true', 'on'))
+
+            prior_map: Dict[Tuple, int] = {}
+            # end_time is often None (the user gave a relative time_range);
+            # treat that as "now" so we can derive a comparable prior window.
+            effective_end_time = end_time or now
+            if start_time and agg_rows:
+                try:
+                    prior_map = await loop.run_in_executor(
+                        _executor,
+                        lambda: ClickHouseClient.aggregate_prior_window(
+                            group_by_fields=group_fields,
+                            start_time=start_time,
+                            end_time=effective_end_time,
+                            device_ips=device_ips,
+                            severities=severities,
+                            query_text=search_query if search_query else None,
+                            subnet_rollup=is_subnet_rollup,
+                        ),
+                    )
+                except Exception as _e:
+                    logger.warning(f"prior-window enrichment skipped: {_e}")
+                    prior_map = {}
+
+            # Median of prior counts is the anchor for SPIKE detection — far
+            # more robust than the mean against a single noisy baseline row.
+            prior_values = sorted(prior_map.values()) if prior_map else []
+            if prior_values:
+                _mid = len(prior_values) // 2
+                prior_median = (
+                    prior_values[_mid] if len(prior_values) % 2 == 1
+                    else (prior_values[_mid - 1] + prior_values[_mid]) / 2
+                )
+            else:
+                prior_median = 0
+
+            def _row_key(r):
+                # Mirrors the column order used in aggregate_prior_window().
+                key = []
+                for f in group_fields:
+                    if f == 'srcip' and is_subnet_rollup:
+                        key.append(r.get('src_subnet') or '')
+                    else:
+                        key.append(r.get(f) if r.get(f) is not None else '')
+                return tuple(key)
+
+            for r in agg_rows:
+                cur = int(r.get('event_count') or 0)
+                prior = int(prior_map.get(_row_key(r), 0))
+                r['prior_count'] = prior
+                if prior == 0:
+                    r['anomaly_state'] = 'NEW'
+                    r['delta_pct'] = None
+                elif cur >= 5 * prior and cur >= max(10, 3 * (prior_median or 1)):
+                    r['anomaly_state'] = 'SPIKE'
+                    r['delta_pct'] = round(((cur - prior) / prior) * 100.0, 1)
+                else:
+                    if cur > prior * 1.5:
+                        r['anomaly_state'] = 'GROWING'
+                    elif cur < prior * 0.5:
+                        r['anomaly_state'] = 'SHRINKING'
+                    else:
+                        r['anomaly_state'] = 'STEADY'
+                    r['delta_pct'] = round(((cur - prior) / prior) * 100.0, 1) if prior else None
+
+            # When compare mode is on, surface GONE keys (in prior, absent now)
+            # at the bottom — capped so a hot device doesn't blow up the page.
+            if is_compare_mode and prior_map:
+                current_keys = {_row_key(r) for r in agg_rows}
+                gone = [
+                    {**dict(zip(group_fields, k)),
+                     'event_count': 0, 'prior_count': v,
+                     'anomaly_state': 'GONE', 'delta_pct': -100.0,
+                     'first_seen': None, 'last_seen': None,
+                     'top_action': None, 'top_policy': None, 'top_app': None,
+                     'device_count': 0,
+                     # subnet rollup mirrors src column when applicable
+                     **({'src_subnet': k[0], 'unique_src_ips': 0, 'sample_ips': []}
+                        if is_subnet_rollup and 'srcip' in group_fields else {}),
+                     }
+                    for k, v in prior_map.items() if k not in current_keys
+                ]
+                gone.sort(key=lambda x: -x.get('prior_count', 0))
+                agg_rows.extend(gone[:25])
+
+            # Map every device-display label seen on this page back to a
+            # Device.id so the per-row Learning-Mode and Policy-Lookup chips
+            # have somewhere to deep-link to. Display labels look like
+            # "192.168.100.221_root" (ip_vdom) or "10.10.0.1" (no vdom).
+            device_ip_to_id: Dict[str, int] = {}
+            try:
+                rows = (await db.execute(select(Device.id, Device.ip_address))).all()
+                device_ip_to_id = {str(ip): int(rid) for rid, ip in rows}
+            except Exception as _e:
+                logger.warning(f"device-id map skipped: {_e}")
+
+            current_device_ip: Optional[str] = None
+            current_device_id: Optional[int] = None
+            if current_device:
+                # Strip a trailing _vdom suffix to get the bare IP.
+                bare = current_device.rsplit('_', 1)[0]
+                if bare in device_ip_to_id:
+                    current_device_ip = bare
+                    current_device_id = device_ip_to_id[bare]
+
+            # Anomaly counts for the compare-mode summary banner.
+            anomaly_counts = {'NEW': 0, 'SPIKE': 0, 'GROWING': 0,
+                              'SHRINKING': 0, 'STEADY': 0, 'GONE': 0}
+            current_window_total = 0
+            for r in agg_rows:
+                state = r.get('anomaly_state') or 'STEADY'
+                anomaly_counts[state] = anomaly_counts.get(state, 0) + 1
+                if state != 'GONE':
+                    current_window_total += int(r.get('event_count') or 0)
+
             context["logs"] = []
-            context["agg_rows"] = logs_or_agg
+            context["agg_rows"] = agg_rows
+            context["is_compare_mode"] = is_compare_mode
+            context["prior_window_total"] = sum(prior_map.values()) if prior_map else 0
+            context["current_window_total"] = current_window_total
+            context["anomaly_counts"] = anomaly_counts
+            context["device_ip_to_id"] = device_ip_to_id
+            context["current_device_ip"] = current_device_ip
+            context["current_device_id"] = current_device_id
         else:
             context["logs"] = logs_or_agg
             context["agg_rows"] = []
+            context["is_compare_mode"] = False
+            context["prior_window_total"] = 0
+            context["device_ip_to_id"] = {}
+            context["current_device_ip"] = None
+            context["current_device_id"] = None
 
         return _render("logs/log_list.html", request, context)
     except Exception as e:

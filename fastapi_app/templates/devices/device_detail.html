@@ -1578,6 +1578,14 @@
             (took {{ fw_snapshot.fetch_duration_ms or 0 }}ms)
         </p>
 
+        <div style="display:flex; justify-content:flex-end; margin-bottom:.5rem;">
+            <a class="btn btn-secondary"
+               href="{{ url_for('device_learning_mode', device_id=device.id) }}"
+               title="Pick a broad policy and let the system suggest narrower rules from observed traffic.">
+                🎯 Learning Mode
+            </a>
+        </div>
+
         <div class="zone-search-box">
             <input type="text" id="policy-search" placeholder="Filter policies (name, src, dst, service, action)…"
                    onkeyup="filterPolicies()">
@@ -1624,6 +1632,12 @@
                         <span class="fw-chip fw-chip-action fw-chip-action-{{ act_class }}">{{ p.action }}</span>
                         {% if p.nat_enabled %}<span class="fw-chip fw-chip-nat">NAT</span>{% endif %}
                         {% if not p.enabled %}<span class="fw-chip fw-chip-off">DISABLED</span>{% endif %}
+                        {% if p.name and p.action in ('accept','allow','pass') %}
+                        <a class="fw-chip fw-chip-svc"
+                           href="{{ url_for('device_learning_mode', device_id=device.id) }}?policy_name={{ p.name | urlencode }}"
+                           title="Suggest narrower rules from real traffic"
+                           onclick="event.stopPropagation()">🎯 learn</a>
+                        {% endif %}
                     </div>
                     <div class="fw-pol-chevron">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>

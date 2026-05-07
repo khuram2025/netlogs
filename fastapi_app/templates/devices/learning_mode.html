@@ -1,0 +1,398 @@
+{% extends 'base.html' %}
+
+{% block title %}Learning Mode — {{ device.ip_address }} — Zentryc{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lm-wrap { display:flex; flex-direction:column; gap:1rem; }
+  .lm-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  .lm-header h2 { margin:0; }
+  .lm-sub { color:var(--text-muted, #94a3b8); font-size:.9rem; margin-top:.25rem; }
+
+  .lm-controls {
+    display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:.75rem; align-items:end;
+    background:var(--card-bg, #0f172a); padding:1rem; border-radius:8px;
+    border:1px solid var(--border, #1e293b);
+  }
+  .lm-controls label { display:block; font-size:.78rem; color:var(--text-muted,#94a3b8); margin-bottom:.25rem; text-transform:uppercase; letter-spacing:.04em; }
+  .lm-controls select, .lm-controls input {
+    width:100%; padding:.55rem .65rem; background:var(--input-bg, #020617);
+    color:var(--text, #e2e8f0); border:1px solid var(--border, #1e293b); border-radius:6px;
+  }
+  .lm-controls .lm-run { padding:.6rem 1.2rem; }
+
+  .lm-summary {
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap:.6rem;
+  }
+  .lm-stat { background:var(--card-bg,#0f172a); border:1px solid var(--border,#1e293b);
+              border-radius:8px; padding:.85rem 1rem; }
+  .lm-stat-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+                    color:var(--text-muted,#94a3b8); }
+  .lm-stat-value { font-size:1.45rem; font-weight:600; margin-top:.2rem; color:var(--text,#e2e8f0); }
+  .lm-stat-sub { font-size:.78rem; color:var(--text-muted,#94a3b8); margin-top:.15rem; }
+
+  .lm-section { background:var(--card-bg,#0f172a); border:1px solid var(--border,#1e293b);
+                 border-radius:8px; padding:1rem; }
+  .lm-section h3 { margin:0 0 .35rem 0; font-size:1rem; }
+  .lm-section .lm-sec-sub { color:var(--text-muted,#94a3b8); font-size:.82rem; margin-bottom:.85rem; }
+
+  .lm-cand-list { display:flex; flex-direction:column; gap:.55rem; }
+  .lm-cand { border:1px solid var(--border,#1e293b); border-radius:6px; padding:.7rem .85rem;
+             background:rgba(15,23,42,.5); }
+  .lm-cand-row { display:grid; grid-template-columns: 1fr auto auto; gap:.75rem; align-items:center; }
+  .lm-cand-label { font-weight:600; color:var(--text,#e2e8f0); }
+  .lm-cand-meta { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.25rem; }
+  .lm-chip { display:inline-flex; align-items:center; gap:.25rem; padding:.15rem .5rem;
+             border-radius:999px; font-size:.72rem; background:#1e293b; color:#cbd5e1;
+             border:1px solid #334155; }
+  .lm-chip-zone { background:#0c4a6e; color:#bae6fd; border-color:#0369a1; }
+  .lm-chip-svc  { background:#312e81; color:#c7d2fe; border-color:#4338ca; }
+  .lm-chip-app  { background:#064e3b; color:#a7f3d0; border-color:#047857; }
+  .lm-chip-risk { background:#7f1d1d; color:#fecaca; border-color:#b91c1c; }
+
+  .lm-coverage-cell { min-width:160px; }
+  .lm-coverage-bar { height:6px; background:#1e293b; border-radius:3px; overflow:hidden; margin-top:.3rem; }
+  .lm-coverage-fill { height:100%; background:linear-gradient(90deg,#10b981,#06b6d4); }
+  .lm-coverage-pct { font-size:.78rem; color:var(--text-muted,#94a3b8); display:flex; justify-content:space-between; }
+
+  .lm-conf-cell { text-align:right; min-width:80px; font-size:.85rem; color:var(--text-muted,#94a3b8); }
+  .lm-conf-val { font-size:1.1rem; font-weight:600; color:var(--text,#e2e8f0); }
+
+  .lm-cand-detail { margin-top:.75rem; padding-top:.6rem; border-top:1px dashed #1e293b;
+                    display:grid; grid-template-columns: 1fr 1fr; gap:1rem; font-size:.82rem; }
+  .lm-cand-detail .lm-block strong { display:block; color:var(--text-muted,#94a3b8); font-size:.7rem;
+                                       text-transform:uppercase; letter-spacing:.05em; margin-bottom:.2rem; }
+  .lm-cand-detail code { background:#020617; padding:.1rem .35rem; border-radius:3px; font-size:.78rem; }
+
+  .lm-evidence { margin-top:.5rem; }
+  .lm-evidence table { width:100%; border-collapse:collapse; font-size:.78rem; }
+  .lm-evidence th, .lm-evidence td { padding:.3rem .5rem; text-align:left;
+                                       border-bottom:1px solid #1e293b; }
+  .lm-evidence th { color:var(--text-muted,#94a3b8); font-weight:500; font-size:.7rem;
+                     text-transform:uppercase; letter-spacing:.04em; }
+
+  .lm-residuals table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  .lm-residuals th, .lm-residuals td { padding:.45rem .55rem; text-align:left;
+                                         border-bottom:1px solid #1e293b; }
+  .lm-residuals th { color:var(--text-muted,#94a3b8); font-weight:500; font-size:.74rem;
+                      text-transform:uppercase; letter-spacing:.04em; }
+  .lm-risk-high   { color:#fca5a5; font-weight:600; }
+  .lm-risk-medium { color:#fcd34d; font-weight:600; }
+  .lm-risk-low    { color:#94a3b8; }
+
+  .lm-empty, .lm-loading {
+    text-align:center; padding:2rem 1rem; color:var(--text-muted,#94a3b8);
+    border:1px dashed #1e293b; border-radius:8px;
+  }
+  .lm-spinner { display:inline-block; width:14px; height:14px; border:2px solid #334155;
+                border-top-color:#06b6d4; border-radius:50%; animation: lmspin 0.8s linear infinite; }
+  @keyframes lmspin { to { transform:rotate(360deg); } }
+
+  .lm-note { background:#422006; border:1px solid #92400e; color:#fde68a; border-radius:6px;
+             padding:.6rem .85rem; font-size:.85rem; }
+
+  .lm-export-bar { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lm-wrap" data-device-id="{{ device.id }}">
+
+  <div class="lm-header">
+    <div>
+      <h2>Learning Mode — {{ device.hostname or device.ip_address }}</h2>
+      <div class="lm-sub">
+        Pick an existing policy to analyse against the last 30 days of traffic.
+        The system will propose narrower replacements and surface anything the
+        candidates would <em>not</em> cover.
+        <a href="{{ url_for('device_detail', device_id=device.id) }}?tab=policies"
+           style="margin-left:.5rem;">← Back to device</a>
+      </div>
+    </div>
+  </div>
+
+  <form id="lm-controls" class="lm-controls" onsubmit="lmRun(event)">
+    <div>
+      <label for="lm-policy">Policy to learn from</label>
+      <select id="lm-policy" required>
+        <option value="">— select a policy —</option>
+        {% for p in policies %}
+          <option value="{{ p.name }}"
+                  {% if selected_policy_name and p.name == selected_policy_name %}selected{% endif %}>
+            #{{ p.position }} · {{ p.name }} ({{ p.action }}{% if not p.enabled %}, disabled{% endif %})
+            {% if p.hit_count is not none %} · {{ p.hit_count }} hits{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="lm-window">Window</label>
+      <select id="lm-window">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+    </div>
+    <div>
+      <label for="lm-min-hits">Min hits / candidate</label>
+      <input type="number" id="lm-min-hits" min="1" max="10000" value="5">
+    </div>
+    <div>
+      <button type="submit" class="btn btn-primary lm-run">Analyse</button>
+    </div>
+  </form>
+
+  <div id="lm-result">
+    {% if not policies %}
+    <div class="lm-empty">
+      <div style="font-size:2rem;">📭</div>
+      <h3>No firewall policies on this device</h3>
+      <p>Fetch firewall policies first, then come back to learn from traffic.</p>
+    </div>
+    {% else %}
+    <div class="lm-empty">
+      <div style="font-size:2rem;">🎯</div>
+      <h3>Ready to analyse</h3>
+      <p>Select a policy above and click <strong>Analyse</strong>. The narrower it
+         can be, the safer your firewall will be.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const wrap = document.querySelector('.lm-wrap');
+  const deviceId = wrap && wrap.dataset.deviceId;
+
+  function fmtInt(n) { return (n == null ? 0 : Number(n)).toLocaleString(); }
+  function fmtPct(n) { return (Number(n || 0)).toFixed(1) + '%'; }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderCandidate(c, idx) {
+    const chips = [];
+    (c.src_zones || []).forEach(z => chips.push(`<span class="lm-chip lm-chip-zone">src:${escapeHtml(z)}</span>`));
+    (c.dst_zones || []).forEach(z => chips.push(`<span class="lm-chip lm-chip-zone">dst:${escapeHtml(z)}</span>`));
+    if (c.service_group) chips.push(`<span class="lm-chip lm-chip-svc">${escapeHtml(c.service_group)}</span>`);
+    (c.applications || []).slice(0, 4).forEach(a => chips.push(`<span class="lm-chip lm-chip-app">${escapeHtml(a)}</span>`));
+    (c.risk_flags || []).forEach(f => chips.push(`<span class="lm-chip lm-chip-risk">${escapeHtml(f)}</span>`));
+
+    const evidence = (c.sample_flows || []).map(s => `
+      <tr>
+        <td><code>${escapeHtml(s.srcip)}</code></td>
+        <td><code>${escapeHtml(s.dstip)}</code></td>
+        <td>${escapeHtml(s.proto)}/${fmtInt(s.dstport)}</td>
+        <td>${escapeHtml(s.application || '')}</td>
+        <td style="text-align:right;">${fmtInt(s.hits)}</td>
+        <td class="lm-risk-low">${escapeHtml(s.last_seen || '')}</td>
+      </tr>`).join('');
+
+    return `
+      <details class="lm-cand">
+        <summary style="cursor:pointer; list-style:none;">
+          <div class="lm-cand-row">
+            <div>
+              <div class="lm-cand-label">${escapeHtml(c.label)}</div>
+              <div class="lm-cand-meta">${chips.join('')}</div>
+            </div>
+            <div class="lm-coverage-cell">
+              <div class="lm-coverage-pct">
+                <span>${fmtPct(c.coverage_pct)} coverage</span>
+                <span>${fmtInt(c.hits)} hits</span>
+              </div>
+              <div class="lm-coverage-bar">
+                <div class="lm-coverage-fill" style="width:${Math.min(100, c.coverage_pct)}%"></div>
+              </div>
+            </div>
+            <div class="lm-conf-cell">
+              <div class="lm-conf-val">${Number(c.confidence || 0).toFixed(0)}</div>
+              <div>confidence</div>
+            </div>
+          </div>
+        </summary>
+        <div class="lm-cand-detail">
+          <div class="lm-block">
+            <strong>Source IPs (${(c.src_ips || []).length})</strong>
+            ${(c.src_ips || []).map(ip => `<code>${escapeHtml(ip)}</code>`).join(' ')}
+          </div>
+          <div class="lm-block">
+            <strong>Destination IPs (${(c.dst_ips || []).length})</strong>
+            ${(c.dst_ips || []).map(ip => `<code>${escapeHtml(ip)}</code>`).join(' ')}
+          </div>
+          <div class="lm-block">
+            <strong>Ports</strong>
+            ${(c.ports || []).map(p => `<code>${escapeHtml(c.proto)}/${p}</code>`).join(' ')}
+          </div>
+          <div class="lm-block">
+            <strong>Distinct sources / destinations</strong>
+            ${fmtInt(c.distinct_src)} src · ${fmtInt(c.distinct_dst)} dst
+          </div>
+        </div>
+        <div class="lm-evidence">
+          <strong style="font-size:.72rem; color:var(--text-muted,#94a3b8); text-transform:uppercase;">
+            Top contributing flows
+          </strong>
+          <table>
+            <thead><tr>
+              <th>Source</th><th>Destination</th><th>Proto/Port</th>
+              <th>App</th><th style="text-align:right;">Hits</th><th>Last seen</th>
+            </tr></thead>
+            <tbody>${evidence || '<tr><td colspan="6" class="lm-risk-low">no samples</td></tr>'}</tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderResidual(r) {
+    return `
+      <tr>
+        <td><code>${escapeHtml(r.srcip)}</code></td>
+        <td><code>${escapeHtml(r.dstip)}</code></td>
+        <td>${escapeHtml(r.proto)}/${fmtInt(r.dstport)}</td>
+        <td>${escapeHtml(r.application || '')}</td>
+        <td style="text-align:right;">${fmtInt(r.hits)}</td>
+        <td class="lm-risk-${escapeHtml(r.risk)}">${escapeHtml(r.risk).toUpperCase()}</td>
+        <td>${(r.risk_reasons || []).map(escapeHtml).join(', ')}</td>
+      </tr>`;
+  }
+
+  function renderReport(report, params) {
+    const root = document.getElementById('lm-result');
+    if (!report || (!report.total_hits && !report.notes.length)) {
+      root.innerHTML = `
+        <div class="lm-empty">
+          <h3>No traffic matched <code>${escapeHtml(report.policy_name)}</code></h3>
+          <p>Either the rule is unused in the chosen window, or the rule name in
+             syslogs differs from the configured rule. Try a longer window or
+             confirm the policy actually receives traffic.</p>
+        </div>`;
+      return;
+    }
+
+    const stats = `
+      <div class="lm-summary">
+        <div class="lm-stat">
+          <div class="lm-stat-label">Total Hits</div>
+          <div class="lm-stat-value">${fmtInt(report.total_hits)}</div>
+          <div class="lm-stat-sub">${report.window_days}-day window</div>
+        </div>
+        <div class="lm-stat">
+          <div class="lm-stat-label">Distinct Flows</div>
+          <div class="lm-stat-value">${fmtInt(report.distinct_flows)}</div>
+          <div class="lm-stat-sub">${fmtInt(report.distinct_src)} src · ${fmtInt(report.distinct_dst)} dst</div>
+        </div>
+        <div class="lm-stat">
+          <div class="lm-stat-label">Coverage</div>
+          <div class="lm-stat-value">${fmtPct(report.coverage_pct)}</div>
+          <div class="lm-stat-sub">${report.candidates.length} suggested rule(s)</div>
+        </div>
+        <div class="lm-stat">
+          <div class="lm-stat-label">Residual Flows</div>
+          <div class="lm-stat-value">${fmtInt(report.residuals.length)}</div>
+          <div class="lm-stat-sub">uncovered after narrowing</div>
+        </div>
+      </div>`;
+
+    const notes = (report.notes || []).map(n =>
+      `<div class="lm-note">${escapeHtml(n)}</div>`).join('');
+
+    const candidatesBody = report.candidates.length
+      ? report.candidates.map(renderCandidate).join('')
+      : '<div class="lm-empty">No candidates met the threshold. Lower min-hits or extend the window.</div>';
+
+    const residualsBody = report.residuals.length
+      ? `<div class="lm-residuals">
+           <table>
+             <thead><tr>
+               <th>Source</th><th>Destination</th><th>Proto/Port</th>
+               <th>App</th><th style="text-align:right;">Hits</th>
+               <th>Risk</th><th>Reasons</th>
+             </tr></thead>
+             <tbody>${report.residuals.map(renderResidual).join('')}</tbody>
+           </table>
+         </div>`
+      : '<div class="lm-empty">No residuals — every flow falls into a candidate.</div>';
+
+    const csvBase = `/api/devices/${deviceId}/policy-narrowing/export.csv` +
+      `?policy_name=${encodeURIComponent(params.policyName)}` +
+      `&window_days=${params.windowDays}&min_hits=${params.minHits}`;
+
+    root.innerHTML = `
+      ${stats}
+      ${notes}
+      <div class="lm-section">
+        <h3>Suggested rules <span style="color:var(--text-muted,#94a3b8); font-weight:400;">(${report.candidates.length})</span></h3>
+        <div class="lm-sec-sub">
+          Each row would replace part of <code>${escapeHtml(report.policy_name)}</code>.
+          Click a row for the IP set and the top contributing flows. Coverage = share of total matched traffic.
+        </div>
+        <div class="lm-cand-list">${candidatesBody}</div>
+        <div class="lm-export-bar">
+          <a class="btn btn-secondary" href="${csvBase}&section=candidates">Export candidates CSV</a>
+        </div>
+      </div>
+      <div class="lm-section">
+        <h3>Residual flows <span style="color:var(--text-muted,#94a3b8); font-weight:400;">(${report.residuals.length})</span></h3>
+        <div class="lm-sec-sub">
+          Traffic the suggested rules would <em>not</em> cover. Review high-risk
+          rows first — they may indicate misuse, or a legitimate flow that needs
+          its own targeted rule.
+        </div>
+        ${residualsBody}
+        <div class="lm-export-bar">
+          <a class="btn btn-secondary" href="${csvBase}&section=residuals">Export residuals CSV</a>
+        </div>
+      </div>
+    `;
+  }
+
+  window.lmRun = async function (ev) {
+    if (ev) ev.preventDefault();
+    const policyName = document.getElementById('lm-policy').value;
+    const windowDays = document.getElementById('lm-window').value;
+    const minHits = document.getElementById('lm-min-hits').value;
+
+    if (!policyName) return;
+
+    const root = document.getElementById('lm-result');
+    root.innerHTML = `
+      <div class="lm-loading">
+        <div class="lm-spinner"></div>
+        <div style="margin-top:.6rem;">Analysing matched traffic for <code>${escapeHtml(policyName)}</code>…</div>
+      </div>`;
+
+    const url = `/api/devices/${deviceId}/policy-narrowing/` +
+      `?policy_name=${encodeURIComponent(policyName)}` +
+      `&window_days=${windowDays}&min_hits=${minHits}`;
+
+    try {
+      const resp = await fetch(url, { credentials: 'same-origin' });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const report = await resp.json();
+      renderReport(report, { policyName, windowDays, minHits });
+    } catch (e) {
+      root.innerHTML = `<div class="lm-empty"><h3>Analysis failed</h3><p>${escapeHtml(e.message || String(e))}</p></div>`;
+    }
+  };
+
+  // Auto-run if a policy was preselected via URL
+  document.addEventListener('DOMContentLoaded', () => {
+    const sel = document.getElementById('lm-policy');
+    if (sel && sel.value) lmRun();
+  });
+})();
+</script>
+{% endblock %}

@@ -2083,6 +2083,83 @@ class ClickHouseClient:
         return count
 
     @classmethod
+    def aggregate_prior_window(
+        cls,
+        group_by_fields: List[str],
+        start_time: datetime,
+        end_time: datetime,
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        query_text: Optional[str] = None,
+        facilities: Optional[List[int]] = None,
+        subnet_rollup: bool = False,
+        limit: int = 10000,
+    ) -> Dict[Tuple, int]:
+        """Aggregate the immediately preceding window of equal length and
+        return a {group_key_tuple: event_count} map.
+
+        Used by the log-list aggregate view to compute anomaly badges
+        (NEW / SPIKE) and the optional Compare-Windows column. The query
+        shape mirrors aggregate_logs() so the same indexes are hit; it
+        differs only in the time filter.
+
+        ``group_key_tuple`` ordering matches ``group_by_fields`` and
+        substitutes the /24 subnet expression for ``srcip`` when
+        ``subnet_rollup`` is True. Tuples are normalised to plain str/int
+        so the caller can match them against current-window rows.
+        """
+        allowed = {'srcip', 'dstip', 'dstport'}
+        group_by_fields = [f for f in group_by_fields if f in allowed]
+        if not group_by_fields:
+            group_by_fields = ['srcip', 'dstip', 'dstport']
+        if start_time is None or end_time is None:
+            return {}
+
+        client = cls.get_client()
+        # Shift left by the same window length.
+        delta = end_time - start_time
+        if delta.total_seconds() <= 0:
+            return {}
+        prior_start = start_time - delta
+        prior_end = start_time
+
+        prewhere_parts = [
+            f"timestamp >= '{prior_start.strftime('%Y-%m-%d %H:%M:%S')}'",
+            f"timestamp < '{prior_end.strftime('%Y-%m-%d %H:%M:%S')}'",
+        ]
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        where_sql = cls._build_where_clause(
+            device_ips, severities, None, None, query_text, facilities,
+        )
+        prewhere_clause = " AND ".join(prewhere_parts)
+        select_cols, group_cols, _ = cls._build_agg_columns(group_by_fields, subnet_rollup)
+
+        query = f"""
+        SELECT {select_cols}, count() AS event_count
+        FROM syslogs
+        PREWHERE {prewhere_clause}
+        WHERE {where_sql}
+        GROUP BY {group_cols}
+        ORDER BY event_count DESC
+        LIMIT {int(limit)}
+        """
+        try:
+            rows = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"aggregate_prior_window failed: {e}")
+            return {}
+
+        # Normalise the key columns to (srcKey, dstKey, dstport) shape that
+        # callers can compare against the current window's rows.
+        out: Dict[Tuple, int] = {}
+        n = len(group_by_fields)
+        for r in rows:
+            key = tuple(r[i] if r[i] is not None else "" for i in range(n))
+            count = int(r[n] or 0)
+            out[key] = count
+        return out
+
+    @classmethod
     def get_log_stats_summary(
         cls,
         device_ips: Optional[List[str]] = None,

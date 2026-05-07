@@ -2676,6 +2676,89 @@
             height: 12px;
         }
 
+        /* ── Tier-1 aggregate enhancements ─────────────────────────── */
+        .anomaly-chip {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 44px; padding: 2px 6px; border-radius: 4px;
+            font-size: 10px; font-weight: 700; letter-spacing: .04em;
+            font-family: var(--font-mono);
+        }
+        .anomaly-new      { background:#0f766e; color:#a7f3d0; border:1px solid #14b8a6; }
+        .anomaly-spike    { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; animation: anomaly-pulse 1.6s ease-in-out infinite; }
+        .anomaly-growing  { background:#1e3a8a; color:#bfdbfe; border:1px solid #3b82f6; min-width:24px; }
+        .anomaly-shrinking{ background:#3f3f46; color:#d4d4d8; border:1px solid #6b7280; min-width:24px; }
+        .anomaly-gone     { background:#3f3f46; color:#a1a1aa; border:1px dashed #6b7280; opacity:.7; }
+        .anomaly-steady   { background:transparent; color:#475569; border:1px solid transparent; min-width:18px; }
+        @keyframes anomaly-pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.55); }
+            50%     { box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+        }
+        .anomaly-row-spike td { background: rgba(127,29,29,.08); }
+        .anomaly-row-new   td { background: rgba(15,118,110,.05); }
+        .anomaly-row-gone  td { opacity: .55; font-style: italic; }
+
+        .compare-banner {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem;
+            margin: 0 0 0.75rem 0; padding: 0.6rem 0.85rem;
+            background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b);
+            border-left: 3px solid #06b6d4;
+            border-radius: 6px;
+        }
+        .compare-banner-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.75rem; flex: 1 1 280px; }
+        .compare-banner-headline strong { color: var(--text, #e2e8f0); font-size: 0.88rem; }
+        .compare-banner-total { color: var(--text-muted, #94a3b8); font-size: 0.82rem; font-family: var(--font-mono); }
+        .compare-banner-total b { color: var(--text, #e2e8f0); font-weight: 600; }
+        .compare-banner-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .compare-banner-chips .anomaly-chip { font-size: 11px; padding: 2px 8px; min-width: auto; }
+
+        .event-count-prior {
+            background: var(--bg-elev-2, #1e293b); color: var(--text-muted, #94a3b8);
+        }
+        .delta-cell { font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+        .delta-up   { color: #fca5a5; }
+        .delta-down { color: #86efac; }
+        .delta-na   { color: var(--text-muted, #94a3b8); }
+
+        .row-actions { display: inline-flex; gap: 4px; }
+        .row-act {
+            display:inline-flex; align-items:center; justify-content:center;
+            width: 22px; height: 22px; border-radius: 4px;
+            font-size: 13px; line-height: 1; cursor: pointer;
+            background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b);
+            color: var(--text-muted, #94a3b8); text-decoration: none;
+        }
+        .row-act:hover { color: var(--text, #e2e8f0); border-color: #334155; transform: translateY(-1px); }
+        .row-act-learn:hover  { border-color:#06b6d4; color:#67e8f9; }
+        .row-act-lookup:hover { border-color:#3b82f6; color:#93c5fd; }
+        .row-act-block:hover  { border-color:#ef4444; color:#fca5a5; }
+
+        .live-mode-active #liveModeBtn { background:#7f1d1d; color:#fecaca; border-color:#ef4444; }
+        .live-mode-active #liveModeBtn::before { content:''; display:inline-block; width:6px; height:6px; border-radius:50%; background:#ef4444; margin-right:4px; animation: live-blink 1.2s linear infinite; }
+        @keyframes live-blink { 50% { opacity: .25; } }
+
+        /* Block-source modal */
+        .lm-modal-backdrop {
+            position: fixed; inset: 0; background: rgba(2,6,23,.7);
+            display: none; align-items: center; justify-content: center; z-index: 9999;
+        }
+        .lm-modal-backdrop.show { display:flex; }
+        .lm-modal {
+            width: min(520px, 92vw); background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b); border-radius: 10px;
+            padding: 1rem 1.25rem;
+        }
+        .lm-modal h3 { margin:0 0 .35rem 0; font-size:1rem; }
+        .lm-modal label { display:block; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted,#94a3b8); margin:.6rem 0 .25rem; }
+        .lm-modal textarea, .lm-modal input, .lm-modal select {
+            width:100%; padding:.45rem .55rem; background:var(--bg-base,#020617);
+            color:var(--text,#e2e8f0); border:1px solid var(--border-default,#1e293b); border-radius:6px;
+            font-family: var(--font-mono); font-size: 12px;
+        }
+        .lm-modal-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.85rem; }
+        .lm-modal-actions .btn { padding:.45rem .9rem; }
+
         .device-count {
             font-family: var(--font-mono);
             font-size: 12px;
@@ -3064,6 +3147,15 @@
                     Export FortiGate Policy
                 </button>
                 <span class="fg-selected-count" id="fgSelectedCount"></span>
+                <div style="width:1px;height:20px;background:var(--border-default);margin:0 4px;"></div>
+                <button type="button" class="group-pill {% if is_compare_mode %}active{% endif %}" id="compareBtn" onclick="toggleCompareMode()" title="Compare event counts to the immediately preceding window of equal length">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M3 18l6-6-4-4M21 6l-6 6 4 4"/></svg>
+                    Compare vs Prior
+                </button>
+                <button type="button" class="group-pill" id="liveModeBtn" onclick="toggleLiveMode()" title="Auto-refresh aggregate every 30s (only enabled for windows ≤ 1 hour)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+                    <span id="liveModeLabel">Go Live</span>
+                </button>
             </div>
             {% endif %}
 
@@ -3235,28 +3327,74 @@
                         {% endif %}
                         {% else %}
                         {# ===== AGGREGATE TABLE ===== #}
+                        {% if is_compare_mode and agg_rows %}
+                        {% set _ac = anomaly_counts or {} %}
+                        <div class="compare-banner">
+                            <div class="compare-banner-headline">
+                                <strong>Compare vs prior window</strong>
+                                <span class="compare-banner-total">
+                                    Current: <b>{{ "{:,}".format(current_window_total or 0) }}</b>
+                                    · Prior: <b>{{ "{:,}".format(prior_window_total or 0) }}</b>
+                                    {% if (prior_window_total or 0) > 0 %}
+                                        {% set _delta = ((current_window_total or 0) - (prior_window_total or 0)) / (prior_window_total or 1) * 100.0 %}
+                                        · Δ
+                                        <b class="{% if _delta >= 0 %}delta-up{% else %}delta-down{% endif %}">
+                                            {% if _delta >= 0 %}+{% endif %}{{ "%.1f"|format(_delta) }}%
+                                        </b>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="compare-banner-chips">
+                                {% if _ac.get('NEW', 0) %}<span class="anomaly-chip anomaly-new">NEW · {{ _ac.NEW }}</span>{% endif %}
+                                {% if _ac.get('SPIKE', 0) %}<span class="anomaly-chip anomaly-spike">SPIKE · {{ _ac.SPIKE }}</span>{% endif %}
+                                {% if _ac.get('GROWING', 0) %}<span class="anomaly-chip anomaly-growing" style="min-width:auto;padding:2px 8px;">↑ GROWING · {{ _ac.GROWING }}</span>{% endif %}
+                                {% if _ac.get('SHRINKING', 0) %}<span class="anomaly-chip anomaly-shrinking" style="min-width:auto;padding:2px 8px;">↓ SHRINKING · {{ _ac.SHRINKING }}</span>{% endif %}
+                                {% if _ac.get('GONE', 0) %}<span class="anomaly-chip anomaly-gone">GONE · {{ _ac.GONE }}</span>{% endif %}
+                                {% if _ac.get('STEADY', 0) %}<span class="anomaly-chip anomaly-steady" style="min-width:auto;padding:2px 8px;">STEADY · {{ _ac.STEADY }}</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
                         {% if agg_rows %}
                         <table class="agg-table">
                             <thead>
                                 <tr>
                                     <th style="width:32px;text-align:center;"><input type="checkbox" class="agg-check" id="aggSelectAll" onchange="toggleAllAggRows(this)" title="Select All"></th>
+                                    <th title="Anomaly state vs the immediately preceding window of equal length">!</th>
                                     {% if 'srcip' in group_fields %}<th>Source IP</th>{% endif %}
                                     {% if 'dstip' in group_fields %}<th>Dest IP</th>{% endif %}
                                     {% if 'dstport' in group_fields %}<th>Dst Port</th>{% endif %}
                                     <th>Events</th>
+                                    {% if is_compare_mode %}<th title="Events in the prior window of equal length">Prior</th><th title="Change vs prior window">Δ</th>{% endif %}
                                     <th>First Seen</th>
                                     <th>Last Seen</th>
                                     <th>Action</th>
                                     <th>Policy</th>
                                     <th>Application</th>
                                     <th>Devices</th>
+                                    <th>Actions</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in agg_rows %}
-                                <tr class="agg-row" data-agg-idx="{{ loop.index0 }}">
+                                {% set _state = row.anomaly_state or 'STEADY' %}
+                                <tr class="agg-row anomaly-row-{{ _state | lower }}" data-agg-idx="{{ loop.index0 }}" data-anomaly="{{ _state }}">
                                     <td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="{{ loop.index0 }}" onchange="updateAggSelection()"></td>
+                                    <td>
+                                        {% if _state == 'NEW' %}
+                                            <span class="anomaly-chip anomaly-new" title="Not seen in prior window">NEW</span>
+                                        {% elif _state == 'SPIKE' %}
+                                            <span class="anomaly-chip anomaly-spike" title="≥5× prior window count and well above baseline">SPIKE</span>
+                                        {% elif _state == 'GROWING' and is_compare_mode %}
+                                            <span class="anomaly-chip anomaly-growing" title="Rising vs prior window">↑</span>
+                                        {% elif _state == 'SHRINKING' and is_compare_mode %}
+                                            <span class="anomaly-chip anomaly-shrinking" title="Falling vs prior window">↓</span>
+                                        {% elif _state == 'GONE' %}
+                                            <span class="anomaly-chip anomaly-gone" title="Present in prior window, absent now">GONE</span>
+                                        {% else %}
+                                            <span class="anomaly-chip anomaly-steady" title="No significant change">·</span>
+                                        {% endif %}
+                                    </td>
                                     {% if 'srcip' in group_fields %}
                                     {% if is_subnet_rollup %}
                                     <td>
@@ -3282,6 +3420,18 @@
                                     <td><span class="port-value">{{ row.dstport or '--' }}</span></td>
                                     {% endif %}
                                     <td><span class="event-count-badge">{{ "{:,}".format(row.event_count) }}</span></td>
+                                    {% if is_compare_mode %}
+                                    <td><span class="event-count-badge event-count-prior">{{ "{:,}".format(row.prior_count or 0) }}</span></td>
+                                    <td>
+                                        {% if row.delta_pct is none %}
+                                            <span class="delta-cell delta-na">—</span>
+                                        {% elif row.delta_pct >= 0 %}
+                                            <span class="delta-cell delta-up">+{{ row.delta_pct }}%</span>
+                                        {% else %}
+                                            <span class="delta-cell delta-down">{{ row.delta_pct }}%</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endif %}
                                     <td><span class="agg-timestamp">{{ row.first_seen.strftime('%Y-%m-%d %H:%M:%S') if row.first_seen else '--' }}</span></td>
                                     <td><span class="agg-timestamp">{{ row.last_seen.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen else '--' }}</span></td>
                                     <td>
@@ -3297,6 +3447,31 @@
                                     <td><span class="agg-mono">{{ row.top_policy or '--' }}</span></td>
                                     <td><span class="agg-mono">{{ row.top_app or '--' }}</span></td>
                                     <td><span class="device-count">{{ row.device_count }}</span></td>
+                                    <td>
+                                        {% set act_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
+                                        <div class="row-actions">
+                                            {% if current_device_id and row.top_policy %}
+                                            <a class="row-act row-act-learn"
+                                               href="{{ url_for('device_learning_mode', device_id=current_device_id) }}?policy_name={{ row.top_policy | urlencode }}"
+                                               title="Learning Mode — suggest narrower rules from real traffic for &quot;{{ row.top_policy }}&quot;">🎯</a>
+                                            {% endif %}
+                                            {% if row.dstip and row.dstport %}
+                                            <a class="row-act row-act-lookup"
+                                               href="/policy-lookup/?dstip={{ row.dstip }}&dstport={{ row.dstport }}{% if act_srcip and not is_subnet_rollup %}&srcip={{ act_srcip }}{% endif %}&time_range={{ current_time_range }}"
+                                               title="Policy Lookup — show which rule(s) cover this flow">🔍</a>
+                                            {% endif %}
+                                            {% set src_ips_for_block = (row.sample_ips if is_subnet_rollup and row.sample_ips else ([row.srcip] if row.srcip else [])) %}
+                                            {% if src_ips_for_block %}
+                                            <button type="button" class="row-act row-act-block"
+                                                    data-src-ips="{{ src_ips_for_block | join(',') }}"
+                                                    data-src-subnet="{{ row.src_subnet or '' }}"
+                                                    data-dstip="{{ row.dstip or '' }}"
+                                                    data-dstport="{{ row.dstport or '' }}"
+                                                    onclick="openBlockSourceDialog(this)"
+                                                    title="Add source(s) to a Block EDL">🚫</button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
                                     <td>
                                         {% set drill_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
                                         <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
@@ -3518,6 +3693,7 @@
     <input type="hidden" name="view" id="hiddenView" value="{{ current_view or '' }}">
     <input type="hidden" name="group_by" id="hiddenGroupBy" value="{{ current_group_by or 'srcip,dstip,dstport' }}">
     <input type="hidden" name="subnet_rollup" id="hiddenSubnetRollup" value="{{ '1' if is_subnet_rollup else '' }}">
+    <input type="hidden" name="compare" id="hiddenCompare" value="{{ '1' if is_compare_mode else '' }}">
     </form>
 
     <script>
@@ -3904,6 +4080,164 @@
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
+        }
+
+        // Toggle compare-vs-prior-window mode
+        function toggleCompareMode() {
+            const input = document.getElementById('hiddenCompare');
+            if (!input) return;
+            input.value = input.value === '1' ? '' : '1';
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Live mode — auto-refresh aggregate every 30s for short windows.
+        // Persists across reloads via sessionStorage; restores scroll.
+        const LIVE_KEY = 'zentryc_logs_live_mode';
+        const LIVE_SCROLL_KEY = 'zentryc_logs_live_scroll';
+        let _liveTimer = null;
+        function liveModeAllowed() {
+            const tr = (document.getElementById('hiddenTimeRange') || {}).value || '';
+            // Allow ≤ 1h windows. Anything longer makes a 30s refresh ~useless.
+            return /^(\d+m|1h)$/.test(tr);
+        }
+        function setLiveMode(on) {
+            const btn = document.getElementById('liveModeBtn');
+            const lbl = document.getElementById('liveModeLabel');
+            if (on && !liveModeAllowed()) {
+                alert('Live mode is only enabled for time ranges ≤ 1 hour. Pick 1m / 5m / 1h first.');
+                return;
+            }
+            if (on) {
+                sessionStorage.setItem(LIVE_KEY, '1');
+                document.body.classList.add('live-mode-active');
+                if (lbl) lbl.textContent = 'Live (30s)';
+                _liveTimer = setInterval(() => {
+                    sessionStorage.setItem(LIVE_SCROLL_KEY,
+                        String(window.scrollY || document.documentElement.scrollTop || 0));
+                    window.location.reload();
+                }, 30000);
+            } else {
+                sessionStorage.removeItem(LIVE_KEY);
+                document.body.classList.remove('live-mode-active');
+                if (lbl) lbl.textContent = 'Go Live';
+                if (_liveTimer) clearInterval(_liveTimer);
+                _liveTimer = null;
+            }
+        }
+        function toggleLiveMode() {
+            setLiveMode(sessionStorage.getItem(LIVE_KEY) !== '1');
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            // Restore previous scroll if we just auto-reloaded
+            const sy = sessionStorage.getItem(LIVE_SCROLL_KEY);
+            if (sy) {
+                window.scrollTo(0, parseInt(sy, 10) || 0);
+                sessionStorage.removeItem(LIVE_SCROLL_KEY);
+            }
+            if (sessionStorage.getItem(LIVE_KEY) === '1' && liveModeAllowed()) {
+                setLiveMode(true);
+            } else if (sessionStorage.getItem(LIVE_KEY) === '1') {
+                // Window changed away from a supported range — auto-disable.
+                sessionStorage.removeItem(LIVE_KEY);
+            }
+        });
+
+        // ── Block-source dialog ─────────────────────────────────────
+        function openBlockSourceDialog(btn) {
+            const ips = (btn.dataset.srcIps || '').split(',').map(s => s.trim()).filter(Boolean);
+            const subnet = btn.dataset.srcSubnet || '';
+            const dstip = btn.dataset.dstip || '';
+            const dstport = btn.dataset.dstport || '';
+            const desc = `auto-blocked from logs aggregate (→ ${dstip}:${dstport})`;
+            const initial = subnet ? [subnet] : ips;
+
+            let modal = document.getElementById('blockSrcModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'blockSrcModal';
+                modal.className = 'lm-modal-backdrop';
+                modal.innerHTML = `
+                    <div class="lm-modal" role="dialog" aria-modal="true">
+                        <h3>Add source(s) to a Block EDL</h3>
+                        <div style="font-size:.82rem;color:var(--text-muted,#94a3b8);">
+                            Select an EDL list (type IP) and review the values.
+                        </div>
+                        <label for="blockEdlSelect">EDL list</label>
+                        <select id="blockEdlSelect"><option value="">Loading…</option></select>
+                        <label for="blockEdlValues">Values</label>
+                        <textarea id="blockEdlValues" rows="6"></textarea>
+                        <label for="blockEdlDesc">Description (optional)</label>
+                        <input type="text" id="blockEdlDesc">
+                        <div id="blockEdlMsg" style="margin-top:.5rem;font-size:.82rem;"></div>
+                        <div class="lm-modal-actions">
+                            <button class="btn btn-secondary" type="button" onclick="closeBlockSourceDialog()">Cancel</button>
+                            <button class="btn btn-primary" type="button" id="blockEdlSubmit">Add to EDL</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeBlockSourceDialog();
+                });
+            }
+
+            modal.querySelector('#blockEdlValues').value = initial.join('\n');
+            modal.querySelector('#blockEdlDesc').value = desc;
+            modal.querySelector('#blockEdlMsg').textContent = '';
+            modal.classList.add('show');
+
+            // Load IP-typed EDLs
+            const sel = modal.querySelector('#blockEdlSelect');
+            sel.innerHTML = '<option value="">Loading…</option>';
+            fetch('/api/edl/?list_type=IP', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(lists => {
+                    if (!Array.isArray(lists) || !lists.length) {
+                        sel.innerHTML = '<option value="">No IP EDL lists — create one in EDL section</option>';
+                        return;
+                    }
+                    sel.innerHTML = lists.map(l =>
+                        `<option value="${l.id}">${l.name} (${l.active_entry_count} active)</option>`
+                    ).join('');
+                })
+                .catch(e => { sel.innerHTML = `<option value="">Failed: ${e}</option>`; });
+
+            modal.querySelector('#blockEdlSubmit').onclick = async () => {
+                const edlId = sel.value;
+                const values = modal.querySelector('#blockEdlValues').value
+                    .split('\n').map(s => s.trim()).filter(Boolean);
+                const description = modal.querySelector('#blockEdlDesc').value.trim();
+                const msg = modal.querySelector('#blockEdlMsg');
+                if (!edlId) { msg.textContent = 'Pick an EDL list.'; msg.style.color = '#fca5a5'; return; }
+                if (!values.length) { msg.textContent = 'No values to add.'; msg.style.color = '#fca5a5'; return; }
+                msg.textContent = 'Adding…'; msg.style.color = '';
+                try {
+                    const headers = { 'Content-Type': 'application/json' };
+                    // CSRF middleware: base.html patches fetch() to inject the token,
+                    // so no manual header here. Pass JSON body directly.
+                    const r = await fetch(`/api/edl/${edlId}/entries/bulk-add/`, {
+                        method: 'POST', credentials: 'same-origin', headers,
+                        body: JSON.stringify({ values, description }),
+                    });
+                    const j = await r.json();
+                    if (!r.ok || !j.success) {
+                        msg.textContent = `Failed: ${j.error || r.status}`;
+                        msg.style.color = '#fca5a5';
+                        return;
+                    }
+                    msg.style.color = '#86efac';
+                    msg.textContent = `Added ${j.added}, skipped ${j.skipped_duplicate} duplicate(s), ${(j.skipped_invalid||[]).length} invalid.`;
+                    setTimeout(closeBlockSourceDialog, 1400);
+                } catch (e) {
+                    msg.textContent = `Error: ${e.message || e}`;
+                    msg.style.color = '#fca5a5';
+                }
+            };
+        }
+        function closeBlockSourceDialog() {
+            const m = document.getElementById('blockSrcModal');
+            if (m) m.classList.remove('show');
         }
 
         // Toggle group-by field (multi-select, at least one must remain)
