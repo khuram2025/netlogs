@@ -198,6 +198,20 @@
     .udl-sev-informational { background: rgba(59,130,246,.15); color: #60a5fa; }
     .udl-method { font-family: 'JetBrains Mono', monospace; font-size: .7rem; font-weight: 600; color: var(--udl-success); }
     .udl-vendor { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    /* New cell styles for cleaner URL/DNS log rows */
+    .udl-cell-user { line-height: 1.18; min-width: 0; }
+    .udl-cell-user b { display: block; color: var(--udl-purple); font-weight: 600; font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+    .udl-cell-user span { display: block; color: var(--udl-dim); font-size: .7rem; font-family: 'JetBrains Mono', monospace; }
+    .udl-cell-dom { max-width: 480px; }
+    .udl-cell-host { font-family: 'JetBrains Mono', monospace; font-size: .79rem; font-weight: 600; color: #93c5fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .udl-cell-path { font-family: 'JetBrains Mono', monospace; font-size: .7rem; color: var(--udl-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .udl-cell-cat { display: inline-block; padding: 1px 8px; border-radius: 9999px; background: rgba(148,163,184,.07); color: var(--udl-text); font-size: .72rem; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+    .udl-cell-bytes { font-family: 'JetBrains Mono', monospace; font-size: .73rem; color: #c4b5fd; }
+    .udl-table .mono { font-family: 'JetBrains Mono', monospace; font-size: .73rem; }
+    .udl-table .r { text-align: right; }
+    /* zebra striping for readability */
+    .udl-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
+    .udl-table tbody tr.udl-expanded td { background: rgba(59,130,246,.08); }
     .udl-vendor-pa { background: rgba(59,130,246,.15); color: #60a5fa; }
     .udl-vendor-fg { background: rgba(34,197,94,.15); color: #4ade80; }
     .udl-hostname-sub { display: block; font-size: .68rem; color: var(--udl-warning); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
@@ -403,6 +417,23 @@
         .udl-sidebar { display: none; }
         .udl-dd-right { display: none; }
     }
+
+    /* ---- TIMELINE STRIP ---- */
+    .udl-tl-strip {
+        background: var(--udl-card); border: 1px solid var(--udl-border);
+        border-radius: 10px; margin-bottom: 1rem; overflow: hidden;
+        animation: udl-fadeIn .5s ease-out .22s both;
+    }
+    .udl-tl-hdr {
+        display:flex; justify-content:space-between; align-items:center;
+        padding: .55rem .9rem; border-bottom: 1px solid var(--udl-border);
+    }
+    .udl-tl-title { font-size:.74rem; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.05em; display:flex; align-items:center; gap:.4rem; }
+    .udl-tl-title svg { width:14px; height:14px; stroke: var(--udl-primary); fill:none; stroke-width:2; }
+    .udl-tl-legend { display:flex; gap:.85rem; font-size:.7rem; color:var(--udl-muted); }
+    .udl-tl-legend span { display:inline-flex; align-items:center; gap:.3rem; }
+    .udl-tl-dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
+    .udl-tl-chart { height: 110px; }
 </style>
 {% endblock %}
 
@@ -495,6 +526,23 @@
         </label>
     </div>
 
+    <!-- TIMELINE STRIP -->
+    <div class="udl-tl-strip">
+        <div class="udl-tl-hdr">
+            <div class="udl-tl-title">
+                <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                <span id="udl-tl-title-text">URL Activity Timeline</span>
+            </div>
+            <div class="udl-tl-legend">
+                <span><span class="udl-tl-dot" style="background:#22c55e"></span>Allowed</span>
+                <span id="udl-tl-leg-alert"><span class="udl-tl-dot" style="background:#f59e0b"></span>Alerted</span>
+                <span><span class="udl-tl-dot" style="background:#ef4444"></span>Blocked</span>
+                <span id="udl-tl-leg-sink" style="display:none"><span class="udl-tl-dot" style="background:#a78bfa"></span>Sinkholed</span>
+            </div>
+        </div>
+        <div id="udl-tl-chart" class="udl-tl-chart"></div>
+    </div>
+
     <!-- LAYOUT: TABLE + SIDEBAR -->
     <div class="udl-layout">
         <div class="udl-main">
@@ -511,19 +559,18 @@
                     <table class="udl-table">
                         <thead>
                             <tr>
-                                <th>Time</th>
-                                <th>Vendor</th>
-                                <th>Source</th>
-                                <th>User</th>
-                                <th>URL / Domain</th>
-                                <th>Category</th>
-                                <th>Action</th>
-                                <th>Method</th>
-                                <th>Dest</th>
+                                <th style="width:118px">Time</th>
+                                <th style="width:38px"></th>
+                                <th style="width:170px">User</th>
+                                <th>Domain &amp; Path</th>
+                                <th style="width:160px">Category</th>
+                                <th style="width:90px">Action</th>
+                                <th style="width:60px">Method</th>
+                                <th style="width:90px" class="r">Bytes</th>
                             </tr>
                         </thead>
                         <tbody id="url-table-body">
-                            <tr><td colspan="9"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading URL logs...</div></div></td></tr>
+                            <tr><td colspan="8"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading URL logs...</div></div></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -595,6 +642,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
 <script>
 (function() {
     // ============ STATE ============
@@ -604,6 +652,96 @@
     let urlTotal = 0, dnsTotal = 0;
     let expandedRow = null;
     let urlStats = null, dnsStats = null;
+    let tlChart = null;
+
+    // ============ TIMELINE CHART ============
+    function tlBucketLabel(b) {
+        const d = new Date(b);
+        const h = String(d.getHours()).padStart(2,'0');
+        const m = String(d.getMinutes()).padStart(2,'0');
+        return `${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${h}:${m}`;
+    }
+    function ensureTlChart() {
+        if (tlChart) return tlChart;
+        const el = document.getElementById('udl-tl-chart');
+        if (!el || typeof echarts === 'undefined') return null;
+        tlChart = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        window.addEventListener('resize', () => tlChart && tlChart.resize());
+        return tlChart;
+    }
+    async function loadTimeline() {
+        const c = ensureTlChart();
+        if (!c) return;
+        const params = new URLSearchParams({ hours: getHours() });
+        if (currentTab === 'url') {
+            const f = getCurrentFilters();
+            if (f.vendor) params.set('vendor', f.vendor);
+            if (f.category) params.set('category', f.category);
+            if (f.action) params.set('action', f.action);
+            if (f.search) params.set('search', f.search);
+            if (document.getElementById('filter-clean').checked) params.set('clean', 'true');
+            try {
+                const r = await fetch('/api/threats/url-logs/timeline?' + params);
+                const j = await r.json();
+                renderTl(j.timeline||[], false);
+            } catch(e) { c.clear(); }
+        } else {
+            const f = getCurrentFilters();
+            if (f.vendor) params.set('vendor', f.vendor);
+            const sev = document.getElementById('filter-severity').value;
+            if (sev) params.set('severity', sev);
+            if (f.action) params.set('action', f.action);
+            if (f.search) params.set('search', f.search);
+            try {
+                const r = await fetch('/api/threats/dns-logs/timeline?' + params);
+                const j = await r.json();
+                renderTl(j.timeline||[], true);
+            } catch(e) { c.clear(); }
+        }
+    }
+    function renderTl(rows, isDns) {
+        const c = ensureTlChart();
+        if (!c) return;
+        const x = rows.map(r => tlBucketLabel(r.bucket));
+        const allowed = rows.map(r => r.allowed||0);
+        const blocked = rows.map(r => r.blocked||0);
+        const series = [
+            { name:'Allowed', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
+              data:allowed, itemStyle:{color:'#22c55e'}, lineStyle:{width:1.2} }
+        ];
+        if (!isDns) {
+            const alerted = rows.map(r => r.alerted||0);
+            series.push({ name:'Alerted', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
+                data:alerted, itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.2} });
+        } else {
+            const sinkholed = rows.map(r => r.sinkholed||0);
+            if (sinkholed.some(v=>v>0)) {
+                series.push({ name:'Sinkholed', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
+                    data:sinkholed, itemStyle:{color:'#a78bfa'}, lineStyle:{width:1.2} });
+            }
+        }
+        series.push({ name:'Blocked', type:'line', stack:'t', areaStyle:{opacity:.65}, symbol:'none', smooth:.25,
+            data:blocked, itemStyle:{color:'#ef4444'}, lineStyle:{width:1.2} });
+        c.setOption({
+            tooltip:{ trigger:'axis', axisPointer:{type:'cross', label:{backgroundColor:'#1e293b'}},
+                formatter: p => {
+                    let html = `<b>${p[0].axisValue}</b><br/>`;
+                    p.forEach(s => html += `${s.marker} ${s.seriesName}: <b>${(s.value||0).toLocaleString()}</b><br/>`);
+                    return html;
+                }
+            },
+            grid:{ left:40, right:8, top:6, bottom:18 },
+            xAxis:{ type:'category', data:x, boundaryGap:false,
+                axisLabel:{fontSize:9, color:'#94a3b8', interval:Math.max(0, Math.floor(x.length/8))} },
+            yAxis:{ type:'value', axisLabel:{fontSize:9, color:'#64748b', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v},
+                splitLine:{lineStyle:{color:'#1a2238'}} },
+            series: series
+        }, true);
+        // toggle DNS legend
+        document.getElementById('udl-tl-leg-alert').style.display = isDns?'none':'';
+        document.getElementById('udl-tl-leg-sink').style.display = isDns?'':'none';
+        document.getElementById('udl-tl-title-text').textContent = isDns?'DNS Activity Timeline':'URL Activity Timeline';
+    }
 
     function getHours() { return parseInt(document.getElementById('udl-time-range').value) || 24; }
 
@@ -678,6 +816,9 @@
         populateActionFilter(tab);
         renderStats();
         renderSidebar();
+        loadTimeline();
+        // Reload the active tab's stats so hero/sidebar/timeline all honour current search
+        if (tab === 'url') loadUrlStats(); else loadDnsStats();
     };
 
     function populateActionFilter(tab) {
@@ -861,7 +1002,7 @@
             document.getElementById('url-table-count').innerHTML = `Showing <strong>${fmtNum(data.events.length)}</strong> of <strong>${fmtNum(urlTotal)}</strong>`;
 
             if (!data.events.length) {
-                body.innerHTML = '<tr><td colspan="9"><div class="udl-empty"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><div>No URL logs found for the selected filters</div></div></td></tr>';
+                body.innerHTML = '<tr><td colspan="8"><div class="udl-empty"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><div>No URL logs found for the selected filters</div></div></td></tr>';
                 renderUrlPagination();
                 return;
             }
@@ -870,24 +1011,42 @@
             expandedRow = null;
             data.events.forEach((e, i) => {
                 const tr = document.createElement('tr');
-                const hostnameHtml = e.hostname ? `<span class="udl-hostname-sub" title="${esc(e.hostname)}">${esc(e.hostname)}</span>` : '';
+                // Path = URL minus scheme + host (keep "/" if root)
+                let path = '';
+                try {
+                    if (e.url) {
+                        const u = new URL(e.url.startsWith('http')? e.url : 'http://x/'+e.url);
+                        path = (u.pathname || '/') + (u.search || '');
+                    }
+                } catch(_) { path = e.url || ''; }
+                if (path === '/' && !e.url.endsWith('/')) path = '';
+                const host = e.hostname || (function(){ try { return new URL(e.url).host; } catch(_) { return ''; } })();
+                const userBlock = e.src_user
+                    ? `<div class="udl-cell-user"><b>${esc(e.src_user)}</b><span>${esc(e.src_ip)}</span></div>`
+                    : `<div class="udl-cell-user"><b style="color:var(--udl-cyan)">${esc(e.src_ip)}</b><span>—</span></div>`;
+                const totalBytes = (e.sent_bytes||0)+(e.recv_bytes||0);
+                const bytesCell = totalBytes
+                    ? `<span class="udl-cell-bytes" title="↑ ${fmtBytes(e.sent_bytes)}  ↓ ${fmtBytes(e.recv_bytes)}">${fmtBytes(totalBytes)}</span>`
+                    : `<span style="color:var(--udl-dim)">—</span>`;
                 tr.innerHTML = `
                     <td class="udl-ts">${fmtTime(e.timestamp)}</td>
                     <td>${vendorBadge(e.vendor)}</td>
-                    <td class="udl-ip">${esc(e.src_ip)}</td>
-                    <td class="udl-user-cell">${esc(e.src_user)}</td>
-                    <td class="udl-url-cell" title="${esc(e.url)}">${esc(truncUrl(e.url, 60))}${hostnameHtml}</td>
-                    <td>${esc(e.category)}</td>
+                    <td>${userBlock}</td>
+                    <td class="udl-cell-dom" title="${esc(e.url)}">
+                        <div class="udl-cell-host">${esc(host)||'<span style="color:var(--udl-dim)">—</span>'}</div>
+                        ${path ? `<div class="udl-cell-path">${esc(truncUrl(path,90))}</div>` : ''}
+                    </td>
+                    <td><span class="udl-cell-cat">${esc(e.category||'—')}</span></td>
                     <td>${actionBadge(e.action)}</td>
-                    <td><span class="udl-method">${esc(e.http_method)}</span></td>
-                    <td class="udl-ip">${esc(e.dest_ip)}</td>
+                    <td><span class="udl-method">${esc(e.http_method||'—')}</span></td>
+                    <td class="r mono">${bytesCell}</td>
                 `;
                 tr.addEventListener('click', () => toggleUrlDetail(tr, e));
                 body.appendChild(tr);
             });
             renderUrlPagination();
         } catch(err) {
-            body.innerHTML = '<tr><td colspan="9"><div class="udl-empty" style="color:var(--udl-danger)">Error loading URL logs</div></td></tr>';
+            body.innerHTML = '<tr><td colspan="8"><div class="udl-empty" style="color:var(--udl-danger)">Error loading URL logs</div></td></tr>';
         }
     }
 
@@ -903,7 +1062,7 @@
         tr.classList.add('udl-expanded');
         const detail = document.createElement('tr');
         detail.className = 'udl-detail-row';
-        detail.innerHTML = `<td colspan="9"><div class="udl-detail-content">
+        detail.innerHTML = `<td colspan="8"><div class="udl-detail-content">
             <div class="udl-detail-group">
                 <h4>Request Details</h4>
                 <div class="udl-detail-field"><span class="lbl">Vendor</span><span class="val">${vendorBadge(e.vendor)} ${esc(e.vendor)}</span></div>
@@ -1130,7 +1289,16 @@
 
     async function loadDnsStats() {
         try {
-            const resp = await fetch('/api/threats/dns-logs/stats?hours=' + getHours());
+            const sp = new URLSearchParams({ hours: getHours() });
+            const vendor = document.getElementById('filter-vendor').value;
+            const sev = document.getElementById('filter-severity').value;
+            const act = document.getElementById('filter-action').value;
+            const q = document.getElementById('filter-search').value.trim();
+            if (vendor) sp.set('vendor', vendor);
+            if (sev) sp.set('severity', sev);
+            if (act) sp.set('action', act);
+            if (q) sp.set('search', q);
+            const resp = await fetch('/api/threats/dns-logs/stats?' + sp);
             dnsStats = await resp.json();
         } catch(e) { dnsStats = { summary: {} }; }
         if (currentTab === 'dns') { renderStats(); renderSidebar(); }
@@ -1158,6 +1326,7 @@
         urlPage = 0; dnsPage = 0;
         renderStats(); renderSidebar();
         loadUrlStats(); loadDnsStats(); loadNoiseCount();
+        loadTimeline();
         if (currentTab === 'url') loadUrlLogs();
         else loadDnsLogs();
     };
@@ -1167,8 +1336,12 @@
             urlPage = 0;
             loadUrlLogs();
             loadUrlStats();  // reload stats/sidebar with current vendor filter
+        } else {
+            dnsPage = 0;
+            loadDnsLogs();
+            loadDnsStats();  // reload stats/sidebar with current filter (was missing)
         }
-        else { dnsPage = 0; loadDnsLogs(); }
+        loadTimeline();
     };
 
     window.resetFilters = function() {
@@ -1513,6 +1686,7 @@
     loadNoiseCount();
     loadUrlLogs();
     loadDnsLogs(); // Pre-load DNS count for tab badge
+    loadTimeline();
 
 })();
 </script>

@@ -168,6 +168,16 @@ async def api_summary(hours: int = Query(24, ge=1, le=720)):
 
 # ── Top Categories ───────────────────────────────────────────────────
 
+# Filter clause used everywhere we read url_category. Excludes garbage values
+# from truncated UDP syslog (leading `"`, length < 3) so dashboards and
+# dropdowns only show real categories.
+VALID_CAT = (
+    "url_category != '' "
+    "AND NOT startsWith(url_category, '\"') "
+    "AND length(url_category) >= 3"
+)
+
+
 @router.get("/api/url-analytics/categories",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_categories(hours: int = Query(24, ge=1, le=720), limit: int = Query(20, ge=5, le=50)):
@@ -180,7 +190,7 @@ async def api_categories(hours: int = Query(24, ge=1, le=720), limit: int = Quer
                sum(sent_bytes + recv_bytes) as bandwidth,
                countIf(action IN {BLOCKED_ACTIONS}) as blocked
         FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND url_category != '' {sc}
+        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {VALID_CAT} {sc}
         GROUP BY url_category ORDER BY requests DESC LIMIT {limit}
         """
         rows = list(client.query(q).named_results())
@@ -216,7 +226,7 @@ async def api_hostnames(hours: int = Query(24, ge=1, le=720), limit: int = Query
         SELECT hostname, count() as requests,
                uniqExact(src_ip) as users,
                sum(sent_bytes + recv_bytes) as bandwidth,
-               any(url_category) as category
+               any(if({VALID_CAT}, url_category, '')) as category
         FROM url_logs
         WHERE timestamp > now() - INTERVAL {hours} HOUR AND hostname != '' {sc}
         GROUP BY hostname ORDER BY requests DESC LIMIT {limit}
@@ -376,7 +386,7 @@ async def api_blocked(hours: int = Query(24, ge=1, le=720)):
 
         # Top blocked hostnames
         host_q = f"""
-        SELECT hostname, any(url_category) as category,
+        SELECT hostname, any(if({VALID_CAT}, url_category, '')) as category,
                count() as blocked_count,
                uniqExact(src_ip) as users_blocked
         FROM url_logs
@@ -392,7 +402,7 @@ async def api_blocked(hours: int = Query(24, ge=1, le=720)):
         cat_q = f"""
         SELECT url_category, count() as cnt, uniqExact(src_ip) as users
         FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {blk} AND url_category != '' {sc}
+        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {blk} AND {VALID_CAT} {sc}
         GROUP BY url_category ORDER BY cnt DESC LIMIT 10
         """
         cats = [{"category": r["url_category"], "count": _safe(r["cnt"]),
@@ -466,3 +476,266 @@ async def api_bandwidth(hours: int = Query(24, ge=1, le=720), limit: int = Query
     except Exception as e:
         logger.error(f"Bandwidth error: {e}")
         return JSONResponse({"success": True, "by_user": [], "by_hostname": []})
+
+
+# ── Timeline (hourly buckets) ────────────────────────────────────────
+
+@router.get("/api/url-analytics/timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_timeline(hours: int = Query(24, ge=1, le=720)):
+    """Hourly time-series with action breakdown + bandwidth, for area chart."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        # Bucket size: 5min if ≤6h, 1h if ≤7d, 1d if >7d
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+            bucket_size = "5m"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+            bucket_size = "1h"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+            bucket_size = "1d"
+        q = f"""
+        SELECT {bucket_sql} as bucket,
+               count() as total,
+               countIf(action IN {BLOCKED_ACTIONS}) as blocked,
+               countIf(action IN ('alert','warn','warning')) as alerted,
+               countIf(action IN ('allow','passthrough','log','pass','accept')) as allowed,
+               sum(recv_bytes) as recv,
+               sum(sent_bytes) as sent,
+               uniqExact(if(src_user != '', src_user, src_ip)) as users
+        FROM url_logs
+        WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+        GROUP BY bucket
+        ORDER BY bucket ASC
+        """
+        rows = list(client.query(q).named_results())
+        return JSONResponse({
+            "success": True, "bucket_size": bucket_size,
+            "timeline": [{
+                "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+                "total": _safe(r["total"]),
+                "blocked": _safe(r["blocked"]),
+                "alerted": _safe(r["alerted"]),
+                "allowed": _safe(r["allowed"]),
+                "recv": _safe(r["recv"]),
+                "sent": _safe(r["sent"]),
+                "users": _safe(r["users"]),
+            } for r in rows]
+        })
+    except Exception as e:
+        logger.error(f"Timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": [], "bucket_size": "1h"})
+
+
+# ── Actions breakdown ───────────────────────────────────────────────
+
+@router.get("/api/url-analytics/actions",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_actions(hours: int = Query(24, ge=1, le=720)):
+    """Action distribution + HTTP method distribution + content type distribution."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+
+        act_q = f"""
+        SELECT action, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND action != '' {sc}
+        GROUP BY action ORDER BY cnt DESC
+        """
+        actions = [{"action": r["action"], "count": _safe(r["cnt"])}
+                   for r in client.query(act_q).named_results()]
+
+        mth_q = f"""
+        SELECT http_method as method, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND http_method != '' {sc}
+        GROUP BY http_method ORDER BY cnt DESC LIMIT 10
+        """
+        methods = [{"method": r["method"], "count": _safe(r["cnt"])}
+                   for r in client.query(mth_q).named_results()]
+
+        # Vendor breakdown
+        vnd_q = f"""
+        SELECT vendor, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND vendor != '' {sc}
+        GROUP BY vendor ORDER BY cnt DESC
+        """
+        vendors = [{"vendor": r["vendor"], "count": _safe(r["cnt"])}
+                   for r in client.query(vnd_q).named_results()]
+
+        return JSONResponse({"success": True, "actions": actions, "methods": methods, "vendors": vendors})
+    except Exception as e:
+        logger.error(f"Actions error: {e}")
+        return JSONResponse({"success": True, "actions": [], "methods": [], "vendors": []})
+
+
+# ── Countries ───────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/countries",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_countries(hours: int = Query(24, ge=1, le=720), limit: int = Query(15, ge=5, le=50)):
+    """Top destination countries by request count."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        q = f"""
+        SELECT dest_country as country, count() as requests,
+               sum(sent_bytes + recv_bytes) as bandwidth,
+               uniqExact(src_ip) as users,
+               countIf(action IN {BLOCKED_ACTIONS}) as blocked
+        FROM url_logs
+        WHERE timestamp > now() - INTERVAL {hours} HOUR AND dest_country != '' {sc}
+        GROUP BY dest_country ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"country": r["country"], "requests": _safe(r["requests"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "users": _safe(r["users"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "countries": rows})
+    except Exception as e:
+        logger.error(f"Countries error: {e}")
+        return JSONResponse({"success": True, "countries": []})
+
+
+# ── Applications ────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/applications",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_applications(hours: int = Query(24, ge=1, le=720), limit: int = Query(20, ge=5, le=50)):
+    """Top applications recognised by firewall (Fortinet appcat / Palo Alto app)."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        q = f"""
+        SELECT application as app, count() as requests,
+               uniqExact(src_ip) as users,
+               sum(sent_bytes + recv_bytes) as bandwidth,
+               countIf(action IN {BLOCKED_ACTIONS}) as blocked
+        FROM url_logs
+        WHERE timestamp > now() - INTERVAL {hours} HOUR AND application != '' {sc}
+        GROUP BY application ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"application": r["app"], "requests": _safe(r["requests"]),
+                 "users": _safe(r["users"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "applications": rows})
+    except Exception as e:
+        logger.error(f"Applications error: {e}")
+        return JSONResponse({"success": True, "applications": []})
+
+
+# ── Devices ─────────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/devices",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_devices(hours: int = Query(24, ge=1, le=720), limit: int = Query(15, ge=5, le=50)):
+    """Activity by reporting firewall device."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        q = f"""
+        SELECT
+            coalesce(nullIf(device_name, ''), device_ip) as device,
+            any(vendor) as vendor,
+            any(device_ip) as device_ip,
+            count() as requests,
+            uniqExact(src_ip) as users,
+            uniqExact(hostname) as sites,
+            sum(sent_bytes + recv_bytes) as bandwidth,
+            countIf(action IN {BLOCKED_ACTIONS}) as blocked
+        FROM url_logs
+        WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+        GROUP BY device ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"device": r["device"], "vendor": r["vendor"] or "",
+                 "device_ip": r["device_ip"] or "",
+                 "requests": _safe(r["requests"]),
+                 "users": _safe(r["users"]),
+                 "sites": _safe(r["sites"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "devices": rows})
+    except Exception as e:
+        logger.error(f"Devices error: {e}")
+        return JSONResponse({"success": True, "devices": []})
+
+
+# ── DNS Overview (mini analytics integrated into URL Analytics page) ─
+
+@router.get("/api/url-analytics/dns",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_dns_overview(hours: int = Query(24, ge=1, le=720)):
+    """DNS-side overview: top domains, qtypes, sinkholed, NXDOMAIN, etc."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+
+        sum_q = f"""
+        SELECT count() as total,
+               uniqExact(src_ip) as users,
+               uniqExact(qname) as unique_domains,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(severity IN ('critical','high')) as critical_high,
+               countIf(action = 'sinkhole') as sinkholed
+        FROM dns_logs WHERE {tw}
+        """
+        sr = list(client.query(sum_q).named_results())
+        s = sr[0] if sr else {}
+
+        # Top queried domains
+        dom_q = f"""
+        SELECT qname, count() as cnt, any(category) as category,
+               any(action) as action, any(severity) as severity
+        FROM dns_logs WHERE {tw} AND qname != ''
+        GROUP BY qname ORDER BY cnt DESC LIMIT 15
+        """
+        domains = [{"domain": r["qname"], "count": _safe(r["cnt"]),
+                    "category": r["category"] or "",
+                    "action": r["action"] or "",
+                    "severity": r["severity"] or ""}
+                   for r in client.query(dom_q).named_results()]
+
+        # Query type distribution
+        qtype_q = f"""
+        SELECT qtype, count() as cnt
+        FROM dns_logs WHERE {tw} AND qtype != ''
+        GROUP BY qtype ORDER BY cnt DESC LIMIT 8
+        """
+        qtypes = [{"qtype": r["qtype"], "count": _safe(r["cnt"])}
+                  for r in client.query(qtype_q).named_results()]
+
+        # Top sources
+        src_q = f"""
+        SELECT src_ip, any(src_user) as username, count() as cnt,
+               uniqExact(qname) as unique_domains,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop')) as blocked
+        FROM dns_logs WHERE {tw}
+        GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
+        """
+        sources = [{"src_ip": r["src_ip"], "username": r["username"] or "",
+                    "count": _safe(r["cnt"]),
+                    "unique_domains": _safe(r["unique_domains"]),
+                    "blocked": _safe(r["blocked"])}
+                   for r in client.query(src_q).named_results()]
+
+        return JSONResponse({"success": True,
+                             "summary": {
+                                 "total": _safe(s.get("total")),
+                                 "users": _safe(s.get("users")),
+                                 "unique_domains": _safe(s.get("unique_domains")),
+                                 "blocked": _safe(s.get("blocked")),
+                                 "sinkholed": _safe(s.get("sinkholed")),
+                                 "critical_high": _safe(s.get("critical_high")),
+                             },
+                             "domains": domains,
+                             "qtypes": qtypes,
+                             "sources": sources})
+    except Exception as e:
+        logger.error(f"DNS overview error: {e}")
+        return JSONResponse({"success": True, "summary": {}, "domains": [], "qtypes": [], "sources": []})

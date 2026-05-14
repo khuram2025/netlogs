@@ -1,121 +1,278 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    .container:has(.ua-page) { max-width:100%; padding:0 1rem; margin:1rem auto; }
-    .ua-page {
-        --ua-bg:#0f172a; --ua-card:#1e293b; --ua-border:#334155;
-        --ua-text:#e2e8f0; --ua-muted:#94a3b8; --ua-dim:#64748b;
-        --ua-primary:#3b82f6; --ua-success:#22c55e; --ua-danger:#ef4444;
-        --ua-warning:#f59e0b; --ua-purple:#a78bfa; --ua-cyan:#22d3ee;
+    /* Break out of base .container */
+    .container:has(.ua2-page) { max-width:100%; padding:0 1rem; margin:1rem auto; }
+
+    .ua2-page {
+        --bg:#0b1220; --card:#141c2e; --card-2:#1a2238; --border:#2a3553;
+        --text:#e6ebf5; --muted:#94a3b8; --dim:#64748b;
+        --primary:#3b82f6; --success:#22c55e; --danger:#ef4444;
+        --warning:#f59e0b; --purple:#a78bfa; --cyan:#22d3ee; --pink:#ec4899;
         font-family:'Outfit',system-ui,sans-serif; width:100%;
     }
-    @keyframes ua-fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes ua-spin { to{transform:rotate(360deg)} }
+    @keyframes ua2-fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes ua2-spin { to{transform:rotate(360deg)} }
 
-    /* Header */
-    .ua-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; animation:ua-fadeIn .4s ease-out both; }
-    .ua-hdr h1 { font-size:1.5rem; font-weight:700; color:#fff; margin:0; display:flex; align-items:center; gap:.5rem; }
-    .ua-hdr h1 svg { width:28px; height:28px; stroke:var(--ua-primary); fill:none; stroke-width:2; }
-    .ua-hdr-sub { color:var(--ua-muted); font-size:.85rem; margin-top:2px; }
-    .ua-hdr-right { display:flex; align-items:center; gap:.75rem; }
-    .ua-sel { background:var(--ua-card); border:1px solid var(--ua-border); color:#fff; padding:.4rem .75rem; border-radius:8px; font-size:.8rem; font-family:inherit; cursor:pointer; }
-    .ua-sel:focus { outline:none; border-color:var(--ua-primary); }
-    .ua-btn { background:var(--ua-card); border:1px solid var(--ua-border); color:var(--ua-muted); padding:.4rem .75rem; border-radius:8px; font-size:.8rem; cursor:pointer; display:flex; align-items:center; gap:.35rem; transition:all .2s; font-family:inherit; }
-    .ua-btn:hover { border-color:var(--ua-primary); color:#fff; }
-    .ua-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+    /* ── HEADER ───────────────────────────────────────────────── */
+    .ua2-hdr {
+        display:flex; justify-content:space-between; align-items:flex-end; gap:1rem;
+        margin-bottom:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border);
+        animation:ua2-fadeIn .35s ease-out both;
+    }
+    .ua2-hdr h1 {
+        font-size:1.55rem; font-weight:700; color:#fff; margin:0;
+        display:flex; align-items:center; gap:.6rem; letter-spacing:-.01em;
+    }
+    .ua2-hdr h1 .ua2-icon-wrap {
+        width:34px; height:34px; border-radius:10px;
+        background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);
+        display:flex; align-items:center; justify-content:center;
+    }
+    .ua2-hdr h1 svg { width:18px; height:18px; stroke:#fff; fill:none; stroke-width:2.2; }
+    .ua2-hdr-sub { color:var(--muted); font-size:.82rem; margin-top:4px; }
+    .ua2-hdr-right { display:flex; align-items:center; gap:.5rem; }
+    .ua2-sel, .ua2-btn {
+        background:var(--card); border:1px solid var(--border); color:var(--text);
+        padding:.42rem .8rem; border-radius:8px; font-size:.8rem; font-family:inherit;
+        cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:.4rem;
+    }
+    .ua2-sel:focus, .ua2-btn:focus { outline:none; border-color:var(--primary); }
+    .ua2-btn:hover { border-color:var(--primary); }
+    .ua2-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+    .ua2-btn-primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .ua2-btn-primary:hover { background:#2563eb; border-color:#2563eb; }
+    .ua2-auto-dot {
+        width:7px; height:7px; border-radius:50%; background:var(--success);
+        box-shadow:0 0 0 0 rgba(34,197,94,.4); animation:ua2-pulse 1.8s infinite;
+    }
+    @keyframes ua2-pulse {
+        0% { box-shadow:0 0 0 0 rgba(34,197,94,.45) }
+        70% { box-shadow:0 0 0 8px rgba(34,197,94,0) }
+        100% { box-shadow:0 0 0 0 rgba(34,197,94,0) }
+    }
 
-    /* Hero stats */
-    .ua-stats { display:grid; grid-template-columns:repeat(8,1fr); gap:.75rem; margin-bottom:1.25rem; animation:ua-fadeIn .5s ease-out .1s both; }
-    .ua-stat { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.75rem .875rem; text-align:center; transition:border-color .2s,transform .15s; }
-    .ua-stat:hover { border-color:var(--ua-primary); transform:translateY(-2px); }
-    .ua-stat-val { font-size:1.35rem; font-weight:800; color:#fff; line-height:1.2; font-family:'JetBrains Mono',monospace; }
-    .ua-stat-label { font-size:.65rem; color:var(--ua-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; font-weight:500; }
-    @media(max-width:1200px){ .ua-stats{grid-template-columns:repeat(4,1fr);} }
-    @media(max-width:640px){ .ua-stats{grid-template-columns:repeat(2,1fr);} }
+    /* ── HERO STAT GRID ───────────────────────────────────────── */
+    .ua2-stats {
+        display:grid; grid-template-columns:repeat(8,1fr); gap:.65rem;
+        margin-bottom:1rem; animation:ua2-fadeIn .4s ease-out .05s both;
+    }
+    .ua2-stat {
+        background:var(--card); border:1px solid var(--border);
+        border-radius:11px; padding:.7rem .9rem; position:relative; overflow:hidden;
+        transition:transform .15s, border-color .15s;
+    }
+    .ua2-stat::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+        background:var(--primary); opacity:.55;
+    }
+    .ua2-stat:hover { transform:translateY(-2px); border-color:var(--border); }
+    .ua2-stat.clickable { cursor:pointer; }
+    .ua2-stat.clickable:hover { border-color:var(--primary); }
+    .ua2-stat-l { font-size:.62rem; color:var(--muted); text-transform:uppercase;
+                  letter-spacing:.07em; font-weight:600; margin-bottom:4px; display:flex;
+                  align-items:center; gap:.3rem; }
+    .ua2-stat-l svg { width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:2; }
+    .ua2-stat-v { font-size:1.4rem; font-weight:800; color:#fff; line-height:1.1;
+                  font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; }
+    .ua2-stat-sub { font-size:.66rem; color:var(--dim); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+    .ua2-stat.danger::before { background:var(--danger); }
+    .ua2-stat.success::before { background:var(--success); }
+    .ua2-stat.warning::before { background:var(--warning); }
+    .ua2-stat.purple::before { background:var(--purple); }
+    .ua2-stat.cyan::before { background:var(--cyan); }
+    .ua2-stat.pink::before { background:var(--pink); }
+    .ua2-stat.danger .ua2-stat-v { color:#fca5a5; }
+    .ua2-stat.success .ua2-stat-v { color:#86efac; }
+    .ua2-stat.warning .ua2-stat-v { color:#fcd34d; }
+    .ua2-stat.purple .ua2-stat-v { color:#c4b5fd; }
+    .ua2-stat.cyan .ua2-stat-v { color:#67e8f9; }
+    .ua2-stat.pink .ua2-stat-v { color:#f9a8d4; }
+    @media (max-width:1400px) { .ua2-stats { grid-template-columns:repeat(4,1fr); } }
+    @media (max-width:640px)  { .ua2-stats { grid-template-columns:repeat(2,1fr); } }
 
-    /* Tabs */
-    .ua-tabs { display:flex; gap:2px; background:var(--ua-card); border-radius:10px; padding:4px; margin-bottom:1rem; width:fit-content; animation:ua-fadeIn .5s ease-out .15s both; }
-    .ua-tab { padding:.45rem 1.1rem; border-radius:8px; font-size:.82rem; font-weight:600; color:var(--ua-muted); background:transparent; border:none; cursor:pointer; transition:all .2s; font-family:inherit; }
-    .ua-tab:hover { color:var(--ua-text); background:rgba(59,130,246,.08); }
-    .ua-tab.active { color:#fff; background:var(--ua-primary); }
+    /* ── SECTION GRIDS ────────────────────────────────────────── */
+    .ua2-row { display:grid; gap:.85rem; margin-bottom:.85rem;
+               animation:ua2-fadeIn .4s ease-out .1s both; }
+    .ua2-row-1 { grid-template-columns:1fr; }
+    .ua2-row-2 { grid-template-columns:1.4fr 1fr; }
+    .ua2-row-3 { grid-template-columns:1fr 1fr 1fr; }
+    .ua2-row-32 { grid-template-columns:2fr 1fr; }
+    @media (max-width:1100px) {
+        .ua2-row-2, .ua2-row-3, .ua2-row-32 { grid-template-columns:1fr; }
+    }
 
-    /* Panels */
-    .ua-panel { display:none; animation:ua-fadeIn .35s ease-out both; }
-    .ua-panel.active { display:block; }
-    .ua-cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-    @media(max-width:900px){ .ua-cols{grid-template-columns:1fr;} }
-    .ua-3cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
-    @media(max-width:1100px){ .ua-3cols{grid-template-columns:1fr;} }
+    /* ── CARD ─────────────────────────────────────────────────── */
+    .ua2-card {
+        background:var(--card); border:1px solid var(--border); border-radius:12px;
+        overflow:hidden; display:flex; flex-direction:column;
+    }
+    .ua2-card-hdr {
+        display:flex; justify-content:space-between; align-items:center;
+        padding:.7rem .95rem; border-bottom:1px solid var(--border);
+    }
+    .ua2-card-title {
+        font-size:.78rem; font-weight:700; color:#fff;
+        text-transform:uppercase; letter-spacing:.06em;
+        display:flex; align-items:center; gap:.4rem;
+    }
+    .ua2-card-title svg { width:14px; height:14px; stroke:var(--primary); fill:none; stroke-width:2; }
+    .ua2-card-meta { font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+    .ua2-card-body { padding:.65rem .8rem 1rem; flex:1; min-height:0; }
+    .ua2-card-body.no-pad { padding:0; }
+    .ua2-card-body.flush { padding:.4rem .6rem .8rem; }
 
-    /* Card */
-    .ua-card { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:1rem; margin-bottom:1rem; }
-    .ua-card-title { font-size:.8rem; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.75rem; display:flex; align-items:center; gap:.4rem; }
-    .ua-card-title svg { width:16px; height:16px; stroke:var(--ua-primary); fill:none; stroke-width:2; }
+    /* ── CHART CONTAINERS ─────────────────────────────────────── */
+    .ua2-chart { width:100%; }
+    .chart-timeline  { height:280px; }
+    .chart-donut     { height:240px; }
+    .chart-bar       { height:280px; }
+    .chart-bar-tall  { height:340px; }
+    .chart-mini      { height:180px; }
 
-    /* Table */
-    .ua-tbl { width:100%; border-collapse:collapse; font-size:.8rem; }
-    .ua-tbl th { text-align:left; padding:.5rem .6rem; font-size:.65rem; text-transform:uppercase; color:var(--ua-dim); border-bottom:1px solid var(--ua-border); font-weight:600; letter-spacing:.04em; }
-    .ua-tbl td { padding:.45rem .6rem; border-bottom:1px solid rgba(51,65,85,.4); color:var(--ua-text); vertical-align:middle; }
-    .ua-tbl tbody tr:hover td { background:rgba(59,130,246,.06); }
-    .ua-tbl tbody tr[style*="cursor:pointer"]:hover td { background:rgba(59,130,246,.12); }
-    .ua-tbl tbody tr[style*="cursor:pointer"]:active td { background:rgba(59,130,246,.18); }
-    .ua-tbl .mono { font-family:'JetBrains Mono',monospace; font-size:.75rem; }
-    .ua-tbl .r { text-align:right; }
+    /* ── TABLE ────────────────────────────────────────────────── */
+    .ua2-tbl { width:100%; border-collapse:collapse; font-size:.8rem; }
+    .ua2-tbl th {
+        text-align:left; padding:.5rem .7rem; font-size:.62rem;
+        text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border);
+        font-weight:600; letter-spacing:.05em; background:rgba(0,0,0,.15);
+        position:sticky; top:0; z-index:1;
+    }
+    .ua2-tbl td {
+        padding:.45rem .7rem; border-bottom:1px solid rgba(42,53,83,.55);
+        color:var(--text); vertical-align:middle;
+    }
+    .ua2-tbl tbody tr { transition:background .12s; }
+    .ua2-tbl tbody tr:hover td { background:rgba(59,130,246,.07); }
+    .ua2-tbl tbody tr.clickable { cursor:pointer; }
+    .ua2-tbl tbody tr.clickable:hover td { background:rgba(59,130,246,.11); }
+    .ua2-tbl .mono { font-family:'JetBrains Mono',monospace; font-size:.74rem; }
+    .ua2-tbl .r { text-align:right; }
+    .ua2-tbl .c { text-align:center; }
+    .ua2-tbl .ellip { max-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ua2-tbl-wrap { max-height:560px; overflow:auto; }
+
+    /* Bars inside table cells (bandwidth-style) */
+    .ua2-bar { display:flex; align-items:center; gap:.5rem; min-width:80px; }
+    .ua2-bar-track { flex:1; height:5px; background:rgba(51,65,85,.6); border-radius:3px; overflow:hidden; min-width:60px; }
+    .ua2-bar-fill { height:100%; border-radius:3px; background:var(--primary); transition:width .4s ease; }
 
     /* Badges */
-    .ua-badge { display:inline-block; padding:2px 8px; border-radius:9999px; font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
-    .ua-badge-productive { background:rgba(34,197,94,.12); color:var(--ua-success); }
-    .ua-badge-neutral { background:rgba(148,163,184,.12); color:var(--ua-muted); }
-    .ua-badge-unproductive { background:rgba(245,158,11,.12); color:var(--ua-warning); }
-    .ua-badge-risky { background:rgba(239,68,68,.12); color:var(--ua-danger); }
+    .ua2-bdg {
+        display:inline-block; padding:1px 7px; border-radius:9999px;
+        font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    }
+    .ua2-bdg-prod    { background:rgba(34,197,94,.13); color:#86efac; }
+    .ua2-bdg-neut    { background:rgba(148,163,184,.13); color:#cbd5e1; }
+    .ua2-bdg-unprod  { background:rgba(245,158,11,.13); color:#fcd34d; }
+    .ua2-bdg-risky   { background:rgba(239,68,68,.13); color:#fca5a5; }
+    .ua2-bdg-allow   { background:rgba(34,197,94,.13); color:#86efac; }
+    .ua2-bdg-block   { background:rgba(239,68,68,.13); color:#fca5a5; }
+    .ua2-bdg-alert   { background:rgba(245,158,11,.13); color:#fcd34d; }
+    .ua2-bdg-sinkhole{ background:rgba(168,85,247,.13); color:#c4b5fd; }
+    .ua2-bdg-sev-critical { background:rgba(239,68,68,.18); color:#fca5a5; }
+    .ua2-bdg-sev-high     { background:rgba(249,115,22,.16); color:#fdba74; }
+    .ua2-bdg-sev-medium   { background:rgba(245,158,11,.16); color:#fcd34d; }
+    .ua2-bdg-sev-low      { background:rgba(34,197,94,.13); color:#86efac; }
+    .ua2-bdg-sev-informational { background:rgba(59,130,246,.13); color:#93c5fd; }
 
-    /* Productivity breakdown */
-    .ua-prod-row { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-top:1rem; }
-    @media(max-width:900px){ .ua-prod-row{grid-template-columns:repeat(2,1fr);} }
-    .ua-prod-card { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.875rem; }
-    .ua-prod-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; }
-    .ua-prod-lbl { font-size:.7rem; text-transform:uppercase; font-weight:600; letter-spacing:.04em; }
-    .ua-prod-val { font-size:1.2rem; font-weight:800; font-family:'JetBrains Mono',monospace; }
-    .ua-bar-bg { height:6px; background:rgba(51,65,85,.5); border-radius:3px; overflow:hidden; }
-    .ua-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+    /* ── TABS ─────────────────────────────────────────────────── */
+    .ua2-tabs {
+        display:flex; gap:2px; background:var(--card); border:1px solid var(--border);
+        border-radius:10px; padding:4px; width:fit-content; margin-bottom:.8rem;
+        animation:ua2-fadeIn .4s ease-out .15s both; overflow:auto; max-width:100%;
+    }
+    .ua2-tab {
+        padding:.45rem 1rem; border-radius:7px; font-size:.8rem; font-weight:600;
+        color:var(--muted); background:transparent; border:none; cursor:pointer;
+        white-space:nowrap; transition:all .15s; font-family:inherit;
+        display:inline-flex; align-items:center; gap:.4rem;
+    }
+    .ua2-tab:hover { color:var(--text); background:rgba(59,130,246,.08); }
+    .ua2-tab.active { color:#fff; background:var(--primary); }
+    .ua2-tab-count {
+        font-size:.65rem; padding:1px 7px; border-radius:9px;
+        background:rgba(255,255,255,.12); font-family:'JetBrains Mono',monospace;
+    }
+    .ua2-panel { display:none; animation:ua2-fadeIn .3s ease-out both; }
+    .ua2-panel.active { display:block; }
 
-    /* YouTube stats row */
-    .ua-yt-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1rem; }
-    @media(max-width:800px){ .ua-yt-stats{grid-template-columns:repeat(2,1fr);} }
-    .ua-yt-stat { background:var(--ua-card); border:1px solid var(--ua-border); border-radius:10px; padding:.75rem; text-align:center; }
-    .ua-yt-stat-val { font-size:1.25rem; font-weight:800; color:#fff; font-family:'JetBrains Mono',monospace; }
-    .ua-yt-stat-lbl { font-size:.65rem; color:var(--ua-muted); text-transform:uppercase; margin-top:3px; font-weight:500; }
+    /* ── PRODUCTIVITY SUMMARY (donut + score) ────────────────── */
+    .ua2-prod-wrap { display:grid; grid-template-columns:200px 1fr; gap:1.25rem; align-items:center; }
+    @media (max-width:600px) { .ua2-prod-wrap { grid-template-columns:1fr; } }
+    .ua2-prod-list { display:flex; flex-direction:column; gap:.45rem; }
+    .ua2-prod-item {
+        display:grid; grid-template-columns:14px 1fr auto auto; gap:.55rem;
+        align-items:center; font-size:.78rem;
+    }
+    .ua2-prod-swatch { width:10px; height:10px; border-radius:3px; }
+    .ua2-prod-name { color:var(--text); font-weight:500; }
+    .ua2-prod-num { color:#fff; font-family:'JetBrains Mono',monospace; font-size:.78rem; font-weight:600; }
+    .ua2-prod-pct { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:.7rem; min-width:48px; text-align:right; }
 
-    /* Search query highlight */
-    .ua-search-q { background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.15); padding:2px 8px; border-radius:4px; font-style:italic; color:var(--ua-cyan); font-size:.78rem; }
+    /* Search query pills */
+    .ua2-search-q {
+        background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.15);
+        padding:1px 8px; border-radius:5px; font-style:italic; color:var(--cyan);
+        font-size:.77rem; display:inline-block; max-width:100%; overflow:hidden;
+        text-overflow:ellipsis; white-space:nowrap; vertical-align:middle;
+    }
 
-    /* BW bar */
-    .ua-bw-bar { display:flex; align-items:center; gap:.5rem; }
-    .ua-bw-track { flex:1; height:6px; background:rgba(51,65,85,.5); border-radius:3px; overflow:hidden; }
-    .ua-bw-fill { height:100%; border-radius:3px; background:var(--ua-primary); transition:width .5s ease; }
+    /* User pill (username + ip) */
+    .ua2-user { display:flex; flex-direction:column; gap:1px; line-height:1.15; }
+    .ua2-user b { color:var(--purple); font-weight:600; font-size:.79rem; }
+    .ua2-user span { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:.7rem; }
 
-    /* Loading */
-    .ua-loading { text-align:center; padding:3rem; color:var(--ua-muted); }
-    .ua-loading::after { content:''; display:inline-block; width:20px; height:20px; border:2px solid var(--ua-border); border-top-color:var(--ua-primary); border-radius:50%; animation:ua-spin .6s linear infinite; margin-left:.5rem; vertical-align:middle; }
-    .ua-empty { text-align:center; padding:2rem; color:var(--ua-dim); font-size:.85rem; }
+    /* Loading / empty */
+    .ua2-loading {
+        display:flex; align-items:center; justify-content:center; gap:.55rem;
+        padding:2.5rem 1rem; color:var(--muted); font-size:.82rem;
+    }
+    .ua2-loading::before {
+        content:''; width:14px; height:14px; border:2px solid var(--border);
+        border-top-color:var(--primary); border-radius:50%; animation:ua2-spin .65s linear infinite;
+    }
+    .ua2-empty {
+        text-align:center; padding:2.5rem 1rem; color:var(--dim); font-size:.85rem;
+    }
+    .ua2-empty .ico {
+        width:36px; height:36px; margin:0 auto .6rem; opacity:.5;
+        display:flex; align-items:center; justify-content:center;
+    }
+    .ua2-empty svg { width:34px; height:34px; stroke:currentColor; fill:none; stroke-width:1.4; }
+
+    /* YouTube big stat row */
+    .ua2-yt-row {
+        display:grid; grid-template-columns:repeat(4,1fr); gap:.65rem; padding:.7rem .9rem;
+        background:rgba(239,68,68,.05); border-bottom:1px solid var(--border);
+    }
+    .ua2-yt-row .ua2-stat { background:var(--card-2); }
+    @media (max-width:800px) { .ua2-yt-row { grid-template-columns:repeat(2,1fr); } }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="ua-page">
-    <!-- Header -->
-    <div class="ua-hdr">
+<div class="ua2-page">
+
+    <!-- HEADER -->
+    <div class="ua2-hdr">
         <div>
             <h1>
-                <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 0 1 9-9"/></svg>
+                <span class="ua2-icon-wrap">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+                </span>
                 URL Analytics
             </h1>
-            <div class="ua-hdr-sub">Web Activity Intelligence &mdash; Bandwidth, Productivity &amp; Security</div>
+            <div class="ua2-hdr-sub">Web Activity Intelligence &mdash; Productivity, Bandwidth &amp; Security</div>
         </div>
-        <div class="ua-hdr-right">
-            <select class="ua-sel" id="uaTimeRange">
+        <div class="ua2-hdr-right">
+            <div class="ua2-btn" style="padding:.42rem .65rem; cursor:default;" title="Auto-refresh every 60s">
+                <span class="ua2-auto-dot"></span>
+                <span id="ua2-refresh-status" style="font-size:.72rem;color:var(--muted);">live</span>
+            </div>
+            <select class="ua2-sel" id="ua2-time">
                 <option value="1">Last 1 hour</option>
                 <option value="6">Last 6 hours</option>
                 <option value="24" selected>Last 24 hours</option>
@@ -123,356 +280,966 @@
                 <option value="168">Last 7 days</option>
                 <option value="720">Last 30 days</option>
             </select>
-            <button class="ua-btn" id="uaRefresh">
+            <button class="ua2-btn" id="ua2-export" title="Export current view as CSV">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export
+            </button>
+            <button class="ua2-btn ua2-btn-primary" id="ua2-refresh">
                 <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                 Refresh
             </button>
         </div>
     </div>
 
-    <!-- Hero Stats -->
-    <div class="ua-stats">
-        <div class="ua-stat" style="cursor:pointer" onclick="drill({})"><div class="ua-stat-val" id="sTotal">-</div><div class="ua-stat-label">Total Requests</div></div>
-        <div class="ua-stat"><div class="ua-stat-val" id="sUsers" style="color:var(--ua-cyan)">-</div><div class="ua-stat-label">Unique Users</div></div>
-        <div class="ua-stat"><div class="ua-stat-val" id="sSites" style="color:var(--ua-primary)">-</div><div class="ua-stat-label">Unique Sites</div></div>
-        <div class="ua-stat"><div class="ua-stat-val" id="sBW" style="color:var(--ua-purple)">-</div><div class="ua-stat-label">Bandwidth</div></div>
-        <div class="ua-stat" style="cursor:pointer" onclick="drill({action:'blocked'})"><div class="ua-stat-val" id="sBlocked" style="color:var(--ua-danger)">-</div><div class="ua-stat-label">Blocked</div></div>
-        <div class="ua-stat"><div class="ua-stat-val" id="sCats">-</div><div class="ua-stat-label">Categories</div></div>
-        <div class="ua-stat" style="cursor:pointer" onclick="drill({search:'youtube.com'})"><div class="ua-stat-val" id="sYT" style="color:var(--ua-danger)">-</div><div class="ua-stat-label">YouTube</div></div>
-        <div class="ua-stat"><div class="ua-stat-val" id="sProd">-</div><div class="ua-stat-label">Productivity Score</div></div>
+    <!-- HERO STATS -->
+    <div class="ua2-stats" id="ua2-stats">
+        <div class="ua2-stat clickable" onclick="ua2.drill({})">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Requests</div>
+            <div class="ua2-stat-v" id="s-total">—</div>
+            <div class="ua2-stat-sub" id="s-total-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat cyan">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Users</div>
+            <div class="ua2-stat-v" id="s-users">—</div>
+            <div class="ua2-stat-sub" id="s-users-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Sites</div>
+            <div class="ua2-stat-v" id="s-sites">—</div>
+            <div class="ua2-stat-sub" id="s-sites-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat purple">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Bandwidth</div>
+            <div class="ua2-stat-v" id="s-bw">—</div>
+            <div class="ua2-stat-sub" id="s-bw-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat danger clickable" onclick="ua2.drill({action:'blocked'})">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Blocked</div>
+            <div class="ua2-stat-v" id="s-blk">—</div>
+            <div class="ua2-stat-sub" id="s-blk-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat warning">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>Categories</div>
+            <div class="ua2-stat-v" id="s-cats">—</div>
+            <div class="ua2-stat-sub" id="s-cats-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat pink clickable" onclick="ua2.drill({search:'youtube.com'})">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>YouTube</div>
+            <div class="ua2-stat-v" id="s-yt">—</div>
+            <div class="ua2-stat-sub" id="s-yt-sub">&nbsp;</div>
+        </div>
+        <div class="ua2-stat success">
+            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Productivity</div>
+            <div class="ua2-stat-v" id="s-prod">—</div>
+            <div class="ua2-stat-sub" id="s-prod-sub">productive ratio</div>
+        </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="ua-tabs">
-        <button class="ua-tab active" data-tab="overview">Overview</button>
-        <button class="ua-tab" data-tab="users">Users</button>
-        <button class="ua-tab" data-tab="youtube">YouTube</button>
-        <button class="ua-tab" data-tab="searches">Searches</button>
-        <button class="ua-tab" data-tab="blocked">Blocked</button>
-        <button class="ua-tab" data-tab="bandwidth">Bandwidth</button>
-    </div>
-
-    <!-- Tab: Overview -->
-    <div class="ua-panel active" id="tab-overview">
-        <div class="ua-cols">
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> Top Categories</div>
-                <div id="tblCategories"><div class="ua-loading">Loading</div></div>
+    <!-- TIMELINE (full-width) -->
+    <div class="ua2-row ua2-row-1">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                    Web Traffic Timeline
+                </div>
+                <div class="ua2-card-meta" id="tl-meta">&nbsp;</div>
             </div>
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Top Hostnames</div>
-                <div id="tblHostnames"><div class="ua-loading">Loading</div></div>
-            </div>
-        </div>
-        <div class="ua-card">
-            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Productivity Breakdown</div>
-            <div id="prodBreakdown"><div class="ua-loading">Loading</div></div>
-        </div>
-    </div>
-
-    <!-- Tab: Users -->
-    <div class="ua-panel" id="tab-users">
-        <div class="ua-card">
-            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Top Users</div>
-            <div id="tblUsers"><div class="ua-loading">Loading</div></div>
-        </div>
-    </div>
-
-    <!-- Tab: YouTube -->
-    <div class="ua-panel" id="tab-youtube">
-        <div id="ytStats"><div class="ua-loading">Loading</div></div>
-        <div class="ua-card">
-            <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg> YouTube Users</div>
-            <div id="tblYT"><div class="ua-loading">Loading</div></div>
-        </div>
-    </div>
-
-    <!-- Tab: Searches -->
-    <div class="ua-panel" id="tab-searches">
-        <div class="ua-card">
-            <div class="ua-card-title"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Recent Searches</div>
-            <div id="tblSearches"><div class="ua-loading">Loading</div></div>
-        </div>
-    </div>
-
-    <!-- Tab: Blocked -->
-    <div class="ua-panel" id="tab-blocked">
-        <div class="ua-3cols">
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Top Blocked Sites</div>
-                <div id="tblBlockedHosts"><div class="ua-loading">Loading</div></div>
-            </div>
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> Blocked Categories</div>
-                <div id="tblBlockedCats"><div class="ua-loading">Loading</div></div>
-            </div>
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg> Users Hitting Blocks</div>
-                <div id="tblBlockedUsers"><div class="ua-loading">Loading</div></div>
+            <div class="ua2-card-body">
+                <div id="chart-tl" class="ua2-chart chart-timeline"></div>
             </div>
         </div>
     </div>
 
-    <!-- Tab: Bandwidth -->
-    <div class="ua-panel" id="tab-bandwidth">
-        <div class="ua-cols">
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Top Users by Bandwidth</div>
-                <div id="tblBWUsers"><div class="ua-loading">Loading</div></div>
+    <!-- PRODUCTIVITY + CATEGORIES -->
+    <div class="ua2-row ua2-row-2">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    Top URL Categories
+                </div>
+                <div class="ua2-card-meta">color = productivity class</div>
             </div>
-            <div class="ua-card">
-                <div class="ua-card-title"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Top Sites by Bandwidth</div>
-                <div id="tblBWHosts"><div class="ua-loading">Loading</div></div>
+            <div class="ua2-card-body">
+                <div id="chart-cats" class="ua2-chart chart-bar-tall"></div>
+            </div>
+        </div>
+
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg>
+                    Productivity Breakdown
+                </div>
+                <div class="ua2-card-meta" id="prod-meta">&nbsp;</div>
+            </div>
+            <div class="ua2-card-body">
+                <div class="ua2-prod-wrap">
+                    <div id="chart-prod" class="ua2-chart chart-donut" style="height:200px;"></div>
+                    <div class="ua2-prod-list" id="prod-list">
+                        <div class="ua2-loading">Loading</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- ACTION DONUT + COUNTRY BAR + TOP SITES BANDWIDTH -->
+    <div class="ua2-row ua2-row-3">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Action Breakdown
+                </div>
+                <div class="ua2-card-meta" id="act-meta">&nbsp;</div>
+            </div>
+            <div class="ua2-card-body">
+                <div id="chart-act" class="ua2-chart chart-donut"></div>
+            </div>
+        </div>
+
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+                    Top Destination Countries
+                </div>
+                <div class="ua2-card-meta">by requests</div>
+            </div>
+            <div class="ua2-card-body">
+                <div id="chart-geo" class="ua2-chart chart-donut"></div>
+            </div>
+        </div>
+
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Top Sites by Bandwidth
+                </div>
+                <div class="ua2-card-meta">click row to drill</div>
+            </div>
+            <div class="ua2-card-body no-pad">
+                <div class="ua2-tbl-wrap" style="max-height:260px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Site</th><th class="r">BW</th><th style="width:35%"></th></tr></thead>
+                        <tbody id="tbl-topsites"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="ua2-tabs" id="ua2-tabs">
+        <button class="ua2-tab active" data-tab="hosts">
+            <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Top Sites
+        </button>
+        <button class="ua2-tab" data-tab="users">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Users <span class="ua2-tab-count" id="tab-users-cnt">—</span>
+        </button>
+        <button class="ua2-tab" data-tab="dns">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+            DNS Insights <span class="ua2-tab-count" id="tab-dns-cnt">—</span>
+        </button>
+        <button class="ua2-tab" data-tab="youtube">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            YouTube <span class="ua2-tab-count" id="tab-yt-cnt">—</span>
+        </button>
+        <button class="ua2-tab" data-tab="searches">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Searches
+        </button>
+        <button class="ua2-tab" data-tab="blocked">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Blocked <span class="ua2-tab-count" id="tab-blk-cnt">—</span>
+        </button>
+        <button class="ua2-tab" data-tab="bandwidth">
+            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Bandwidth
+        </button>
+        <button class="ua2-tab" data-tab="apps">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Apps &amp; Devices
+        </button>
+    </div>
+
+    <!-- PANELS -->
+    <div class="ua2-panel active" data-panel="hosts">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">Top Hostnames</div>
+                <div class="ua2-card-meta">Sorted by requests · click to view logs</div>
+            </div>
+            <div class="ua2-card-body no-pad">
+                <div class="ua2-tbl-wrap">
+                    <table class="ua2-tbl">
+                        <thead><tr>
+                            <th>Hostname</th>
+                            <th class="r">Requests</th>
+                            <th class="r">Users</th>
+                            <th class="r">Bandwidth</th>
+                            <th>Category</th>
+                            <th style="width:14%"></th>
+                        </tr></thead>
+                        <tbody id="tbl-hosts"><tr><td colspan="6"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="users">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">Top Users by Activity</div>
+                <div class="ua2-card-meta">click row to drill</div>
+            </div>
+            <div class="ua2-card-body no-pad">
+                <div class="ua2-tbl-wrap">
+                    <table class="ua2-tbl">
+                        <thead><tr>
+                            <th>User</th>
+                            <th class="r">Requests</th>
+                            <th class="r">Sites</th>
+                            <th class="r">Bandwidth</th>
+                            <th class="r">Blocked</th>
+                            <th>Top Sites</th>
+                        </tr></thead>
+                        <tbody id="tbl-users"><tr><td colspan="6"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="dns">
+        <div class="ua2-row ua2-row-3" style="margin-bottom:.85rem">
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">DNS Query Types</div></div>
+                <div class="ua2-card-body"><div id="chart-qtype" class="ua2-chart chart-donut"></div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Queried Domains</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:260px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Domain</th><th>Category</th><th class="r">Queries</th></tr></thead>
+                        <tbody id="tbl-dns-doms"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top DNS Sources</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:260px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Source</th><th class="r">Queries</th><th class="r">Domains</th></tr></thead>
+                        <tbody id="tbl-dns-src"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+        </div>
+        <div class="ua2-stats" id="dns-stats" style="margin-bottom:0"></div>
+    </div>
+
+    <div class="ua2-panel" data-panel="youtube">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">YouTube Activity</div>
+                <div class="ua2-card-meta">Est. watch time based on ~2.5 MB/min @ 720p</div>
+            </div>
+            <div class="ua2-yt-row" id="yt-row">
+                <div class="ua2-stat danger"><div class="ua2-stat-l">Requests</div><div class="ua2-stat-v" id="yt-req">—</div></div>
+                <div class="ua2-stat cyan"><div class="ua2-stat-l">Users</div><div class="ua2-stat-v" id="yt-usr">—</div></div>
+                <div class="ua2-stat purple"><div class="ua2-stat-l">Downloaded</div><div class="ua2-stat-v" id="yt-dl">—</div></div>
+                <div class="ua2-stat warning"><div class="ua2-stat-l">Est. Watch Time</div><div class="ua2-stat-v" id="yt-time">—</div></div>
+            </div>
+            <div class="ua2-card-body no-pad">
+                <div class="ua2-tbl-wrap" style="max-height:480px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>User</th><th class="r">Requests</th><th class="r">Downloaded</th><th class="r">Est. Watch</th></tr></thead>
+                        <tbody id="tbl-yt"><tr><td colspan="4"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="searches">
+        <div class="ua2-card">
+            <div class="ua2-card-hdr"><div class="ua2-card-title">Search Queries</div><div class="ua2-card-meta">Google / Bing / Yahoo / DDG</div></div>
+            <div class="ua2-card-body no-pad">
+                <div class="ua2-tbl-wrap">
+                    <table class="ua2-tbl">
+                        <thead><tr><th style="width:42%">Search Query</th><th class="r">Count</th><th class="r">Users</th><th>Sample User</th><th>Engine</th></tr></thead>
+                        <tbody id="tbl-searches"><tr><td colspan="5"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="blocked">
+        <div class="ua2-row ua2-row-3">
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Blocked Sites</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Hostname</th><th>Category</th><th class="r">Hits</th></tr></thead>
+                        <tbody id="tbl-blk-h"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Blocked Categories</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Category</th><th class="r">Hits</th><th class="r">Users</th></tr></thead>
+                        <tbody id="tbl-blk-c"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Users Hitting Blocks</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>User</th><th class="r">Hits</th><th class="r">Sites</th></tr></thead>
+                        <tbody id="tbl-blk-u"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="bandwidth">
+        <div class="ua2-row ua2-row-2">
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Users by Bandwidth</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>User</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th style="width:90px"></th></tr></thead>
+                        <tbody id="tbl-bw-u"><tr><td colspan="5"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Hosts by Bandwidth</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Hostname</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th style="width:90px"></th></tr></thead>
+                        <tbody id="tbl-bw-h"><tr><td colspan="5"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ua2-panel" data-panel="apps">
+        <div class="ua2-row ua2-row-2">
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Applications</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Application</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th class="r">Blocked</th></tr></thead>
+                        <tbody id="tbl-apps"><tr><td colspan="5"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Reporting Devices</div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
+                    <table class="ua2-tbl">
+                        <thead><tr><th>Device</th><th>Vendor</th><th class="r">Requests</th><th class="r">Sites</th><th class="r">Bandwidth</th></tr></thead>
+                        <tbody id="tbl-devs"><tr><td colspan="5"><div class="ua2-loading">Loading</div></td></tr></tbody>
+                    </table>
+                </div></div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
 <script>
 (function(){
-    /* ---- Helpers ---- */
+    const PROD_COLORS = {
+        productive:'#22c55e', neutral:'#94a3b8',
+        unproductive:'#f59e0b', risky:'#ef4444'
+    };
+    const ACT_COLOR = {
+        allow:'#22c55e', passthrough:'#22c55e', log:'#22c55e', accept:'#22c55e', pass:'#22c55e',
+        blocked:'#ef4444', 'block-url':'#ef4444', deny:'#ef4444', drop:'#ef4444',
+        'reset-client':'#ef4444', 'reset-server':'#ef4444',
+        alert:'#f59e0b', warn:'#f59e0b', warning:'#f59e0b',
+        sinkhole:'#a78bfa'
+    };
+
+    /* ---- helpers ---- */
     function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
     function fmtBytes(b){
         if(!b||b===0) return '0 B';
-        var u=['B','KB','MB','GB','TB'], i=0; b=Number(b);
-        while(b>=1024&&i<u.length-1){b/=1024;i++;}
+        const u=['B','KB','MB','GB','TB','PB']; let i=0; b=Number(b);
+        while(b>=1024 && i<u.length-1){ b/=1024; i++; }
         return b.toFixed(i?1:0)+' '+u[i];
     }
-    function esc(s){ if(!s) return ''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-    function getHours(){ return document.getElementById('uaTimeRange').value; }
+    function fmtMinutes(m){
+        m = Number(m)||0;
+        const h = Math.floor(m/60), mm = Math.round(m%60);
+        return h ? `${h}h ${mm}m` : `${mm}m`;
+    }
+    function esc(s){ if(s==null) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+    function qs(s){ return s.replace(/'/g,'&#39;'); }
     function $(id){ return document.getElementById(id); }
+    function getHours(){ return $('ua2-time').value; }
+    function isoBucket(b){
+        const d = new Date(b);
+        const h = String(d.getHours()).padStart(2,'0');
+        const m = String(d.getMinutes()).padStart(2,'0');
+        const mo = d.toLocaleString('en-US',{month:'short'});
+        const day = d.getDate();
+        return `${mo} ${day} ${h}:${m}`;
+    }
 
-    /* ---- Tab switching ---- */
-    document.querySelectorAll('.ua-tab').forEach(function(t){
-        t.addEventListener('click',function(){
-            document.querySelectorAll('.ua-tab').forEach(function(x){x.classList.remove('active');});
-            document.querySelectorAll('.ua-panel').forEach(function(x){x.classList.remove('active');});
-            t.classList.add('active');
-            $('tab-'+t.dataset.tab).classList.add('active');
+    /* ---- drill-down ---- */
+    window.ua2 = {
+        drill(params) {
+            const p = new URLSearchParams(params || {});
+            p.set('hours', getHours());
+            p.set('clean', 'true');
+            window.location.href = '/threats/url-dns/?' + p.toString();
+        }
+    };
+
+    /* ---- ECharts instances ---- */
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => {
+        Object.values(charts).forEach(c => c && c.resize());
+    });
+
+    /* ---- fetch ---- */
+    function api(path) {
+        return fetch('/api/url-analytics/' + path + '?hours=' + getHours())
+            .then(r => r.ok ? r.json() : Promise.reject(r.status));
+    }
+
+    /* ---- renderers ---- */
+
+    function renderSummary(d) {
+        const s = (d && d.summary) || {};
+        $('s-total').textContent = fmtNum(s.total_requests);
+        $('s-users').textContent = fmtNum(s.unique_users);
+        $('s-sites').textContent = fmtNum(s.unique_sites);
+        $('s-bw').textContent = fmtBytes(s.total_bandwidth);
+        $('s-blk').textContent = fmtNum(s.blocked_count);
+        $('s-cats').textContent = fmtNum(s.category_count);
+        $('s-yt').textContent = fmtNum(s.youtube_requests);
+        // sub-stats
+        $('s-bw-sub').textContent = `↓ ${fmtBytes(s.total_recv)}  ↑ ${fmtBytes(s.total_sent)}`;
+        const blkPct = s.total_requests ? ((s.blocked_count/s.total_requests)*100).toFixed(1) : 0;
+        $('s-blk-sub').textContent = `${blkPct}% of traffic`;
+        $('tab-users-cnt').textContent = fmtNum(s.unique_users);
+        $('tab-blk-cnt').textContent = fmtNum(s.blocked_count);
+        $('tab-yt-cnt').textContent = fmtNum(s.youtube_requests);
+    }
+
+    function renderTimeline(d) {
+        const rows = (d && d.timeline) || [];
+        $('tl-meta').textContent = rows.length ? `${rows.length} buckets · ${d.bucket_size||''}` : '';
+        const c = chart('chart-tl');
+        if (!c) return;
+        if (!rows.length) { c.clear(); return; }
+        const x = rows.map(r => isoBucket(r.bucket));
+        const allowed = rows.map(r => r.allowed);
+        const blocked = rows.map(r => r.blocked);
+        const alerted = rows.map(r => r.alerted);
+        const bw = rows.map(r => +(r.recv+r.sent)/1024/1024);  // MB
+        c.setOption({
+            tooltip: {
+                trigger:'axis', axisPointer:{type:'cross', label:{backgroundColor:'#1e293b'}},
+                formatter: (params)=> {
+                    const ts = params[0].axisValue;
+                    let html = `<b>${ts}</b><br/>`;
+                    params.forEach(p => {
+                        const v = p.seriesName==='Bandwidth' ? (p.value.toFixed(1)+' MB') : fmtNum(p.value);
+                        html += `${p.marker} ${p.seriesName}: <b>${v}</b><br/>`;
+                    });
+                    return html;
+                }
+            },
+            legend: { data:['Allowed','Alerted','Blocked','Bandwidth'], top:0, right:10, itemWidth:10, itemHeight:10 },
+            grid: { left:50, right:50, top:30, bottom:30, containLabel:true },
+            xAxis: { type:'category', data:x, boundaryGap:false, axisLabel:{fontSize:10} },
+            yAxis: [
+                { type:'value', name:'Requests', nameTextStyle:{fontSize:10,color:'#94a3b8'}, axisLabel:{fontSize:10}, splitLine:{lineStyle:{color:'#1a2238'}} },
+                { type:'value', name:'MB', nameTextStyle:{fontSize:10,color:'#94a3b8'}, position:'right', axisLabel:{fontSize:10, formatter:'{value}'}, splitLine:{show:false} }
+            ],
+            series: [
+                { name:'Allowed', type:'line', stack:'total', areaStyle:{opacity:.5}, smooth:.3, symbol:'none', data:allowed,
+                  itemStyle:{color:'#22c55e'}, lineStyle:{width:1.5} },
+                { name:'Alerted', type:'line', stack:'total', areaStyle:{opacity:.5}, smooth:.3, symbol:'none', data:alerted,
+                  itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.5} },
+                { name:'Blocked', type:'line', stack:'total', areaStyle:{opacity:.6}, smooth:.3, symbol:'none', data:blocked,
+                  itemStyle:{color:'#ef4444'}, lineStyle:{width:1.5} },
+                { name:'Bandwidth', type:'line', yAxisIndex:1, symbol:'none', smooth:.3, data:bw,
+                  itemStyle:{color:'#22d3ee'}, lineStyle:{width:2, type:'dashed'} }
+            ]
+        });
+    }
+
+    function renderCategories(d) {
+        const cats = (d && d.categories) || [];
+        const prod = (d && d.productivity) || {};
+        // bar chart
+        const c = chart('chart-cats');
+        if (c) {
+            const top = cats.slice(0, 12).reverse();
+            c.setOption({
+                tooltip: { trigger:'axis', axisPointer:{type:'shadow'},
+                    formatter: p => {
+                        const r = top[p[0].dataIndex];
+                        return `<b>${esc(r.category)}</b><br/>Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Productivity: <b>${r.productivity}</b>`;
+                    }
+                },
+                grid: { left:8, right:60, top:10, bottom:10, containLabel:true },
+                xAxis: { type:'value', axisLabel:{fontSize:10, formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v} },
+                yAxis: { type:'category', data: top.map(r=>r.category),
+                         axisLabel:{fontSize:11, color:'#cbd5e1', formatter: v => v.length>26?v.slice(0,24)+'…':v} },
+                series: [{
+                    type:'bar', barWidth:'62%',
+                    data: top.map(r => ({
+                        value: r.requests,
+                        itemStyle: { color: PROD_COLORS[r.productivity] || '#3b82f6', borderRadius:[0,3,3,0] }
+                    })),
+                    label: { show:true, position:'right', fontSize:10, color:'#cbd5e1', formatter: p => fmtNum(p.value) }
+                }]
+            });
+            chart('chart-cats').on('click', (p) => {
+                const r = top[p.dataIndex]; if (r) ua2.drill({category:r.category});
+            });
+        }
+        // productivity
+        const total = (prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
+        const score = total ? Math.round((prod.productive||0)/total*100) : 0;
+        $('s-prod').textContent = score+'%';
+        const pe = $('s-prod'); pe.style.color = score>=60?'#86efac':score>=30?'#fcd34d':'#fca5a5';
+
+        const pc = chart('chart-prod');
+        if (pc) {
+            const items = [
+                {name:'Productive',  value:prod.productive||0,  itemStyle:{color:PROD_COLORS.productive}},
+                {name:'Neutral',     value:prod.neutral||0,     itemStyle:{color:PROD_COLORS.neutral}},
+                {name:'Unproductive',value:prod.unproductive||0,itemStyle:{color:PROD_COLORS.unproductive}},
+                {name:'Risky',       value:prod.risky||0,       itemStyle:{color:PROD_COLORS.risky}},
+            ];
+            pc.setOption({
+                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                series:[{
+                    type:'pie', radius:['62%','85%'], avoidLabelOverlap:false,
+                    label:{ show:true, position:'center', formatter:`{a|${score}%}\n{b|Productive}`,
+                        rich:{ a:{fontSize:22, fontWeight:'bold', color:'#fff', fontFamily:'JetBrains Mono'},
+                               b:{fontSize:10, color:'#94a3b8', padding:[4,0,0,0]} }
+                    },
+                    labelLine:{show:false},
+                    data: items
+                }]
+            });
+        }
+        $('prod-meta').textContent = `${fmtNum(total)} requests classified`;
+        // list to the right of donut
+        const items = [
+            {label:'Productive',  k:'productive',  v:prod.productive||0,   c:PROD_COLORS.productive},
+            {label:'Neutral',     k:'neutral',     v:prod.neutral||0,      c:PROD_COLORS.neutral},
+            {label:'Unproductive',k:'unproductive',v:prod.unproductive||0, c:PROD_COLORS.unproductive},
+            {label:'Risky',       k:'risky',       v:prod.risky||0,        c:PROD_COLORS.risky},
+        ];
+        $('prod-list').innerHTML = items.map(it => {
+            const pct = total ? ((it.v/total)*100).toFixed(1) : 0;
+            return `<div class="ua2-prod-item">
+                <div class="ua2-prod-swatch" style="background:${it.c}"></div>
+                <div class="ua2-prod-name">${it.label}</div>
+                <div class="ua2-prod-num">${fmtNum(it.v)}</div>
+                <div class="ua2-prod-pct">${pct}%</div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderHostnames(d) {
+        const rows = (d && d.hostnames) || [];
+        const tb = $('tbl-hosts');
+        if (!rows.length) { tb.innerHTML = '<tr><td colspan="6"><div class="ua2-empty">No hostname activity</div></td></tr>'; }
+        else {
+            const max = Math.max(...rows.map(r=>r.bandwidth||0)) || 1;
+            tb.innerHTML = rows.slice(0,30).map(r => {
+                const pct = ((r.bandwidth/max)*100).toFixed(1);
+                return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.hostname))}'})">
+                    <td class="mono ellip" style="max-width:300px;color:#93c5fd">${esc(r.hostname)}</td>
+                    <td class="r mono">${fmtNum(r.requests)}</td>
+                    <td class="r mono">${fmtNum(r.users)}</td>
+                    <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                    <td>${esc(r.category||'—')}</td>
+                    <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%"></div></div></div></td>
+                </tr>`;
+            }).join('');
+        }
+        // Top sites side-card (bandwidth view)
+        const sites = [...rows].sort((a,b)=>(b.bandwidth||0)-(a.bandwidth||0)).slice(0,10);
+        const mx = sites.length ? sites[0].bandwidth||1 : 1;
+        $('tbl-topsites').innerHTML = sites.length ? sites.map(r => {
+            const pct = ((r.bandwidth/mx)*100).toFixed(1);
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.hostname))}'})">
+                <td class="mono ellip" style="max-width:160px;color:#93c5fd" title="${esc(r.hostname)}">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:var(--purple)"></div></div></div></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="3"><div class="ua2-empty">No data</div></td></tr>';
+    }
+
+    function renderUsers(d) {
+        const rows = (d && d.users) || [];
+        const tb = $('tbl-users');
+        if (!rows.length) { tb.innerHTML = '<tr><td colspan="6"><div class="ua2-empty">No user activity</div></td></tr>'; return; }
+        tb.innerHTML = rows.slice(0,40).map(r => {
+            const u = r.username || '—';
+            const sites = (r.top_sites||[]).slice(0,3).map(s=>esc(s)).join(', ');
+            const sv = r.username || r.src_ip;
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(sv))}'})">
+                <td><div class="ua2-user"><b>${esc(u)}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtNum(r.unique_sites)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td class="r mono" style="${r.blocked>0?'color:#fca5a5':''}">${fmtNum(r.blocked)}</td>
+                <td class="ellip" style="max-width:300px;color:var(--dim);font-size:.74rem">${sites}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderActions(d) {
+        const acts = (d && d.actions) || [];
+        const meths = (d && d.methods) || [];
+        const vnds = (d && d.vendors) || [];
+
+        const total = acts.reduce((s,r)=>s+r.count,0);
+        $('act-meta').textContent = total ? `${fmtNum(total)} actions` : '';
+
+        const c = chart('chart-act');
+        if (c) {
+            const data = acts.map(a => ({
+                name: a.action,
+                value: a.count,
+                itemStyle: { color: ACT_COLOR[a.action.toLowerCase()] || '#3b82f6' }
+            }));
+            c.setOption({
+                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11, color:'#cbd5e1'},
+                         formatter: name => {
+                             const found = acts.find(a=>a.action===name);
+                             return `${name}  {b|${found ? fmtNum(found.count) : ''}}`;
+                         },
+                         tooltip:{show:false}
+                       },
+                series:[{
+                    type:'pie', radius:['55%','78%'], center:['38%','50%'],
+                    label:{show:false}, labelLine:{show:false},
+                    data: data
+                }]
+            });
+        }
+    }
+
+    function renderCountries(d) {
+        const rows = (d && d.countries) || [];
+        const c = chart('chart-geo');
+        if (!c) return;
+        if (!rows.length) { c.clear(); return; }
+        const top = rows.slice(0,10).reverse();
+        c.setOption({
+            tooltip:{ trigger:'axis', axisPointer:{type:'shadow'},
+                formatter: p => {
+                    const r = top[p[0].dataIndex];
+                    return `<b>${esc(r.country)}</b><br/>Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Blocked: ${fmtNum(r.blocked)}`;
+                }
+            },
+            grid:{left:8, right:40, top:5, bottom:5, containLabel:true},
+            xAxis:{ type:'value', axisLabel:{fontSize:10, formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v} },
+            yAxis:{ type:'category', data: top.map(r=>r.country), axisLabel:{fontSize:11, color:'#cbd5e1'} },
+            series:[{
+                type:'bar', barWidth:'58%',
+                data: top.map(r => ({value:r.requests, itemStyle:{color:'#22d3ee', borderRadius:[0,3,3,0]}})),
+                label:{show:true, position:'right', fontSize:10, color:'#cbd5e1', formatter: p => fmtNum(p.value)}
+            }]
+        });
+    }
+
+    function renderYT(d) {
+        const t = (d && d.totals) || {};
+        $('yt-req').textContent = fmtNum(t.requests);
+        $('yt-usr').textContent = fmtNum(t.users);
+        $('yt-dl').textContent = fmtBytes(t.download_bytes);
+        $('yt-time').textContent = fmtMinutes(t.est_watch_minutes);
+        const users = (d && d.top_users) || [];
+        const tb = $('tbl-yt');
+        if (!users.length) { tb.innerHTML='<tr><td colspan="4"><div class="ua2-empty">No YouTube activity</div></td></tr>'; return; }
+        tb.innerHTML = users.map(r => {
+            const sv = r.username || r.src_ip;
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(sv))}'})">
+                <td><div class="ua2-user"><b>${esc(r.username || '—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td class="r mono">${fmtMinutes(r.est_minutes)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderSearches(d) {
+        const rows = (d && d.searches) || [];
+        const tb = $('tbl-searches');
+        if (!rows.length) { tb.innerHTML='<tr><td colspan="5"><div class="ua2-empty">No search activity</div></td></tr>'; return; }
+        tb.innerHTML = rows.slice(0,50).map(r => `
+            <tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.query||''))}'})">
+                <td><span class="ua2-search-q" title="${esc(r.query)}">“${esc(r.query)}”</span></td>
+                <td class="r mono">${fmtNum(r.searches)}</td>
+                <td class="r mono">${fmtNum(r.users)}</td>
+                <td class="mono" style="font-size:.74rem;color:var(--dim)">${esc(r.user||'')}</td>
+                <td style="font-size:.74rem;color:var(--muted)">${esc(r.engine||'')}</td>
+            </tr>`).join('');
+    }
+
+    function renderBlocked(d) {
+        const hosts = (d && d.blocked_hosts) || [];
+        const cats = (d && d.blocked_categories) || [];
+        const users = (d && d.blocked_users) || [];
+        $('tbl-blk-h').innerHTML = hosts.length ? hosts.map(r => `
+            <tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.hostname))}',action:'blocked'})">
+                <td class="mono ellip" style="max-width:200px;color:#fca5a5">${esc(r.hostname)}</td>
+                <td>${esc(r.category||'—')}</td>
+                <td class="r mono">${fmtNum(r.blocked_count)}</td>
+            </tr>`).join('') : '<tr><td colspan="3"><div class="ua2-empty">No blocks</div></td></tr>';
+        $('tbl-blk-c').innerHTML = cats.length ? cats.map(r => `
+            <tr class="clickable" onclick="ua2.drill({category:'${qs(esc(r.category))}',action:'blocked'})">
+                <td>${esc(r.category)}</td>
+                <td class="r mono">${fmtNum(r.count)}</td>
+                <td class="r mono">${fmtNum(r.users)}</td>
+            </tr>`).join('') : '<tr><td colspan="3"><div class="ua2-empty">No blocks</div></td></tr>';
+        $('tbl-blk-u').innerHTML = users.length ? users.map(r => {
+            const sv = r.username || r.src_ip;
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(sv))}',action:'blocked'})">
+                <td><div class="ua2-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtNum(r.blocked_count)}</td>
+                <td class="r mono">${fmtNum(r.unique_blocked_sites)}</td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="3"><div class="ua2-empty">No blocks</div></td></tr>';
+    }
+
+    function renderBandwidth(d) {
+        const u = (d && d.by_user) || [];
+        const h = (d && d.by_hostname) || [];
+        const mxU = u.length ? u[0].total_bytes||1 : 1;
+        const mxH = h.length ? h[0].total_bytes||1 : 1;
+        $('tbl-bw-u').innerHTML = u.length ? u.map(r => {
+            const sv = r.username || r.src_ip;
+            const pct = (r.total_bytes/mxU*100).toFixed(1);
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(sv))}'})">
+                <td><div class="ua2-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtBytes(r.sent)}</td>
+                <td class="r mono">${fmtBytes(r.recv)}</td>
+                <td class="r mono" style="color:#fff;font-weight:600">${fmtBytes(r.total_bytes)}</td>
+                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:var(--purple)"></div></div></div></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="5"><div class="ua2-empty">No bandwidth</div></td></tr>';
+        $('tbl-bw-h').innerHTML = h.length ? h.map(r => {
+            const pct = (r.total_bytes/mxH*100).toFixed(1);
+            return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.hostname))}'})">
+                <td class="mono ellip" style="max-width:240px;color:#93c5fd">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtBytes(r.sent)}</td>
+                <td class="r mono">${fmtBytes(r.recv)}</td>
+                <td class="r mono" style="color:#fff;font-weight:600">${fmtBytes(r.total_bytes)}</td>
+                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%"></div></div></div></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="5"><div class="ua2-empty">No bandwidth</div></td></tr>';
+    }
+
+    function renderApps(d) {
+        const rows = (d && d.applications) || [];
+        $('tbl-apps').innerHTML = rows.length ? rows.map(r => `
+            <tr><td>${esc(r.application)}</td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtNum(r.users)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td class="r mono" style="${r.blocked>0?'color:#fca5a5':''}">${fmtNum(r.blocked)}</td></tr>
+        `).join('') : '<tr><td colspan="5"><div class="ua2-empty"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>No application data — firewall isn\'t reporting application names</div></td></tr>';
+    }
+
+    function renderDevices(d) {
+        const rows = (d && d.devices) || [];
+        const tb = $('tbl-devs');
+        // Filter out blank/no-device rows
+        const real = rows.filter(r => r.device && r.device.trim());
+        if (!real.length) {
+            tb.innerHTML = '<tr><td colspan="5"><div class="ua2-empty"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>Device name not being reported by firewall</div></td></tr>';
+            return;
+        }
+        tb.innerHTML = real.map(r => `
+            <tr><td>${esc(r.device)}</td>
+                <td><span class="ua2-bdg ua2-bdg-${r.vendor==='fortinet'?'allow':r.vendor==='paloalto'?'alert':'neut'}">${esc(r.vendor||'—')}</span></td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtNum(r.sites)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td></tr>
+        `).join('');
+    }
+
+    function renderDNS(d) {
+        const s = (d && d.summary) || {};
+        // Hero strip
+        $('dns-stats').innerHTML = `
+            <div class="ua2-stat">
+                <div class="ua2-stat-l">Queries</div>
+                <div class="ua2-stat-v">${fmtNum(s.total)}</div>
+            </div>
+            <div class="ua2-stat cyan">
+                <div class="ua2-stat-l">Resolvers</div>
+                <div class="ua2-stat-v">${fmtNum(s.users)}</div>
+            </div>
+            <div class="ua2-stat">
+                <div class="ua2-stat-l">Unique Domains</div>
+                <div class="ua2-stat-v">${fmtNum(s.unique_domains)}</div>
+            </div>
+            <div class="ua2-stat danger">
+                <div class="ua2-stat-l">Blocked</div>
+                <div class="ua2-stat-v">${fmtNum(s.blocked)}</div>
+            </div>
+            <div class="ua2-stat purple">
+                <div class="ua2-stat-l">Sinkholed</div>
+                <div class="ua2-stat-v">${fmtNum(s.sinkholed)}</div>
+            </div>
+            <div class="ua2-stat warning">
+                <div class="ua2-stat-l">High/Crit</div>
+                <div class="ua2-stat-v">${fmtNum(s.critical_high)}</div>
+            </div>
+        `;
+        $('tab-dns-cnt').textContent = fmtNum(s.total);
+
+        // qtype donut
+        const qts = (d && d.qtypes) || [];
+        const c = chart('chart-qtype');
+        if (c) {
+            c.setOption({
+                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11,color:'#cbd5e1'} },
+                series:[{
+                    type:'pie', radius:['55%','78%'], center:['38%','50%'], label:{show:false},
+                    data: qts.map(q => ({name:q.qtype, value:q.count}))
+                }]
+            });
+        }
+        // Domains
+        const doms = (d && d.domains) || [];
+        $('tbl-dns-doms').innerHTML = doms.length ? doms.map(r => `
+            <tr><td class="mono ellip" style="max-width:180px">${esc(r.domain)}</td>
+                <td>${esc(r.category||'—')}</td>
+                <td class="r mono">${fmtNum(r.count)}</td></tr>
+        `).join('') : '<tr><td colspan="3"><div class="ua2-empty">No DNS data</div></td></tr>';
+
+        // Sources
+        const srcs = (d && d.sources) || [];
+        $('tbl-dns-src').innerHTML = srcs.length ? srcs.map(r => `
+            <tr><td><div class="ua2-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtNum(r.count)}</td>
+                <td class="r mono">${fmtNum(r.unique_domains)}</td></tr>
+        `).join('') : '<tr><td colspan="3"><div class="ua2-empty">No DNS data</div></td></tr>';
+    }
+
+    /* ---- Tabs ---- */
+    document.querySelectorAll('.ua2-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ua2-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.ua2-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            const p = document.querySelector(`.ua2-panel[data-panel="${btn.dataset.tab}"]`);
+            if (p) p.classList.add('active');
+            // Resize charts on tab switch (especially DNS qtype)
+            setTimeout(() => Object.values(charts).forEach(c => c && c.resize()), 50);
         });
     });
 
-    /* ---- Productivity badge ---- */
-    function prodBadge(p){
-        if(!p) return '';
-        var m={'productive':'ua-badge-productive','neutral':'ua-badge-neutral','unproductive':'ua-badge-unproductive','risky':'ua-badge-risky'};
-        return '<span class="ua-badge '+(m[p.toLowerCase()]||'ua-badge-neutral')+'">'+esc(p)+'</span>';
-    }
+    /* ---- CSV export ---- */
+    $('ua2-export').addEventListener('click', async () => {
+        const hours = getHours();
+        const types = ['summary','categories','hostnames','users','blocked','bandwidth'];
+        const lines = ['# Zentryc URL Analytics export — '+new Date().toISOString()+'  hours='+hours];
+        for (const t of types) {
+            try {
+                const r = await fetch('/api/url-analytics/'+t+'?hours='+hours);
+                const j = await r.json();
+                lines.push('','# '+t.toUpperCase());
+                if (t==='summary' && j.summary) {
+                    Object.entries(j.summary).forEach(([k,v]) => lines.push(`${k},${v}`));
+                } else if (j[t]) {
+                    const arr = j[t];
+                    if (arr.length) {
+                        const keys = Object.keys(arr[0]).filter(k=>!Array.isArray(arr[0][k]));
+                        lines.push(keys.join(','));
+                        arr.forEach(row => lines.push(keys.map(k => {
+                            const v = row[k]; const s = v==null?'':String(v);
+                            return s.includes(',')||s.includes('"') ? '"'+s.replace(/"/g,'""')+'"' : s;
+                        }).join(',')));
+                    }
+                } else {
+                    // multi-array endpoints (blocked, bandwidth)
+                    Object.keys(j).filter(k=>Array.isArray(j[k])).forEach(arrKey => {
+                        const arr = j[arrKey];
+                        if (arr.length) {
+                            lines.push('## '+arrKey);
+                            const keys = Object.keys(arr[0]).filter(k=>!Array.isArray(arr[0][k]));
+                            lines.push(keys.join(','));
+                            arr.forEach(row => lines.push(keys.map(k => {
+                                const v = row[k]; const s = v==null?'':String(v);
+                                return s.includes(',')||s.includes('"') ? '"'+s.replace(/"/g,'""')+'"' : s;
+                            }).join(',')));
+                            lines.push('');
+                        }
+                    });
+                }
+            } catch(e) {}
+        }
+        const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `zentryc-url-analytics-${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+    });
 
-    /* ---- Drill-down to URL & DNS page ---- */
-    window.drill = function(params) {
-        var p = new URLSearchParams(params);
-        p.set('hours', getHours());
-        p.set('clean', 'true');
-        window.location.href = '/threats/url-dns/?' + p.toString();
-    }
-
-    /* ---- Fetch helper ---- */
-    function api(path){
-        return fetch('/api/url-analytics/'+path+'?hours='+getHours()).then(function(r){
-            if(!r.ok) throw new Error(r.status);
-            return r.json();
+    /* ---- Refresh all ---- */
+    let lastRefresh = 0;
+    function refreshAll() {
+        lastRefresh = Date.now();
+        $('ua2-refresh-status').textContent = 'updating…';
+        Promise.allSettled([
+            api('summary').then(renderSummary),
+            api('timeline').then(renderTimeline),
+            api('categories').then(renderCategories),
+            api('hostnames').then(renderHostnames),
+            api('users').then(renderUsers),
+            api('actions').then(renderActions),
+            api('countries').then(renderCountries),
+            api('youtube').then(renderYT),
+            api('searches').then(renderSearches),
+            api('blocked').then(renderBlocked),
+            api('bandwidth').then(renderBandwidth),
+            api('applications').then(renderApps),
+            api('devices').then(renderDevices),
+            api('dns').then(renderDNS),
+        ]).then(() => {
+            $('ua2-refresh-status').textContent = 'live · '+new Date().toLocaleTimeString();
         });
     }
 
-    /* ---- Render: Summary ---- */
-    function renderSummary(data){
-        var s=data.summary||{};
-        $('sTotal').textContent=fmtNum(s.total_requests);
-        $('sUsers').textContent=fmtNum(s.unique_users);
-        $('sSites').textContent=fmtNum(s.unique_sites);
-        $('sBW').textContent=fmtBytes(s.total_bandwidth);
-        $('sBlocked').textContent=fmtNum(s.blocked_count);
-        $('sCats').textContent=fmtNum(s.category_count);
-        $('sYT').textContent=fmtNum(s.youtube_requests);
-    }
+    $('ua2-time').addEventListener('change', refreshAll);
+    $('ua2-refresh').addEventListener('click', refreshAll);
+    setInterval(() => { if (!document.hidden) refreshAll(); }, 60000);
 
-    /* ---- Render: Categories + Productivity ---- */
-    function renderCategories(data){
-        var cats=data.categories||[], prod=data.productivity||{};
-        /* Categories table */
-        if(!cats.length){ $('tblCategories').innerHTML='<div class="ua-empty">No category data</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>Category</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th>Productivity</th></tr></thead><tbody>';
-            cats.slice(0,15).forEach(function(c){
-                h+='<tr style="cursor:pointer" onclick="drill({category:\''+esc(c.category).replace(/'/g,'&#39;')+'\'})" title="Drill down to URL logs for '+esc(c.category)+'"><td>'+esc(c.category)+'</td><td class="r mono">'+fmtNum(c.requests)+'</td><td class="r mono">'+fmtNum(c.users)+'</td><td class="r mono">'+fmtBytes(c.bandwidth)+'</td><td>'+prodBadge(c.productivity)+'</td></tr>';
-            });
-            h+='</tbody></table>';
-            $('tblCategories').innerHTML=h;
-        }
-        /* Productivity breakdown */
-        var total=(prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
-        if(!total){ $('prodBreakdown').innerHTML='<div class="ua-empty">No productivity data</div>'; return; }
-        var items=[
-            {label:'Productive',val:prod.productive||0,color:'var(--ua-success)'},
-            {label:'Neutral',val:prod.neutral||0,color:'var(--ua-muted)'},
-            {label:'Unproductive',val:prod.unproductive||0,color:'var(--ua-warning)'},
-            {label:'Risky',val:prod.risky||0,color:'var(--ua-danger)'}
-        ];
-        var ph='<div class="ua-prod-row">';
-        items.forEach(function(it){
-            var pct=total?((it.val/total)*100).toFixed(1):0;
-            ph+='<div class="ua-prod-card"><div class="ua-prod-hdr"><span class="ua-prod-lbl" style="color:'+it.color+'">'+it.label+'</span><span class="ua-prod-val" style="color:'+it.color+'">'+fmtNum(it.val)+'</span></div><div class="ua-bar-bg"><div class="ua-bar-fill" style="width:'+pct+'%;background:'+it.color+'"></div></div><div style="font-size:.7rem;color:var(--ua-dim);margin-top:4px;text-align:right">'+pct+'%</div></div>';
-        });
-        ph+='</div>';
-        $('prodBreakdown').innerHTML=ph;
-        /* Productivity score in hero */
-        var score=total?(((prod.productive||0)/total)*100).toFixed(0):0;
-        var el=$('sProd'); el.textContent=score+'%';
-        el.style.color=score>=60?'var(--ua-success)':score>=30?'var(--ua-warning)':'var(--ua-danger)';
-    }
-
-    /* ---- Render: Hostnames ---- */
-    function renderHostnames(data){
-        var rows=data.hostnames||[];
-        if(!rows.length){ $('tblHostnames').innerHTML='<div class="ua-empty">No hostname data</div>'; return; }
-        var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th>Category</th></tr></thead><tbody>';
-        rows.slice(0,15).forEach(function(r){
-            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\'})" title="View logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td>'+esc(r.category||'-')+'</td></tr>';
-        });
-        h+='</tbody></table>';
-        $('tblHostnames').innerHTML=h;
-    }
-
-    /* ---- Render: Users ---- */
-    function renderUsers(data){
-        var rows=data.users||[];
-        if(!rows.length){ $('tblUsers').innerHTML='<div class="ua-empty">No user data</div>'; return; }
-        var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Requests</th><th class="r">Sites</th><th class="r">Bandwidth</th><th class="r">Blocked</th><th>Top Sites</th></tr></thead><tbody>';
-        rows.slice(0,30).forEach(function(r){
-            var user=esc(r.username||r.src_ip);
-            if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
-            var sites=(r.top_sites||[]).slice(0,3).map(function(s){return esc(s);}).join(', ');
-            var searchVal=r.username||r.src_ip;
-            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(searchVal)+'\'})" title="View logs for '+esc(searchVal)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.unique_sites)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td class="r mono">'+fmtNum(r.blocked)+'</td><td style="font-size:.75rem;color:var(--ua-dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+sites+'</td></tr>';
-        });
-        h+='</tbody></table>';
-        $('tblUsers').innerHTML=h;
-    }
-
-    /* ---- Render: YouTube ---- */
-    function renderYouTube(data){
-        var t=data.totals||{}, users=data.top_users||[];
-        var hrs=Math.floor((t.est_watch_hours||0));
-        var mins=Math.round(((t.est_watch_hours||0)-hrs)*60);
-        var statsH='<div class="ua-yt-stats">'
-            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-danger)">'+fmtNum(t.requests)+'</div><div class="ua-yt-stat-lbl">Total Requests</div></div>'
-            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-cyan)">'+fmtNum(t.users)+'</div><div class="ua-yt-stat-lbl">Users</div></div>'
-            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-purple)">'+fmtBytes(t.download_bytes)+'</div><div class="ua-yt-stat-lbl">Data Downloaded</div></div>'
-            +'<div class="ua-yt-stat"><div class="ua-yt-stat-val" style="color:var(--ua-warning)">'+hrs+'h '+mins+'m</div><div class="ua-yt-stat-lbl">Est. Watch Time</div></div>'
-            +'</div>';
-        $('ytStats').innerHTML=statsH;
-        if(!users.length){ $('tblYT').innerHTML='<div class="ua-empty">No YouTube data</div>'; return; }
-        var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Requests</th><th class="r">Data Downloaded</th><th class="r">Est. Watch Time</th></tr></thead><tbody>';
-        users.forEach(function(r){
-            var user=esc(r.username||r.src_ip);
-            if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
-            var m=r.est_minutes||0, uh=Math.floor(m/60), um=Math.round(m%60);
-            var searchVal=r.username||r.src_ip;
-            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(searchVal)+'\'})" title="View logs for '+esc(searchVal)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtBytes(r.bandwidth)+'</td><td class="r mono">'+uh+'h '+um+'m</td></tr>';
-        });
-        h+='</tbody></table>';
-        $('tblYT').innerHTML=h;
-    }
-
-    /* ---- Render: Searches ---- */
-    function renderSearches(data){
-        var rows=data.searches||[];
-        if(!rows.length){ $('tblSearches').innerHTML='<div class="ua-empty">No search data</div>'; return; }
-        var h='<table class="ua-tbl"><thead><tr><th>Search Query</th><th class="r">Count</th><th class="r">Users</th><th>Sample User</th><th>Engine</th></tr></thead><tbody>';
-        rows.slice(0,30).forEach(function(r){
-            h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.query).replace(/'/g,'&#39;')+'\'})" title="View logs matching this search"><td><span class="ua-search-q">&ldquo;'+esc(r.query)+'&rdquo;</span></td><td class="r mono">'+fmtNum(r.searches)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td class="mono" style="font-size:.75rem">'+esc(r.user||'-')+'</td><td>'+esc(r.engine||'-')+'</td></tr>';
-        });
-        h+='</tbody></table>';
-        $('tblSearches').innerHTML=h;
-    }
-
-    /* ---- Render: Blocked ---- */
-    function renderBlocked(data){
-        var hosts=data.blocked_hosts||[], cats=data.blocked_categories||[], users=data.blocked_users||[];
-        /* Hosts */
-        if(!hosts.length){ $('tblBlockedHosts').innerHTML='<div class="ua-empty">No blocked sites</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th>Category</th><th class="r">Count</th><th class="r">Users</th></tr></thead><tbody>';
-            hosts.slice(0,15).forEach(function(r){
-                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\',action:\'blocked\'})" title="View blocked logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td>'+esc(r.category||'-')+'</td><td class="r mono">'+fmtNum(r.blocked_count)+'</td><td class="r mono">'+fmtNum(r.users_blocked)+'</td></tr>';
-            });
-            $('tblBlockedHosts').innerHTML=h+'</tbody></table>';
-        }
-        /* Categories */
-        if(!cats.length){ $('tblBlockedCats').innerHTML='<div class="ua-empty">No blocked categories</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>Category</th><th class="r">Count</th><th class="r">Users</th></tr></thead><tbody>';
-            cats.slice(0,15).forEach(function(r){
-                h+='<tr style="cursor:pointer" onclick="drill({category:\''+esc(r.category).replace(/'/g,'&#39;')+'\',action:\'blocked\'})" title="View blocked logs for '+esc(r.category)+'"><td>'+esc(r.category)+'</td><td class="r mono">'+fmtNum(r.count)+'</td><td class="r mono">'+fmtNum(r.users)+'</td></tr>';
-            });
-            $('tblBlockedCats').innerHTML=h+'</tbody></table>';
-        }
-        /* Users */
-        if(!users.length){ $('tblBlockedUsers').innerHTML='<div class="ua-empty">No blocked users</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Blocked</th><th class="r">Unique Sites</th></tr></thead><tbody>';
-            users.slice(0,15).forEach(function(r){
-                var user=esc(r.username||r.src_ip);
-                if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
-                var sv=r.username||r.src_ip;
-                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(sv)+'\',action:\'blocked\'})" title="View blocked logs for '+esc(sv)+'"><td>'+user+'</td><td class="r mono">'+fmtNum(r.blocked_count)+'</td><td class="r mono">'+fmtNum(r.unique_blocked_sites)+'</td></tr>';
-            });
-            $('tblBlockedUsers').innerHTML=h+'</tbody></table>';
-        }
-    }
-
-    /* ---- Render: Bandwidth ---- */
-    function renderBandwidth(data){
-        var byUser=data.by_user||[], byHost=data.by_hostname||[];
-        var maxU=byUser.length?Math.max.apply(null,byUser.map(function(r){return r.total_bytes||0;})):1;
-        var maxH=byHost.length?Math.max.apply(null,byHost.map(function(r){return r.total_bytes||0;})):1;
-        /* By user */
-        if(!byUser.length){ $('tblBWUsers').innerHTML='<div class="ua-empty">No bandwidth data</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>User</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th class="r">Requests</th><th style="width:100px"></th></tr></thead><tbody>';
-            byUser.slice(0,15).forEach(function(r){
-                var user=esc(r.username||r.src_ip);
-                if(r.username&&r.src_ip) user=esc(r.username)+' <span style="color:var(--ua-dim);font-size:.7rem">('+esc(r.src_ip)+')</span>';
-                var pct=maxU?((r.total_bytes/maxU)*100).toFixed(1):0;
-                var sv=r.username||r.src_ip;
-                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(sv)+'\'})" title="View logs for '+esc(sv)+'"><td>'+user+'</td><td class="r mono">'+fmtBytes(r.sent)+'</td><td class="r mono">'+fmtBytes(r.recv)+'</td><td class="r mono">'+fmtBytes(r.total_bytes)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td><div class="ua-bw-bar"><div class="ua-bw-track"><div class="ua-bw-fill" style="width:'+pct+'%;background:var(--ua-purple)"></div></div></div></td></tr>';
-            });
-            $('tblBWUsers').innerHTML=h+'</tbody></table>';
-        }
-        /* By host */
-        if(!byHost.length){ $('tblBWHosts').innerHTML='<div class="ua-empty">No bandwidth data</div>'; }
-        else {
-            var h='<table class="ua-tbl"><thead><tr><th>Hostname</th><th class="r">Total</th><th class="r">Recv</th><th class="r">Sent</th><th class="r">Requests</th><th class="r">Users</th><th style="width:100px"></th></tr></thead><tbody>';
-            byHost.slice(0,15).forEach(function(r){
-                var pct=maxH?((r.total_bytes/maxH)*100).toFixed(1):0;
-                h+='<tr style="cursor:pointer" onclick="drill({search:\''+esc(r.hostname)+'\'})" title="View logs for '+esc(r.hostname)+'"><td class="mono">'+esc(r.hostname)+'</td><td class="r mono">'+fmtBytes(r.total_bytes)+'</td><td class="r mono">'+fmtBytes(r.recv)+'</td><td class="r mono">'+fmtBytes(r.sent)+'</td><td class="r mono">'+fmtNum(r.requests)+'</td><td class="r mono">'+fmtNum(r.users)+'</td><td><div class="ua-bw-bar"><div class="ua-bw-track"><div class="ua-bw-fill" style="width:'+pct+'%"></div></div></div></td></tr>';
-            });
-            $('tblBWHosts').innerHTML=h+'</tbody></table>';
-        }
-    }
-
-    /* ---- Load all data in parallel ---- */
-    function refreshAll(){
-        Promise.all([
-            api('summary').then(renderSummary).catch(function(){ $('sTotal').textContent='ERR'; }),
-            api('categories').then(renderCategories).catch(function(){ $('tblCategories').innerHTML='<div class="ua-empty">Failed to load</div>'; $('prodBreakdown').innerHTML=''; }),
-            api('hostnames').then(renderHostnames).catch(function(){ $('tblHostnames').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
-            api('users').then(renderUsers).catch(function(){ $('tblUsers').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
-            api('youtube').then(renderYouTube).catch(function(){ $('ytStats').innerHTML=''; $('tblYT').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
-            api('searches').then(renderSearches).catch(function(){ $('tblSearches').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
-            api('blocked').then(renderBlocked).catch(function(){ $('tblBlockedHosts').innerHTML='<div class="ua-empty">Failed to load</div>'; }),
-            api('bandwidth').then(renderBandwidth).catch(function(){ $('tblBWUsers').innerHTML='<div class="ua-empty">Failed to load</div>'; })
-        ]);
-    }
-
-    /* ---- Events ---- */
-    $('uaTimeRange').addEventListener('change', refreshAll);
-    $('uaRefresh').addEventListener('click', refreshAll);
-
-    /* ---- Init ---- */
     refreshAll();
 })();
 </script>

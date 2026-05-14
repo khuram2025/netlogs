@@ -1081,7 +1081,10 @@ async def api_url_logs(
                 "dest_port": r['dest_port'],
                 "url": r['url'],
                 "hostname": r['hostname'] or "",
-                "category": r['url_category'],
+                # Mask garbage url_category values from truncated UDP syslog
+                "category": (r['url_category'] if r['url_category']
+                             and not r['url_category'].startswith('"')
+                             and len(r['url_category']) >= 3 else ""),
                 "action": r['action'],
                 "http_method": r['http_method'],
                 "user_agent": r['user_agent'],
@@ -1177,22 +1180,29 @@ async def api_url_logs_stats(
             "paloalto_count": _safe(s.get('paloalto_count')),
         }
 
-        # Top categories
+        # Top categories — exclude garbage values from truncated UDP syslog
+        # (leading `"`, length < 3) so the sidebar shows only real categories.
         cat_q = f"""
         SELECT url_category as category, count() as cnt
-        FROM url_logs WHERE {tw} AND url_category != ''
+        FROM url_logs WHERE {tw}
+          AND url_category != ''
+          AND NOT startsWith(url_category, '"')
+          AND length(url_category) >= 3
         GROUP BY url_category ORDER BY cnt DESC LIMIT 10
         """
         cats = [{"category": r['category'], "count": _safe(r['cnt'])}
                 for r in client.query(cat_q, parameters=params).named_results()]
 
         # Top users
+        # NOTE: alias the aggregate as `user_name` (not `src_user`) to avoid an
+        # ILLEGAL_AGGREGATION error in ClickHouse 24+ when the WHERE clause also
+        # references the raw `src_user` column (e.g. via the search filter).
         usr_q = f"""
-        SELECT src_ip, any(src_user) as src_user, count() as cnt
+        SELECT src_ip, any(src_user) as user_name, count() as cnt
         FROM url_logs WHERE {tw}
         GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
         """
-        users = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "", "count": _safe(r['cnt'])}
+        users = [{"src_ip": r['src_ip'], "src_user": r['user_name'] or "", "count": _safe(r['cnt'])}
                  for r in client.query(usr_q, parameters=params).named_results()]
 
         # Action breakdown
@@ -1213,10 +1223,16 @@ async def api_url_logs_stats(
         top_hostnames = [{"hostname": r['hostname'], "count": _safe(r['cnt'])}
                          for r in client.query(host_q, parameters=params).named_results()]
 
-        # Available categories for filter dropdown
+        # Available categories for filter dropdown.
+        # Exclude garbage values from truncated UDP syslog (e.g. `"Inf`, `"Govern`)
+        # — those start with a leading `"` and are partial fragments. Also exclude
+        # one-character values that are obvious noise.
         fcat_q = f"""
         SELECT DISTINCT url_category as category FROM url_logs
-        WHERE {tw} AND url_category != ''
+        WHERE {tw}
+          AND url_category != ''
+          AND NOT startsWith(url_category, '"')
+          AND length(url_category) >= 3
         ORDER BY url_category LIMIT 100
         """
         filter_categories = [r['category'] for r in client.query(fcat_q, parameters=params).named_results()]
@@ -1351,11 +1367,31 @@ async def api_dns_logs(
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_dns_logs_stats(
     hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    severity: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
 ):
-    """Stats for DNS traffic from the unified dns_logs table."""
+    """Stats for DNS traffic — filter-aware so the whole page reflects the search."""
     try:
         client = ClickHouseClient.get_client()
         tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if severity:
+            tw += " AND severity = {sev:String}"
+            params["sev"] = severity
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            params["q"] = f"%{search}%"
+            tw += (" AND (qname ILIKE {q:String} OR src_ip ILIKE {q:String} "
+                   "OR dest_ip ILIKE {q:String} OR resolved_ip ILIKE {q:String} "
+                   "OR src_user ILIKE {q:String} OR category ILIKE {q:String} "
+                   "OR threat_name ILIKE {q:String} OR msg ILIKE {q:String})")
 
         # Summary
         sum_q = f"""
@@ -1369,7 +1405,7 @@ async def api_dns_logs_stats(
                countIf(severity IN ('critical','high')) as critical_high
         FROM dns_logs WHERE {tw}
         """
-        sr = list(client.query(sum_q).named_results())
+        sr = list(client.query(sum_q, parameters=params).named_results())
         s = sr[0] if sr else {}
         summary = {
             "total": _safe(s.get('total')),
@@ -1393,20 +1429,21 @@ async def api_dns_logs_stats(
         domains = [{"threat_name": r['threat_name'], "count": _safe(r['cnt']),
                      "severity": r['sev'], "action": r['act'],
                      "category": r.get('category', '')}
-                   for r in client.query(dom_q).named_results()]
+                   for r in client.query(dom_q, parameters=params).named_results()]
 
-        # Top sources
+        # Top sources — alias `any(src_user)` as user_name to avoid
+        # ILLEGAL_AGGREGATION when WHERE also references the raw src_user column.
         src_q = f"""
-        SELECT src_ip, any(src_user) as src_user, count() as cnt,
+        SELECT src_ip, any(src_user) as user_name, count() as cnt,
                uniqExact(qname) as unique_domains,
                countIf(action IN ('sinkhole','block','deny','drop')) as blocked
         FROM dns_logs WHERE {tw}
         GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
         """
-        sources = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "",
+        sources = [{"src_ip": r['src_ip'], "src_user": r['user_name'] or "",
                      "count": _safe(r['cnt']), "unique_domains": _safe(r['unique_domains']),
                      "blocked": _safe(r['blocked'])}
-                   for r in client.query(src_q).named_results()]
+                   for r in client.query(src_q, parameters=params).named_results()]
 
         # Action breakdown
         act_q = f"""
@@ -1415,7 +1452,7 @@ async def api_dns_logs_stats(
         GROUP BY action ORDER BY cnt DESC
         """
         actions = [{"action": r['action'], "count": _safe(r['cnt'])}
-                   for r in client.query(act_q).named_results()]
+                   for r in client.query(act_q, parameters=params).named_results()]
 
         # Severity breakdown
         sev_q = f"""
@@ -1424,7 +1461,7 @@ async def api_dns_logs_stats(
         GROUP BY severity ORDER BY cnt DESC
         """
         severities = [{"severity": r['severity'], "count": _safe(r['cnt'])}
-                      for r in client.query(sev_q).named_results()]
+                      for r in client.query(sev_q, parameters=params).named_results()]
 
         return JSONResponse({
             "success": True, "summary": summary,
@@ -1434,3 +1471,127 @@ async def api_dns_logs_stats(
     except Exception as e:
         logger.error(f"DNS logs stats error: {e}")
         return JSONResponse({"success": True, "summary": {}, "top_domains": [], "top_sources": [], "actions": [], "severities": []})
+
+
+# ============================================================
+# Mini-histograms for URL / DNS log pages
+# ============================================================
+
+@router.get("/api/threats/url-logs/timeline", name="api_url_logs_timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_url_logs_timeline(
+    hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    category: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
+    clean: bool = Query(False),
+):
+    """Hourly histogram for URL logs page (allowed / blocked / alerted)."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if category:
+            tw += " AND url_category = {cat:String}"
+            params["cat"] = category
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            tw += " AND " + _build_url_search_clause(search, params)
+        if clean:
+            from ..services.siteclean import build_siteclean_where
+            sc = await build_siteclean_where()
+            if sc:
+                tw += " " + sc
+
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+
+        q = f"""
+        SELECT {bucket_sql} as bucket,
+               count() as total,
+               countIf(action IN ('block-url','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(action IN ('alert','warn','warning')) as alerted,
+               countIf(action IN ('allow','passthrough','log','pass','accept')) as allowed
+        FROM url_logs WHERE {tw}
+        GROUP BY bucket ORDER BY bucket ASC
+        """
+        rows = list(client.query(q, parameters=params).named_results())
+        return JSONResponse({"success": True, "timeline": [{
+            "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+            "total": _safe(r["total"]),
+            "blocked": _safe(r["blocked"]),
+            "alerted": _safe(r["alerted"]),
+            "allowed": _safe(r["allowed"]),
+        } for r in rows]})
+    except Exception as e:
+        logger.error(f"URL timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": []})
+
+
+@router.get("/api/threats/dns-logs/timeline", name="api_dns_logs_timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_dns_logs_timeline(
+    hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    severity: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """Hourly histogram for DNS logs page (allowed / blocked / sinkholed)."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if severity:
+            tw += " AND severity = {sev:String}"
+            params["sev"] = severity
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            params["q"] = f"%{search}%"
+            tw += (" AND (qname ILIKE {q:String} OR src_ip ILIKE {q:String} "
+                   "OR dest_ip ILIKE {q:String} OR resolved_ip ILIKE {q:String} "
+                   "OR src_user ILIKE {q:String} OR category ILIKE {q:String} "
+                   "OR threat_name ILIKE {q:String} OR msg ILIKE {q:String})")
+
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+
+        q = f"""
+        SELECT {bucket_sql} as bucket,
+               count() as total,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(action = 'sinkhole') as sinkholed,
+               countIf(action IN ('allow','pass','passthrough','log')) as allowed
+        FROM dns_logs WHERE {tw}
+        GROUP BY bucket ORDER BY bucket ASC
+        """
+        rows = list(client.query(q, parameters=params).named_results())
+        return JSONResponse({"success": True, "timeline": [{
+            "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+            "total": _safe(r["total"]),
+            "blocked": _safe(r["blocked"]),
+            "sinkholed": _safe(r["sinkholed"]),
+            "allowed": _safe(r["allowed"]),
+        } for r in rows]})
+    except Exception as e:
+        logger.error(f"DNS timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": []})
