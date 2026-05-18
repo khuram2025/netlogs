@@ -1,0 +1,169 @@
+{% extends "reports/_report_base.html" %}
+
+{% block report_title %}Bandwidth Report{% endblock %}
+{% block report_subtitle %}
+    Top consumers — by user and by host. Identify heavy usage and unusual transfers.
+{% endblock %}
+{% block report_icon_svg %}
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+{% endblock %}
+
+{% block report_body %}
+<!-- KPI strip -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span>
+        <span class="rpt-section-title">Bandwidth Summary</span>
+    </div>
+    <div class="rpt-kpis">
+        <div class="rpt-kpi purple"><div class="rpt-kpi-l">Total Bandwidth</div><div class="rpt-kpi-v" id="bw-total">—</div><div class="rpt-kpi-sub" id="bw-total-sub">&nbsp;</div></div>
+        <div class="rpt-kpi"><div class="rpt-kpi-l">Total Received</div><div class="rpt-kpi-v" id="bw-recv">—</div></div>
+        <div class="rpt-kpi cyan"><div class="rpt-kpi-l">Total Sent</div><div class="rpt-kpi-v" id="bw-sent">—</div></div>
+        <div class="rpt-kpi success"><div class="rpt-kpi-l">Total Requests</div><div class="rpt-kpi-v" id="bw-req">—</div></div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="rpt-row rpt-row-2">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+            <span class="rpt-section-title">Top Users by Bandwidth</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="bw-users-chart" class="rpt-chart rpt-chart-lg"></div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/></svg></span>
+            <span class="rpt-section-title">Top Hosts by Bandwidth</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="bw-hosts-chart" class="rpt-chart rpt-chart-lg"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Tables -->
+<div class="rpt-row rpt-row-2">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg></span>
+            <span class="rpt-section-title">Top Users — Detail</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b no-pad">
+            <div class="rpt-tbl-wrap" style="max-height:none">
+                <table class="rpt-tbl">
+                    <thead><tr><th>User</th><th class="r">↑ Sent</th><th class="r">↓ Recv</th><th class="r">Total</th><th></th></tr></thead>
+                    <tbody id="bw-users-tbl"><tr><td colspan="5"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg></span>
+            <span class="rpt-section-title">Top Hosts — Detail</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b no-pad">
+            <div class="rpt-tbl-wrap" style="max-height:none">
+                <table class="rpt-tbl">
+                    <thead><tr><th>Hostname</th><th class="r">↑ Sent</th><th class="r">↓ Recv</th><th class="r">Total</th><th></th></tr></thead>
+                    <tbody id="bw-hosts-tbl"><tr><td colspan="5"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block report_extra_js %}
+<script>
+(function(){
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function fmtBytes(b){ if(!b||b===0) return '0 B'; const u=['B','KB','MB','GB','TB','PB']; let i=0; b=Number(b); while(b>=1024 && i<u.length-1){b/=1024;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+    function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el || typeof echarts === 'undefined') return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize()));
+
+    Promise.all([
+        fetch('/api/url-analytics/bandwidth?hours='+window.rptHours).then(r=>r.json()),
+        fetch('/api/url-analytics/summary?hours='+window.rptHours).then(r=>r.json())
+    ]).then(([bw, sum]) => {
+        const s = sum.summary || {};
+        const u = bw.by_user || [];
+        const h = bw.by_hostname || [];
+        document.getElementById('bw-total').textContent = fmtBytes(s.total_bandwidth);
+        document.getElementById('bw-recv').textContent  = fmtBytes(s.total_recv);
+        document.getElementById('bw-sent').textContent  = fmtBytes(s.total_sent);
+        document.getElementById('bw-req').textContent   = fmtNum(s.total_requests);
+        const total = (s.total_bandwidth||0); const recv = (s.total_recv||0);
+        const recvPct = total ? ((recv/total)*100).toFixed(0) : 0;
+        document.getElementById('bw-total-sub').textContent = recvPct + '% download';
+
+        // Users chart (top 10)
+        const topU = u.slice(0,10).reverse();
+        const cu = chart('bw-users-chart');
+        if (cu) {
+            cu.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter:p=>{const r=topU[p[0].dataIndex]; return `<b>${esc(r.username||r.src_ip)}</b><br/>Total: ${fmtBytes(r.total_bytes)}<br/>↓ ${fmtBytes(r.recv)}<br/>↑ ${fmtBytes(r.sent)}`;}},
+                grid:{left:8, right:70, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>fmtBytes(v)}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:topU.map(r=>r.username||r.src_ip), axisLabel:{fontSize:11, color:'#c4b5fd'}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:topU.map(r=>({value:r.total_bytes,
+                    itemStyle:{color:{type:'linear',x:0,y:0,x2:1,y2:0,colorStops:[{offset:0,color:'#a78bfa'},{offset:1,color:'#ec4899'}]}, borderRadius:[0,4,4,0]}})),
+                    label:{show:true, position:'right', fontSize:10, color:'#c4b5fd', formatter:p=>fmtBytes(p.value)}}]
+            });
+        }
+
+        // Hosts chart (top 10)
+        const topH = h.slice(0,10).reverse();
+        const ch = chart('bw-hosts-chart');
+        if (ch) {
+            ch.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter:p=>{const r=topH[p[0].dataIndex]; return `<b>${esc(r.hostname)}</b><br/>Total: ${fmtBytes(r.total_bytes)}<br/>↓ ${fmtBytes(r.recv)}<br/>↑ ${fmtBytes(r.sent)}`;}},
+                grid:{left:8, right:70, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>fmtBytes(v)}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:topH.map(r=>r.hostname), axisLabel:{fontSize:11, color:'#93c5fd', formatter:v=>v.length>24?v.slice(0,22)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:topH.map(r=>({value:r.total_bytes,
+                    itemStyle:{color:{type:'linear',x:0,y:0,x2:1,y2:0,colorStops:[{offset:0,color:'#3b82f6'},{offset:1,color:'#22d3ee'}]}, borderRadius:[0,4,4,0]}})),
+                    label:{show:true, position:'right', fontSize:10, color:'#93c5fd', formatter:p=>fmtBytes(p.value)}}]
+            });
+        }
+
+        // Tables
+        const maxU = u.length ? u[0].total_bytes||1 : 1;
+        document.getElementById('bw-users-tbl').innerHTML = u.length ? u.slice(0,40).map(r => `
+            <tr>
+                <td><div class="rpt-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono">${fmtBytes(r.sent)}</td>
+                <td class="r mono">${fmtBytes(r.recv)}</td>
+                <td class="r mono" style="font-weight:700;color:#fff">${fmtBytes(r.total_bytes)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.total_bytes/maxU*100).toFixed(1)}%;background:linear-gradient(90deg,#a78bfa,#ec4899)"></div></div></div></td>
+            </tr>`).join('') : '<tr><td colspan="5"><div class="rpt-empty">No user bandwidth data</div></td></tr>';
+
+        const maxH = h.length ? h[0].total_bytes||1 : 1;
+        document.getElementById('bw-hosts-tbl').innerHTML = h.length ? h.slice(0,40).map(r => `
+            <tr>
+                <td class="mono" style="color:#93c5fd;overflow:hidden;text-overflow:ellipsis;max-width:240px">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtBytes(r.sent)}</td>
+                <td class="r mono">${fmtBytes(r.recv)}</td>
+                <td class="r mono" style="font-weight:700;color:#fff">${fmtBytes(r.total_bytes)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.total_bytes/maxH*100).toFixed(1)}%"></div></div></div></td>
+            </tr>`).join('') : '<tr><td colspan="5"><div class="rpt-empty">No host bandwidth data</div></td></tr>';
+    });
+})();
+</script>
+{% endblock %}

@@ -3542,46 +3542,77 @@ class ClickHouseClient:
 
         # Volume / NAT / category come from parsed_data (Map). Different vendors
         # use different keys, so we coalesce the common ones.
-        extra_cols = """
-            sum(toUInt64OrZero(parsed_data['sent_bytes'])
+        #
+        # NOTE: Fortinet emits multiple "session update" rows per session with
+        # *cumulative* byte counters. Summing them directly over-counts bandwidth
+        # by 100×–1000×. We compute byte totals by first deduplicating per
+        # parsed_data['sessionid'] (taking max — cumulative is monotonic, so
+        # max == final), then summing across sessions in the outer query. Rows
+        # with no sessionid fall back to (timestamp, srcip, srcport) which is
+        # unique per row so they are treated as singletons.
+
+        # Per-session inner aggregation — produces ONE row per
+        # (group_key, session_key) with max bytes for that session.
+        inner_select = """
+            {device_expr} as device_display,
+            toString(device_ip) as device_ip_str,
+            vdom, policyname, action, application, src_zone, dst_zone,
+            coalesce(nullIf(parsed_data['sessionid'], ''),
+                concat(toString(toUnixTimestamp64Milli(timestamp)), '_',
+                       toString(srcip), '_', toString(srcport))) as sid_key,
+            count() as inner_events,
+            uniq(srcip) as inner_uniq_src,
+            groupUniqArray(10)(toString(srcip)) as inner_sample_srcs,
+            min(timestamp) as inner_first_seen,
+            max(timestamp) as inner_last_seen,
+            max(toUInt64OrZero(parsed_data['sent_bytes'])
               + toUInt64OrZero(parsed_data['sentbyte'])
-              + toUInt64OrZero(parsed_data['bytes_sent']))             as sent_bytes,
-            sum(toUInt64OrZero(parsed_data['recv_bytes'])
+              + toUInt64OrZero(parsed_data['bytes_sent']))     as inner_sent_max,
+            max(toUInt64OrZero(parsed_data['recv_bytes'])
               + toUInt64OrZero(parsed_data['rcvdbyte'])
-              + toUInt64OrZero(parsed_data['bytes_received']))         as recv_bytes,
-            anyIf(parsed_data['srcnat'],     parsed_data['srcnat']     != '') as nat_srcip,
-            anyIf(parsed_data['dstnat'],     parsed_data['dstnat']     != '') as nat_dstip,
-            anyIf(parsed_data['srcnatport'], parsed_data['srcnatport'] != '') as nat_srcport,
-            anyIf(parsed_data['dstnatport'], parsed_data['dstnatport'] != '') as nat_dstport,
-            anyIf(parsed_data['category'],   parsed_data['category']   != '') as category
+              + toUInt64OrZero(parsed_data['bytes_received'])) as inner_recv_max,
+            anyIf(parsed_data['srcnat'],     parsed_data['srcnat']     != '') as inner_nat_srcip,
+            anyIf(parsed_data['dstnat'],     parsed_data['dstnat']     != '') as inner_nat_dstip,
+            anyIf(parsed_data['srcnatport'], parsed_data['srcnatport'] != '') as inner_nat_srcport,
+            anyIf(parsed_data['dstnatport'], parsed_data['dstnatport'] != '') as inner_nat_dstport,
+            anyIf(parsed_data['category'],   parsed_data['category']   != '') as inner_category
+        """.format(device_expr=device_expr)
+
+        # Outer aggregation — combines per-session rows into per-policy totals.
+        outer_select = """
+            any(device_display) as device_display,
+            device_ip_str,
+            vdom, policyname, action, application, src_zone, dst_zone,
+            sum(inner_events)              as event_count,
+            sum(inner_uniq_src)            as unique_src_count,
+            arrayDistinct(arrayFlatten(groupArray(inner_sample_srcs))) as sample_sources,
+            min(inner_first_seen)          as first_seen,
+            max(inner_last_seen)           as last_seen,
+            sum(inner_sent_max)            as sent_bytes,
+            sum(inner_recv_max)            as recv_bytes,
+            anyIf(inner_nat_srcip,   inner_nat_srcip   != '') as nat_srcip,
+            anyIf(inner_nat_dstip,   inner_nat_dstip   != '') as nat_dstip,
+            anyIf(inner_nat_srcport, inner_nat_srcport != '') as nat_srcport,
+            anyIf(inner_nat_dstport, inner_nat_dstport != '') as nat_dstport,
+            anyIf(inner_category,    inner_category    != '') as category
         """
 
         # ── Query 1: Allowed traffic ──
         srcip_where = f"AND srcip = '{srcip_safe}'" if srcip_safe else ""
         q_allowed = f"""
-        SELECT
-            {device_expr} as device_display,
-            toString(device_ip) as device_ip_str,
-            vdom,
-            policyname,
-            action,
-            application,
-            src_zone,
-            dst_zone,
-            count()               as event_count,
-            uniq(srcip)           as unique_src_count,
-            groupUniqArray(10)(toString(srcip)) as sample_sources,
-            min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen,
-            {extra_cols}
-        FROM syslogs
-        PREWHERE {time_clause}
-            AND {dstip_clause}
-            AND dstport = {dstport}
-            {proto_clause}
-            AND action IN ('accept','allow','pass','close','client-rst','server-rst')
-        WHERE 1=1 {srcip_where}
-        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        SELECT {outer_select}
+        FROM (
+            SELECT {inner_select}
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND {dstip_clause}
+                AND dstport = {dstport}
+                {proto_clause}
+                AND action IN ('accept','allow','pass','close','client-rst','server-rst')
+            WHERE 1=1 {srcip_where}
+            GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone, sid_key
+        )
+        GROUP BY device_ip_str, vdom, policyname, action, application, src_zone, dst_zone
         ORDER BY event_count DESC
         LIMIT 200
         """
@@ -3589,28 +3620,18 @@ class ClickHouseClient:
 
         # ── Query 2: Denied traffic (never filtered by srcip — show ALL denies) ──
         q_denied = f"""
-        SELECT
-            {device_expr} as device_display,
-            toString(device_ip) as device_ip_str,
-            vdom,
-            policyname,
-            action,
-            application,
-            src_zone,
-            dst_zone,
-            count()               as event_count,
-            uniq(srcip)           as unique_src_count,
-            groupUniqArray(5)(toString(srcip)) as sample_sources,
-            min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen,
-            {extra_cols}
-        FROM syslogs
-        PREWHERE {time_clause}
-            AND {dstip_clause}
-            AND dstport = {dstport}
-            {proto_clause}
-            AND action IN ('deny','drop','block','reject','blocked','reset-both')
-        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        SELECT {outer_select}
+        FROM (
+            SELECT {inner_select}
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND {dstip_clause}
+                AND dstport = {dstport}
+                {proto_clause}
+                AND action IN ('deny','drop','block','reject','blocked','reset-both')
+            GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone, sid_key
+        )
+        GROUP BY device_ip_str, vdom, policyname, action, application, src_zone, dst_zone
         ORDER BY event_count DESC
         LIMIT 100
         """

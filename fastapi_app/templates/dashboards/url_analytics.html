@@ -3,101 +3,319 @@
 {% block extra_css %}
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    /* Break out of base .container */
-    .container:has(.ua2-page) { max-width:100%; padding:0 1rem; margin:1rem auto; }
+    /* Break out of base .container so the dashboard can use the full width */
+    .container:has(.ua2-page) { max-width:100%; padding:0 1.25rem; margin:1rem auto; }
 
     .ua2-page {
-        --bg:#0b1220; --card:#141c2e; --card-2:#1a2238; --border:#2a3553;
-        --text:#e6ebf5; --muted:#94a3b8; --dim:#64748b;
-        --primary:#3b82f6; --success:#22c55e; --danger:#ef4444;
-        --warning:#f59e0b; --purple:#a78bfa; --cyan:#22d3ee; --pink:#ec4899;
+        /* ── Design tokens ────────────────────────────────────────── */
+        --bg:#0a0f1c;
+        --surface:#111a2e;
+        --surface-2:#162038;
+        --surface-3:#1c2849;
+        --border:#243154;
+        --border-soft:#1c2747;
+        --hairline:rgba(124,152,210,.08);
+
+        --text:#e7ecf7;
+        --text-2:#c2cce0;
+        --muted:#8c9ab5;
+        --dim:#5a6783;
+
+        --primary:#3b82f6;
+        --primary-soft:rgba(59,130,246,.14);
+        --success:#22c55e;
+        --danger:#ef4444;
+        --warning:#f59e0b;
+        --purple:#a78bfa;
+        --cyan:#22d3ee;
+        --pink:#ec4899;
+        --indigo:#818cf8;
+
+        /* gradient swatches for hero cards */
+        --grad-blue:    linear-gradient(135deg, rgba(59,130,246,.18) 0%, rgba(59,130,246,.02) 70%);
+        --grad-purple:  linear-gradient(135deg, rgba(167,139,250,.18) 0%, rgba(167,139,250,.02) 70%);
+        --grad-emerald: linear-gradient(135deg, rgba(34,197,94,.18)  0%, rgba(34,197,94,.02)  70%);
+        --grad-rose:    linear-gradient(135deg, rgba(239,68,68,.18)  0%, rgba(239,68,68,.02)  70%);
+        --grad-amber:   linear-gradient(135deg, rgba(245,158,11,.18) 0%, rgba(245,158,11,.02) 70%);
+        --grad-cyan:    linear-gradient(135deg, rgba(34,211,238,.18) 0%, rgba(34,211,238,.02) 70%);
+
         font-family:'Outfit',system-ui,sans-serif; width:100%;
+        color:var(--text);
     }
-    @keyframes ua2-fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes ua2-spin { to{transform:rotate(360deg)} }
+    @keyframes ua2-fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes ua2-spin   { to{transform:rotate(360deg)} }
+    @keyframes ua2-pulse  {
+        0%   { box-shadow:0 0 0 0 rgba(34,197,94,.55) }
+        70%  { box-shadow:0 0 0 9px rgba(34,197,94,0) }
+        100% { box-shadow:0 0 0 0 rgba(34,197,94,0) }
+    }
+    @keyframes ua2-shimmer{ from{background-position:-400px 0} to{background-position:400px 0} }
 
     /* ── HEADER ───────────────────────────────────────────────── */
     .ua2-hdr {
-        display:flex; justify-content:space-between; align-items:flex-end; gap:1rem;
-        margin-bottom:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border);
+        display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; align-items:center;
+        padding:1.05rem 1.2rem 1.1rem;
+        background:linear-gradient(135deg,rgba(59,130,246,.06) 0%, rgba(34,211,238,.03) 50%, transparent 100%);
+        border:1px solid var(--border-soft);
+        border-radius:14px;
+        margin-bottom:1rem;
         animation:ua2-fadeIn .35s ease-out both;
+        position:relative;
+        overflow:hidden;
     }
-    .ua2-hdr h1 {
-        font-size:1.55rem; font-weight:700; color:#fff; margin:0;
-        display:flex; align-items:center; gap:.6rem; letter-spacing:-.01em;
+    .ua2-hdr::before {
+        content:''; position:absolute; inset:0;
+        background:radial-gradient(900px 200px at 0% 0%, rgba(59,130,246,.07), transparent 55%);
+        pointer-events:none;
     }
-    .ua2-hdr h1 .ua2-icon-wrap {
-        width:34px; height:34px; border-radius:10px;
+    .ua2-hdr-l { display:flex; align-items:center; gap:.85rem; min-width:0; position:relative; z-index:1; }
+    .ua2-icon-wrap {
+        width:42px; height:42px; border-radius:12px; flex-shrink:0;
         background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);
         display:flex; align-items:center; justify-content:center;
+        box-shadow:0 8px 24px -8px rgba(59,130,246,.45);
     }
-    .ua2-hdr h1 svg { width:18px; height:18px; stroke:#fff; fill:none; stroke-width:2.2; }
-    .ua2-hdr-sub { color:var(--muted); font-size:.82rem; margin-top:4px; }
-    .ua2-hdr-right { display:flex; align-items:center; gap:.5rem; }
-    .ua2-sel, .ua2-btn {
-        background:var(--card); border:1px solid var(--border); color:var(--text);
-        padding:.42rem .8rem; border-radius:8px; font-size:.8rem; font-family:inherit;
-        cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:.4rem;
+    .ua2-icon-wrap svg { width:22px; height:22px; stroke:#fff; fill:none; stroke-width:2; }
+    .ua2-hdr h1 {
+        font-size:1.4rem; font-weight:700; color:#fff; margin:0;
+        letter-spacing:-.01em; line-height:1.15;
     }
-    .ua2-sel:focus, .ua2-btn:focus { outline:none; border-color:var(--primary); }
-    .ua2-btn:hover { border-color:var(--primary); }
-    .ua2-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
-    .ua2-btn-primary { background:var(--primary); border-color:var(--primary); color:#fff; }
-    .ua2-btn-primary:hover { background:#2563eb; border-color:#2563eb; }
-    .ua2-auto-dot {
-        width:7px; height:7px; border-radius:50%; background:var(--success);
-        box-shadow:0 0 0 0 rgba(34,197,94,.4); animation:ua2-pulse 1.8s infinite;
+    .ua2-hdr-sub {
+        color:var(--muted); font-size:.78rem; margin-top:3px;
+        display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
     }
-    @keyframes ua2-pulse {
-        0% { box-shadow:0 0 0 0 rgba(34,197,94,.45) }
-        70% { box-shadow:0 0 0 8px rgba(34,197,94,0) }
-        100% { box-shadow:0 0 0 0 rgba(34,197,94,0) }
+    .ua2-hdr-sub .dot { width:3px; height:3px; border-radius:50%; background:var(--dim); }
+
+    .ua2-hdr-r {
+        display:flex; align-items:center; gap:.55rem; flex-wrap:wrap;
+        position:relative; z-index:1;
     }
 
-    /* ── HERO STAT GRID ───────────────────────────────────────── */
+    /* Live indicator */
+    .ua2-live {
+        display:inline-flex; align-items:center; gap:.45rem;
+        padding:.42rem .7rem; border-radius:9px;
+        background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.22);
+        font-size:.72rem; color:#86efac; font-weight:600;
+    }
+    .ua2-live-dot {
+        width:7px; height:7px; border-radius:50%; background:var(--success);
+        animation:ua2-pulse 1.8s infinite;
+    }
+    .ua2-live-time { color:var(--muted); font-family:'JetBrains Mono',monospace; font-weight:500; }
+
+    /* Segmented time control */
+    .ua2-seg {
+        display:inline-flex; align-items:center; gap:2px;
+        background:var(--surface); border:1px solid var(--border);
+        padding:3px; border-radius:10px;
+    }
+    .ua2-seg-btn {
+        padding:.38rem .7rem; border:none; background:transparent;
+        color:var(--muted); font-size:.72rem; font-weight:600; letter-spacing:.02em;
+        cursor:pointer; border-radius:7px; font-family:inherit;
+        transition:all .15s; min-width:40px;
+    }
+    .ua2-seg-btn:hover { color:var(--text); background:rgba(59,130,246,.08); }
+    .ua2-seg-btn.active {
+        background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff;
+        box-shadow:0 4px 14px -4px rgba(59,130,246,.5);
+    }
+
+    /* Buttons */
+    .ua2-btn {
+        background:var(--surface); border:1px solid var(--border); color:var(--text);
+        padding:.48rem .85rem; border-radius:9px; font-size:.78rem; font-family:inherit;
+        font-weight:600; cursor:pointer; transition:all .15s;
+        display:inline-flex; align-items:center; gap:.42rem;
+    }
+    .ua2-btn:hover { border-color:#3a4d7c; background:var(--surface-2); }
+    .ua2-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+    .ua2-btn-primary {
+        background:linear-gradient(135deg,#3b82f6,#2563eb); border-color:transparent; color:#fff;
+        box-shadow:0 4px 14px -4px rgba(59,130,246,.55);
+    }
+    .ua2-btn-primary:hover { filter:brightness(1.08); }
+
+    /* hide the underlying select but keep accessible */
+    #ua2-time { position:absolute; opacity:0; pointer-events:none; width:0; height:0; }
+
+    /* ── KPI ROW (4 hero + 2 stack columns = 6 cols) ───────────── */
+    .ua2-hero {
+        display:grid; grid-template-columns:repeat(6,1fr); gap:.6rem;
+        margin-bottom:.85rem; animation:ua2-fadeIn .4s ease-out .05s both;
+    }
+    .ua2-hero-stat {
+        position:relative; overflow:hidden;
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:12px; padding:.7rem .85rem .7rem;
+        transition:transform .18s ease, border-color .15s, box-shadow .2s;
+        min-width:0;
+    }
+
+    /* Stack container for two mini tiles in one column slot */
+    .ua2-hero-stack {
+        display:grid; grid-template-rows:1fr 1fr; gap:.5rem;
+        min-width:0;
+    }
+    .ua2-hero-mini {
+        position:relative; overflow:hidden;
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:10px; padding:.45rem .7rem;
+        display:flex; align-items:center; gap:.55rem;
+        transition:transform .15s, border-color .15s, background .15s;
+        min-width:0;
+    }
+    .ua2-hero-mini.clickable { cursor:pointer; }
+    .ua2-hero-mini:hover { transform:translateY(-1px); border-color:rgba(124,152,210,.22); }
+    .ua2-hero-mini.clickable:hover { border-color:rgba(59,130,246,.42); background:var(--surface-2); }
+    .ua2-hero-mini-ico {
+        width:24px; height:24px; border-radius:7px; flex-shrink:0;
+        background:rgba(59,130,246,.14); display:flex; align-items:center; justify-content:center;
+        color:#93c5fd;
+    }
+    .ua2-hero-mini-ico svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.1; }
+    .ua2-hero-mini.cyan   .ua2-hero-mini-ico { background:rgba(34,211,238,.16); color:#67e8f9; }
+    .ua2-hero-mini.amber  .ua2-hero-mini-ico { background:rgba(245,158,11,.16); color:#fcd34d; }
+    .ua2-hero-mini.pink   .ua2-hero-mini-ico { background:rgba(236,72,153,.16); color:#f9a8d4; }
+    .ua2-hero-mini-body { min-width:0; flex:1; line-height:1.1; }
+    .ua2-hero-mini-l {
+        font-size:.58rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.06em; font-weight:600;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ua2-hero-mini-v {
+        font-size:1.05rem; font-weight:800; color:#fff; line-height:1.1; margin-top:1px;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ua2-hero-mini.cyan  .ua2-hero-mini-v { color:#67e8f9; }
+    .ua2-hero-mini.amber .ua2-hero-mini-v { color:#fcd34d; }
+    .ua2-hero-mini.pink  .ua2-hero-mini-v { color:#f9a8d4; }
+    .ua2-hero-stat::before {
+        content:''; position:absolute; inset:0; opacity:1; pointer-events:none;
+        background:var(--grad-blue);
+    }
+    .ua2-hero-stat.purple::before  { background:var(--grad-purple); }
+    .ua2-hero-stat.emerald::before { background:var(--grad-emerald); }
+    .ua2-hero-stat.rose::before    { background:var(--grad-rose); }
+    .ua2-hero-stat.amber::before   { background:var(--grad-amber); }
+    .ua2-hero-stat.cyan::before    { background:var(--grad-cyan); }
+    .ua2-hero-stat.pink::before    { background:linear-gradient(135deg, rgba(236,72,153,.18) 0%, rgba(236,72,153,.02) 70%); }
+    .ua2-hero-stat:hover {
+        transform:translateY(-2px); border-color:rgba(124,152,210,.22);
+        box-shadow:0 14px 30px -16px rgba(0,0,0,.5);
+    }
+    .ua2-hero-stat.clickable { cursor:pointer; }
+    .ua2-hero-stat.clickable:hover { border-color:rgba(59,130,246,.4); }
+
+    .ua2-hero-head {
+        position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between;
+        margin-bottom:.32rem; gap:.3rem;
+    }
+    .ua2-hero-label {
+        font-size:.64rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.06em; font-weight:600;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ua2-hero-ico {
+        width:26px; height:26px; border-radius:8px; flex-shrink:0;
+        background:rgba(59,130,246,.16); display:flex; align-items:center; justify-content:center;
+        color:#93c5fd;
+    }
+    .ua2-hero-stat.purple  .ua2-hero-ico { background:rgba(167,139,250,.16); color:#c4b5fd; }
+    .ua2-hero-stat.emerald .ua2-hero-ico { background:rgba(34,197,94,.16);  color:#86efac; }
+    .ua2-hero-stat.rose    .ua2-hero-ico { background:rgba(239,68,68,.16);  color:#fca5a5; }
+    .ua2-hero-stat.amber   .ua2-hero-ico { background:rgba(245,158,11,.16); color:#fcd34d; }
+    .ua2-hero-stat.cyan    .ua2-hero-ico { background:rgba(34,211,238,.16); color:#67e8f9; }
+    .ua2-hero-ico svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
+
+    .ua2-hero-val {
+        position:relative; z-index:1;
+        font-size:1.35rem; font-weight:800; color:#fff; line-height:1.05;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.025em;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ua2-hero-stat.emerald .ua2-hero-val { color:#86efac; }
+    .ua2-hero-stat.rose    .ua2-hero-val { color:#fca5a5; }
+    .ua2-hero-stat.amber   .ua2-hero-val { color:#fcd34d; }
+    .ua2-hero-stat.purple  .ua2-hero-val { color:#c4b5fd; }
+    .ua2-hero-stat.cyan    .ua2-hero-val { color:#67e8f9; }
+
+    .ua2-hero-sub {
+        position:relative; z-index:1; margin-top:.14rem; min-height:12px;
+        font-size:.6rem; color:var(--muted); font-family:'JetBrains Mono',monospace;
+        display:flex; align-items:center; gap:.35rem;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ua2-hero-sub .pip { display:inline-flex; align-items:center; gap:.2rem; }
+    .ua2-hero-sub .pip-up   { color:#86efac; }
+    .ua2-hero-sub .pip-down { color:#93c5fd; }
+
+    .ua2-hero-sparkline {
+        position:relative; z-index:1; margin-top:.3rem; height:22px; width:100%;
+    }
+
+    @media (max-width:1200px) {
+        .ua2-hero { grid-template-columns:repeat(3,1fr); }
+        .ua2-hero-stack { grid-row:span 1; }
+    }
+    @media (max-width:760px)  { .ua2-hero { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:420px)  { .ua2-hero { grid-template-columns:1fr; } }
+
+    /* ── SECONDARY STAT STRIP ─────────────────────────────────── */
     .ua2-stats {
-        display:grid; grid-template-columns:repeat(8,1fr); gap:.65rem;
-        margin-bottom:1rem; animation:ua2-fadeIn .4s ease-out .05s both;
+        display:grid; grid-template-columns:repeat(4,1fr); gap:.65rem;
+        margin-bottom:.85rem; animation:ua2-fadeIn .4s ease-out .07s both;
     }
     .ua2-stat {
-        background:var(--card); border:1px solid var(--border);
-        border-radius:11px; padding:.7rem .9rem; position:relative; overflow:hidden;
-        transition:transform .15s, border-color .15s;
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:12px; padding:.55rem .8rem;
+        display:flex; align-items:center; gap:.65rem;
+        transition:transform .15s, border-color .15s, background .15s;
     }
-    .ua2-stat::before {
-        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-        background:var(--primary); opacity:.55;
-    }
-    .ua2-stat:hover { transform:translateY(-2px); border-color:var(--border); }
+    .ua2-stat:hover { transform:translateY(-1px); border-color:rgba(124,152,210,.2); }
     .ua2-stat.clickable { cursor:pointer; }
-    .ua2-stat.clickable:hover { border-color:var(--primary); }
-    .ua2-stat-l { font-size:.62rem; color:var(--muted); text-transform:uppercase;
-                  letter-spacing:.07em; font-weight:600; margin-bottom:4px; display:flex;
-                  align-items:center; gap:.3rem; }
-    .ua2-stat-l svg { width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:2; }
-    .ua2-stat-v { font-size:1.4rem; font-weight:800; color:#fff; line-height:1.1;
-                  font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; }
-    .ua2-stat-sub { font-size:.66rem; color:var(--dim); margin-top:3px; font-family:'JetBrains Mono',monospace; }
-    .ua2-stat.danger::before { background:var(--danger); }
-    .ua2-stat.success::before { background:var(--success); }
-    .ua2-stat.warning::before { background:var(--warning); }
-    .ua2-stat.purple::before { background:var(--purple); }
-    .ua2-stat.cyan::before { background:var(--cyan); }
-    .ua2-stat.pink::before { background:var(--pink); }
-    .ua2-stat.danger .ua2-stat-v { color:#fca5a5; }
+    .ua2-stat.clickable:hover { border-color:rgba(59,130,246,.42); background:var(--surface-2); }
+
+    .ua2-stat-ico {
+        width:30px; height:30px; border-radius:8px; flex-shrink:0;
+        background:rgba(59,130,246,.14); display:flex; align-items:center; justify-content:center;
+        color:#93c5fd;
+    }
+    .ua2-stat-ico svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2.1; }
+    .ua2-stat.danger  .ua2-stat-ico { background:rgba(239,68,68,.14);  color:#fca5a5; }
+    .ua2-stat.success .ua2-stat-ico { background:rgba(34,197,94,.14);  color:#86efac; }
+    .ua2-stat.warning .ua2-stat-ico { background:rgba(245,158,11,.14); color:#fcd34d; }
+    .ua2-stat.purple  .ua2-stat-ico { background:rgba(167,139,250,.14); color:#c4b5fd; }
+    .ua2-stat.cyan    .ua2-stat-ico { background:rgba(34,211,238,.14); color:#67e8f9; }
+    .ua2-stat.pink    .ua2-stat-ico { background:rgba(236,72,153,.14); color:#f9a8d4; }
+
+    .ua2-stat-body { min-width:0; flex:1; }
+    .ua2-stat-l {
+        font-size:.62rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.06em; font-weight:600; display:block; margin-bottom:1px;
+    }
+    .ua2-stat-v {
+        font-size:1.08rem; font-weight:700; color:#fff; line-height:1.05;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.015em;
+    }
+    .ua2-stat.danger  .ua2-stat-v { color:#fca5a5; }
     .ua2-stat.success .ua2-stat-v { color:#86efac; }
     .ua2-stat.warning .ua2-stat-v { color:#fcd34d; }
-    .ua2-stat.purple .ua2-stat-v { color:#c4b5fd; }
-    .ua2-stat.cyan .ua2-stat-v { color:#67e8f9; }
-    .ua2-stat.pink .ua2-stat-v { color:#f9a8d4; }
-    @media (max-width:1400px) { .ua2-stats { grid-template-columns:repeat(4,1fr); } }
-    @media (max-width:640px)  { .ua2-stats { grid-template-columns:repeat(2,1fr); } }
+    .ua2-stat.purple  .ua2-stat-v { color:#c4b5fd; }
+    .ua2-stat.cyan    .ua2-stat-v { color:#67e8f9; }
+    .ua2-stat.pink    .ua2-stat-v { color:#f9a8d4; }
+    .ua2-stat-sub { font-size:.62rem; color:var(--dim); font-family:'JetBrains Mono',monospace; margin-top:1px; }
+
+    @media (max-width:1100px) { .ua2-stats { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:520px)  { .ua2-stats { grid-template-columns:1fr; } }
 
     /* ── SECTION GRIDS ────────────────────────────────────────── */
     .ua2-row { display:grid; gap:.85rem; margin-bottom:.85rem;
                animation:ua2-fadeIn .4s ease-out .1s both; }
     .ua2-row-1 { grid-template-columns:1fr; }
-    .ua2-row-2 { grid-template-columns:1.4fr 1fr; }
+    .ua2-row-2 { grid-template-columns:1.45fr 1fr; }
     .ua2-row-3 { grid-template-columns:1fr 1fr 1fr; }
     .ua2-row-32 { grid-template-columns:2fr 1fr; }
     @media (max-width:1100px) {
@@ -106,27 +324,64 @@
 
     /* ── CARD ─────────────────────────────────────────────────── */
     .ua2-card {
-        background:var(--card); border:1px solid var(--border); border-radius:12px;
+        background:var(--surface); border:1px solid var(--border-soft); border-radius:14px;
         overflow:hidden; display:flex; flex-direction:column;
+        transition:border-color .15s;
     }
+    .ua2-card:hover { border-color:rgba(124,152,210,.18); }
     .ua2-card-hdr {
-        display:flex; justify-content:space-between; align-items:center;
-        padding:.7rem .95rem; border-bottom:1px solid var(--border);
+        display:flex; justify-content:space-between; align-items:center; gap:.5rem;
+        padding:.82rem 1rem .8rem;
+        border-bottom:1px solid var(--border-soft);
+        background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
     }
     .ua2-card-title {
         font-size:.78rem; font-weight:700; color:#fff;
         text-transform:uppercase; letter-spacing:.06em;
-        display:flex; align-items:center; gap:.4rem;
+        display:inline-flex; align-items:center; gap:.5rem;
     }
-    .ua2-card-title svg { width:14px; height:14px; stroke:var(--primary); fill:none; stroke-width:2; }
+    .ua2-card-title .tico {
+        width:24px; height:24px; border-radius:7px;
+        background:rgba(59,130,246,.13);
+        display:inline-flex; align-items:center; justify-content:center;
+        color:#93c5fd;
+    }
+    .ua2-card-title .tico svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
     .ua2-card-meta { font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
-    .ua2-card-body { padding:.65rem .8rem 1rem; flex:1; min-height:0; }
+    .ua2-card-body { padding:.7rem .9rem 1rem; flex:1; min-height:0; }
     .ua2-card-body.no-pad { padding:0; }
     .ua2-card-body.flush { padding:.4rem .6rem .8rem; }
 
+    /* Card with side-rail of stats (e.g. timeline) */
+    .ua2-timeline-wrap {
+        display:grid; grid-template-columns:1fr 200px; gap:.65rem;
+    }
+    @media (max-width:1100px) {
+        .ua2-timeline-wrap { grid-template-columns:1fr; }
+    }
+    .ua2-timeline-rail {
+        display:flex; flex-direction:column; gap:.45rem;
+        padding:.35rem;
+    }
+    .ua2-rail-card {
+        background:var(--surface-2); border:1px solid var(--border-soft);
+        border-radius:10px; padding:.65rem .8rem;
+    }
+    .ua2-rail-l {
+        font-size:.6rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.07em; font-weight:600; margin-bottom:3px;
+        display:flex; align-items:center; gap:.3rem;
+    }
+    .ua2-rail-l svg { width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:2; }
+    .ua2-rail-v {
+        font-size:1.05rem; font-weight:700; color:#fff;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.015em;
+    }
+    .ua2-rail-sub { font-size:.62rem; color:var(--dim); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+
     /* ── CHART CONTAINERS ─────────────────────────────────────── */
     .ua2-chart { width:100%; }
-    .chart-timeline  { height:280px; }
+    .chart-timeline  { height:300px; }
     .chart-donut     { height:240px; }
     .chart-bar       { height:280px; }
     .chart-bar-tall  { height:340px; }
@@ -135,87 +390,118 @@
     /* ── TABLE ────────────────────────────────────────────────── */
     .ua2-tbl { width:100%; border-collapse:collapse; font-size:.8rem; }
     .ua2-tbl th {
-        text-align:left; padding:.5rem .7rem; font-size:.62rem;
-        text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border);
-        font-weight:600; letter-spacing:.05em; background:rgba(0,0,0,.15);
-        position:sticky; top:0; z-index:1;
+        text-align:left; padding:.55rem .8rem; font-size:.62rem;
+        text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border-soft);
+        font-weight:700; letter-spacing:.06em;
+        background:linear-gradient(180deg,rgba(0,0,0,.18),rgba(0,0,0,.08));
+        position:sticky; top:0; z-index:1; backdrop-filter:blur(4px);
     }
     .ua2-tbl td {
-        padding:.45rem .7rem; border-bottom:1px solid rgba(42,53,83,.55);
+        padding:.5rem .8rem; border-bottom:1px solid var(--hairline);
         color:var(--text); vertical-align:middle;
     }
     .ua2-tbl tbody tr { transition:background .12s; }
-    .ua2-tbl tbody tr:hover td { background:rgba(59,130,246,.07); }
+    .ua2-tbl tbody tr:hover td { background:rgba(59,130,246,.06); }
     .ua2-tbl tbody tr.clickable { cursor:pointer; }
-    .ua2-tbl tbody tr.clickable:hover td { background:rgba(59,130,246,.11); }
+    .ua2-tbl tbody tr.clickable:hover td { background:rgba(59,130,246,.1); }
     .ua2-tbl .mono { font-family:'JetBrains Mono',monospace; font-size:.74rem; }
     .ua2-tbl .r { text-align:right; }
     .ua2-tbl .c { text-align:center; }
     .ua2-tbl .ellip { max-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ua2-tbl-wrap { max-height:560px; overflow:auto; }
+    .ua2-tbl-wrap::-webkit-scrollbar { width:8px; height:8px; }
+    .ua2-tbl-wrap::-webkit-scrollbar-thumb { background:#2a3553; border-radius:4px; }
+    .ua2-tbl-wrap::-webkit-scrollbar-track { background:transparent; }
 
-    /* Bars inside table cells (bandwidth-style) */
+    /* Inline progress bar */
     .ua2-bar { display:flex; align-items:center; gap:.5rem; min-width:80px; }
-    .ua2-bar-track { flex:1; height:5px; background:rgba(51,65,85,.6); border-radius:3px; overflow:hidden; min-width:60px; }
-    .ua2-bar-fill { height:100%; border-radius:3px; background:var(--primary); transition:width .4s ease; }
+    .ua2-bar-track { flex:1; height:5px; background:rgba(36,49,84,.7); border-radius:3px; overflow:hidden; min-width:60px; }
+    .ua2-bar-fill {
+        height:100%; border-radius:3px;
+        background:linear-gradient(90deg,#3b82f6,#22d3ee);
+        transition:width .4s ease;
+    }
 
     /* Badges */
     .ua2-bdg {
-        display:inline-block; padding:1px 7px; border-radius:9999px;
+        display:inline-block; padding:2px 8px; border-radius:9999px;
         font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     }
-    .ua2-bdg-prod    { background:rgba(34,197,94,.13); color:#86efac; }
+    .ua2-bdg-prod    { background:rgba(34,197,94,.14); color:#86efac; }
     .ua2-bdg-neut    { background:rgba(148,163,184,.13); color:#cbd5e1; }
-    .ua2-bdg-unprod  { background:rgba(245,158,11,.13); color:#fcd34d; }
-    .ua2-bdg-risky   { background:rgba(239,68,68,.13); color:#fca5a5; }
-    .ua2-bdg-allow   { background:rgba(34,197,94,.13); color:#86efac; }
-    .ua2-bdg-block   { background:rgba(239,68,68,.13); color:#fca5a5; }
-    .ua2-bdg-alert   { background:rgba(245,158,11,.13); color:#fcd34d; }
-    .ua2-bdg-sinkhole{ background:rgba(168,85,247,.13); color:#c4b5fd; }
+    .ua2-bdg-unprod  { background:rgba(245,158,11,.14); color:#fcd34d; }
+    .ua2-bdg-risky   { background:rgba(239,68,68,.14); color:#fca5a5; }
+    .ua2-bdg-allow   { background:rgba(34,197,94,.14); color:#86efac; }
+    .ua2-bdg-block   { background:rgba(239,68,68,.14); color:#fca5a5; }
+    .ua2-bdg-alert   { background:rgba(245,158,11,.14); color:#fcd34d; }
+    .ua2-bdg-sinkhole{ background:rgba(168,85,247,.14); color:#c4b5fd; }
     .ua2-bdg-sev-critical { background:rgba(239,68,68,.18); color:#fca5a5; }
     .ua2-bdg-sev-high     { background:rgba(249,115,22,.16); color:#fdba74; }
     .ua2-bdg-sev-medium   { background:rgba(245,158,11,.16); color:#fcd34d; }
-    .ua2-bdg-sev-low      { background:rgba(34,197,94,.13); color:#86efac; }
-    .ua2-bdg-sev-informational { background:rgba(59,130,246,.13); color:#93c5fd; }
+    .ua2-bdg-sev-low      { background:rgba(34,197,94,.14); color:#86efac; }
+    .ua2-bdg-sev-informational { background:rgba(59,130,246,.14); color:#93c5fd; }
 
     /* ── TABS ─────────────────────────────────────────────────── */
-    .ua2-tabs {
-        display:flex; gap:2px; background:var(--card); border:1px solid var(--border);
-        border-radius:10px; padding:4px; width:fit-content; margin-bottom:.8rem;
-        animation:ua2-fadeIn .4s ease-out .15s both; overflow:auto; max-width:100%;
+    .ua2-tabs-wrap {
+        position:sticky; top:0; z-index:10;
+        background:linear-gradient(180deg,var(--bg) 0%,var(--bg) 78%,transparent 100%);
+        padding:.45rem 0 .55rem;
+        margin-bottom:.85rem;
+        animation:ua2-fadeIn .4s ease-out .15s both;
     }
+    .ua2-tabs {
+        display:flex; gap:2px;
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:11px; padding:4px;
+        width:fit-content; max-width:100%;
+        overflow:auto;
+    }
+    .ua2-tabs::-webkit-scrollbar { display:none; }
     .ua2-tab {
-        padding:.45rem 1rem; border-radius:7px; font-size:.8rem; font-weight:600;
+        padding:.5rem 1rem; border-radius:8px; font-size:.78rem; font-weight:600;
         color:var(--muted); background:transparent; border:none; cursor:pointer;
         white-space:nowrap; transition:all .15s; font-family:inherit;
-        display:inline-flex; align-items:center; gap:.4rem;
+        display:inline-flex; align-items:center; gap:.45rem;
+        position:relative;
     }
-    .ua2-tab:hover { color:var(--text); background:rgba(59,130,246,.08); }
-    .ua2-tab.active { color:#fff; background:var(--primary); }
+    .ua2-tab svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.1; }
+    .ua2-tab:hover { color:var(--text); background:rgba(59,130,246,.07); }
+    .ua2-tab.active {
+        color:#fff;
+        background:linear-gradient(135deg,#3b82f6,#2563eb);
+        box-shadow:0 4px 14px -4px rgba(59,130,246,.55);
+    }
     .ua2-tab-count {
         font-size:.65rem; padding:1px 7px; border-radius:9px;
         background:rgba(255,255,255,.12); font-family:'JetBrains Mono',monospace;
+        font-weight:700;
     }
-    .ua2-panel { display:none; animation:ua2-fadeIn .3s ease-out both; }
+    .ua2-tab:not(.active) .ua2-tab-count {
+        background:rgba(124,152,210,.12); color:var(--text-2);
+    }
+    .ua2-panel { display:none; animation:ua2-fadeIn .25s ease-out both; }
     .ua2-panel.active { display:block; }
 
-    /* ── PRODUCTIVITY SUMMARY (donut + score) ────────────────── */
-    .ua2-prod-wrap { display:grid; grid-template-columns:200px 1fr; gap:1.25rem; align-items:center; }
+    /* ── PRODUCTIVITY DONUT + LIST ────────────────────────────── */
+    .ua2-prod-wrap { display:grid; grid-template-columns:200px 1fr; gap:1.2rem; align-items:center; }
     @media (max-width:600px) { .ua2-prod-wrap { grid-template-columns:1fr; } }
-    .ua2-prod-list { display:flex; flex-direction:column; gap:.45rem; }
+    .ua2-prod-list { display:flex; flex-direction:column; gap:.5rem; }
     .ua2-prod-item {
         display:grid; grid-template-columns:14px 1fr auto auto; gap:.55rem;
         align-items:center; font-size:.78rem;
+        padding:.35rem .55rem; border-radius:7px;
+        transition:background .12s;
     }
+    .ua2-prod-item:hover { background:rgba(59,130,246,.05); }
     .ua2-prod-swatch { width:10px; height:10px; border-radius:3px; }
-    .ua2-prod-name { color:var(--text); font-weight:500; }
-    .ua2-prod-num { color:#fff; font-family:'JetBrains Mono',monospace; font-size:.78rem; font-weight:600; }
-    .ua2-prod-pct { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:.7rem; min-width:48px; text-align:right; }
+    .ua2-prod-name { color:var(--text-2); font-weight:500; }
+    .ua2-prod-num  { color:#fff; font-family:'JetBrains Mono',monospace; font-size:.78rem; font-weight:700; }
+    .ua2-prod-pct  { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:.7rem; min-width:48px; text-align:right; }
 
     /* Search query pills */
     .ua2-search-q {
-        background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.15);
-        padding:1px 8px; border-radius:5px; font-style:italic; color:var(--cyan);
+        background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.18);
+        padding:2px 9px; border-radius:6px; font-style:italic; color:var(--cyan);
         font-size:.77rem; display:inline-block; max-width:100%; overflow:hidden;
         text-overflow:ellipsis; white-space:nowrap; vertical-align:middle;
     }
@@ -243,36 +529,78 @@
     }
     .ua2-empty svg { width:34px; height:34px; stroke:currentColor; fill:none; stroke-width:1.4; }
 
+    /* Skeleton hero loading state */
+    .skl {
+        display:inline-block; height:.95em; width:60%;
+        background:linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%);
+        background-size:400px 100%;
+        border-radius:4px; animation:ua2-shimmer 1.4s linear infinite;
+        vertical-align:middle;
+    }
+
     /* YouTube big stat row */
     .ua2-yt-row {
-        display:grid; grid-template-columns:repeat(4,1fr); gap:.65rem; padding:.7rem .9rem;
-        background:rgba(239,68,68,.05); border-bottom:1px solid var(--border);
+        display:grid; grid-template-columns:repeat(4,1fr); gap:.65rem; padding:.85rem 1rem;
+        background:linear-gradient(135deg,rgba(239,68,68,.06),rgba(236,72,153,.02));
+        border-bottom:1px solid var(--border-soft);
     }
-    .ua2-yt-row .ua2-stat { background:var(--card-2); }
+    .ua2-yt-row .ua2-stat { background:var(--surface-2); }
     @media (max-width:800px) { .ua2-yt-row { grid-template-columns:repeat(2,1fr); } }
+
+    /* Drill chip below header for active filter context */
+    .ua2-chip {
+        display:inline-flex; align-items:center; gap:.32rem;
+        padding:2px 8px; border-radius:9999px;
+        background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.22);
+        color:#93c5fd; font-size:.66rem; font-weight:600; letter-spacing:.02em;
+    }
+    .ua2-chip svg { width:10px; height:10px; stroke:currentColor; fill:none; stroke-width:2.2; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="ua2-page">
 
-    <!-- HEADER -->
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ HEADER                                                        ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
     <div class="ua2-hdr">
-        <div>
-            <h1>
-                <span class="ua2-icon-wrap">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
-                </span>
-                URL Analytics
-            </h1>
-            <div class="ua2-hdr-sub">Web Activity Intelligence &mdash; Productivity, Bandwidth &amp; Security</div>
-        </div>
-        <div class="ua2-hdr-right">
-            <div class="ua2-btn" style="padding:.42rem .65rem; cursor:default;" title="Auto-refresh every 60s">
-                <span class="ua2-auto-dot"></span>
-                <span id="ua2-refresh-status" style="font-size:.72rem;color:var(--muted);">live</span>
+        <div class="ua2-hdr-l">
+            <span class="ua2-icon-wrap">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+            </span>
+            <div>
+                <h1>URL Analytics</h1>
+                <div class="ua2-hdr-sub">
+                    <span>Web activity intelligence</span>
+                    <span class="dot"></span>
+                    <span>Productivity</span>
+                    <span class="dot"></span>
+                    <span>Bandwidth</span>
+                    <span class="dot"></span>
+                    <span>Security</span>
+                    <span class="ua2-chip" id="ua2-active-range" style="margin-left:.4rem">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span id="ua2-active-range-text">Last 24 hours</span>
+                    </span>
+                </div>
             </div>
-            <select class="ua2-sel" id="ua2-time">
+        </div>
+        <div class="ua2-hdr-r">
+            <div class="ua2-live" title="Auto-refresh every 60s">
+                <span class="ua2-live-dot"></span>
+                <span id="ua2-refresh-status" class="ua2-live-time">live</span>
+            </div>
+
+            <div class="ua2-seg" id="ua2-range-seg" role="tablist" aria-label="Time range">
+                <button class="ua2-seg-btn" data-h="1">1H</button>
+                <button class="ua2-seg-btn" data-h="6">6H</button>
+                <button class="ua2-seg-btn active" data-h="24">24H</button>
+                <button class="ua2-seg-btn" data-h="72">3D</button>
+                <button class="ua2-seg-btn" data-h="168">7D</button>
+                <button class="ua2-seg-btn" data-h="720">30D</button>
+            </div>
+            <select id="ua2-time" aria-hidden="true" tabindex="-1">
                 <option value="1">Last 1 hour</option>
                 <option value="6">Last 6 hours</option>
                 <option value="24" selected>Last 24 hours</option>
@@ -280,6 +608,7 @@
                 <option value="168">Last 7 days</option>
                 <option value="720">Last 30 days</option>
             </select>
+
             <button class="ua2-btn" id="ua2-export" title="Export current view as CSV">
                 <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export
@@ -291,75 +620,160 @@
         </div>
     </div>
 
-    <!-- HERO STATS -->
-    <div class="ua2-stats" id="ua2-stats">
-        <div class="ua2-stat clickable" onclick="ua2.drill({})">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Requests</div>
-            <div class="ua2-stat-v" id="s-total">—</div>
-            <div class="ua2-stat-sub" id="s-total-sub">&nbsp;</div>
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ UNIFIED KPI ROW — 8 tiles in one row                          ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
+    <div class="ua2-hero">
+        <div class="ua2-hero-stat clickable" onclick="ua2.drill({})" title="View all requests">
+            <div class="ua2-hero-head">
+                <div class="ua2-hero-label">Requests</div>
+                <div class="ua2-hero-ico">
+                    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+                </div>
+            </div>
+            <div class="ua2-hero-val" id="s-total"><span class="skl"></span></div>
+            <div class="ua2-hero-sub" id="s-total-sub">&nbsp;</div>
+            <div class="ua2-hero-sparkline" id="spark-requests"></div>
         </div>
-        <div class="ua2-stat cyan">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Users</div>
-            <div class="ua2-stat-v" id="s-users">—</div>
-            <div class="ua2-stat-sub" id="s-users-sub">&nbsp;</div>
+
+        <div class="ua2-hero-stat purple">
+            <div class="ua2-hero-head">
+                <div class="ua2-hero-label">Bandwidth</div>
+                <div class="ua2-hero-ico">
+                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+            </div>
+            <div class="ua2-hero-val" id="s-bw"><span class="skl"></span></div>
+            <div class="ua2-hero-sub" id="s-bw-sub">&nbsp;</div>
+            <div class="ua2-hero-sparkline" id="spark-bandwidth"></div>
         </div>
-        <div class="ua2-stat">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Sites</div>
-            <div class="ua2-stat-v" id="s-sites">—</div>
-            <div class="ua2-stat-sub" id="s-sites-sub">&nbsp;</div>
+
+        <div class="ua2-hero-stat emerald">
+            <div class="ua2-hero-head">
+                <div class="ua2-hero-label">Productivity</div>
+                <div class="ua2-hero-ico">
+                    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+            </div>
+            <div class="ua2-hero-val" id="s-prod"><span class="skl"></span></div>
+            <div class="ua2-hero-sub" id="s-prod-sub">productive ratio</div>
+            <div class="ua2-hero-sparkline" id="gauge-prod"></div>
         </div>
-        <div class="ua2-stat purple">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Bandwidth</div>
-            <div class="ua2-stat-v" id="s-bw">—</div>
-            <div class="ua2-stat-sub" id="s-bw-sub">&nbsp;</div>
+
+        <div class="ua2-hero-stat rose clickable" onclick="ua2.drill({action:'blocked'})" title="View blocked requests">
+            <div class="ua2-hero-head">
+                <div class="ua2-hero-label">Blocked</div>
+                <div class="ua2-hero-ico">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                </div>
+            </div>
+            <div class="ua2-hero-val" id="s-blk"><span class="skl"></span></div>
+            <div class="ua2-hero-sub" id="s-blk-sub">&nbsp;</div>
+            <div class="ua2-hero-sparkline" id="spark-blocked"></div>
         </div>
-        <div class="ua2-stat danger clickable" onclick="ua2.drill({action:'blocked'})">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Blocked</div>
-            <div class="ua2-stat-v" id="s-blk">—</div>
-            <div class="ua2-stat-sub" id="s-blk-sub">&nbsp;</div>
+
+        <!-- Stack 1: Users / Sites -->
+        <div class="ua2-hero-stack">
+            <div class="ua2-hero-mini cyan">
+                <div class="ua2-hero-mini-ico">
+                    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <div class="ua2-hero-mini-body">
+                    <div class="ua2-hero-mini-l">Users</div>
+                    <div class="ua2-hero-mini-v" id="s-users">—</div>
+                </div>
+            </div>
+            <div class="ua2-hero-mini">
+                <div class="ua2-hero-mini-ico">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>
+                </div>
+                <div class="ua2-hero-mini-body">
+                    <div class="ua2-hero-mini-l">Sites</div>
+                    <div class="ua2-hero-mini-v" id="s-sites">—</div>
+                </div>
+            </div>
         </div>
-        <div class="ua2-stat warning">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>Categories</div>
-            <div class="ua2-stat-v" id="s-cats">—</div>
-            <div class="ua2-stat-sub" id="s-cats-sub">&nbsp;</div>
-        </div>
-        <div class="ua2-stat pink clickable" onclick="ua2.drill({search:'youtube.com'})">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>YouTube</div>
-            <div class="ua2-stat-v" id="s-yt">—</div>
-            <div class="ua2-stat-sub" id="s-yt-sub">&nbsp;</div>
-        </div>
-        <div class="ua2-stat success">
-            <div class="ua2-stat-l"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Productivity</div>
-            <div class="ua2-stat-v" id="s-prod">—</div>
-            <div class="ua2-stat-sub" id="s-prod-sub">productive ratio</div>
+
+        <!-- Stack 2: Categories / YouTube -->
+        <div class="ua2-hero-stack">
+            <div class="ua2-hero-mini amber">
+                <div class="ua2-hero-mini-ico">
+                    <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>
+                </div>
+                <div class="ua2-hero-mini-body">
+                    <div class="ua2-hero-mini-l">Categories</div>
+                    <div class="ua2-hero-mini-v" id="s-cats">—</div>
+                </div>
+            </div>
+            <div class="ua2-hero-mini pink clickable" onclick="ua2.drill({search:'youtube.com'})" title="View YouTube traffic">
+                <div class="ua2-hero-mini-ico">
+                    <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </div>
+                <div class="ua2-hero-mini-body">
+                    <div class="ua2-hero-mini-l">YouTube</div>
+                    <div class="ua2-hero-mini-v" id="s-yt">—</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- TIMELINE (full-width) -->
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ TIMELINE — full width with stat rail                          ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
     <div class="ua2-row ua2-row-1">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                    <span class="tico"><svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
                     Web Traffic Timeline
                 </div>
                 <div class="ua2-card-meta" id="tl-meta">&nbsp;</div>
             </div>
             <div class="ua2-card-body">
-                <div id="chart-tl" class="ua2-chart chart-timeline"></div>
+                <div class="ua2-timeline-wrap">
+                    <div id="chart-tl" class="ua2-chart chart-timeline"></div>
+                    <div class="ua2-timeline-rail">
+                        <div class="ua2-rail-card">
+                            <div class="ua2-rail-l">
+                                <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/></svg>
+                                Peak Hour
+                            </div>
+                            <div class="ua2-rail-v" id="rail-peak">—</div>
+                            <div class="ua2-rail-sub" id="rail-peak-time">&nbsp;</div>
+                        </div>
+                        <div class="ua2-rail-card">
+                            <div class="ua2-rail-l">
+                                <svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+                                Avg / Bucket
+                            </div>
+                            <div class="ua2-rail-v" id="rail-avg">—</div>
+                            <div class="ua2-rail-sub" id="rail-avg-sub">&nbsp;</div>
+                        </div>
+                        <div class="ua2-rail-card">
+                            <div class="ua2-rail-l">
+                                <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                Block Rate
+                            </div>
+                            <div class="ua2-rail-v" id="rail-blkrate">—</div>
+                            <div class="ua2-rail-sub" id="rail-blkrate-sub">&nbsp;</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- PRODUCTIVITY + CATEGORIES -->
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ CATEGORIES + PRODUCTIVITY                                     ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
     <div class="ua2-row ua2-row-2">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
                     Top URL Categories
                 </div>
-                <div class="ua2-card-meta">color = productivity class</div>
+                <div class="ua2-card-meta">colored by productivity class · click to drill</div>
             </div>
             <div class="ua2-card-body">
                 <div id="chart-cats" class="ua2-chart chart-bar-tall"></div>
@@ -369,14 +783,14 @@
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg>
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg></span>
                     Productivity Breakdown
                 </div>
                 <div class="ua2-card-meta" id="prod-meta">&nbsp;</div>
             </div>
             <div class="ua2-card-body">
                 <div class="ua2-prod-wrap">
-                    <div id="chart-prod" class="ua2-chart chart-donut" style="height:200px;"></div>
+                    <div id="chart-prod" class="ua2-chart chart-donut" style="height:220px;"></div>
                     <div class="ua2-prod-list" id="prod-list">
                         <div class="ua2-loading">Loading</div>
                     </div>
@@ -385,12 +799,14 @@
         </div>
     </div>
 
-    <!-- ACTION DONUT + COUNTRY BAR + TOP SITES BANDWIDTH -->
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ ACTIONS + COUNTRIES + TOP SITES BANDWIDTH                      ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
     <div class="ua2-row ua2-row-3">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                     Action Breakdown
                 </div>
                 <div class="ua2-card-meta" id="act-meta">&nbsp;</div>
@@ -403,8 +819,8 @@
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
-                    Top Destination Countries
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></span>
+                    Top Destinations
                 </div>
                 <div class="ua2-card-meta">by requests</div>
             </div>
@@ -416,8 +832,8 @@
         <div class="ua2-card">
             <div class="ua2-card-hdr">
                 <div class="ua2-card-title">
-                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                    Top Sites by Bandwidth
+                    <span class="tico"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+                    Top Sites · Bandwidth
                 </div>
                 <div class="ua2-card-meta">click row to drill</div>
             </div>
@@ -432,48 +848,55 @@
         </div>
     </div>
 
-    <!-- TABS -->
-    <div class="ua2-tabs" id="ua2-tabs">
-        <button class="ua2-tab active" data-tab="hosts">
-            <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            Top Sites
-        </button>
-        <button class="ua2-tab" data-tab="users">
-            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            Users <span class="ua2-tab-count" id="tab-users-cnt">—</span>
-        </button>
-        <button class="ua2-tab" data-tab="dns">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-            DNS Insights <span class="ua2-tab-count" id="tab-dns-cnt">—</span>
-        </button>
-        <button class="ua2-tab" data-tab="youtube">
-            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            YouTube <span class="ua2-tab-count" id="tab-yt-cnt">—</span>
-        </button>
-        <button class="ua2-tab" data-tab="searches">
-            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Searches
-        </button>
-        <button class="ua2-tab" data-tab="blocked">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-            Blocked <span class="ua2-tab-count" id="tab-blk-cnt">—</span>
-        </button>
-        <button class="ua2-tab" data-tab="bandwidth">
-            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Bandwidth
-        </button>
-        <button class="ua2-tab" data-tab="apps">
-            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            Apps &amp; Devices
-        </button>
+    <!-- ╔═══════════════════════════════════════════════════════════════╗
+         ║ TABS                                                          ║
+         ╚═══════════════════════════════════════════════════════════════╝ -->
+    <div class="ua2-tabs-wrap">
+        <div class="ua2-tabs" id="ua2-tabs" role="tablist">
+            <button class="ua2-tab active" data-tab="hosts" role="tab">
+                <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Top Sites
+            </button>
+            <button class="ua2-tab" data-tab="users" role="tab">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                Users <span class="ua2-tab-count" id="tab-users-cnt">—</span>
+            </button>
+            <button class="ua2-tab" data-tab="dns" role="tab">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                DNS Insights <span class="ua2-tab-count" id="tab-dns-cnt">—</span>
+            </button>
+            <button class="ua2-tab" data-tab="youtube" role="tab">
+                <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                YouTube <span class="ua2-tab-count" id="tab-yt-cnt">—</span>
+            </button>
+            <button class="ua2-tab" data-tab="searches" role="tab">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Searches
+            </button>
+            <button class="ua2-tab" data-tab="blocked" role="tab">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                Blocked <span class="ua2-tab-count" id="tab-blk-cnt">—</span>
+            </button>
+            <button class="ua2-tab" data-tab="bandwidth" role="tab">
+                <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Bandwidth
+            </button>
+            <button class="ua2-tab" data-tab="apps" role="tab">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Apps &amp; Devices
+            </button>
+        </div>
     </div>
 
     <!-- PANELS -->
     <div class="ua2-panel active" data-panel="hosts">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
-                <div class="ua2-card-title">Top Hostnames</div>
-                <div class="ua2-card-meta">Sorted by requests · click to view logs</div>
+                <div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/></svg></span>
+                    Top Hostnames
+                </div>
+                <div class="ua2-card-meta">sorted by requests · click row to view logs</div>
             </div>
             <div class="ua2-card-body no-pad">
                 <div class="ua2-tbl-wrap">
@@ -496,7 +919,10 @@
     <div class="ua2-panel" data-panel="users">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
-                <div class="ua2-card-title">Top Users by Activity</div>
+                <div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+                    Top Users by Activity
+                </div>
                 <div class="ua2-card-meta">click row to drill</div>
             </div>
             <div class="ua2-card-body no-pad">
@@ -518,20 +944,33 @@
     </div>
 
     <div class="ua2-panel" data-panel="dns">
-        <div class="ua2-row ua2-row-3" style="margin-bottom:.85rem">
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">DNS Query Types</div></div>
+        <div class="ua2-stats" id="dns-stats" style="margin-bottom:.85rem"></div>
+        <div class="ua2-row ua2-row-3" style="margin-bottom:0">
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg></span>
+                    DNS Query Types
+                </div></div>
                 <div class="ua2-card-body"><div id="chart-qtype" class="ua2-chart chart-donut"></div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Queried Domains</div></div>
-                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:260px;">
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>
+                    Top Queried Domains
+                </div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:280px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Domain</th><th>Category</th><th class="r">Queries</th></tr></thead>
                         <tbody id="tbl-dns-doms"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
                     </table>
                 </div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top DNS Sources</div></div>
-                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:260px;">
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+                    Top DNS Sources
+                </div></div>
+                <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:280px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Source</th><th class="r">Queries</th><th class="r">Domains</th></tr></thead>
                         <tbody id="tbl-dns-src"><tr><td colspan="3"><div class="ua2-loading">Loading</div></td></tr></tbody>
@@ -539,20 +978,34 @@
                 </div></div>
             </div>
         </div>
-        <div class="ua2-stats" id="dns-stats" style="margin-bottom:0"></div>
     </div>
 
     <div class="ua2-panel" data-panel="youtube">
         <div class="ua2-card">
             <div class="ua2-card-hdr">
-                <div class="ua2-card-title">YouTube Activity</div>
-                <div class="ua2-card-meta">Est. watch time based on ~2.5 MB/min @ 720p</div>
+                <div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+                    YouTube Activity
+                </div>
+                <div class="ua2-card-meta">est. watch time based on ~2.5 MB/min @ 720p</div>
             </div>
             <div class="ua2-yt-row" id="yt-row">
-                <div class="ua2-stat danger"><div class="ua2-stat-l">Requests</div><div class="ua2-stat-v" id="yt-req">—</div></div>
-                <div class="ua2-stat cyan"><div class="ua2-stat-l">Users</div><div class="ua2-stat-v" id="yt-usr">—</div></div>
-                <div class="ua2-stat purple"><div class="ua2-stat-l">Downloaded</div><div class="ua2-stat-v" id="yt-dl">—</div></div>
-                <div class="ua2-stat warning"><div class="ua2-stat-l">Est. Watch Time</div><div class="ua2-stat-v" id="yt-time">—</div></div>
+                <div class="ua2-stat danger">
+                    <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+                    <div class="ua2-stat-body"><span class="ua2-stat-l">Requests</span><div class="ua2-stat-v" id="yt-req">—</div></div>
+                </div>
+                <div class="ua2-stat cyan">
+                    <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                    <div class="ua2-stat-body"><span class="ua2-stat-l">Users</span><div class="ua2-stat-v" id="yt-usr">—</div></div>
+                </div>
+                <div class="ua2-stat purple">
+                    <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                    <div class="ua2-stat-body"><span class="ua2-stat-l">Downloaded</span><div class="ua2-stat-v" id="yt-dl">—</div></div>
+                </div>
+                <div class="ua2-stat warning">
+                    <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                    <div class="ua2-stat-body"><span class="ua2-stat-l">Est. Watch Time</span><div class="ua2-stat-v" id="yt-time">—</div></div>
+                </div>
             </div>
             <div class="ua2-card-body no-pad">
                 <div class="ua2-tbl-wrap" style="max-height:480px;">
@@ -567,7 +1020,13 @@
 
     <div class="ua2-panel" data-panel="searches">
         <div class="ua2-card">
-            <div class="ua2-card-hdr"><div class="ua2-card-title">Search Queries</div><div class="ua2-card-meta">Google / Bing / Yahoo / DDG</div></div>
+            <div class="ua2-card-hdr">
+                <div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+                    Search Queries
+                </div>
+                <div class="ua2-card-meta">Google · Bing · Yahoo · DuckDuckGo</div>
+            </div>
             <div class="ua2-card-body no-pad">
                 <div class="ua2-tbl-wrap">
                     <table class="ua2-tbl">
@@ -581,7 +1040,11 @@
 
     <div class="ua2-panel" data-panel="blocked">
         <div class="ua2-row ua2-row-3">
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Blocked Sites</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
+                    Top Blocked Sites
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Hostname</th><th>Category</th><th class="r">Hits</th></tr></thead>
@@ -589,7 +1052,11 @@
                     </table>
                 </div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Blocked Categories</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg></span>
+                    Blocked Categories
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Category</th><th class="r">Hits</th><th class="r">Users</th></tr></thead>
@@ -597,7 +1064,11 @@
                     </table>
                 </div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Users Hitting Blocks</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+                    Users Hitting Blocks
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:420px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>User</th><th class="r">Hits</th><th class="r">Sites</th></tr></thead>
@@ -610,7 +1081,11 @@
 
     <div class="ua2-panel" data-panel="bandwidth">
         <div class="ua2-row ua2-row-2">
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Users by Bandwidth</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+                    Top Users by Bandwidth
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>User</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th style="width:90px"></th></tr></thead>
@@ -618,7 +1093,11 @@
                     </table>
                 </div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Hosts by Bandwidth</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+                    Top Hosts by Bandwidth
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Hostname</th><th class="r">Sent</th><th class="r">Received</th><th class="r">Total</th><th style="width:90px"></th></tr></thead>
@@ -631,7 +1110,11 @@
 
     <div class="ua2-panel" data-panel="apps">
         <div class="ua2-row ua2-row-2">
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Top Applications</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+                    Top Applications
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Application</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th class="r">Blocked</th></tr></thead>
@@ -639,7 +1122,11 @@
                     </table>
                 </div></div>
             </div>
-            <div class="ua2-card"><div class="ua2-card-hdr"><div class="ua2-card-title">Reporting Devices</div></div>
+            <div class="ua2-card">
+                <div class="ua2-card-hdr"><div class="ua2-card-title">
+                    <span class="tico"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+                    Reporting Devices
+                </div></div>
                 <div class="ua2-card-body no-pad"><div class="ua2-tbl-wrap" style="max-height:520px;">
                     <table class="ua2-tbl">
                         <thead><tr><th>Device</th><th>Vendor</th><th class="r">Requests</th><th class="r">Sites</th><th class="r">Bandwidth</th></tr></thead>
@@ -695,6 +1182,29 @@
         return `${mo} ${day} ${h}:${m}`;
     }
 
+    /* ---- segmented time control wiring ---- */
+    const RANGE_LABELS = {
+        '1':'Last 1 hour','6':'Last 6 hours','24':'Last 24 hours',
+        '72':'Last 3 days','168':'Last 7 days','720':'Last 30 days'
+    };
+    function applyRange(h, fromUI) {
+        const sel = $('ua2-time');
+        if (sel.value !== String(h)) {
+            sel.value = String(h);
+        }
+        document.querySelectorAll('#ua2-range-seg .ua2-seg-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.h === String(h));
+        });
+        const lbl = $('ua2-active-range-text');
+        if (lbl) lbl.textContent = RANGE_LABELS[String(h)] || ('Last '+h+'h');
+        if (fromUI) sel.dispatchEvent(new Event('change'));
+    }
+    document.querySelectorAll('#ua2-range-seg .ua2-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => applyRange(btn.dataset.h, true));
+    });
+    // Keep chip label in sync if select changes some other way
+    $('ua2-time').addEventListener('change', () => applyRange($('ua2-time').value, false));
+
     /* ---- drill-down ---- */
     window.ua2 = {
         drill(params) {
@@ -736,13 +1246,16 @@
         $('s-blk').textContent = fmtNum(s.blocked_count);
         $('s-cats').textContent = fmtNum(s.category_count);
         $('s-yt').textContent = fmtNum(s.youtube_requests);
-        // sub-stats
-        $('s-bw-sub').textContent = `↓ ${fmtBytes(s.total_recv)}  ↑ ${fmtBytes(s.total_sent)}`;
+        $('s-bw-sub').innerHTML = `<span class="pip pip-down">↓ ${fmtBytes(s.total_recv)}</span> · <span class="pip pip-up">↑ ${fmtBytes(s.total_sent)}</span>`;
         const blkPct = s.total_requests ? ((s.blocked_count/s.total_requests)*100).toFixed(1) : 0;
-        $('s-blk-sub').textContent = `${blkPct}% of traffic`;
+        $('s-blk-sub').textContent = `${blkPct}% of total traffic`;
+        // Tab counts
         $('tab-users-cnt').textContent = fmtNum(s.unique_users);
         $('tab-blk-cnt').textContent = fmtNum(s.blocked_count);
         $('tab-yt-cnt').textContent = fmtNum(s.youtube_requests);
+        // Block-rate rail (also exposed via timeline rail)
+        $('rail-blkrate').textContent = blkPct + '%';
+        $('rail-blkrate-sub').textContent = `${fmtNum(s.blocked_count)} blocked`;
     }
 
     function renderTimeline(d) {
@@ -756,75 +1269,143 @@
         const blocked = rows.map(r => r.blocked);
         const alerted = rows.map(r => r.alerted);
         const bw = rows.map(r => +(r.recv+r.sent)/1024/1024);  // MB
+
+        // Update rail summary
+        let peakIdx = 0, peakVal = -Infinity, totReq = 0;
+        rows.forEach((r,i) => {
+            const v = (r.allowed||0)+(r.alerted||0)+(r.blocked||0);
+            totReq += v;
+            if (v > peakVal) { peakVal = v; peakIdx = i; }
+        });
+        if (rows.length) {
+            $('rail-peak').textContent = fmtNum(peakVal);
+            $('rail-peak-time').textContent = isoBucket(rows[peakIdx].bucket);
+            $('rail-avg').textContent = fmtNum(Math.round(totReq / rows.length));
+            $('rail-avg-sub').textContent = `over ${rows.length} buckets`;
+        }
+
+        // Sparklines on hero cards
+        renderSpark('spark-requests', rows.map(r => (r.allowed||0)+(r.alerted||0)+(r.blocked||0)), '#60a5fa');
+        renderSpark('spark-bandwidth', bw, '#c4b5fd');
+        renderSpark('spark-blocked', blocked, '#f87171');
+
         c.setOption({
             tooltip: {
                 trigger:'axis', axisPointer:{type:'cross', label:{backgroundColor:'#1e293b'}},
+                backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
                 formatter: (params)=> {
                     const ts = params[0].axisValue;
-                    let html = `<b>${ts}</b><br/>`;
+                    let html = `<div style="font-weight:700;color:#fff;margin-bottom:4px">${ts}</div>`;
                     params.forEach(p => {
                         const v = p.seriesName==='Bandwidth' ? (p.value.toFixed(1)+' MB') : fmtNum(p.value);
-                        html += `${p.marker} ${p.seriesName}: <b>${v}</b><br/>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:14px">${p.marker}${p.seriesName}<b style="margin-left:auto">${v}</b></div>`;
                     });
                     return html;
                 }
             },
-            legend: { data:['Allowed','Alerted','Blocked','Bandwidth'], top:0, right:10, itemWidth:10, itemHeight:10 },
-            grid: { left:50, right:50, top:30, bottom:30, containLabel:true },
-            xAxis: { type:'category', data:x, boundaryGap:false, axisLabel:{fontSize:10} },
+            legend: { data:['Allowed','Alerted','Blocked','Bandwidth'], top:0, right:10, itemWidth:10, itemHeight:10, textStyle:{color:'#c2cce0', fontSize:11} },
+            grid: { left:50, right:50, top:34, bottom:30, containLabel:true },
+            xAxis: {
+                type:'category', data:x, boundaryGap:false,
+                axisLabel:{fontSize:10, color:'#8c9ab5'},
+                axisLine:{lineStyle:{color:'#243154'}}
+            },
             yAxis: [
-                { type:'value', name:'Requests', nameTextStyle:{fontSize:10,color:'#94a3b8'}, axisLabel:{fontSize:10}, splitLine:{lineStyle:{color:'#1a2238'}} },
-                { type:'value', name:'MB', nameTextStyle:{fontSize:10,color:'#94a3b8'}, position:'right', axisLabel:{fontSize:10, formatter:'{value}'}, splitLine:{show:false} }
+                { type:'value', name:'Requests', nameTextStyle:{fontSize:10,color:'#8c9ab5'}, axisLabel:{fontSize:10, color:'#8c9ab5'},
+                  splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}} },
+                { type:'value', name:'MB', nameTextStyle:{fontSize:10,color:'#8c9ab5'}, position:'right', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:'{value}'}, splitLine:{show:false} }
             ],
             series: [
-                { name:'Allowed', type:'line', stack:'total', areaStyle:{opacity:.5}, smooth:.3, symbol:'none', data:allowed,
-                  itemStyle:{color:'#22c55e'}, lineStyle:{width:1.5} },
-                { name:'Alerted', type:'line', stack:'total', areaStyle:{opacity:.5}, smooth:.3, symbol:'none', data:alerted,
-                  itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.5} },
-                { name:'Blocked', type:'line', stack:'total', areaStyle:{opacity:.6}, smooth:.3, symbol:'none', data:blocked,
-                  itemStyle:{color:'#ef4444'}, lineStyle:{width:1.5} },
+                { name:'Allowed', type:'line', stack:'total',
+                  areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(34,197,94,.5)'},{offset:1,color:'rgba(34,197,94,.05)'}]}},
+                  smooth:.3, symbol:'none', data:allowed, itemStyle:{color:'#22c55e'}, lineStyle:{width:1.5} },
+                { name:'Alerted', type:'line', stack:'total',
+                  areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(245,158,11,.5)'},{offset:1,color:'rgba(245,158,11,.05)'}]}},
+                  smooth:.3, symbol:'none', data:alerted, itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.5} },
+                { name:'Blocked', type:'line', stack:'total',
+                  areaStyle:{opacity:.6, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(239,68,68,.55)'},{offset:1,color:'rgba(239,68,68,.05)'}]}},
+                  smooth:.3, symbol:'none', data:blocked, itemStyle:{color:'#ef4444'}, lineStyle:{width:1.5} },
                 { name:'Bandwidth', type:'line', yAxisIndex:1, symbol:'none', smooth:.3, data:bw,
                   itemStyle:{color:'#22d3ee'}, lineStyle:{width:2, type:'dashed'} }
             ]
         });
     }
 
+    /* ---- compact sparklines on hero cards ---- */
+    function renderSpark(id, data, color) {
+        const el = document.getElementById(id);
+        if (!el || !data || !data.length) return;
+        const c = chart(id);
+        if (!c) return;
+        c.setOption({
+            grid: { left:0, right:0, top:4, bottom:0 },
+            xAxis: { type:'category', show:false, data:data.map((_,i)=>i), boundaryGap:false },
+            yAxis: { type:'value', show:false },
+            tooltip: { show:false },
+            series: [{
+                type:'line', data, smooth:.4, symbol:'none', lineStyle:{width:1.4, color},
+                areaStyle:{ color:{type:'linear',x:0,y:0,x2:0,y2:1,
+                    colorStops:[{offset:0,color:color+'66'},{offset:1,color:color+'00'}]} }
+            }]
+        });
+    }
+
     function renderCategories(d) {
         const cats = (d && d.categories) || [];
         const prod = (d && d.productivity) || {};
-        // bar chart
         const c = chart('chart-cats');
         if (c) {
             const top = cats.slice(0, 12).reverse();
             c.setOption({
                 tooltip: { trigger:'axis', axisPointer:{type:'shadow'},
+                    backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
                     formatter: p => {
                         const r = top[p[0].dataIndex];
-                        return `<b>${esc(r.category)}</b><br/>Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Productivity: <b>${r.productivity}</b>`;
+                        return `<div style="font-weight:700;color:#fff;margin-bottom:4px">${esc(r.category)}</div>
+                            Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Productivity: <b>${r.productivity}</b>`;
                     }
                 },
                 grid: { left:8, right:60, top:10, bottom:10, containLabel:true },
-                xAxis: { type:'value', axisLabel:{fontSize:10, formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v} },
+                xAxis: { type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v},
+                         splitLine:{lineStyle:{color:'rgba(36,49,84,.45)', type:'dashed'}} },
                 yAxis: { type:'category', data: top.map(r=>r.category),
-                         axisLabel:{fontSize:11, color:'#cbd5e1', formatter: v => v.length>26?v.slice(0,24)+'…':v} },
+                         axisLabel:{fontSize:11, color:'#c2cce0', formatter: v => v.length>26?v.slice(0,24)+'…':v},
+                         axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false} },
                 series: [{
                     type:'bar', barWidth:'62%',
                     data: top.map(r => ({
                         value: r.requests,
-                        itemStyle: { color: PROD_COLORS[r.productivity] || '#3b82f6', borderRadius:[0,3,3,0] }
+                        itemStyle: { color: PROD_COLORS[r.productivity] || '#3b82f6', borderRadius:[0,4,4,0] }
                     })),
-                    label: { show:true, position:'right', fontSize:10, color:'#cbd5e1', formatter: p => fmtNum(p.value) }
+                    label: { show:true, position:'right', fontSize:10, color:'#c2cce0', formatter: p => fmtNum(p.value) }
                 }]
             });
             chart('chart-cats').on('click', (p) => {
                 const r = top[p.dataIndex]; if (r) ua2.drill({category:r.category});
             });
         }
-        // productivity
+        // Productivity number
         const total = (prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
         const score = total ? Math.round((prod.productive||0)/total*100) : 0;
         $('s-prod').textContent = score+'%';
         const pe = $('s-prod'); pe.style.color = score>=60?'#86efac':score>=30?'#fcd34d':'#fca5a5';
+
+        // Mini gauge under the hero score
+        const ge = chart('gauge-prod');
+        if (ge) {
+            ge.setOption({
+                grid:{left:0,right:0,top:6,bottom:0},
+                xAxis:{type:'category', show:false, data:['p']},
+                yAxis:{type:'value', show:false, max:100},
+                tooltip:{show:false},
+                series:[
+                    { type:'bar', data:[100], barWidth:6, itemStyle:{color:'rgba(36,49,84,.6)', borderRadius:[3,3,3,3]} ,
+                      z:1, silent:true, barGap:'-100%' },
+                    { type:'bar', data:[score], barWidth:6,
+                      itemStyle:{color: score>=60?'#22c55e':score>=30?'#f59e0b':'#ef4444', borderRadius:[3,3,3,3]}, z:2 }
+                ]
+            });
+        }
 
         const pc = chart('chart-prod');
         if (pc) {
@@ -835,12 +1416,14 @@
                 {name:'Risky',       value:prod.risky||0,       itemStyle:{color:PROD_COLORS.risky}},
             ];
             pc.setOption({
-                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                tooltip:{ trigger:'item',
+                    backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
                 series:[{
-                    type:'pie', radius:['62%','85%'], avoidLabelOverlap:false,
+                    type:'pie', radius:['60%','85%'], avoidLabelOverlap:false,
                     label:{ show:true, position:'center', formatter:`{a|${score}%}\n{b|Productive}`,
-                        rich:{ a:{fontSize:22, fontWeight:'bold', color:'#fff', fontFamily:'JetBrains Mono'},
-                               b:{fontSize:10, color:'#94a3b8', padding:[4,0,0,0]} }
+                        rich:{ a:{fontSize:24, fontWeight:'bold', color:'#fff', fontFamily:'JetBrains Mono', lineHeight:28},
+                               b:{fontSize:10, color:'#8c9ab5', letterSpacing:1, padding:[4,0,0,0]} }
                     },
                     labelLine:{show:false},
                     data: items
@@ -848,12 +1431,11 @@
             });
         }
         $('prod-meta').textContent = `${fmtNum(total)} requests classified`;
-        // list to the right of donut
         const items = [
-            {label:'Productive',  k:'productive',  v:prod.productive||0,   c:PROD_COLORS.productive},
-            {label:'Neutral',     k:'neutral',     v:prod.neutral||0,      c:PROD_COLORS.neutral},
-            {label:'Unproductive',k:'unproductive',v:prod.unproductive||0, c:PROD_COLORS.unproductive},
-            {label:'Risky',       k:'risky',       v:prod.risky||0,        c:PROD_COLORS.risky},
+            {label:'Productive',  v:prod.productive||0,   c:PROD_COLORS.productive},
+            {label:'Neutral',     v:prod.neutral||0,      c:PROD_COLORS.neutral},
+            {label:'Unproductive',v:prod.unproductive||0, c:PROD_COLORS.unproductive},
+            {label:'Risky',       v:prod.risky||0,        c:PROD_COLORS.risky},
         ];
         $('prod-list').innerHTML = items.map(it => {
             const pct = total ? ((it.v/total)*100).toFixed(1) : 0;
@@ -884,7 +1466,7 @@
                 </tr>`;
             }).join('');
         }
-        // Top sites side-card (bandwidth view)
+        // Top sites side card
         const sites = [...rows].sort((a,b)=>(b.bandwidth||0)-(a.bandwidth||0)).slice(0,10);
         const mx = sites.length ? sites[0].bandwidth||1 : 1;
         $('tbl-topsites').innerHTML = sites.length ? sites.map(r => {
@@ -892,7 +1474,7 @@
             return `<tr class="clickable" onclick="ua2.drill({search:'${qs(esc(r.hostname))}'})">
                 <td class="mono ellip" style="max-width:160px;color:#93c5fd" title="${esc(r.hostname)}">${esc(r.hostname)}</td>
                 <td class="r mono">${fmtBytes(r.bandwidth)}</td>
-                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:var(--purple)"></div></div></div></td>
+                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#a78bfa,#22d3ee)"></div></div></div></td>
             </tr>`;
         }).join('') : '<tr><td colspan="3"><div class="ua2-empty">No data</div></td></tr>';
     }
@@ -918,30 +1500,27 @@
 
     function renderActions(d) {
         const acts = (d && d.actions) || [];
-        const meths = (d && d.methods) || [];
-        const vnds = (d && d.vendors) || [];
-
         const total = acts.reduce((s,r)=>s+r.count,0);
         $('act-meta').textContent = total ? `${fmtNum(total)} actions` : '';
-
         const c = chart('chart-act');
         if (c) {
             const data = acts.map(a => ({
-                name: a.action,
-                value: a.count,
+                name: a.action, value: a.count,
                 itemStyle: { color: ACT_COLOR[a.action.toLowerCase()] || '#3b82f6' }
             }));
             c.setOption({
-                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
-                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11, color:'#cbd5e1'},
+                tooltip:{ trigger:'item',
+                    backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11, color:'#c2cce0'},
                          formatter: name => {
                              const found = acts.find(a=>a.action===name);
-                             return `${name}  {b|${found ? fmtNum(found.count) : ''}}`;
+                             return `${name}  ${found ? fmtNum(found.count) : ''}`;
                          },
                          tooltip:{show:false}
                        },
                 series:[{
-                    type:'pie', radius:['55%','78%'], center:['38%','50%'],
+                    type:'pie', radius:['58%','80%'], center:['38%','50%'],
                     label:{show:false}, labelLine:{show:false},
                     data: data
                 }]
@@ -957,18 +1536,22 @@
         const top = rows.slice(0,10).reverse();
         c.setOption({
             tooltip:{ trigger:'axis', axisPointer:{type:'shadow'},
+                backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
                 formatter: p => {
                     const r = top[p[0].dataIndex];
-                    return `<b>${esc(r.country)}</b><br/>Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Blocked: ${fmtNum(r.blocked)}`;
+                    return `<div style="font-weight:700;color:#fff;margin-bottom:4px">${esc(r.country)}</div>
+                        Requests: <b>${fmtNum(r.requests)}</b><br/>Users: ${fmtNum(r.users)}<br/>Bandwidth: ${fmtBytes(r.bandwidth)}<br/>Blocked: ${fmtNum(r.blocked)}`;
                 }
             },
             grid:{left:8, right:40, top:5, bottom:5, containLabel:true},
-            xAxis:{ type:'value', axisLabel:{fontSize:10, formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v} },
-            yAxis:{ type:'category', data: top.map(r=>r.country), axisLabel:{fontSize:11, color:'#cbd5e1'} },
+            xAxis:{ type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v => v>=1000?(v/1000).toFixed(0)+'k':v},
+                    splitLine:{lineStyle:{color:'rgba(36,49,84,.45)', type:'dashed'}} },
+            yAxis:{ type:'category', data: top.map(r=>r.country), axisLabel:{fontSize:11, color:'#c2cce0'},
+                    axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false} },
             series:[{
                 type:'bar', barWidth:'58%',
-                data: top.map(r => ({value:r.requests, itemStyle:{color:'#22d3ee', borderRadius:[0,3,3,0]}})),
-                label:{show:true, position:'right', fontSize:10, color:'#cbd5e1', formatter: p => fmtNum(p.value)}
+                data: top.map(r => ({value:r.requests, itemStyle:{color:'#22d3ee', borderRadius:[0,4,4,0]}})),
+                label:{show:true, position:'right', fontSize:10, color:'#c2cce0', formatter: p => fmtNum(p.value)}
             }]
         });
     }
@@ -1046,7 +1629,7 @@
                 <td class="r mono">${fmtBytes(r.sent)}</td>
                 <td class="r mono">${fmtBytes(r.recv)}</td>
                 <td class="r mono" style="color:#fff;font-weight:600">${fmtBytes(r.total_bytes)}</td>
-                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:var(--purple)"></div></div></div></td>
+                <td><div class="ua2-bar"><div class="ua2-bar-track"><div class="ua2-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#a78bfa,#ec4899)"></div></div></div></td>
             </tr>`;
         }).join('') : '<tr><td colspan="5"><div class="ua2-empty">No bandwidth</div></td></tr>';
         $('tbl-bw-h').innerHTML = h.length ? h.map(r => {
@@ -1075,7 +1658,6 @@
     function renderDevices(d) {
         const rows = (d && d.devices) || [];
         const tb = $('tbl-devs');
-        // Filter out blank/no-device rows
         const real = rows.filter(r => r.device && r.device.trim());
         if (!real.length) {
             tb.innerHTML = '<tr><td colspan="5"><div class="ua2-empty"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>Device name not being reported by firewall</div></td></tr>';
@@ -1092,49 +1674,51 @@
 
     function renderDNS(d) {
         const s = (d && d.summary) || {};
-        // Hero strip
         $('dns-stats').innerHTML = `
             <div class="ua2-stat">
-                <div class="ua2-stat-l">Queries</div>
-                <div class="ua2-stat-v">${fmtNum(s.total)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">Queries</span><div class="ua2-stat-v">${fmtNum(s.total)}</div></div>
             </div>
             <div class="ua2-stat cyan">
-                <div class="ua2-stat-l">Resolvers</div>
-                <div class="ua2-stat-v">${fmtNum(s.users)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">Resolvers</span><div class="ua2-stat-v">${fmtNum(s.users)}</div></div>
             </div>
             <div class="ua2-stat">
-                <div class="ua2-stat-l">Unique Domains</div>
-                <div class="ua2-stat-v">${fmtNum(s.unique_domains)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">Unique Domains</span><div class="ua2-stat-v">${fmtNum(s.unique_domains)}</div></div>
             </div>
             <div class="ua2-stat danger">
-                <div class="ua2-stat-l">Blocked</div>
-                <div class="ua2-stat-v">${fmtNum(s.blocked)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">Blocked</span><div class="ua2-stat-v">${fmtNum(s.blocked)}</div></div>
             </div>
             <div class="ua2-stat purple">
-                <div class="ua2-stat-l">Sinkholed</div>
-                <div class="ua2-stat-v">${fmtNum(s.sinkholed)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">Sinkholed</span><div class="ua2-stat-v">${fmtNum(s.sinkholed)}</div></div>
             </div>
             <div class="ua2-stat warning">
-                <div class="ua2-stat-l">High/Crit</div>
-                <div class="ua2-stat-v">${fmtNum(s.critical_high)}</div>
+                <div class="ua2-stat-ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+                <div class="ua2-stat-body"><span class="ua2-stat-l">High/Crit</span><div class="ua2-stat-v">${fmtNum(s.critical_high)}</div></div>
             </div>
         `;
+        // make dns stat strip 6-wide for DNS panel
+        const stripEl = $('dns-stats');
+        if (stripEl) stripEl.style.gridTemplateColumns = 'repeat(6,1fr)';
         $('tab-dns-cnt').textContent = fmtNum(s.total);
 
-        // qtype donut
         const qts = (d && d.qtypes) || [];
         const c = chart('chart-qtype');
         if (c) {
             c.setOption({
-                tooltip:{ trigger:'item', formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
-                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11,color:'#cbd5e1'} },
+                tooltip:{ trigger:'item',
+                    backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter: p => `${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)` },
+                legend:{ orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11,color:'#c2cce0'} },
                 series:[{
-                    type:'pie', radius:['55%','78%'], center:['38%','50%'], label:{show:false},
+                    type:'pie', radius:['58%','80%'], center:['38%','50%'], label:{show:false},
                     data: qts.map(q => ({name:q.qtype, value:q.count}))
                 }]
             });
         }
-        // Domains
         const doms = (d && d.domains) || [];
         $('tbl-dns-doms').innerHTML = doms.length ? doms.map(r => `
             <tr><td class="mono ellip" style="max-width:180px">${esc(r.domain)}</td>
@@ -1142,7 +1726,6 @@
                 <td class="r mono">${fmtNum(r.count)}</td></tr>
         `).join('') : '<tr><td colspan="3"><div class="ua2-empty">No DNS data</div></td></tr>';
 
-        // Sources
         const srcs = (d && d.sources) || [];
         $('tbl-dns-src').innerHTML = srcs.length ? srcs.map(r => `
             <tr><td><div class="ua2-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
@@ -1159,7 +1742,6 @@
             btn.classList.add('active');
             const p = document.querySelector(`.ua2-panel[data-panel="${btn.dataset.tab}"]`);
             if (p) p.classList.add('active');
-            // Resize charts on tab switch (especially DNS qtype)
             setTimeout(() => Object.values(charts).forEach(c => c && c.resize()), 50);
         });
     });
@@ -1187,7 +1769,6 @@
                         }).join(',')));
                     }
                 } else {
-                    // multi-array endpoints (blocked, bandwidth)
                     Object.keys(j).filter(k=>Array.isArray(j[k])).forEach(arrKey => {
                         const arr = j[arrKey];
                         if (arr.length) {
@@ -1212,9 +1793,7 @@
     });
 
     /* ---- Refresh all ---- */
-    let lastRefresh = 0;
     function refreshAll() {
-        lastRefresh = Date.now();
         $('ua2-refresh-status').textContent = 'updating…';
         Promise.allSettled([
             api('summary').then(renderSummary),

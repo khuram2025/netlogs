@@ -43,6 +43,7 @@ from .api.llm_config import router as llm_config_router
 from .api.policy_narrowing import router as policy_narrowing_router
 from .api.threat_dashboard import router as threat_dashboard_router
 from .api.user_activity import router as user_activity_router
+from .api.reports import router as reports_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -343,6 +344,9 @@ app.include_router(url_dashboard_router)
 
 # Include user activity timeline routes
 app.include_router(user_activity_router)
+
+# Include Reports module
+app.include_router(reports_router)
 
 # Include HTMX partial endpoints
 from .api.partials import router as partials_router

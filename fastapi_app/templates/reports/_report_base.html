@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+
+{#
+    Shared base for all reports.
+    Children should override `report_title`, `report_subtitle`, `report_icon_svg`,
+    `report_body` blocks. The header, controls bar, and print CSS are unified here.
+#}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    /* Break out of container constraints */
+    .container:has(.rpt-page) { max-width:100%; padding:0 1.25rem; margin:1rem auto; }
+
+    .rpt-page {
+        --bg:#0a0f1c; --surface:#111a2e; --surface-2:#162038; --surface-3:#1c2849;
+        --border:#243154; --border-soft:#1c2747; --hairline:rgba(124,152,210,.08);
+        --text:#e7ecf7; --text-2:#c2cce0; --muted:#8c9ab5; --dim:#5a6783;
+        --primary:#3b82f6; --primary-2:#2563eb;
+        --success:#22c55e; --danger:#ef4444; --warning:#f59e0b;
+        --purple:#a78bfa; --cyan:#22d3ee; --pink:#ec4899;
+        font-family:'Outfit',system-ui,sans-serif; width:100%; color:var(--text);
+    }
+
+    /* ---- ANIMATIONS ---- */
+    @keyframes rpt-fadeIn { from {opacity:0;transform:translateY(8px);} to {opacity:1;transform:translateY(0);} }
+    @keyframes rpt-spin { to { transform:rotate(360deg); } }
+    @keyframes rpt-pulse {
+        0%   { box-shadow:0 0 0 0 rgba(34,197,94,.55) }
+        70%  { box-shadow:0 0 0 9px rgba(34,197,94,0) }
+        100% { box-shadow:0 0 0 0 rgba(34,197,94,0) }
+    }
+
+    /* ============================================================
+       SCREEN STYLES
+       ============================================================ */
+    .rpt-screen-controls {
+        display:flex; flex-wrap:wrap; gap:.55rem; align-items:center;
+        padding:.8rem 1rem; border:1px solid var(--border-soft);
+        background:linear-gradient(135deg,rgba(59,130,246,.06) 0%, rgba(34,211,238,.03) 50%, transparent 100%);
+        border-radius:14px; margin-bottom:1rem;
+        animation:rpt-fadeIn .35s ease-out both;
+        position:relative; overflow:hidden;
+    }
+    .rpt-screen-controls::before {
+        content:''; position:absolute; inset:0; pointer-events:none;
+        background:radial-gradient(700px 200px at 0% 0%, rgba(59,130,246,.07), transparent 55%);
+    }
+    .rpt-controls-l {
+        display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+        position:relative; z-index:1;
+    }
+    .rpt-back {
+        display:inline-flex; align-items:center; gap:.4rem;
+        padding:.42rem .75rem; border-radius:9px;
+        background:var(--surface); border:1px solid var(--border);
+        color:var(--text-2); font-size:.78rem; font-weight:600;
+        text-decoration:none; transition:all .15s;
+    }
+    .rpt-back:hover { border-color:#3a4d7c; background:var(--surface-2); color:#fff; }
+    .rpt-back svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+
+    /* Live indicator */
+    .rpt-live {
+        display:inline-flex; align-items:center; gap:.45rem;
+        padding:.42rem .7rem; border-radius:9px;
+        background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.22);
+        font-size:.72rem; color:#86efac; font-weight:600;
+    }
+    .rpt-live-dot { width:7px; height:7px; border-radius:50%; background:var(--success); animation:rpt-pulse 1.8s infinite; }
+
+    .rpt-seg {
+        display:inline-flex; align-items:center; gap:2px;
+        background:var(--surface); border:1px solid var(--border);
+        padding:3px; border-radius:10px;
+    }
+    .rpt-seg-btn {
+        padding:.4rem .7rem; border:none; background:transparent;
+        color:var(--muted); font-size:.72rem; font-weight:600; letter-spacing:.02em;
+        cursor:pointer; border-radius:7px; font-family:inherit;
+        transition:all .15s; min-width:40px;
+    }
+    .rpt-seg-btn:hover { color:var(--text); background:rgba(59,130,246,.08); }
+    .rpt-seg-btn.active {
+        background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff;
+        box-shadow:0 4px 14px -4px rgba(59,130,246,.5);
+    }
+
+    .rpt-controls-r { display:flex; align-items:center; gap:.5rem; margin-left:auto; position:relative; z-index:1; }
+
+    .rpt-btn {
+        background:var(--surface); border:1px solid var(--border); color:var(--text);
+        padding:.48rem .85rem; border-radius:9px; font-size:.78rem; font-family:inherit;
+        font-weight:600; cursor:pointer; transition:all .15s;
+        display:inline-flex; align-items:center; gap:.45rem; text-decoration:none;
+    }
+    .rpt-btn:hover { border-color:#3a4d7c; background:var(--surface-2); }
+    .rpt-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+    .rpt-btn-primary {
+        background:linear-gradient(135deg,#3b82f6,#2563eb); border-color:transparent; color:#fff;
+        box-shadow:0 4px 14px -4px rgba(59,130,246,.55);
+    }
+    .rpt-btn-primary:hover { filter:brightness(1.08); }
+
+    /* Search field */
+    .rpt-search {
+        position:relative; display:inline-flex; align-items:center;
+    }
+    .rpt-search svg {
+        position:absolute; left:9px; top:50%; transform:translateY(-50%);
+        width:13px; height:13px; stroke:var(--dim); fill:none; stroke-width:2;
+    }
+    .rpt-search input {
+        background:var(--surface); color:var(--text); border:1px solid var(--border);
+        padding:.42rem .65rem .42rem 2rem; border-radius:9px; font-size:.78rem;
+        font-family:inherit; min-width:220px; transition:border-color .15s;
+    }
+    .rpt-search input:focus { outline:none; border-color:var(--primary); }
+
+    /* ============================================================
+       REPORT DOCUMENT (paper-like, also used for PDF print)
+       ============================================================ */
+    .rpt-doc {
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:14px; padding:0;
+        animation:rpt-fadeIn .4s ease-out .05s both;
+        overflow:hidden;
+    }
+
+    /* Document header — branded */
+    .rpt-doc-header {
+        position:relative; overflow:hidden;
+        padding:1.6rem 1.6rem 1.4rem;
+        background:linear-gradient(135deg, rgba(59,130,246,.12) 0%, rgba(34,211,238,.06) 45%, rgba(167,139,250,.08) 100%);
+        border-bottom:1px solid var(--border-soft);
+    }
+    .rpt-doc-header::before {
+        content:''; position:absolute; inset:0; pointer-events:none;
+        background:
+            radial-gradient(800px 240px at 0% 0%, rgba(59,130,246,.15), transparent 55%),
+            radial-gradient(700px 240px at 100% 100%, rgba(167,139,250,.1), transparent 55%);
+    }
+    .rpt-doc-brand {
+        display:flex; align-items:center; gap:.7rem; margin-bottom:.85rem;
+        position:relative; z-index:1;
+    }
+    .rpt-doc-brand-mark {
+        width:42px; height:42px; border-radius:11px;
+        background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 10px 28px -8px rgba(59,130,246,.5);
+    }
+    .rpt-doc-brand-mark svg { width:22px; height:22px; stroke:#fff; fill:none; stroke-width:2; }
+    .rpt-doc-brand-text { line-height:1.15; }
+    .rpt-doc-brand-name { font-weight:800; color:#fff; font-size:.95rem; letter-spacing:-.01em; }
+    .rpt-doc-brand-tag { font-size:.7rem; color:var(--muted); letter-spacing:.04em; text-transform:uppercase; font-weight:600; }
+
+    .rpt-doc-title {
+        font-size:1.8rem; font-weight:800; color:#fff; line-height:1.1; letter-spacing:-.02em;
+        position:relative; z-index:1; display:flex; align-items:center; gap:.7rem;
+        margin-bottom:.45rem;
+    }
+    .rpt-doc-title-ico {
+        width:36px; height:36px; border-radius:10px;
+        background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+        display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .rpt-doc-title-ico svg { width:18px; height:18px; stroke:#93c5fd; fill:none; stroke-width:2; }
+    .rpt-doc-sub {
+        font-size:.86rem; color:var(--text-2); position:relative; z-index:1; max-width:780px;
+    }
+
+    /* Meta strip below the title */
+    .rpt-doc-meta {
+        display:flex; gap:1.25rem; flex-wrap:wrap; align-items:center;
+        margin-top:1rem; padding-top:1rem; position:relative; z-index:1;
+        border-top:1px solid rgba(255,255,255,.06);
+    }
+    .rpt-meta-item { display:flex; flex-direction:column; gap:1px; }
+    .rpt-meta-l {
+        font-size:.6rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.08em; font-weight:600;
+    }
+    .rpt-meta-v {
+        font-size:.78rem; color:#fff; font-weight:600;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.01em;
+    }
+    .rpt-meta-chip {
+        display:inline-flex; align-items:center; gap:.32rem;
+        padding:3px 9px; border-radius:9999px;
+        background:rgba(59,130,246,.13); border:1px solid rgba(59,130,246,.25);
+        color:#93c5fd; font-size:.68rem; font-weight:600; letter-spacing:.02em;
+    }
+    .rpt-meta-chip svg { width:10px; height:10px; stroke:currentColor; fill:none; stroke-width:2.2; }
+
+    /* Document body */
+    .rpt-doc-body {
+        padding:1.5rem 1.6rem 1.8rem;
+        animation:rpt-fadeIn .4s ease-out .1s both;
+    }
+
+    /* Section heading */
+    .rpt-section { margin-bottom:1.6rem; }
+    .rpt-section-h {
+        display:flex; align-items:center; gap:.55rem;
+        margin-bottom:.85rem; padding-bottom:.5rem;
+        border-bottom:1px solid var(--border-soft);
+    }
+    .rpt-section-h-ico {
+        width:26px; height:26px; border-radius:7px;
+        background:rgba(59,130,246,.13);
+        display:inline-flex; align-items:center; justify-content:center;
+    }
+    .rpt-section-h-ico svg { width:13px; height:13px; stroke:#93c5fd; fill:none; stroke-width:2.2; }
+    .rpt-section-title {
+        font-size:.82rem; font-weight:800; color:#fff;
+        text-transform:uppercase; letter-spacing:.06em;
+    }
+    .rpt-section-meta { margin-left:auto; font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+    /* KPI grid */
+    .rpt-kpis {
+        display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+        gap:.7rem;
+    }
+    .rpt-kpi {
+        position:relative; overflow:hidden;
+        background:var(--surface-2); border:1px solid var(--border-soft);
+        border-radius:11px; padding:.85rem .95rem;
+        transition:border-color .15s, transform .15s, box-shadow .2s;
+    }
+    .rpt-kpi::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+        background:var(--primary); opacity:.6;
+    }
+    .rpt-kpi.danger::before  { background:var(--danger); }
+    .rpt-kpi.success::before { background:var(--success); }
+    .rpt-kpi.warning::before { background:var(--warning); }
+    .rpt-kpi.purple::before  { background:var(--purple); }
+    .rpt-kpi.cyan::before    { background:var(--cyan); }
+    .rpt-kpi.pink::before    { background:var(--pink); }
+    .rpt-kpi-l {
+        font-size:.62rem; color:var(--muted); text-transform:uppercase;
+        letter-spacing:.07em; font-weight:700; margin-bottom:4px;
+    }
+    .rpt-kpi-v {
+        font-size:1.45rem; font-weight:800; color:#fff; line-height:1.05;
+        font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;
+    }
+    .rpt-kpi-sub {
+        font-size:.66rem; color:var(--dim); margin-top:3px;
+        font-family:'JetBrains Mono',monospace;
+    }
+    .rpt-kpi.danger  .rpt-kpi-v { color:#fca5a5; }
+    .rpt-kpi.success .rpt-kpi-v { color:#86efac; }
+    .rpt-kpi.warning .rpt-kpi-v { color:#fcd34d; }
+    .rpt-kpi.purple  .rpt-kpi-v { color:#c4b5fd; }
+    .rpt-kpi.cyan    .rpt-kpi-v { color:#67e8f9; }
+    .rpt-kpi.pink    .rpt-kpi-v { color:#f9a8d4; }
+
+    /* Grid rows */
+    .rpt-row { display:grid; gap:.85rem; margin-bottom:1.3rem; }
+    .rpt-row-2 { grid-template-columns:1fr 1fr; }
+    .rpt-row-12 { grid-template-columns:1fr 2fr; }
+    .rpt-row-21 { grid-template-columns:2fr 1fr; }
+    .rpt-row-3 { grid-template-columns:1fr 1fr 1fr; }
+    @media (max-width:900px) {
+        .rpt-row-2, .rpt-row-12, .rpt-row-21, .rpt-row-3 { grid-template-columns:1fr; }
+    }
+
+    /* Sub-card (inside the document) */
+    .rpt-card {
+        background:var(--surface-2); border:1px solid var(--border-soft);
+        border-radius:12px; overflow:hidden;
+        display:flex; flex-direction:column;
+    }
+    .rpt-card-h {
+        display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+        padding:.7rem .95rem; border-bottom:1px solid var(--border-soft);
+        background:linear-gradient(180deg,rgba(255,255,255,.015),transparent);
+    }
+    .rpt-card-t {
+        font-size:.72rem; font-weight:800; color:#fff;
+        text-transform:uppercase; letter-spacing:.06em;
+        display:inline-flex; align-items:center; gap:.4rem;
+    }
+    .rpt-card-t svg {
+        width:11px; height:11px; stroke:#93c5fd; fill:none; stroke-width:2.2;
+        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
+    }
+    .rpt-card-meta { font-size:.66rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+    .rpt-card-b { padding:.75rem .9rem 1rem; flex:1; min-height:0; }
+    .rpt-card-b.no-pad { padding:0; }
+
+    /* Chart container */
+    .rpt-chart { width:100%; }
+    .rpt-chart-sm { height:200px; }
+    .rpt-chart-md { height:260px; }
+    .rpt-chart-lg { height:320px; }
+
+    /* Table */
+    .rpt-tbl { width:100%; border-collapse:collapse; font-size:.78rem; }
+    .rpt-tbl th {
+        text-align:left; padding:.55rem .8rem; font-size:.62rem;
+        text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border-soft);
+        font-weight:700; letter-spacing:.06em;
+        background:linear-gradient(180deg,rgba(0,0,0,.18),rgba(0,0,0,.08));
+    }
+    .rpt-tbl td {
+        padding:.5rem .8rem; border-bottom:1px solid var(--hairline);
+        color:var(--text); vertical-align:middle;
+    }
+    .rpt-tbl tbody tr:hover td { background:rgba(59,130,246,.05); }
+    .rpt-tbl .mono { font-family:'JetBrains Mono',monospace; font-size:.74rem; }
+    .rpt-tbl .r { text-align:right; }
+    .rpt-tbl .c { text-align:center; }
+    .rpt-tbl-wrap { max-height:560px; overflow:auto; border-radius:0 0 12px 12px; }
+    .rpt-tbl-wrap::-webkit-scrollbar { width:7px; height:7px; }
+    .rpt-tbl-wrap::-webkit-scrollbar-thumb { background:#2a3553; border-radius:4px; }
+
+    /* Progress bar */
+    .rpt-bar { display:flex; align-items:center; gap:.5rem; min-width:80px; }
+    .rpt-bar-track { flex:1; height:5px; background:rgba(36,49,84,.7); border-radius:3px; overflow:hidden; min-width:60px; }
+    .rpt-bar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,#3b82f6,#22d3ee); transition:width .4s ease; }
+
+    /* Badges */
+    .rpt-bdg {
+        display:inline-block; padding:2px 8px; border-radius:9999px;
+        font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    }
+    .rpt-bdg-prod   { background:rgba(34,197,94,.14);  color:#86efac; }
+    .rpt-bdg-neut   { background:rgba(148,163,184,.13); color:#cbd5e1; }
+    .rpt-bdg-unprod { background:rgba(245,158,11,.14); color:#fcd34d; }
+    .rpt-bdg-risky  { background:rgba(239,68,68,.14);  color:#fca5a5; }
+    .rpt-bdg-allow  { background:rgba(34,197,94,.14);  color:#86efac; }
+    .rpt-bdg-block  { background:rgba(239,68,68,.14);  color:#fca5a5; }
+    .rpt-bdg-alert  { background:rgba(245,158,11,.14); color:#fcd34d; }
+    .rpt-bdg-info   { background:rgba(59,130,246,.14); color:#93c5fd; }
+
+    /* User pill */
+    .rpt-user { display:flex; flex-direction:column; gap:1px; line-height:1.15; }
+    .rpt-user b { color:var(--purple); font-weight:700; font-size:.78rem; }
+    .rpt-user span { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:.68rem; }
+
+    /* Loading */
+    .rpt-loading {
+        display:flex; align-items:center; justify-content:center; gap:.55rem;
+        padding:2rem 1rem; color:var(--muted); font-size:.78rem;
+    }
+    .rpt-loading::before {
+        content:''; width:14px; height:14px; border:2px solid var(--border);
+        border-top-color:var(--primary); border-radius:50%; animation:rpt-spin .65s linear infinite;
+    }
+    .rpt-empty { text-align:center; padding:2rem 1rem; color:var(--dim); font-size:.84rem; }
+
+    /* Insight / risk callout */
+    .rpt-callout {
+        display:flex; gap:.8rem; align-items:flex-start;
+        padding:.85rem 1rem; border-radius:11px;
+        background:rgba(59,130,246,.07); border:1px solid rgba(59,130,246,.22);
+        margin-bottom:1rem;
+    }
+    .rpt-callout-ico {
+        width:28px; height:28px; border-radius:8px; flex-shrink:0;
+        background:rgba(59,130,246,.18); color:#93c5fd;
+        display:inline-flex; align-items:center; justify-content:center;
+    }
+    .rpt-callout-ico svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+    .rpt-callout.warn  { background:rgba(245,158,11,.06); border-color:rgba(245,158,11,.24); }
+    .rpt-callout.warn  .rpt-callout-ico { background:rgba(245,158,11,.18); color:#fcd34d; }
+    .rpt-callout.risk  { background:rgba(239,68,68,.06);  border-color:rgba(239,68,68,.24); }
+    .rpt-callout.risk  .rpt-callout-ico { background:rgba(239,68,68,.18); color:#fca5a5; }
+    .rpt-callout.ok    { background:rgba(34,197,94,.06);  border-color:rgba(34,197,94,.24); }
+    .rpt-callout.ok    .rpt-callout-ico { background:rgba(34,197,94,.18); color:#86efac; }
+    .rpt-callout-body { flex:1; min-width:0; font-size:.8rem; color:var(--text-2); line-height:1.45; }
+    .rpt-callout-body b { color:#fff; }
+
+    /* Footer */
+    .rpt-doc-footer {
+        padding:.9rem 1.6rem 1.1rem;
+        background:linear-gradient(180deg, transparent, rgba(0,0,0,.18));
+        border-top:1px solid var(--border-soft);
+        display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem;
+        font-size:.7rem; color:var(--muted);
+    }
+    .rpt-doc-footer strong { color:#fff; }
+    .rpt-doc-footer-r { font-family:'JetBrains Mono',monospace; }
+
+    /* ============================================================
+       PRINT STYLES — produces clean PDF via browser "Save as PDF"
+       ============================================================ */
+    @media print {
+        @page {
+            size: A4;
+            margin: 12mm 10mm 14mm 10mm;
+        }
+
+        body {
+            background:#fff !important;
+            color:#0b1220 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+        }
+        /* Hide everything but the report document */
+        body * { visibility:hidden !important; }
+        .rpt-doc, .rpt-doc * { visibility:visible !important; }
+        .rpt-doc {
+            position:absolute !important;
+            left:0 !important; top:0 !important; right:0 !important;
+            width:100% !important; border:none !important; border-radius:0 !important;
+            margin:0 !important; padding:0 !important;
+            background:#fff !important;
+            color:#0b1220 !important;
+            box-shadow:none !important;
+        }
+        /* Light theme for print */
+        .rpt-doc-header {
+            background:linear-gradient(135deg, #f0f7ff 0%, #eef9ff 50%, #f5f0ff 100%) !important;
+            border-bottom:1px solid #cbd5e1 !important;
+            color:#0b1220 !important;
+            padding:14mm 12mm 8mm !important;
+        }
+        .rpt-doc-header::before { display:none !important; }
+        .rpt-doc-title, .rpt-doc-brand-name { color:#0b1220 !important; }
+        .rpt-doc-brand-tag { color:#475569 !important; }
+        .rpt-doc-sub { color:#334155 !important; }
+        .rpt-doc-meta { border-top-color:rgba(0,0,0,.08) !important; }
+        .rpt-meta-l { color:#64748b !important; }
+        .rpt-meta-v { color:#0b1220 !important; }
+        .rpt-meta-chip { background:#e0f2fe !important; color:#0369a1 !important; border-color:#bae6fd !important; }
+        .rpt-doc-title-ico { background:#dbeafe !important; border-color:#bfdbfe !important; }
+        .rpt-doc-title-ico svg { stroke:#1d4ed8 !important; }
+        .rpt-doc-brand-mark { box-shadow:none !important; }
+
+        .rpt-doc-body { padding:8mm 12mm !important; }
+        .rpt-section-h {
+            border-bottom-color:#cbd5e1 !important;
+        }
+        .rpt-section-h-ico { background:#dbeafe !important; }
+        .rpt-section-h-ico svg { stroke:#1d4ed8 !important; }
+        .rpt-section-title { color:#0b1220 !important; }
+        .rpt-section-meta { color:#64748b !important; }
+        .rpt-section { page-break-inside:auto; }
+        .rpt-card, .rpt-callout { page-break-inside:avoid; }
+
+        .rpt-kpi, .rpt-card {
+            background:#fff !important;
+            border:1px solid #e2e8f0 !important;
+            color:#0b1220 !important;
+        }
+        .rpt-kpi-l, .rpt-card-t { color:#475569 !important; }
+        .rpt-kpi-v {
+            color:#0b1220 !important;
+            font-family:'JetBrains Mono',monospace !important;
+        }
+        .rpt-kpi-sub { color:#64748b !important; }
+        .rpt-kpi.danger  .rpt-kpi-v { color:#b91c1c !important; }
+        .rpt-kpi.success .rpt-kpi-v { color:#15803d !important; }
+        .rpt-kpi.warning .rpt-kpi-v { color:#b45309 !important; }
+        .rpt-kpi.purple  .rpt-kpi-v { color:#6d28d9 !important; }
+        .rpt-kpi.cyan    .rpt-kpi-v { color:#0e7490 !important; }
+        .rpt-kpi.pink    .rpt-kpi-v { color:#be185d !important; }
+
+        .rpt-card-h {
+            background:#f8fafc !important;
+            border-bottom-color:#e2e8f0 !important;
+        }
+        .rpt-card-t svg { stroke:#1d4ed8 !important; background:#dbeafe !important; }
+
+        .rpt-tbl th {
+            background:#f1f5f9 !important;
+            color:#475569 !important;
+            border-bottom-color:#cbd5e1 !important;
+        }
+        .rpt-tbl td {
+            color:#0b1220 !important;
+            border-bottom-color:#e2e8f0 !important;
+        }
+        .rpt-tbl tbody tr:hover td { background:transparent !important; }
+        .rpt-bar-track { background:#e2e8f0 !important; }
+        .rpt-bar-fill { background:linear-gradient(90deg,#3b82f6,#22d3ee) !important; }
+
+        .rpt-bdg, .rpt-meta-chip {
+            border:1px solid transparent !important;
+        }
+        .rpt-bdg-prod   { background:#dcfce7 !important; color:#15803d !important; }
+        .rpt-bdg-neut   { background:#f1f5f9 !important; color:#475569 !important; }
+        .rpt-bdg-unprod { background:#fef3c7 !important; color:#b45309 !important; }
+        .rpt-bdg-risky  { background:#fee2e2 !important; color:#b91c1c !important; }
+        .rpt-bdg-allow  { background:#dcfce7 !important; color:#15803d !important; }
+        .rpt-bdg-block  { background:#fee2e2 !important; color:#b91c1c !important; }
+        .rpt-bdg-alert  { background:#fef3c7 !important; color:#b45309 !important; }
+        .rpt-bdg-info   { background:#dbeafe !important; color:#1d4ed8 !important; }
+
+        .rpt-user b { color:#6d28d9 !important; }
+        .rpt-user span { color:#64748b !important; }
+
+        .rpt-callout.warn { background:#fffbeb !important; border-color:#fcd34d !important; color:#0b1220 !important; }
+        .rpt-callout.warn .rpt-callout-ico { background:#fef3c7 !important; color:#b45309 !important; }
+        .rpt-callout.risk { background:#fef2f2 !important; border-color:#fca5a5 !important; color:#0b1220 !important; }
+        .rpt-callout.risk .rpt-callout-ico { background:#fee2e2 !important; color:#b91c1c !important; }
+        .rpt-callout.ok { background:#f0fdf4 !important; border-color:#86efac !important; color:#0b1220 !important; }
+        .rpt-callout.ok .rpt-callout-ico { background:#dcfce7 !important; color:#15803d !important; }
+        .rpt-callout {
+            background:#eff6ff !important; border-color:#bfdbfe !important; color:#0b1220 !important;
+        }
+        .rpt-callout .rpt-callout-ico { background:#dbeafe !important; color:#1d4ed8 !important; }
+        .rpt-callout-body { color:#0b1220 !important; }
+        .rpt-callout-body b { color:#0b1220 !important; }
+
+        .rpt-doc-footer {
+            background:#f8fafc !important;
+            border-top-color:#cbd5e1 !important;
+            color:#475569 !important;
+            padding:6mm 12mm !important;
+            page-break-after:avoid;
+        }
+        .rpt-doc-footer strong { color:#0b1220 !important; }
+
+        .rpt-tbl-wrap { max-height:none !important; overflow:visible !important; }
+        .rpt-chart-sm, .rpt-chart-md, .rpt-chart-lg { height:auto; min-height:200px; }
+        .rpt-chart canvas, .rpt-chart svg { max-width:100% !important; }
+    }
+</style>
+{% block report_extra_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="rpt-page">
+
+    <!-- Screen-only controls (back, range, search, print, download) -->
+    <div class="rpt-screen-controls no-print">
+        <div class="rpt-controls-l">
+            <a href="{{ url_for('reports_index') }}" class="rpt-back">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+                All Reports
+            </a>
+            <div class="rpt-live"><span class="rpt-live-dot"></span><span>live</span></div>
+            <div class="rpt-seg" id="rpt-range-seg" role="tablist" aria-label="Time range">
+                <button class="rpt-seg-btn" data-h="1">1H</button>
+                <button class="rpt-seg-btn" data-h="6">6H</button>
+                <button class="rpt-seg-btn{% if report_hours == 24 %} active{% endif %}" data-h="24">24H</button>
+                <button class="rpt-seg-btn{% if report_hours == 72 %} active{% endif %}" data-h="72">3D</button>
+                <button class="rpt-seg-btn{% if report_hours == 168 %} active{% endif %}" data-h="168">7D</button>
+                <button class="rpt-seg-btn{% if report_hours == 720 %} active{% endif %}" data-h="720">30D</button>
+            </div>
+            {% block report_controls_extra %}{% endblock %}
+        </div>
+        <div class="rpt-controls-r">
+            <button class="rpt-btn" id="rpt-refresh" title="Refresh data">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Refresh
+            </button>
+            <button class="rpt-btn rpt-btn-primary" id="rpt-print" title="Open print dialog → save as PDF">
+                <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Download PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Report document — printed -->
+    <div class="rpt-doc" id="rpt-doc">
+        <div class="rpt-doc-header">
+            <div class="rpt-doc-brand">
+                <div class="rpt-doc-brand-mark">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <div class="rpt-doc-brand-text">
+                    <div class="rpt-doc-brand-name">Zentryc</div>
+                    <div class="rpt-doc-brand-tag">SOAR / SIEM · Analytics Report</div>
+                </div>
+            </div>
+            <h1 class="rpt-doc-title">
+                <span class="rpt-doc-title-ico">{% block report_icon_svg %}<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>{% endblock %}</span>
+                {% block report_title %}Report{% endblock %}
+            </h1>
+            <div class="rpt-doc-sub">{% block report_subtitle %}Generated by Zentryc{% endblock %}</div>
+            <div class="rpt-doc-meta">
+                <div class="rpt-meta-item">
+                    <span class="rpt-meta-l">Time Range</span>
+                    <span class="rpt-meta-v" id="rpt-meta-range">{{ report_hours }} hours</span>
+                </div>
+                <div class="rpt-meta-item">
+                    <span class="rpt-meta-l">Generated</span>
+                    <span class="rpt-meta-v" id="rpt-meta-generated">—</span>
+                </div>
+                <div class="rpt-meta-item">
+                    <span class="rpt-meta-l">Report ID</span>
+                    <span class="rpt-meta-v" id="rpt-meta-id">—</span>
+                </div>
+                {% block report_meta_extra %}{% endblock %}
+            </div>
+        </div>
+
+        <div class="rpt-doc-body">
+            {% block report_body %}{% endblock %}
+        </div>
+
+        <div class="rpt-doc-footer">
+            <div>
+                <strong>Zentryc</strong> · SOAR/SIEM v{{ app_version }} ·
+                <span id="rpt-footer-user">{{ current_user.username if current_user else '—' }}</span>
+            </div>
+            <div class="rpt-doc-footer-r" id="rpt-footer-ts">—</div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
+<script>
+window.rptHours = {{ report_hours }};
+(function(){
+    // Generated/footer timestamps
+    const now = new Date();
+    document.getElementById('rpt-meta-generated').textContent = now.toLocaleString();
+    document.getElementById('rpt-footer-ts').textContent = now.toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+    const reportId = 'ZTR-' + now.toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*9000+1000);
+    document.getElementById('rpt-meta-id').textContent = reportId;
+
+    // Range labels
+    const labels = {'1':'1 hour','6':'6 hours','24':'24 hours','72':'3 days','168':'7 days','720':'30 days'};
+    document.getElementById('rpt-meta-range').textContent = 'Last ' + (labels[String(window.rptHours)] || (window.rptHours + 'h'));
+
+    // Segmented range — reloads page with new ?hours=
+    document.querySelectorAll('#rpt-range-seg .rpt-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const h = btn.dataset.h;
+            const url = new URL(window.location.href);
+            url.searchParams.set('hours', h);
+            window.location.href = url.toString();
+        });
+    });
+
+    // Print button
+    document.getElementById('rpt-print').addEventListener('click', () => {
+        window.print();
+    });
+
+    // Refresh button — just reloads the page so all data refetches
+    document.getElementById('rpt-refresh').addEventListener('click', () => {
+        window.location.reload();
+    });
+})();
+</script>
+{% block report_extra_js %}{% endblock %}
+{% endblock %}

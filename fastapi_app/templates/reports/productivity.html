@@ -1,0 +1,165 @@
+{% extends "reports/_report_base.html" %}
+
+{% block report_title %}Productivity Report{% endblock %}
+{% block report_subtitle %}
+    Breakdown of web activity by productivity class — productive, neutral, unproductive and risky — with category drill-down.
+{% endblock %}
+{% block report_icon_svg %}
+    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+{% endblock %}
+
+{% block report_body %}
+<!-- KPI strip -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span>
+        <span class="rpt-section-title">Productivity Snapshot</span>
+    </div>
+    <div class="rpt-kpis">
+        <div class="rpt-kpi success"><div class="rpt-kpi-l">Productivity Score</div><div class="rpt-kpi-v" id="pr-score">—</div><div class="rpt-kpi-sub">productive share</div></div>
+        <div class="rpt-kpi success"><div class="rpt-kpi-l">Productive</div><div class="rpt-kpi-v" id="pr-good">—</div><div class="rpt-kpi-sub" id="pr-good-sub">&nbsp;</div></div>
+        <div class="rpt-kpi"><div class="rpt-kpi-l">Neutral</div><div class="rpt-kpi-v" id="pr-neut">—</div><div class="rpt-kpi-sub" id="pr-neut-sub">&nbsp;</div></div>
+        <div class="rpt-kpi warning"><div class="rpt-kpi-l">Unproductive</div><div class="rpt-kpi-v" id="pr-unp">—</div><div class="rpt-kpi-sub" id="pr-unp-sub">&nbsp;</div></div>
+        <div class="rpt-kpi danger"><div class="rpt-kpi-l">Risky</div><div class="rpt-kpi-v" id="pr-risk">—</div><div class="rpt-kpi-sub" id="pr-risk-sub">&nbsp;</div></div>
+    </div>
+</div>
+
+<div id="pr-callouts"></div>
+
+<!-- Two-up: donut + bar -->
+<div class="rpt-row rpt-row-12">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg></span>
+            <span class="rpt-section-title">Productivity Mix</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="pr-donut" class="rpt-chart rpt-chart-md"></div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="rpt-section-title">Top Categories — colour = productivity</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="pr-cats" class="rpt-chart rpt-chart-lg"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Full category table -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg></span>
+        <span class="rpt-section-title">Category Breakdown</span>
+    </div>
+    <div class="rpt-card"><div class="rpt-card-b no-pad">
+        <div class="rpt-tbl-wrap" style="max-height:none">
+            <table class="rpt-tbl">
+                <thead><tr>
+                    <th>Category</th>
+                    <th>Class</th>
+                    <th class="r">Requests</th>
+                    <th class="r">Users</th>
+                    <th class="r">Bandwidth</th>
+                    <th></th>
+                </tr></thead>
+                <tbody id="pr-tbl"><tr><td colspan="6"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+            </table>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block report_extra_js %}
+<script>
+(function(){
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function fmtBytes(b){ if(!b||b===0) return '0 B'; const u=['B','KB','MB','GB','TB','PB']; let i=0; b=Number(b); while(b>=1024 && i<u.length-1){b/=1024;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+    function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el || typeof echarts === 'undefined') return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize()));
+
+    const COLOR = {productive:'#22c55e', neutral:'#94a3b8', unproductive:'#f59e0b', risky:'#ef4444'};
+    const BDG   = {productive:'rpt-bdg-prod', neutral:'rpt-bdg-neut', unproductive:'rpt-bdg-unprod', risky:'rpt-bdg-risky'};
+
+    fetch('/api/url-analytics/categories?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const prod = d.productivity||{};
+        const total = (prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
+        const pct = k => total ? ((prod[k]||0)/total*100).toFixed(1) : 0;
+        const score = total ? Math.round((prod.productive||0)/total*100) : 0;
+
+        document.getElementById('pr-score').textContent = score+'%';
+        document.getElementById('pr-good').textContent  = fmtNum(prod.productive);
+        document.getElementById('pr-neut').textContent  = fmtNum(prod.neutral);
+        document.getElementById('pr-unp').textContent   = fmtNum(prod.unproductive);
+        document.getElementById('pr-risk').textContent  = fmtNum(prod.risky);
+        document.getElementById('pr-good-sub').textContent = pct('productive')+'% of total';
+        document.getElementById('pr-neut-sub').textContent = pct('neutral')+'% of total';
+        document.getElementById('pr-unp-sub').textContent  = pct('unproductive')+'% of total';
+        document.getElementById('pr-risk-sub').textContent = pct('risky')+'% of total';
+        const pe = document.getElementById('pr-score'); pe.style.color = score>=60?'#86efac':score>=30?'#fcd34d':'#fca5a5';
+
+        const c = chart('pr-donut');
+        if (c) {
+            c.setOption({
+                tooltip:{trigger:'item', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}, formatter:p=>`${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)`},
+                series:[{type:'pie', radius:['60%','85%'], center:['50%','50%'],
+                    label:{show:true, position:'center', formatter:`{a|${score}%}\n{b|Productive}`,
+                        rich:{a:{fontSize:24, fontWeight:'bold', color:'#fff', fontFamily:'JetBrains Mono', lineHeight:28},
+                              b:{fontSize:10, color:'#8c9ab5', letterSpacing:1, padding:[4,0,0,0]}}},
+                    labelLine:{show:false},
+                    data:[
+                        {name:'Productive', value:prod.productive||0, itemStyle:{color:COLOR.productive}},
+                        {name:'Neutral', value:prod.neutral||0, itemStyle:{color:COLOR.neutral}},
+                        {name:'Unproductive', value:prod.unproductive||0, itemStyle:{color:COLOR.unproductive}},
+                        {name:'Risky', value:prod.risky||0, itemStyle:{color:COLOR.risky}}
+                    ]}]
+            });
+        }
+
+        const cats = (d.categories||[]).slice(0,15).reverse();
+        const cc = chart('pr-cats');
+        if (cc) {
+            cc.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                    formatter: p=>{ const r=cats[p[0].dataIndex]; return `<b>${esc(r.category)}</b><br/>${fmtNum(r.requests)} requests<br/>Class: <b>${r.productivity}</b>`; }},
+                grid:{left:8, right:60, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:cats.map(r=>r.category), axisLabel:{fontSize:11, color:'#c2cce0', formatter:v=>v.length>22?v.slice(0,20)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:cats.map(r=>({value:r.requests, itemStyle:{color:COLOR[r.productivity]||'#3b82f6', borderRadius:[0,4,4,0]}})), label:{show:true, position:'right', fontSize:10, color:'#c2cce0', formatter:p=>fmtNum(p.value)}}]
+            });
+        }
+
+        const all = (d.categories||[]);
+        const maxR = Math.max(...all.map(r=>r.requests||0))||1;
+        document.getElementById('pr-tbl').innerHTML = all.length ? all.map(r=>`
+            <tr>
+                <td>${esc(r.category)}</td>
+                <td><span class="rpt-bdg ${BDG[r.productivity]||'rpt-bdg-neut'}">${esc(r.productivity)}</span></td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtNum(r.users)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.requests/maxR*100).toFixed(1)}%;background:${COLOR[r.productivity]||'#3b82f6'}"></div></div></div></td>
+            </tr>`).join('') : '<tr><td colspan="6"><div class="rpt-empty">No data</div></td></tr>';
+
+        const c2 = [];
+        if (score >= 60) c2.push(`<div class="rpt-callout ok"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span><div class="rpt-callout-body">Productive activity dominates — score <b>${score}%</b>. Keep monitoring categories that approach unproductive thresholds.</div></div>`);
+        else if (score >= 30) c2.push(`<div class="rpt-callout warn"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></span><div class="rpt-callout-body">Productivity score <b>${score}%</b> — a meaningful share of traffic is unproductive or neutral.</div></div>`);
+        else c2.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span><div class="rpt-callout-body">Low productivity score <b>${score}%</b> — review top unproductive categories and policy enforcement.</div></div>`);
+        if (prod.risky > 0) c2.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div class="rpt-callout-body"><b>${fmtNum(prod.risky)}</b> requests landed in risky categories (malware/phishing/proxy). Review the Security report for source attribution.</div></div>`);
+        document.getElementById('pr-callouts').innerHTML = c2.join('');
+    });
+})();
+</script>
+{% endblock %}

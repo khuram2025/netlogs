@@ -1,0 +1,205 @@
+{% extends "reports/_report_base.html" %}
+
+{% block report_title %}Security Report{% endblock %}
+{% block report_subtitle %}
+    Blocked sites and categories, top offenders, and threat indicators across the network.
+{% endblock %}
+{% block report_icon_svg %}
+    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+{% endblock %}
+
+{% block report_body %}
+<!-- KPI strip -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span>
+        <span class="rpt-section-title">Security Posture</span>
+    </div>
+    <div class="rpt-kpis">
+        <div class="rpt-kpi danger"><div class="rpt-kpi-l">Total Blocked</div><div class="rpt-kpi-v" id="sc-total">—</div><div class="rpt-kpi-sub" id="sc-total-sub">&nbsp;</div></div>
+        <div class="rpt-kpi warning"><div class="rpt-kpi-l">Distinct Hostnames</div><div class="rpt-kpi-v" id="sc-hosts">—</div></div>
+        <div class="rpt-kpi cyan"><div class="rpt-kpi-l">Categories Blocked</div><div class="rpt-kpi-v" id="sc-cats">—</div></div>
+        <div class="rpt-kpi purple"><div class="rpt-kpi-l">Users Affected</div><div class="rpt-kpi-v" id="sc-users">—</div></div>
+    </div>
+</div>
+
+<div id="sc-callouts"></div>
+
+<!-- Hosts + Categories charts -->
+<div class="rpt-row rpt-row-2">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
+            <span class="rpt-section-title">Top Blocked Sites</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="sc-hosts-chart" class="rpt-chart rpt-chart-lg"></div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="rpt-section-title">Top Blocked Categories</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="sc-cats-chart" class="rpt-chart rpt-chart-lg"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Users + DNS tables -->
+<div class="rpt-row rpt-row-2">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+            <span class="rpt-section-title">Top Repeat Offenders</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b no-pad">
+            <div class="rpt-tbl-wrap" style="max-height:none">
+                <table class="rpt-tbl">
+                    <thead><tr><th>User</th><th class="r">Hits</th><th class="r">Sites</th></tr></thead>
+                    <tbody id="sc-users-tbl"><tr><td colspan="3"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>
+            <span class="rpt-section-title">DNS Threat Indicators</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b no-pad">
+            <div class="rpt-tbl-wrap" style="max-height:none">
+                <table class="rpt-tbl">
+                    <thead><tr><th>Indicator</th><th class="r">Value</th></tr></thead>
+                    <tbody id="sc-dns-tbl"><tr><td colspan="2"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Detailed sites table -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg></span>
+        <span class="rpt-section-title">Blocked Hostnames — Detail</span>
+    </div>
+    <div class="rpt-card"><div class="rpt-card-b no-pad">
+        <div class="rpt-tbl-wrap" style="max-height:none">
+            <table class="rpt-tbl">
+                <thead><tr><th>Hostname</th><th>Category</th><th class="r">Hits</th><th></th></tr></thead>
+                <tbody id="sc-detail"><tr><td colspan="4"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+            </table>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block report_extra_js %}
+<script>
+(function(){
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el || typeof echarts === 'undefined') return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize()));
+
+    // Pull blocked + summary + dns in parallel
+    Promise.all([
+        fetch('/api/url-analytics/blocked?hours='+window.rptHours).then(r=>r.json()),
+        fetch('/api/url-analytics/summary?hours='+window.rptHours).then(r=>r.json()),
+        fetch('/api/url-analytics/dns?hours='+window.rptHours).then(r=>r.json())
+    ]).then(([blk, sum, dns]) => {
+        const hosts = blk.blocked_hosts || [];
+        const cats  = blk.blocked_categories || [];
+        const users = blk.blocked_users || [];
+        const s = sum.summary || {};
+        const ds = (dns && dns.summary) || {};
+
+        const totalBlocked = s.blocked_count || hosts.reduce((a,r)=>a+(r.blocked_count||0),0);
+        const blkPct = s.total_requests ? ((totalBlocked/s.total_requests)*100).toFixed(1) : 0;
+
+        document.getElementById('sc-total').textContent = fmtNum(totalBlocked);
+        document.getElementById('sc-total-sub').textContent = blkPct + '% of all traffic';
+        document.getElementById('sc-hosts').textContent = fmtNum(hosts.length);
+        document.getElementById('sc-cats').textContent  = fmtNum(cats.length);
+        document.getElementById('sc-users').textContent = fmtNum(users.length);
+
+        // Hosts chart (top 10)
+        const topH = hosts.slice(0,10).reverse();
+        const ch = chart('sc-hosts-chart');
+        if (ch) {
+            ch.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+                grid:{left:8, right:60, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:topH.map(r=>r.hostname), axisLabel:{fontSize:11, color:'#fca5a5', formatter:v=>v.length>26?v.slice(0,24)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:topH.map(r=>({value:r.blocked_count,
+                    itemStyle:{color:{type:'linear',x:0,y:0,x2:1,y2:0,colorStops:[{offset:0,color:'#ef4444'},{offset:1,color:'#f87171'}]}, borderRadius:[0,4,4,0]}})),
+                    label:{show:true, position:'right', fontSize:10, color:'#fca5a5', formatter:p=>fmtNum(p.value)}}]
+            });
+        }
+
+        // Cats chart
+        const topC = cats.slice(0,10).reverse();
+        const cc = chart('sc-cats-chart');
+        if (cc) {
+            cc.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+                grid:{left:8, right:60, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:topC.map(r=>r.category), axisLabel:{fontSize:11, color:'#fcd34d', formatter:v=>v.length>26?v.slice(0,24)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:topC.map(r=>({value:r.count,
+                    itemStyle:{color:{type:'linear',x:0,y:0,x2:1,y2:0,colorStops:[{offset:0,color:'#f59e0b'},{offset:1,color:'#fcd34d'}]}, borderRadius:[0,4,4,0]}})),
+                    label:{show:true, position:'right', fontSize:10, color:'#fcd34d', formatter:p=>fmtNum(p.value)}}]
+            });
+        }
+
+        // Users table
+        document.getElementById('sc-users-tbl').innerHTML = users.length ? users.slice(0,20).map(r => `
+            <tr>
+                <td><div class="rpt-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                <td class="r mono" style="color:#fca5a5">${fmtNum(r.blocked_count)}</td>
+                <td class="r mono">${fmtNum(r.unique_blocked_sites)}</td>
+            </tr>`).join('') : '<tr><td colspan="3"><div class="rpt-empty">No blocked activity</div></td></tr>';
+
+        // DNS indicators
+        document.getElementById('sc-dns-tbl').innerHTML = `
+            <tr><td>Total DNS Queries</td><td class="r mono">${fmtNum(ds.total)}</td></tr>
+            <tr><td>Blocked</td><td class="r mono" style="color:#fca5a5">${fmtNum(ds.blocked)}</td></tr>
+            <tr><td>Sinkholed</td><td class="r mono" style="color:#c4b5fd">${fmtNum(ds.sinkholed)}</td></tr>
+            <tr><td>Critical / High severity</td><td class="r mono" style="color:#fcd34d">${fmtNum(ds.critical_high)}</td></tr>
+            <tr><td>Unique Domains</td><td class="r mono">${fmtNum(ds.unique_domains)}</td></tr>
+            <tr><td>Resolvers used</td><td class="r mono">${fmtNum(ds.users)}</td></tr>
+        `;
+
+        // Detail
+        const maxH = topH.length ? Math.max(...hosts.map(r=>r.blocked_count||0))||1 : 1;
+        document.getElementById('sc-detail').innerHTML = hosts.length ? hosts.slice(0,40).map(r => `
+            <tr>
+                <td class="mono" style="color:#fca5a5">${esc(r.hostname)}</td>
+                <td>${esc(r.category||'—')}</td>
+                <td class="r mono">${fmtNum(r.blocked_count)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.blocked_count/maxH*100).toFixed(1)}%;background:linear-gradient(90deg,#ef4444,#f87171)"></div></div></div></td>
+            </tr>`).join('') : '<tr><td colspan="4"><div class="rpt-empty">No blocked hostnames</div></td></tr>';
+
+        // Callouts
+        const c2 = [];
+        if (totalBlocked === 0) c2.push(`<div class="rpt-callout ok"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span><div class="rpt-callout-body">No blocked traffic in this window.</div></div>`);
+        else if (blkPct > 10) c2.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span><div class="rpt-callout-body">High block rate: <b>${blkPct}%</b> of all traffic was denied. Investigate top hostnames below.</div></div>`);
+        if (ds.critical_high > 0) c2.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></span><div class="rpt-callout-body"><b>${fmtNum(ds.critical_high)}</b> high/critical-severity DNS events — review DNS Insights for affected hosts.</div></div>`);
+        if (ds.sinkholed > 0) c2.push(`<div class="rpt-callout warn"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span><div class="rpt-callout-body"><b>${fmtNum(ds.sinkholed)}</b> DNS queries were sinkholed (likely C2/malware indicators). Check originating users.</div></div>`);
+        document.getElementById('sc-callouts').innerHTML = c2.join('');
+    });
+})();
+</script>
+{% endblock %}

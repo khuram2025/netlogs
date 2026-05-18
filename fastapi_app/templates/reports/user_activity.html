@@ -1,0 +1,450 @@
+{% extends "reports/_report_base.html" %}
+
+{% block report_title %}User Activity Report{% endblock %}
+{% block report_subtitle %}
+    {% if report_user %}
+        Detailed web and traffic activity for <b>{{ report_user }}</b> over the selected window.
+    {% else %}
+        Pick a user from the list below to generate a per-user activity report with categories, sites, productivity, blocked attempts and bandwidth.
+    {% endif %}
+{% endblock %}
+{% block report_icon_svg %}
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+{% endblock %}
+
+{% block report_meta_extra %}
+    <div class="rpt-meta-item">
+        <span class="rpt-meta-l">Subject</span>
+        <span class="rpt-meta-v" id="rpt-meta-user">{{ report_user or '—' }}</span>
+    </div>
+{% endblock %}
+
+{% block report_controls_extra %}
+    <div class="rpt-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="rpt-user-input" placeholder="Username or IP…" value="{{ report_user }}">
+    </div>
+    <button class="rpt-btn" id="rpt-user-go">Generate</button>
+{% endblock %}
+
+{% block report_body %}
+    <div id="rpt-no-user" {% if report_user %}style="display:none"{% endif %}>
+        <div class="rpt-callout">
+            <span class="rpt-callout-ico">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
+            <div class="rpt-callout-body">
+                <b>No user selected.</b> Pick one of the most active users below, or type a username/IP in the search above and click <b>Generate</b>.
+            </div>
+        </div>
+        <div class="rpt-section">
+            <div class="rpt-section-h">
+                <span class="rpt-section-h-ico">
+                    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </span>
+                <span class="rpt-section-title">Top Active Users</span>
+            </div>
+            <div class="rpt-card">
+                <div class="rpt-card-b no-pad">
+                    <div class="rpt-tbl-wrap" style="max-height:none">
+                        <table class="rpt-tbl">
+                            <thead><tr>
+                                <th>User</th>
+                                <th class="r">Requests</th>
+                                <th class="r">Sites</th>
+                                <th class="r">Bandwidth</th>
+                                <th class="r">Blocked</th>
+                                <th></th>
+                            </tr></thead>
+                            <tbody id="rpt-userlist"><tr><td colspan="6"><div class="rpt-loading">Loading top users…</div></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="rpt-user-view" {% if not report_user %}style="display:none"{% endif %}>
+        <!-- KPI strip -->
+        <div class="rpt-section">
+            <div class="rpt-section-h">
+                <span class="rpt-section-h-ico">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </span>
+                <span class="rpt-section-title">Activity at a glance</span>
+                <span class="rpt-section-meta" id="ua-window">—</span>
+            </div>
+            <div class="rpt-kpis">
+                <div class="rpt-kpi"><div class="rpt-kpi-l">Total Requests</div><div class="rpt-kpi-v" id="ua-total">—</div><div class="rpt-kpi-sub" id="ua-total-sub">&nbsp;</div></div>
+                <div class="rpt-kpi purple"><div class="rpt-kpi-l">Bandwidth</div><div class="rpt-kpi-v" id="ua-bw">—</div><div class="rpt-kpi-sub" id="ua-bw-sub">&nbsp;</div></div>
+                <div class="rpt-kpi cyan"><div class="rpt-kpi-l">Unique Sites</div><div class="rpt-kpi-v" id="ua-dests">—</div><div class="rpt-kpi-sub" id="ua-dests-sub">&nbsp;</div></div>
+                <div class="rpt-kpi"><div class="rpt-kpi-l">Categories</div><div class="rpt-kpi-v" id="ua-apps">—</div></div>
+                <div class="rpt-kpi success"><div class="rpt-kpi-l">Allowed</div><div class="rpt-kpi-v" id="ua-allow">—</div></div>
+                <div class="rpt-kpi danger"><div class="rpt-kpi-l">Blocked</div><div class="rpt-kpi-v" id="ua-deny">—</div><div class="rpt-kpi-sub" id="ua-deny-sub">&nbsp;</div></div>
+                <div class="rpt-kpi warning"><div class="rpt-kpi-l">Alerted</div><div class="rpt-kpi-v" id="ua-threat">—</div></div>
+            </div>
+        </div>
+
+        <!-- Risk callout (rendered conditionally by JS) -->
+        <div id="ua-callouts"></div>
+
+        <!-- Activity timeline -->
+        <div class="rpt-section">
+            <div class="rpt-section-h">
+                <span class="rpt-section-h-ico">
+                    <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                </span>
+                <span class="rpt-section-title">Activity Timeline</span>
+                <span class="rpt-section-meta" id="ua-tl-meta">&nbsp;</span>
+            </div>
+            <div class="rpt-card">
+                <div class="rpt-card-b">
+                    <div id="ua-chart-tl" class="rpt-chart rpt-chart-md"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories + Actions -->
+        <div class="rpt-row rpt-row-2">
+            <div class="rpt-section" style="margin:0">
+                <div class="rpt-section-h">
+                    <span class="rpt-section-h-ico">
+                        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </span>
+                    <span class="rpt-section-title">Top URL Categories</span>
+                </div>
+                <div class="rpt-card">
+                    <div class="rpt-card-b">
+                        <div id="ua-chart-cats" class="rpt-chart rpt-chart-md"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="rpt-section" style="margin:0">
+                <div class="rpt-section-h">
+                    <span class="rpt-section-h-ico">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+                    </span>
+                    <span class="rpt-section-title">Action Breakdown</span>
+                </div>
+                <div class="rpt-card">
+                    <div class="rpt-card-b">
+                        <div id="ua-chart-act" class="rpt-chart rpt-chart-md"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Sites by Requests + by Bandwidth -->
+        <div class="rpt-row rpt-row-2">
+            <div class="rpt-section" style="margin:0">
+                <div class="rpt-section-h">
+                    <span class="rpt-section-h-ico">
+                        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </span>
+                    <span class="rpt-section-title">Top Sites by Requests</span>
+                </div>
+                <div class="rpt-card">
+                    <div class="rpt-card-b no-pad">
+                        <div class="rpt-tbl-wrap" style="max-height:none">
+                            <table class="rpt-tbl">
+                                <thead><tr><th>Hostname</th><th class="r">Requests</th><th style="width:32%"></th></tr></thead>
+                                <tbody id="ua-tbl-urls"><tr><td colspan="3"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="rpt-section" style="margin:0">
+                <div class="rpt-section-h">
+                    <span class="rpt-section-h-ico">
+                        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </span>
+                    <span class="rpt-section-title">Top Sites by Bandwidth</span>
+                </div>
+                <div class="rpt-card">
+                    <div class="rpt-card-b no-pad">
+                        <div class="rpt-tbl-wrap" style="max-height:none">
+                            <table class="rpt-tbl">
+                                <thead><tr><th>Hostname</th><th class="r">Bandwidth</th><th style="width:32%"></th></tr></thead>
+                                <tbody id="ua-tbl-dests"><tr><td colspan="3"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blocked hosts for this user -->
+        <div class="rpt-section">
+            <div class="rpt-section-h">
+                <span class="rpt-section-h-ico">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                </span>
+                <span class="rpt-section-title">Blocked Activity — Top Hosts</span>
+            </div>
+            <div class="rpt-card">
+                <div class="rpt-card-b no-pad">
+                    <div class="rpt-tbl-wrap" style="max-height:none">
+                        <table class="rpt-tbl">
+                            <thead><tr><th>Hostname</th><th class="r">Blocked Hits</th><th style="width:36%"></th></tr></thead>
+                            <tbody id="ua-tbl-apps"><tr><td colspan="3"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block report_extra_js %}
+<script>
+window.rptUser = {{ (report_user or '') | tojson }};
+
+(function(){
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function fmtTime(iso){ try { return new Date(iso).toLocaleString(); } catch(_) { return iso; } }
+    function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+    function qs(s){ return String(s).replace(/'/g,'&#39;'); }
+
+    // ===== If no user, render top users list =====
+    if (!window.rptUser) {
+        fetch('/api/url-analytics/users?hours=' + window.rptHours)
+            .then(r => r.json())
+            .then(d => {
+                const rows = (d && d.users) || [];
+                if (!rows.length) {
+                    document.getElementById('rpt-userlist').innerHTML =
+                        '<tr><td colspan="6"><div class="rpt-empty">No user activity found.</div></td></tr>';
+                    return;
+                }
+                const max = Math.max(...rows.map(r=>r.requests||0))||1;
+                document.getElementById('rpt-userlist').innerHTML = rows.slice(0,30).map(r => {
+                    const sv = r.username || r.src_ip;
+                    const pct = ((r.requests/max)*100).toFixed(1);
+                    const u  = '/reports/user-activity?hours=' + window.rptHours + '&user=' + encodeURIComponent(sv);
+                    return `<tr style="cursor:pointer" onclick="window.location.href='${u}'">
+                        <td><div class="rpt-user"><b>${esc(r.username||'—')}</b><span>${esc(r.src_ip)}</span></div></td>
+                        <td class="r mono">${fmtNum(r.requests)}</td>
+                        <td class="r mono">${fmtNum(r.unique_sites)}</td>
+                        <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                        <td class="r mono" style="${r.blocked>0?'color:#fca5a5':''}">${fmtNum(r.blocked)}</td>
+                        <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${pct}%"></div></div></div></td>
+                    </tr>`;
+                }).join('');
+            })
+            .catch(()=>{
+                document.getElementById('rpt-userlist').innerHTML =
+                    '<tr><td colspan="6"><div class="rpt-empty">Error loading users.</div></td></tr>';
+            });
+
+        document.getElementById('rpt-user-go').addEventListener('click', () => {
+            const v = document.getElementById('rpt-user-input').value.trim();
+            if (!v) return;
+            const u = new URL(window.location.href);
+            u.searchParams.set('user', v);
+            window.location.href = u.toString();
+        });
+        document.getElementById('rpt-user-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('rpt-user-go').click();
+        });
+        return;
+    }
+
+    // ===== User selected — load summary =====
+    function fmtBytes(b){
+        if(!b||b===0) return '0 B';
+        const u=['B','KB','MB','GB','TB','PB']; let i=0; b=Number(b);
+        while(b>=1024 && i<u.length-1){ b/=1024; i++; }
+        return b.toFixed(i?1:0)+' '+u[i];
+    }
+
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el || typeof echarts === 'undefined') return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize()));
+
+    document.getElementById('rpt-user-go').addEventListener('click', () => {
+        const v = document.getElementById('rpt-user-input').value.trim();
+        if (!v) return;
+        const u = new URL(window.location.href);
+        u.searchParams.set('user', v);
+        window.location.href = u.toString();
+    });
+    document.getElementById('rpt-user-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('rpt-user-go').click();
+    });
+
+    fetch('/api/reports/user-activity?user=' + encodeURIComponent(window.rptUser) + '&hours=' + window.rptHours)
+        .then(r => r.json())
+        .then(d => {
+            if (!d || !d.success) {
+                document.getElementById('ua-callouts').innerHTML =
+                    '<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="rpt-callout-body"><b>No activity found</b> for this user in the selected time window.</div></div>';
+                return;
+            }
+            renderSummary(d);
+            addBwScopeNote(d);
+            renderTimeline(d);
+            renderCategories(d);
+            renderActions(d);
+            renderHosts(d);
+            renderBlocked(d);
+        });
+
+    function renderSummary(d){
+        const s = d.summary || {};
+        document.getElementById('ua-total').textContent = fmtNum(s.total_events);
+        document.getElementById('ua-bw').textContent    = fmtBytes(s.total_bytes);
+        document.getElementById('ua-dests').textContent = fmtNum(s.unique_sites);
+        document.getElementById('ua-apps').textContent  = fmtNum(s.unique_categories);
+        document.getElementById('ua-allow').textContent = fmtNum(s.allowed);
+        document.getElementById('ua-deny').textContent  = fmtNum(s.blocked);
+        document.getElementById('ua-threat').textContent= fmtNum(s.alerted);
+
+        document.getElementById('ua-bw-sub').innerHTML = `↓ ${fmtBytes(s.bytes_recv)} · ↑ ${fmtBytes(s.bytes_sent)}`;
+        document.getElementById('ua-deny-sub').textContent = `${(s.block_rate||0).toFixed(1)}% of activity`;
+        document.getElementById('ua-dests-sub').innerHTML = '&nbsp;';
+
+        document.getElementById('ua-window').textContent =
+            (s.first_seen ? new Date(s.first_seen).toLocaleString() : '—') + ' → ' +
+            (s.last_seen ? new Date(s.last_seen).toLocaleString() : '—');
+
+        // Update subject pill in meta strip if username/IP came back
+        const subj = s.username ? `${s.username} (${s.src_ip})` : (s.src_ip || window.rptUser);
+        const metaUser = document.getElementById('rpt-meta-user');
+        if (metaUser) metaUser.textContent = subj;
+
+        // Callouts
+        const c = [];
+        if (s.alerted > 0) {
+            c.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></span><div class="rpt-callout-body">User triggered <b>${fmtNum(s.alerted)}</b> alerted events — review the activity timeline.</div></div>`);
+        }
+        if ((s.block_rate||0) > 5) {
+            c.push(`<div class="rpt-callout warn"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span><div class="rpt-callout-body"><b>${(s.block_rate||0).toFixed(1)}%</b> of this user's traffic was blocked. Review blocked hosts below.</div></div>`);
+        }
+        // Productivity callout
+        const prod = d.productivity || {};
+        const totalProd = (prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
+        const score = totalProd ? Math.round((prod.productive||0)/totalProd*100) : 0;
+        if (score >= 60) {
+            c.push(`<div class="rpt-callout ok"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span><div class="rpt-callout-body">Productivity score for this user: <b>${score}%</b> — majority on productive sites.</div></div>`);
+        } else if (totalProd > 0) {
+            c.push(`<div class="rpt-callout warn"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span><div class="rpt-callout-body">Productivity score: <b>${score}%</b>. ${fmtNum(prod.unproductive||0)} unproductive + ${fmtNum(prod.risky||0)} risky requests.</div></div>`);
+        }
+        document.getElementById('ua-callouts').innerHTML = c.join('');
+    }
+
+    // Helper: add a small info note explaining bandwidth scope (one-time, after KPIs)
+    function addBwScopeNote(d) {
+        const s = d.summary || {};
+        const note = document.createElement('div');
+        note.className = 'rpt-callout';
+        note.style.margin = '.4rem 0 1rem 0';
+        note.innerHTML = `<span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><div class="rpt-callout-body"><b>Bandwidth scope:</b> sums only HTTP/HTTPS sessions inspected by the URL filter (deduplicated per session_id to remove cumulative-counter inflation). Pure TCP/UDP traffic outside URL inspection is not counted — check the URL & DNS Logs page for raw per-flow totals.</div>`;
+        document.getElementById('ua-callouts').appendChild(note);
+    }
+
+    function renderTimeline(d){
+        // Use org-wide timeline as a visual reference (per-user timeline can be added later)
+        fetch('/api/url-analytics/timeline?hours=' + window.rptHours)
+            .then(r => r.json())
+            .then(j => {
+                const rows = (j && j.timeline) || [];
+                if (!rows.length) return;
+                document.getElementById('ua-tl-meta').textContent = `${rows.length} buckets · ${j.bucket_size || ''}`;
+                const c = chart('ua-chart-tl'); if (!c) return;
+                const x = rows.map(r => {
+                    const dt = new Date(r.bucket);
+                    return dt.toLocaleString('en-US',{month:'short',day:'numeric'}) + ' ' +
+                        String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+                });
+                c.setOption({
+                    tooltip:{trigger:'axis', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+                    legend:{data:['Allowed','Alerted','Blocked'], top:0, right:10, itemWidth:10, itemHeight:10, textStyle:{color:'#c2cce0', fontSize:11}},
+                    grid:{left:40, right:20, top:30, bottom:24, containLabel:true},
+                    xAxis:{type:'category', data:x, axisLabel:{fontSize:10, color:'#8c9ab5'}, axisLine:{lineStyle:{color:'#243154'}}},
+                    yAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5'}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                    series:[
+                        {name:'Allowed', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(34,197,94,.45)'},{offset:1,color:'rgba(34,197,94,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.allowed||0), itemStyle:{color:'#22c55e'}, lineStyle:{width:1.2}},
+                        {name:'Alerted', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(245,158,11,.45)'},{offset:1,color:'rgba(245,158,11,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.alerted||0), itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.2}},
+                        {name:'Blocked', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(239,68,68,.45)'},{offset:1,color:'rgba(239,68,68,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.blocked||0), itemStyle:{color:'#ef4444'}, lineStyle:{width:1.2}},
+                    ]
+                });
+            });
+    }
+
+    const PROD_COLOR = {productive:'#22c55e', neutral:'#94a3b8', unproductive:'#f59e0b', risky:'#ef4444'};
+    function renderCategories(d){
+        const cats = (d.categories || []).slice(0,10).reverse();
+        const c = chart('ua-chart-cats'); if (!c) return;
+        c.setOption({
+            tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'},
+                formatter: p => { const r=cats[p[0].dataIndex]; return `<b>${esc(r.category)}</b><br/>${fmtNum(r.requests)} requests<br/>Class: <b>${r.productivity}</b><br/>${fmtBytes(r.bandwidth)} bandwidth`; }},
+            grid:{left:8, right:50, top:8, bottom:8, containLabel:true},
+            xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+            yAxis:{type:'category', data:cats.map(r=>r.category), axisLabel:{fontSize:11, color:'#c2cce0', formatter:v=>v.length>22?v.slice(0,20)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+            series:[{type:'bar', barWidth:'62%', data: cats.map(r=>({value:r.requests, itemStyle:{color: PROD_COLOR[r.productivity]||'#3b82f6', borderRadius:[0,4,4,0]}})), label:{show:true, position:'right', fontSize:10, color:'#c2cce0', formatter:p=>fmtNum(p.value)}}]
+        });
+    }
+
+    function renderActions(d){
+        const acts = d.actions || [];
+        const ACT_COLOR = {
+            allow:'#22c55e', accept:'#22c55e', pass:'#22c55e', passthrough:'#22c55e',
+            block:'#ef4444', 'block-url':'#ef4444', blocked:'#ef4444', deny:'#ef4444', drop:'#ef4444', 'reset-client':'#ef4444', 'reset-server':'#ef4444',
+            alert:'#f59e0b',
+            sinkhole:'#a78bfa'
+        };
+        const c = chart('ua-chart-act'); if (!c) return;
+        c.setOption({
+            tooltip:{trigger:'item', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}, formatter:p=>`${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)`},
+            legend:{orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11, color:'#c2cce0'}},
+            series:[{type:'pie', radius:['55%','78%'], center:['38%','50%'], label:{show:false}, labelLine:{show:false},
+                data: acts.map(a => ({name:a.action, value:a.count, itemStyle:{color:ACT_COLOR[(a.action||'').toLowerCase()]||'#3b82f6'}}))}]
+        });
+    }
+
+    function renderHosts(d){
+        const rows = d.hostnames || [];
+        if (!rows.length) { document.getElementById('ua-tbl-urls').innerHTML = '<tr><td colspan="3"><div class="rpt-empty">No host activity</div></td></tr>'; return; }
+        const max = Math.max(...rows.map(r=>r.requests||0)) || 1;
+        document.getElementById('ua-tbl-urls').innerHTML = rows.map(r => `
+            <tr>
+                <td class="mono" style="color:#93c5fd;word-break:break-all">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.requests/max*100).toFixed(1)}%"></div></div></div></td>
+            </tr>`).join('');
+
+        // Destinations panel becomes "hostname + bandwidth" view (more informative for URL logs)
+        const bwMax = Math.max(...rows.map(r=>r.bandwidth||0)) || 1;
+        document.getElementById('ua-tbl-dests').innerHTML = rows.map(r => `
+            <tr>
+                <td class="mono" style="color:#67e8f9">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.bandwidth/bwMax*100).toFixed(1)}%;background:linear-gradient(90deg,#22d3ee,#67e8f9)"></div></div></div></td>
+            </tr>`).join('');
+    }
+
+    function renderBlocked(d){
+        const rows = d.blocked_hosts || [];
+        if (!rows.length) {
+            document.getElementById('ua-tbl-apps').innerHTML = '<tr><td colspan="3"><div class="rpt-empty">No blocked activity for this user</div></td></tr>';
+            return;
+        }
+        const max = Math.max(...rows.map(r=>r.blocked_count||0)) || 1;
+        document.getElementById('ua-tbl-apps').innerHTML = rows.map(r => `
+            <tr>
+                <td class="mono" style="color:#fca5a5">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtNum(r.blocked_count)}</td>
+                <td><div class="rpt-bar"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${(r.blocked_count/max*100).toFixed(1)}%;background:linear-gradient(90deg,#ef4444,#f87171)"></div></div></div></td>
+            </tr>`).join('');
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,234 @@
+{% extends "reports/_report_base.html" %}
+
+{% block report_title %}Executive Summary{% endblock %}
+{% block report_subtitle %}
+    High-level overview of web traffic, productivity, bandwidth and security posture across the organisation.
+{% endblock %}
+{% block report_icon_svg %}
+    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.4 8 14 14l-3-3-4.4 4.4"/><circle cx="14" cy="14" r="1"/></svg>
+{% endblock %}
+
+{% block report_body %}
+<!-- KPI strip -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+        <span class="rpt-section-title">Headline Numbers</span>
+    </div>
+    <div class="rpt-kpis">
+        <div class="rpt-kpi"><div class="rpt-kpi-l">Total Requests</div><div class="rpt-kpi-v" id="ex-req">—</div><div class="rpt-kpi-sub" id="ex-req-sub">&nbsp;</div></div>
+        <div class="rpt-kpi purple"><div class="rpt-kpi-l">Bandwidth</div><div class="rpt-kpi-v" id="ex-bw">—</div><div class="rpt-kpi-sub" id="ex-bw-sub">&nbsp;</div></div>
+        <div class="rpt-kpi success"><div class="rpt-kpi-l">Productivity Score</div><div class="rpt-kpi-v" id="ex-prod">—</div><div class="rpt-kpi-sub">productive ratio</div></div>
+        <div class="rpt-kpi danger"><div class="rpt-kpi-l">Blocked</div><div class="rpt-kpi-v" id="ex-blk">—</div><div class="rpt-kpi-sub" id="ex-blk-sub">&nbsp;</div></div>
+        <div class="rpt-kpi cyan"><div class="rpt-kpi-l">Active Users</div><div class="rpt-kpi-v" id="ex-users">—</div></div>
+        <div class="rpt-kpi"><div class="rpt-kpi-l">Unique Sites</div><div class="rpt-kpi-v" id="ex-sites">—</div></div>
+        <div class="rpt-kpi warning"><div class="rpt-kpi-l">Categories</div><div class="rpt-kpi-v" id="ex-cats">—</div></div>
+        <div class="rpt-kpi pink"><div class="rpt-kpi-l">YouTube Hits</div><div class="rpt-kpi-v" id="ex-yt">—</div></div>
+    </div>
+</div>
+
+<!-- Auto-generated insights -->
+<div id="ex-callouts"></div>
+
+<!-- Timeline -->
+<div class="rpt-section">
+    <div class="rpt-section-h">
+        <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
+        <span class="rpt-section-title">Web Traffic Timeline</span>
+        <span class="rpt-section-meta" id="ex-tl-meta">&nbsp;</span>
+    </div>
+    <div class="rpt-card"><div class="rpt-card-b"><div id="ex-tl" class="rpt-chart rpt-chart-md"></div></div></div>
+</div>
+
+<!-- Productivity + Categories -->
+<div class="rpt-row rpt-row-12">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg></span>
+            <span class="rpt-section-title">Productivity Mix</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="ex-prod-chart" class="rpt-chart rpt-chart-md"></div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="rpt-section-title">Top URL Categories</span>
+            <span class="rpt-section-meta">colour = productivity class</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="ex-cats-chart" class="rpt-chart rpt-chart-md"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Action + Top Hosts -->
+<div class="rpt-row rpt-row-12">
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></span>
+            <span class="rpt-section-title">Action Breakdown</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b">
+            <div id="ex-act-chart" class="rpt-chart rpt-chart-md"></div>
+        </div></div>
+    </div>
+    <div class="rpt-section" style="margin:0">
+        <div class="rpt-section-h">
+            <span class="rpt-section-h-ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/></svg></span>
+            <span class="rpt-section-title">Top Hostnames</span>
+        </div>
+        <div class="rpt-card"><div class="rpt-card-b no-pad">
+            <div class="rpt-tbl-wrap" style="max-height:none">
+                <table class="rpt-tbl">
+                    <thead><tr><th>Hostname</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Bandwidth</th><th>Category</th></tr></thead>
+                    <tbody id="ex-hosts"><tr><td colspan="5"><div class="rpt-loading">Loading…</div></td></tr></tbody>
+                </table>
+            </div>
+        </div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block report_extra_js %}
+<script>
+(function(){
+    function fmtNum(n){ return n==null?'0':Number(n).toLocaleString(); }
+    function fmtBytes(b){ if(!b||b===0) return '0 B'; const u=['B','KB','MB','GB','TB','PB']; let i=0; b=Number(b); while(b>=1024 && i<u.length-1){b/=1024;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+    function esc(s){ const d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+
+    const charts = {};
+    function chart(id) {
+        if (!charts[id]) {
+            const el = document.getElementById(id);
+            if (!el || typeof echarts === 'undefined') return null;
+            charts[id] = echarts.init(el, 'zentryc', {renderer:'canvas'});
+        }
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c && c.resize()));
+
+    const API = '/api/url-analytics/';
+
+    // Summary
+    fetch(API+'summary?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const s = d.summary||{};
+        document.getElementById('ex-req').textContent = fmtNum(s.total_requests);
+        document.getElementById('ex-bw').textContent  = fmtBytes(s.total_bandwidth);
+        document.getElementById('ex-bw-sub').innerHTML = `↓ ${fmtBytes(s.total_recv)} · ↑ ${fmtBytes(s.total_sent)}`;
+        document.getElementById('ex-blk').textContent = fmtNum(s.blocked_count);
+        const blkPct = s.total_requests ? ((s.blocked_count/s.total_requests)*100).toFixed(1) : 0;
+        document.getElementById('ex-blk-sub').textContent = blkPct + '% of total';
+        document.getElementById('ex-users').textContent = fmtNum(s.unique_users);
+        document.getElementById('ex-sites').textContent = fmtNum(s.unique_sites);
+        document.getElementById('ex-cats').textContent  = fmtNum(s.category_count);
+        document.getElementById('ex-yt').textContent    = fmtNum(s.youtube_requests);
+    });
+
+    // Timeline
+    fetch(API+'timeline?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const rows = (d && d.timeline) || [];
+        if (!rows.length) return;
+        document.getElementById('ex-tl-meta').textContent = `${rows.length} buckets · ${d.bucket_size||''}`;
+        const c = chart('ex-tl'); if (!c) return;
+        const x = rows.map(r => {
+            const dt = new Date(r.bucket);
+            return dt.toLocaleString('en-US',{month:'short',day:'numeric'})+' '+
+                String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+        });
+        c.setOption({
+            tooltip:{trigger:'axis', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+            legend:{data:['Allowed','Alerted','Blocked'], top:0, right:10, itemWidth:10, itemHeight:10, textStyle:{color:'#c2cce0', fontSize:11}},
+            grid:{left:40, right:20, top:30, bottom:24, containLabel:true},
+            xAxis:{type:'category', data:x, axisLabel:{fontSize:10, color:'#8c9ab5'}, axisLine:{lineStyle:{color:'#243154'}}},
+            yAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5'}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+            series:[
+                {name:'Allowed', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(34,197,94,.45)'},{offset:1,color:'rgba(34,197,94,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.allowed||0), itemStyle:{color:'#22c55e'}, lineStyle:{width:1.2}},
+                {name:'Alerted', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(245,158,11,.45)'},{offset:1,color:'rgba(245,158,11,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.alerted||0), itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.2}},
+                {name:'Blocked', type:'line', stack:'t', areaStyle:{opacity:.55, color:{type:'linear',x:0,y:0,x2:0,y2:1, colorStops:[{offset:0,color:'rgba(239,68,68,.45)'},{offset:1,color:'rgba(239,68,68,.05)'}]}}, smooth:.3, symbol:'none', data:rows.map(r=>r.blocked||0), itemStyle:{color:'#ef4444'}, lineStyle:{width:1.2}}
+            ]
+        });
+    });
+
+    const PROD_COLORS = {productive:'#22c55e', neutral:'#94a3b8', unproductive:'#f59e0b', risky:'#ef4444'};
+
+    // Categories + Productivity
+    fetch(API+'categories?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const cats = (d.categories||[]).slice(0,12).reverse();
+        const prod = d.productivity||{};
+        const total = (prod.productive||0)+(prod.neutral||0)+(prod.unproductive||0)+(prod.risky||0);
+        const score = total ? Math.round((prod.productive||0)/total*100) : 0;
+        document.getElementById('ex-prod').textContent = score + '%';
+        const pe = document.getElementById('ex-prod'); pe.style.color = score>=60?'#86efac':score>=30?'#fcd34d':'#fca5a5';
+
+        // Productivity donut
+        const pc = chart('ex-prod-chart');
+        if (pc) {
+            pc.setOption({
+                tooltip:{trigger:'item', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+                series:[{type:'pie', radius:['60%','85%'], center:['50%','50%'],
+                    label:{show:true, position:'center', formatter:`{a|${score}%}\n{b|Productive}`,
+                        rich:{a:{fontSize:22, fontWeight:'bold', color:'#fff', fontFamily:'JetBrains Mono', lineHeight:26},
+                              b:{fontSize:10, color:'#8c9ab5', letterSpacing:1, padding:[4,0,0,0]}}},
+                    labelLine:{show:false},
+                    data:[
+                        {name:'Productive', value:prod.productive||0, itemStyle:{color:PROD_COLORS.productive}},
+                        {name:'Neutral', value:prod.neutral||0, itemStyle:{color:PROD_COLORS.neutral}},
+                        {name:'Unproductive', value:prod.unproductive||0, itemStyle:{color:PROD_COLORS.unproductive}},
+                        {name:'Risky', value:prod.risky||0, itemStyle:{color:PROD_COLORS.risky}},
+                    ]}]
+            });
+        }
+
+        // Categories bar
+        const c = chart('ex-cats-chart');
+        if (c) {
+            c.setOption({
+                tooltip:{trigger:'axis', axisPointer:{type:'shadow'}, backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}},
+                grid:{left:8, right:60, top:8, bottom:8, containLabel:true},
+                xAxis:{type:'value', axisLabel:{fontSize:10, color:'#8c9ab5', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, splitLine:{lineStyle:{color:'rgba(36,49,84,.5)', type:'dashed'}}},
+                yAxis:{type:'category', data:cats.map(r=>r.category), axisLabel:{fontSize:11, color:'#c2cce0', formatter:v=>v.length>22?v.slice(0,20)+'…':v}, axisLine:{lineStyle:{color:'#243154'}}, axisTick:{show:false}},
+                series:[{type:'bar', barWidth:'62%', data:cats.map(r=>({value:r.requests, itemStyle:{color:PROD_COLORS[r.productivity]||'#3b82f6', borderRadius:[0,4,4,0]}})), label:{show:true, position:'right', fontSize:10, color:'#c2cce0', formatter:p=>fmtNum(p.value)}}]
+            });
+        }
+
+        // Callouts
+        const c2 = [];
+        if (score >= 60) c2.push(`<div class="rpt-callout ok"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span><div class="rpt-callout-body">Healthy productivity score of <b>${score}%</b>. The majority of activity is on productive sites.</div></div>`);
+        else if (score < 30) c2.push(`<div class="rpt-callout warn"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></span><div class="rpt-callout-body">Productivity score is <b>${score}%</b> — consider reviewing top non-productive categories.</div></div>`);
+        if (prod.risky > 0) c2.push(`<div class="rpt-callout risk"><span class="rpt-callout-ico"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div class="rpt-callout-body"><b>${fmtNum(prod.risky)}</b> requests classified as risky (malware/proxy/phishing categories).</div></div>`);
+        document.getElementById('ex-callouts').innerHTML = c2.join('');
+    });
+
+    // Actions donut
+    fetch(API+'actions?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const acts = d.actions||[];
+        const ACT = {allow:'#22c55e', passthrough:'#22c55e', log:'#22c55e', accept:'#22c55e', pass:'#22c55e',
+            blocked:'#ef4444','block-url':'#ef4444', deny:'#ef4444', drop:'#ef4444', 'reset-client':'#ef4444', 'reset-server':'#ef4444',
+            alert:'#f59e0b', sinkhole:'#a78bfa'};
+        const c = chart('ex-act-chart'); if(!c) return;
+        c.setOption({
+            tooltip:{trigger:'item', backgroundColor:'rgba(11,17,32,.95)', borderColor:'#243154', textStyle:{color:'#e7ecf7'}, formatter:p=>`${p.marker} <b>${p.name}</b><br/>${fmtNum(p.value)} (${p.percent}%)`},
+            legend:{orient:'vertical', right:0, top:'middle', itemWidth:9, itemHeight:9, textStyle:{fontSize:11, color:'#c2cce0'}},
+            series:[{type:'pie', radius:['55%','78%'], center:['38%','50%'], label:{show:false}, labelLine:{show:false},
+                data: acts.map(a=>({name:a.action, value:a.count, itemStyle:{color:ACT[(a.action||'').toLowerCase()]||'#3b82f6'}}))}]
+        });
+    });
+
+    // Hostnames
+    fetch(API+'hostnames?hours='+window.rptHours).then(r=>r.json()).then(d=>{
+        const rows = (d.hostnames||[]).slice(0,15);
+        if (!rows.length) { document.getElementById('ex-hosts').innerHTML = '<tr><td colspan="5"><div class="rpt-empty">No host data</div></td></tr>'; return; }
+        document.getElementById('ex-hosts').innerHTML = rows.map(r => `
+            <tr>
+                <td class="mono" style="color:#93c5fd">${esc(r.hostname)}</td>
+                <td class="r mono">${fmtNum(r.requests)}</td>
+                <td class="r mono">${fmtNum(r.users)}</td>
+                <td class="r mono">${fmtBytes(r.bandwidth)}</td>
+                <td>${esc(r.category||'—')}</td>
+            </tr>`).join('');
+    });
+})();
+</script>
+{% endblock %}

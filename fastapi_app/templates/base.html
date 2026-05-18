@@ -690,6 +690,12 @@
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/></svg></span>
                         <span class="sb-item-label">Dashboards</span>
                     </a>
+                    {% if current_user and current_user.role in ('ADMIN', 'ANALYST') %}
+                    <a href="{{ url_for('reports_index') }}" class="sb-item" data-tip="Reports" data-path="/reports">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                        <span class="sb-item-label">Reports</span>
+                    </a>
+                    {% endif %}
                 </div>
 
                 <!-- SECURITY -->

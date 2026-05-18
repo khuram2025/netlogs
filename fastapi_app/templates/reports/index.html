@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    .container:has(.rpt-idx) { max-width:100%; padding:0 1.25rem; margin:1rem auto; }
+
+    .rpt-idx {
+        --surface:#111a2e; --surface-2:#162038;
+        --border:#243154; --border-soft:#1c2747; --hairline:rgba(124,152,210,.08);
+        --text:#e7ecf7; --muted:#8c9ab5; --dim:#5a6783;
+        font-family:'Outfit',system-ui,sans-serif; color:var(--text); width:100%;
+    }
+    @keyframes idx-fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    .idx-hdr {
+        display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; align-items:center;
+        padding:1.05rem 1.2rem; border:1px solid var(--border-soft); border-radius:14px;
+        margin-bottom:1.2rem; position:relative; overflow:hidden;
+        background:linear-gradient(135deg,rgba(59,130,246,.06) 0%, rgba(34,211,238,.03) 50%, transparent 100%);
+        animation:idx-fadeIn .35s ease-out both;
+    }
+    .idx-hdr::before {
+        content:''; position:absolute; inset:0; pointer-events:none;
+        background:radial-gradient(900px 200px at 0% 0%, rgba(59,130,246,.08), transparent 55%);
+    }
+    .idx-hdr-l { display:flex; align-items:center; gap:.85rem; position:relative; z-index:1; }
+    .idx-icon {
+        width:42px; height:42px; border-radius:12px;
+        background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 8px 24px -8px rgba(59,130,246,.45);
+    }
+    .idx-icon svg { width:22px; height:22px; stroke:#fff; fill:none; stroke-width:2; }
+    .idx-hdr h1 { font-size:1.4rem; font-weight:700; color:#fff; margin:0; letter-spacing:-.01em; }
+    .idx-hdr-sub { color:var(--muted); font-size:.78rem; margin-top:3px; }
+
+    .idx-grid {
+        display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+        gap:.85rem;
+        animation:idx-fadeIn .4s ease-out .05s both;
+    }
+    .idx-card {
+        position:relative; overflow:hidden;
+        background:var(--surface); border:1px solid var(--border-soft);
+        border-radius:14px; padding:1.05rem 1.1rem 1rem;
+        text-decoration:none; color:inherit;
+        display:flex; flex-direction:column; gap:.6rem;
+        transition:transform .15s, border-color .15s, box-shadow .2s;
+    }
+    .idx-card::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+        background:#3b82f6; opacity:.65;
+    }
+    .idx-card.purple::before  { background:#a78bfa; }
+    .idx-card.cyan::before    { background:#22d3ee; }
+    .idx-card.warning::before { background:#f59e0b; }
+    .idx-card.danger::before  { background:#ef4444; }
+    .idx-card.success::before { background:#22c55e; }
+    .idx-card.pink::before    { background:#ec4899; }
+    .idx-card::after {
+        content:''; position:absolute; inset:0; pointer-events:none; opacity:.45;
+        background:radial-gradient(360px 140px at 100% 0%, rgba(59,130,246,.13), transparent 60%);
+    }
+    .idx-card.purple::after { background:radial-gradient(360px 140px at 100% 0%, rgba(167,139,250,.14), transparent 60%); }
+    .idx-card.cyan::after   { background:radial-gradient(360px 140px at 100% 0%, rgba(34,211,238,.14), transparent 60%); }
+    .idx-card.warning::after{ background:radial-gradient(360px 140px at 100% 0%, rgba(245,158,11,.14), transparent 60%); }
+    .idx-card.danger::after { background:radial-gradient(360px 140px at 100% 0%, rgba(239,68,68,.14), transparent 60%); }
+    .idx-card.success::after{ background:radial-gradient(360px 140px at 100% 0%, rgba(34,197,94,.14), transparent 60%); }
+    .idx-card.pink::after   { background:radial-gradient(360px 140px at 100% 0%, rgba(236,72,153,.14), transparent 60%); }
+    .idx-card:hover {
+        transform:translateY(-3px); border-color:rgba(59,130,246,.42);
+        box-shadow:0 18px 36px -16px rgba(0,0,0,.6);
+    }
+    .idx-card-head {
+        display:flex; align-items:center; gap:.65rem; position:relative; z-index:1;
+    }
+    .idx-card-ico {
+        width:32px; height:32px; border-radius:9px;
+        background:rgba(59,130,246,.16); color:#93c5fd;
+        display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .idx-card.purple  .idx-card-ico { background:rgba(167,139,250,.16); color:#c4b5fd; }
+    .idx-card.cyan    .idx-card-ico { background:rgba(34,211,238,.16); color:#67e8f9; }
+    .idx-card.warning .idx-card-ico { background:rgba(245,158,11,.16); color:#fcd34d; }
+    .idx-card.danger  .idx-card-ico { background:rgba(239,68,68,.16); color:#fca5a5; }
+    .idx-card.success .idx-card-ico { background:rgba(34,197,94,.16); color:#86efac; }
+    .idx-card.pink    .idx-card-ico { background:rgba(236,72,153,.16); color:#f9a8d4; }
+    .idx-card-ico svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; }
+    .idx-card-title {
+        font-size:.95rem; font-weight:700; color:#fff; letter-spacing:-.01em; line-height:1.2;
+        position:relative; z-index:1;
+    }
+    .idx-card-desc {
+        font-size:.75rem; color:var(--muted); line-height:1.45; min-height:32px;
+        position:relative; z-index:1;
+    }
+    .idx-card-cta {
+        margin-top:auto; display:flex; align-items:center; justify-content:space-between;
+        padding-top:.5rem; border-top:1px solid var(--hairline);
+        position:relative; z-index:1;
+    }
+    .idx-card-tags {
+        display:flex; gap:5px; flex-wrap:wrap;
+    }
+    .idx-card-tag {
+        font-size:.6rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+        padding:2px 7px; border-radius:9999px;
+        background:rgba(124,152,210,.1); color:var(--muted);
+    }
+    .idx-card-arrow {
+        width:24px; height:24px; border-radius:7px;
+        background:rgba(59,130,246,.13); color:#93c5fd;
+        display:inline-flex; align-items:center; justify-content:center;
+        transition:transform .15s, background .15s;
+    }
+    .idx-card:hover .idx-card-arrow { background:#3b82f6; color:#fff; transform:translateX(2px); }
+    .idx-card-arrow svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rpt-idx">
+
+    <!-- Header -->
+    <div class="idx-hdr">
+        <div class="idx-hdr-l">
+            <span class="idx-icon">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </span>
+            <div>
+                <h1>Reports</h1>
+                <div class="idx-hdr-sub">Professionally formatted reports — view in browser, export to PDF</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report cards -->
+    <div class="idx-grid">
+        <a href="{{ url_for('report_executive') }}?hours=24" class="idx-card">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.4 8 14 14l-3-3-4.4 4.4"/><circle cx="14" cy="14" r="1"/></svg>
+                </span>
+                <div class="idx-card-title">Executive Summary</div>
+            </div>
+            <div class="idx-card-desc">Org-wide overview: traffic volume, productivity score, top risks, and trends. Designed for management.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Overview</span>
+                    <span class="idx-card-tag">Trends</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('report_user_activity') }}?hours=24" class="idx-card purple">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </span>
+                <div class="idx-card-title">User Activity Report</div>
+            </div>
+            <div class="idx-card-desc">Per-user detail — web traffic, productivity, blocked sites, bandwidth, top categories. Search for any user.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Per-User</span>
+                    <span class="idx-card-tag">Detailed</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('report_top_users') }}?hours=24" class="idx-card cyan">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </span>
+                <div class="idx-card-title">Top Users Report</div>
+            </div>
+            <div class="idx-card-desc">Ranked list of most active users with requests, bandwidth, sites visited and blocks.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Ranking</span>
+                    <span class="idx-card-tag">Comparison</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('report_productivity') }}?hours=24" class="idx-card success">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </span>
+                <div class="idx-card-title">Productivity Report</div>
+            </div>
+            <div class="idx-card-desc">Productive vs neutral vs unproductive vs risky breakdown. Identify time sinks across the org.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Productivity</span>
+                    <span class="idx-card-tag">Categories</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('report_security') }}?hours=24" class="idx-card danger">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <div class="idx-card-title">Security Report</div>
+            </div>
+            <div class="idx-card-desc">Blocked sites, blocked categories, repeat offenders, and threat indicators in one view.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Risk</span>
+                    <span class="idx-card-tag">Compliance</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+
+        <a href="{{ url_for('report_bandwidth') }}?hours=24" class="idx-card warning">
+            <div class="idx-card-head">
+                <span class="idx-card-ico">
+                    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </span>
+                <div class="idx-card-title">Bandwidth Report</div>
+            </div>
+            <div class="idx-card-desc">Top users and hosts by sent/received bytes. Identify heavy consumers and unusual transfers.</div>
+            <div class="idx-card-cta">
+                <div class="idx-card-tags">
+                    <span class="idx-card-tag">Capacity</span>
+                    <span class="idx-card-tag">Forensics</span>
+                </div>
+                <span class="idx-card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </div>
+        </a>
+    </div>
+
+</div>
+{% endblock %}
