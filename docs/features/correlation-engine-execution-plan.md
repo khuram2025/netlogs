@@ -42,9 +42,9 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
 | **4** | Source registry & entity model | 4 wk | ✅ Complete | 7 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ✅ Complete | 8 / 8 |
-| **6** | Templates, MITRE workflow, response, ML | 4 wk | 🟡 In progress | 7 / 10 |
+| **6** | Templates, MITRE workflow, response, ML | 4 wk | 🟡 In progress | 8 / 10 |
 
-**Overall: 69 / 72 tasks complete.**
+**Overall: 70 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -276,7 +276,7 @@ controlled response automation, and layer the differentiators.
 | - [x] | **P6-2** | **Data-aware** discovery — each template declares `required_sources`; the API flags `available`, the picker disables unusable templates | `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 |
 | - [x] | **P6-3** | "Create Detection Rule" action on MITRE map technique cells → correlation page opens the builder pre-seeded with the technique | `templates/correlation/mitre_map.html`, `templates/correlation/rules.html` | 2026-05-20 · verified |
 | - [x] | **P6-4** | **Response actions** — `actions` JSON column; `fire_response_actions()` runs `webhook` (POST match summary) and `log` actions when a rule records a match; builder has a Response Actions field | `models/correlation.py`, `services/correlation_engine.py`, `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · framework; notify/EDL/ticket plug in as further action types |
-| - [ ] | **P6-5** | **Anomaly stages** — let a stage reference existing learning-mode baselines (volume anomalous vs baseline) | `services/correlation_engine.py` | |
+| - [x] | **P6-5** | **Anomaly stages** — a stage with an `anomaly` config fires when an entity's window count exceeds (its own rolling baseline average x multiplier), not a fixed threshold | `services/correlation_engine.py`, `schemas/correlation.py` | 2026-05-20 · self-contained statistical baseline (not coupled to the separate learning-mode subsystem); verified — 7 anomalous entities |
 | - [x] | **P6-6** | **Attack-chain visualization** — the rule detail modal renders the rule's stages as a left-to-right kill chain (numbered nodes, threshold/window/source, arrows) | `templates/correlation/rules.html` | 2026-05-20 · verified |
 | - [x] | **P6-7** | **Rule health scorecard** — 7d/30d fire frequency, 30-day daily timeline, dormant/healthy/noisy status, rule version & last-edited; shown in the rule detail modal | `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · verified ("noisy", 2080/7d) |
 | - [x] | **P6-8** | **Sigma rule import** — `core/sigma_import.py` parses a single-selection Sigma YAML rule into a correlation-rule draft (field mapping, MITRE from tags, severity); `POST /api/correlation/sigma/import`; builder "import a Sigma rule" panel | `core/sigma_import.py`, `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · verified |

@@ -803,3 +803,28 @@ class TestSigmaImport:
         from fastapi_app.core.sigma_import import parse_sigma
         with pytest.raises(ValueError):
             parse_sigma("title: X\ndescription: Y\n")
+
+
+# ======================================================================
+# PHASE 6 — anomaly stages
+# ======================================================================
+
+class TestAnomalyStage:
+    def test_anomaly_config_accepted_by_schema(self):
+        s = StageSchema(name="Volume Spike",
+                        filter={"action": "deny", "group_by": "srcip"},
+                        anomaly={"baseline_windows": 6, "multiplier": 3, "min_count": 50})
+        assert s.anomaly["multiplier"] == 3
+
+    def test_anomaly_rule_validates(self):
+        rule = CorrelationRuleCreate(name="Anomalous Volume", stages=[{
+            "name": "Volume Spike",
+            "filter": {"action": "deny", "group_by": "srcip"},
+            "threshold": 1, "window": 300,
+            "anomaly": {"baseline_windows": 6, "multiplier": 3.0, "min_count": 50},
+        }])
+        assert rule.stages[0].anomaly is not None
+
+    def test_stage_without_anomaly_has_none(self):
+        s = StageSchema(name="x", filter={"action": "deny"})
+        assert s.anomaly is None

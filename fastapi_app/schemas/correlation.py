@@ -42,6 +42,10 @@ class StageSchema(BaseModel):
     threshold: int = Field(default=1, ge=1, le=100_000_000)
     window: int = Field(default=300, ge=1, le=604_800)  # 1 second .. 7 days
     group_by: Optional[str] = Field(default=None, max_length=100)
+    # Phase 6: optional anomaly mode — the stage fires when an entity's count
+    # in this window exceeds (baseline average x multiplier) rather than a
+    # fixed threshold. {baseline_windows, multiplier, min_count}.
+    anomaly: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _validate_stage(self):

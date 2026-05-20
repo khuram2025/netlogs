@@ -334,9 +334,51 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
         native_fields.append(native)
 
     where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
+    window = _safe_int(window, "window")
+    gb = ", ".join(native_fields)
+    n = len(group_fields)
+
+    # Phase 6: anomaly mode — fire when an entity's count in this window
+    # exceeds (its baseline average x multiplier), not a fixed threshold.
+    anomaly = stage.get("anomaly")
+    if anomaly and anchor is None:
+        bw = min(30, max(1, _safe_int(anomaly.get("baseline_windows", 6),
+                                      "baseline_windows")))
+        try:
+            mult = float(anomaly.get("multiplier", 3.0) or 3.0)
+        except (TypeError, ValueError):
+            raise StageEvalError("anomaly multiplier must be numeric")
+        min_count = _safe_int(anomaly.get("min_count", threshold), "min_count")
+        total_span = window * (bw + 1)
+        query = f"""
+            SELECT {gb},
+                   countIf(timestamp > now() - INTERVAL {window} SECOND) AS cur,
+                   count() AS tot,
+                   minIf(timestamp, timestamp > now() - INTERVAL {window} SECOND) AS first_ts,
+                   maxIf(timestamp, timestamp > now() - INTERVAL {window} SECOND) AS last_ts
+            FROM {table}
+            WHERE timestamp > now() - INTERVAL {total_span} SECOND AND ({where})
+            GROUP BY {gb}
+            HAVING cur >= {min_count}
+            ORDER BY cur DESC
+            LIMIT {int(limit)}
+        """
+        rows = client.query(query, parameters=params).result_rows
+        candidates = []
+        for row in rows:
+            cur, tot = row[n], row[n + 1]
+            baseline = (tot - cur) / bw
+            if cur < baseline * mult:
+                continue  # within normal range — not anomalous
+            entity = {gf: str(row[i]) for i, gf in enumerate(group_fields)}
+            candidates.append({
+                "entity": entity, "count": cur,
+                "first_event": row[n + 2], "last_event": row[n + 3],
+            })
+        return candidates
+
     tf, tparams = _stage_time_filter(window, anchor)
     params = {**params, **tparams}
-    gb = ", ".join(native_fields)
 
     query = f"""
         SELECT {gb}, count() AS cnt,
@@ -350,7 +392,6 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
     """
     rows = client.query(query, parameters=params).result_rows
     candidates = []
-    n = len(group_fields)
     for row in rows:
         # Entity is keyed by the join-key name (canonical), so it stays
         # consistent when later stages resolve it against other sources.
