@@ -42,9 +42,9 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
 | **4** | Source registry & entity model | 4 wk | ✅ Complete | 7 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ✅ Complete | 8 / 8 |
-| **6** | Templates, MITRE workflow, response, ML | 4 wk | 🟡 In progress | 3 / 10 |
+| **6** | Templates, MITRE workflow, response, ML | 4 wk | 🟡 In progress | 4 / 10 |
 
-**Overall: 65 / 72 tasks complete.**
+**Overall: 66 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -278,7 +278,7 @@ controlled response automation, and layer the differentiators.
 | - [ ] | **P6-4** | **Response actions** per rule + severity: notify (email/Telegram/webhook), add IP/domain to EDL/blocklist, create ticket/webhook | `models/correlation.py`, `services/correlation_engine.py`, `services/notification_service.py` | |
 | - [ ] | **P6-5** | **Anomaly stages** — let a stage reference existing learning-mode baselines (volume anomalous vs baseline) | `services/correlation_engine.py` | |
 | - [ ] | **P6-6** | _Differentiator:_ **attack-chain timeline visualization** — render a matched chain as a kill-chain timeline | `templates/correlation/` | |
-| - [ ] | **P6-7** | _Differentiator:_ **rule health scorecard** — fire frequency, match-to-alert ratio, est. FP rate, last-tuned date | `api/correlation.py`, UI | |
+| - [x] | **P6-7** | **Rule health scorecard** — 7d/30d fire frequency, 30-day daily timeline, dormant/healthy/noisy status, rule version & last-edited; shown in the rule detail modal | `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · verified ("noisy", 2080/7d) |
 | - [ ] | **P6-8** | _Differentiator:_ **Sigma rule import** — map single-source Sigma rules into Zentryc stages | new importer | |
 | - [ ] | **P6-9** | _Differentiator:_ **backtest** — `POST /rules/{id}/backtest` over 7/30 days of history with a fire-frequency chart | `api/correlation.py`, UI | |
 | - [ ] | **P6-10** | _Differentiator:_ **simulation / purple-team mode** — inject synthetic event sequences to validate rules fire, mapped to MITRE | new service | |

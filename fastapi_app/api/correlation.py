@@ -589,6 +589,45 @@ async def api_rule_match_detail(rule_id: int,
     except Exception as e:
         logger.error(f"Error fetching rule match details: {e}")
 
+    # Phase 6: rule health scorecard — fire frequency over 7/30 days, a
+    # 30-day daily timeline, and a dormant/healthy/noisy assessment.
+    health = {
+        "status": "unknown", "matches_7d": 0, "matches_30d": 0,
+        "daily": [], "version": rule_data["version"],
+        "last_modified": (str(rule.updated_at) if rule.updated_at else None),
+    }
+    try:
+        client = ClickHouseClient.get_client()
+        safe_name = rule.name.replace("'", "\\'")
+        r = client.query(f"""
+            SELECT countIf(timestamp > now() - INTERVAL 7 DAY) AS w,
+                   count() AS m
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - INTERVAL 30 DAY
+        """)
+        if r.result_rows:
+            health["matches_7d"] = r.result_rows[0][0] or 0
+            health["matches_30d"] = r.result_rows[0][1] or 0
+        r = client.query(f"""
+            SELECT toDate(timestamp) AS d, count() AS c
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - INTERVAL 30 DAY
+            GROUP BY d ORDER BY d
+        """)
+        health["daily"] = [{"day": str(row[0]), "count": row[1]} for row in r.result_rows]
+
+        w7 = health["matches_7d"]
+        if w7 == 0:
+            health["status"] = "dormant"
+        elif w7 > 5000:
+            health["status"] = "very noisy"
+        elif w7 > 500:
+            health["status"] = "noisy"
+        else:
+            health["status"] = "healthy"
+    except Exception as e:
+        logger.error(f"Error computing rule health: {e}")
+
     return {
         "rule": rule_data,
         "match_count": match_count,
@@ -596,6 +635,7 @@ async def api_rule_match_detail(rule_id: int,
         "top_keys": top_keys,
         "timeline": timeline,
         "recent_matches": recent_matches,
+        "health": health,
     }
 
 

@@ -1224,6 +1224,34 @@
         color: #fbbf24;
     }
 
+    /* ===== Rule health scorecard ===== */
+    .cd-health {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.55rem;
+        margin-top: 0.25rem;
+    }
+    .cd-health-badge {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.25rem 0.6rem;
+        border-radius: 0.4rem;
+        border: 1px solid;
+    }
+    .cd-health-stat {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        color: var(--cr-text-muted);
+    }
+    .cd-health-stat strong {
+        color: var(--cr-text);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
     .cr-btn-submit {
         font-family: 'Outfit', sans-serif;
         display: inline-flex;
@@ -2894,6 +2922,33 @@ function _cdFetchAndRender(ruleId, hours) {
             html += '<div class="cd-summary-card"><div class="cd-summary-val" style="color:white;">' + (data.total_events || 0) + '</div><div class="cd-summary-label">Total Events</div></div>';
             html += '<div class="cd-summary-card"><div class="cd-summary-val" style="color:white;">' + data.top_keys.length + '</div><div class="cd-summary-label">Unique Keys</div></div>';
             html += '</div>';
+
+            // Phase 6: Rule Health scorecard
+            if (data.health) {
+                var hh = data.health;
+                var hc = {dormant: '#94a3b8', healthy: '#4ade80', noisy: '#fbbf24',
+                          'very noisy': '#f87171', unknown: '#94a3b8'}[hh.status] || '#94a3b8';
+                html += '<div class="cd-section-title">Rule Health</div>';
+                html += '<div class="cd-health">';
+                html += '<span class="cd-health-badge" style="color:' + hc + ';border-color:' + hc + '66;background:' + hc + '1f;">' + hh.status + '</span>';
+                html += '<span class="cd-health-stat"><strong>' + hh.matches_7d + '</strong> matches / 7d</span>';
+                html += '<span class="cd-health-stat"><strong>' + hh.matches_30d + '</strong> / 30d</span>';
+                html += '<span class="cd-health-stat">rule <strong>v' + hh.version + '</strong></span>';
+                if (hh.last_modified) {
+                    html += '<span class="cd-health-stat">edited ' + _cdEsc(hh.last_modified.slice(0, 10)) + '</span>';
+                }
+                html += '</div>';
+                if (hh.daily && hh.daily.length) {
+                    var maxD = Math.max.apply(null, hh.daily.map(function(d) { return d.count; }).concat([1]));
+                    html += '<div class="cd-timeline-bars" style="margin-top:0.55rem;">';
+                    hh.daily.forEach(function(d) {
+                        var bh = Math.max(d.count / maxD * 100, 3);
+                        html += '<div class="cd-tbar" style="height:' + bh + '%;">' +
+                                '<div class="cd-tbar-tip">' + d.day.slice(5) + ': ' + d.count + '</div></div>';
+                    });
+                    html += '</div>';
+                }
+            }
 
             // Top Matched IPs/Keys
             if (data.top_keys.length > 0) {
