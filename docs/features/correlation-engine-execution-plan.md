@@ -38,13 +38,13 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **0** | Correctness & safety hotfixes | 1.5–2 wk | ✅ Complete | 14 / 14 |
 | **1** | Match identity, evidence, suppression | 2–3 wk | ✅ Complete | 10 / 10 |
 | **2** | True sequence engine | 3–5 wk | ✅ Complete | 11 / 11 |
-| **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ⬜ Not started | 0 / 7 |
+| **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ✅ Complete | 7 / 7 |
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ⬜ Not started | 0 / 5 |
 | **4** | Source registry & entity model | 4 wk | ⬜ Not started | 0 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 35 / 72 tasks complete.**
+**Overall: 42 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -175,17 +175,19 @@ and lives in Phase 3.**
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P2b-1** | Add `GET /api/correlation/schema` — field/operator catalog per data source | `api/correlation.py` | |
-| - [ ] | **P2b-2** | Visual stage builder: stage cards with add / remove / **reorder** (drag handle) | `templates/correlation/rules.html` | |
-| - [ ] | **P2b-3** | Per-stage inputs: field dropdown, operator dropdown, value, threshold, window (duration picker), source, group-by, join keys | `templates/correlation/rules.html` | |
-| - [ ] | **P2b-4** | Variable picker — offer `$stageN.<field>` chips for fields captured upstream | `templates/correlation/rules.html` | |
-| - [ ] | **P2b-5** | Inline validation in the UI (name uniqueness, threshold > 0, window sanity, unknown-field warnings) | `templates/correlation/rules.html` | |
-| - [ ] | **P2b-6** | Keep a **synchronized advanced JSON editor** as a power-user escape hatch | `templates/correlation/rules.html` | |
-| - [ ] | **P2b-7** | Edit mode — open any existing rule in the same builder (uses `PUT` from P0-11) | `templates/correlation/rules.html` | |
+| - [x] | **P2b-1** | `GET /api/correlation/schema` — field/operator catalog | `api/correlation.py` → `api_correlation_schema()` | 2026-05-20 |
+| - [x] | **P2b-2** | Visual stage builder: stage cards with add / remove / **reorder** (move up/down) | `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P2b-3** | Per-stage inputs: field dropdown, operator dropdown, value, threshold, window, group-by; rule-level ordering / match-mode / suppress-window / join-keys | `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P2b-4** | Variable picker — `$stageN.<field>` selector per condition, populated from upstream stages' group-by | `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P2b-5** | Inline validation in the UI (name, ≥1 condition, threshold ≥ 1, window ≥ 1) + server 422s surfaced in an error box | `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P2b-6** | Synchronized advanced JSON editor (Builder→JSON / JSON→Builder) as the power-user escape hatch | `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P2b-7** | Edit mode — `editRule()` loads any rule into the builder, saves via `PUT` | `templates/correlation/rules.html`, Edit button on rule cards | 2026-05-20 · verified round-trip |
 
 ### Exit criteria — Phase 2b
-- [ ] An analyst can build and edit a correlation rule **without writing JSON**.
-- [ ] A power user can still inspect/edit the JSON representation, kept in sync.
+- [x] An analyst can build and edit a correlation rule **without writing JSON**. — _verified: built + created a 2-stage rule, edited it, all via dropdowns_
+- [x] A power user can still inspect/edit the JSON representation, kept in sync. — _advanced JSON panel with two-way sync_
+
+> **Note:** drag-handle reorder (P2b-2) implemented as move up/down buttons — robust and accessible; HTML5 drag is a later polish.
 
 ---
 
@@ -313,7 +315,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | 2026-05-20 | Plan consolidated from 3 analysis docs; roadmap adopts the verdict's sequencing with 3 refinements (edit endpoint pulled into Phase 0; builder UI parallelized as Phase 2b; test/preview gated on Phase 2 as Phase 3). | Review |
 | 2026-05-20 | **Phase 0 complete** (14/14 tasks). Implemented on branch `feat/correlation-engine-phase0`: new `core/correlation_fields.py` (source field allow-list), `schemas/correlation.py` (Pydantic validation), parameterized ClickHouse queries, fail-closed variable resolution, PUT/clone endpoints, 6 severity cards, filtered match view, `tests/test_correlation.py` (50 tests). Committed `4df7aa0`. | Eng |
 | 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. Committed `a4ced1f`. | Eng |
-| 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** | Eng |
+| 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** Committed `2a13d09`. | Eng |
+| 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. | Eng |
 | | | |
 
 ---

@@ -317,6 +317,42 @@ async def api_delete_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
     return {"status": "ok"}
 
 
+@router.get("/api/correlation/schema", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_correlation_schema():
+    """Field / operator catalog that drives the visual rule builder dropdowns."""
+    from ..core.correlation_fields import SOURCE_FIELDS
+
+    sources = {
+        src: [{"name": f, "type": t} for f, t in sorted(fields.items())]
+        for src, fields in SOURCE_FIELDS.items()
+    }
+    return {
+        "sources": sources,
+        # operator -> field-name suffix the engine understands
+        "operators": {
+            "string": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+            ],
+            "ip": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+            ],
+            "numeric": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+                {"op": "gt", "label": "greater than", "suffix": "_gt"},
+                {"op": "lt", "label": "less than", "suffix": "_lt"},
+                {"op": "gte", "label": "greater or equal", "suffix": "_gte"},
+                {"op": "lte", "label": "less or equal", "suffix": "_lte"},
+            ],
+        },
+        "severities": ["critical", "high", "medium", "low"],
+        "orderings": ["sequence", "any_order"],
+        "match_modes": ["discrete", "recurring"],
+    }
+
+
 @router.get("/correlation/mitre/", response_class=HTMLResponse, name="mitre_attack_map",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db)):

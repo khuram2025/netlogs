@@ -951,6 +951,171 @@
         color: #93c5fd;
     }
 
+    /* ================================================================
+       VISUAL STAGE BUILDER (Phase 2b)
+       ================================================================ */
+    #addRuleModal .cr-modal { max-width: 880px; }
+
+    .cr-stage-card {
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.7rem;
+        padding: 0.9rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .cr-stage-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .cr-stage-num {
+        flex: none;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-radius: 0.4rem;
+    }
+
+    .cr-stage-head input.cr-stage-name {
+        flex: 1;
+        margin: 0;
+    }
+
+    .cr-icon-btn {
+        flex: none;
+        width: 1.7rem;
+        height: 1.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(148, 163, 184, 0.1);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.4rem;
+        color: var(--cr-text-muted);
+        font-size: 0.85rem;
+        cursor: pointer;
+        font-family: 'Outfit', sans-serif;
+        line-height: 1;
+    }
+
+    .cr-icon-btn:hover { background: rgba(148, 163, 184, 0.22); color: #fff; }
+    .cr-icon-btn.danger:hover { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+    .cr-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .cr-cond-label, .cr-stage-meta-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--cr-text-muted);
+        margin-bottom: 0.3rem;
+    }
+
+    /* Grid gives predictable column sizing — flex let the value input
+       overflow the card. Columns: field, operator, value, var-picker, remove. */
+    .cr-cond-row {
+        display: grid;
+        grid-template-columns: 1.3fr 1.1fr 1.6fr 2rem 1.7rem;
+        gap: 0.4rem;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .cr-cond-row select, .cr-cond-row input {
+        margin: 0;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.5rem;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .cr-cond-var { padding: 0.4rem 0.15rem !important; text-align: center; }
+
+    .cr-cond-add {
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px dashed rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.3rem 0.7rem;
+        border-radius: 0.4rem;
+        cursor: pointer;
+        margin-top: 0.15rem;
+    }
+    .cr-cond-add:hover { background: rgba(59, 130, 246, 0.22); }
+
+    .cr-stage-meta {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+
+    .cr-stage-add {
+        width: 100%;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px dashed rgba(59, 130, 246, 0.45);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 0.6rem;
+        border-radius: 0.55rem;
+        cursor: pointer;
+    }
+    .cr-stage-add:hover { background: rgba(59, 130, 246, 0.2); }
+
+    .cr-builder-error {
+        margin-top: 0.6rem;
+        padding: 0.55rem 0.8rem;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 0.45rem;
+        color: #fca5a5;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+    }
+
+    .cr-adv-json {
+        margin-top: 0.5rem;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.55rem;
+        padding: 0.4rem 0.75rem;
+    }
+    .cr-adv-json summary {
+        cursor: pointer;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: var(--cr-text-muted);
+        padding: 0.25rem 0;
+    }
+    .cr-adv-json summary:hover { color: #93c5fd; }
+    .cr-adv-json textarea {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.72rem;
+        margin-top: 0.5rem;
+    }
+    .cr-adv-json-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin: 0.5rem 0 0.25rem;
+    }
+    .cr-adv-json-actions button { font-size: 0.72rem; padding: 0.35rem 0.7rem; }
+
     .cr-btn-submit {
         font-family: 'Outfit', sans-serif;
         display: inline-flex;
@@ -1576,6 +1741,7 @@
                     </button>
                     <button class="cr-btn" onclick="showRuleDetail({{ rule.id }})">Detail</button>
                     {% if current_user and current_user.role == 'ADMIN' %}
+                    <button class="cr-btn" onclick="editRule({{ rule.id }})">Edit</button>
                     <button class="cr-btn cr-btn-delete" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
                     {% endif %}
                 </div>
@@ -1697,7 +1863,7 @@
 <div id="addRuleModal" class="cr-modal-overlay">
     <div class="cr-modal">
         <div class="cr-modal-header">
-            <h3 class="cr-modal-title">Add Correlation Rule</h3>
+            <h3 class="cr-modal-title" id="addRuleModalTitle">Add Correlation Rule</h3>
         </div>
         <form id="addRuleForm" onsubmit="return submitAddRule(event)">
             <div class="cr-modal-body">
@@ -1737,21 +1903,57 @@
                         <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1190">
                     </div>
                 </div>
-                <div class="cr-form-group">
-                    <label>Stages (JSON Array)</label>
-                    <textarea id="ruleStages" rows="8" required placeholder='[
-  {"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300},
-  {"name": "Stage 2", "filter": {"action": "allow", "srcip": "$stage1.srcip"}, "threshold": 1, "window": 600}
-]'></textarea>
-                    <div class="cr-form-hint">
-                        Each stage: name, filter (field conditions), threshold (min events), window (seconds).
-                        Use <code>$stage1.field</code> for variable substitution between stages.
+                <div class="cr-form-row">
+                    <div class="cr-form-group">
+                        <label>Stage Ordering</label>
+                        <select id="ruleOrdering">
+                            <option value="sequence" selected>Sequence — B must follow A</option>
+                            <option value="any_order">Any order</option>
+                        </select>
+                    </div>
+                    <div class="cr-form-group">
+                        <label>Match Mode</label>
+                        <select id="ruleMatchMode">
+                            <option value="discrete" selected>Discrete — one record per chain</option>
+                            <option value="recurring">Recurring — continuous monitor</option>
+                        </select>
+                    </div>
+                    <div class="cr-form-group">
+                        <label>Suppress Window (sec)</label>
+                        <input type="number" id="ruleSuppressWindow" value="3600" min="60" max="604800">
                     </div>
                 </div>
+                <div class="cr-form-group">
+                    <label>Join Keys <span style="color:var(--cr-text-muted);font-weight:400;">(optional, comma-separated)</span></label>
+                    <input type="text" id="ruleJoinKeys" placeholder="leave blank to use Stage 1 group-by — e.g. srcip  or  srcip,dstip">
+                </div>
+
+                <!-- ===== Visual Stage Builder ===== -->
+                <div class="cr-form-group">
+                    <label>Stages</label>
+                    <div id="stagesContainer"></div>
+                    <button type="button" class="cr-stage-add" onclick="builderAddStage()">+ Add Stage</button>
+                    <div id="builderError" class="cr-builder-error" style="display:none;"></div>
+                </div>
+
+                <!-- ===== Advanced JSON (escape hatch) ===== -->
+                <details class="cr-adv-json">
+                    <summary>Advanced — view / edit stage JSON</summary>
+                    <textarea id="ruleStagesJson" rows="8" spellcheck="false"
+                              placeholder='[{"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300}]'></textarea>
+                    <div class="cr-adv-json-actions">
+                        <button type="button" class="cr-btn-cancel" onclick="builderSyncToJson()">Builder → JSON</button>
+                        <button type="button" class="cr-btn-cancel" onclick="builderApplyJson()">JSON → Builder</button>
+                    </div>
+                    <div class="cr-form-hint">
+                        The builder and this JSON are kept in sync on demand. Use
+                        <code>$stage1.field</code> for cross-stage variable references.
+                    </div>
+                </details>
             </div>
             <div class="cr-modal-footer">
                 <button type="button" class="cr-btn-cancel" onclick="closeModal('addRuleModal')">Cancel</button>
-                <button type="submit" class="cr-btn-submit">Create Rule</button>
+                <button type="submit" class="cr-btn-submit" id="addRuleSubmitBtn">Create Rule</button>
             </div>
         </form>
     </div>
@@ -1856,23 +2058,294 @@ function closeModal(id) {
     document.getElementById(id).classList.remove('active');
 }
 
-function showAddRuleModal() {
+// ================================================================
+// VISUAL STAGE BUILDER (Phase 2b)
+// ================================================================
+var corrSchema = null;
+var _editingRuleId = null;
+var _schemaPromise = fetch('/api/correlation/schema')
+    .then(function(r) { return r.json(); })
+    .then(function(s) { corrSchema = s; return s; })
+    .catch(function() { corrSchema = {sources: {syslogs: []}, operators: {}}; return corrSchema; });
+
+async function _ensureSchema() { if (!corrSchema) { await _schemaPromise; } }
+
+function _srcFields(source) {
+    return (corrSchema && corrSchema.sources && corrSchema.sources[source]) || [];
+}
+function _fieldType(source, field) {
+    var f = _srcFields(source).filter(function(x) { return x.name === field; })[0];
+    return f ? f.type : 'string';
+}
+function _opSuffix(op) {
+    return {eq: '', ne: '_ne', gt: '_gt', lt: '_lt', gte: '_gte', lte: '_lte'}[op] || '';
+}
+function _splitFieldOp(key) {
+    var sfx = [['_gte', 'gte'], ['_lte', 'lte'], ['_gt', 'gt'], ['_lt', 'lt'], ['_ne', 'ne']];
+    for (var i = 0; i < sfx.length; i++) {
+        if (key.length > sfx[i][0].length && key.slice(-sfx[i][0].length) === sfx[i][0]) {
+            return {field: key.slice(0, -sfx[i][0].length), op: sfx[i][1]};
+        }
+    }
+    return {field: key, op: 'eq'};
+}
+function _fieldOptionsHtml(source, selected) {
+    return _srcFields(source).map(function(f) {
+        return '<option value="' + f.name + '"' + (f.name === selected ? ' selected' : '') +
+               '>' + f.name + ' (' + f.type + ')</option>';
+    }).join('');
+}
+function _opOptionsHtml(type, selected) {
+    var ops = (corrSchema && corrSchema.operators && corrSchema.operators[type]) ||
+              (corrSchema && corrSchema.operators && corrSchema.operators.string) || [];
+    return ops.map(function(o) {
+        return '<option value="' + o.op + '"' + (o.op === selected ? ' selected' : '') +
+               '>' + o.label + '</option>';
+    }).join('');
+}
+
+function builderAddStage(data) {
+    var container = document.getElementById('stagesContainer');
+    var card = document.createElement('div');
+    card.className = 'cr-stage-card';
+    card.innerHTML =
+        '<div class="cr-stage-head">' +
+          '<span class="cr-stage-num">1</span>' +
+          '<input class="cr-stage-name" placeholder="Stage name — e.g. Port Scan Detected">' +
+          '<button type="button" class="cr-icon-btn" title="Move up" onclick="builderMoveStage(this,-1)">&uarr;</button>' +
+          '<button type="button" class="cr-icon-btn" title="Move down" onclick="builderMoveStage(this,1)">&darr;</button>' +
+          '<button type="button" class="cr-icon-btn danger" title="Remove stage" onclick="builderRemoveStage(this)">&times;</button>' +
+        '</div>' +
+        '<div class="cr-cond-label">Conditions — all must match</div>' +
+        '<div class="cr-conds"></div>' +
+        '<button type="button" class="cr-cond-add" onclick="builderAddCondition(this.closest(\'.cr-stage-card\'))">+ Condition</button>' +
+        '<div class="cr-stage-meta">' +
+          '<div><div class="cr-stage-meta-label">Group by / entity</div>' +
+            '<select class="cr-stage-groupby"></select></div>' +
+          '<div><div class="cr-stage-meta-label">Threshold (min events)</div>' +
+            '<input type="number" class="cr-stage-threshold" min="1" value="1"></div>' +
+          '<div><div class="cr-stage-meta-label">Window (seconds)</div>' +
+            '<input type="number" class="cr-stage-window" min="1" value="300"></div>' +
+        '</div>';
+    container.appendChild(card);
+    card.querySelector('.cr-stage-groupby').innerHTML =
+        '<option value="">(none)</option>' + _fieldOptionsHtml('syslogs', '');
+
+    if (data) {
+        card.querySelector('.cr-stage-name').value = data.name || '';
+        card.querySelector('.cr-stage-threshold').value = data.threshold || 1;
+        card.querySelector('.cr-stage-window').value = data.window || 300;
+        var filter = data.filter || {};
+        if (filter.group_by) card.querySelector('.cr-stage-groupby').value = filter.group_by;
+        Object.keys(filter).forEach(function(key) {
+            if (key === 'group_by' || key === 'threshold' || key === 'window') { return; }
+            var fo = _splitFieldOp(key);
+            builderAddCondition(card, {field: fo.field, op: fo.op, value: filter[key]});
+        });
+    }
+    if (!card.querySelector('.cr-cond-row')) { builderAddCondition(card); }
+    _renumberStages();
+}
+
+function builderAddCondition(card, data) {
+    var conds = card.querySelector('.cr-conds');
+    var fields = _srcFields('syslogs');
+    var field = (data && data.field) || (fields[0] || {}).name || '';
+    var ftype = _fieldType('syslogs', field);
+    var row = document.createElement('div');
+    row.className = 'cr-cond-row';
+    row.innerHTML =
+        '<select class="cr-cond-field" onchange="_onCondFieldChange(this)">' +
+            _fieldOptionsHtml('syslogs', field) + '</select>' +
+        '<select class="cr-cond-op">' + _opOptionsHtml(ftype, (data && data.op) || 'eq') + '</select>' +
+        '<input class="cr-cond-value" placeholder="value or $stage1.field">' +
+        '<select class="cr-cond-var" title="insert a cross-stage variable" ' +
+            'onmousedown="_populateVarPicker(this)" onchange="_onVarPick(this)">' +
+            '<option value="">&#402;</option></select>' +
+        '<button type="button" class="cr-icon-btn danger" title="Remove condition" ' +
+            'onclick="this.closest(\'.cr-cond-row\').remove()">&times;</button>';
+    conds.appendChild(row);
+    if (data && data.value !== undefined && data.value !== null) {
+        row.querySelector('.cr-cond-value').value = data.value;
+    }
+}
+
+function _onCondFieldChange(select) {
+    var row = select.closest('.cr-cond-row');
+    var opSel = row.querySelector('.cr-cond-op');
+    opSel.innerHTML = _opOptionsHtml(_fieldType('syslogs', select.value), opSel.value);
+}
+
+function _populateVarPicker(select) {
+    var card = select.closest('.cr-stage-card');
+    var cards = [].slice.call(document.querySelectorAll('#stagesContainer .cr-stage-card'));
+    var myIdx = cards.indexOf(card);
+    var opts = ['<option value="">&#402;</option>'];
+    for (var i = 0; i < myIdx; i++) {
+        var gb = cards[i].querySelector('.cr-stage-groupby').value;
+        if (gb) {
+            var v = '$stage' + (i + 1) + '.' + gb;
+            opts.push('<option value="' + v + '">' + v + '</option>');
+        }
+    }
+    select.innerHTML = opts.join('');
+}
+
+function _onVarPick(select) {
+    if (select.value) {
+        select.closest('.cr-cond-row').querySelector('.cr-cond-value').value = select.value;
+    }
+    select.selectedIndex = 0;
+}
+
+function builderRemoveStage(btn) {
+    var cards = document.querySelectorAll('#stagesContainer .cr-stage-card');
+    if (cards.length <= 1) { showToast('A rule needs at least one stage', 'error'); return; }
+    btn.closest('.cr-stage-card').remove();
+    _renumberStages();
+}
+
+function builderMoveStage(btn, dir) {
+    var card = btn.closest('.cr-stage-card');
+    if (dir < 0 && card.previousElementSibling) {
+        card.parentNode.insertBefore(card, card.previousElementSibling);
+    } else if (dir > 0 && card.nextElementSibling) {
+        card.parentNode.insertBefore(card.nextElementSibling, card);
+    }
+    _renumberStages();
+}
+
+function _renumberStages() {
+    var cards = document.querySelectorAll('#stagesContainer .cr-stage-card');
+    cards.forEach(function(card, i) {
+        card.querySelector('.cr-stage-num').textContent = (i + 1);
+        card.querySelector('[title="Move up"]').disabled = (i === 0);
+        card.querySelector('[title="Move down"]').disabled = (i === cards.length - 1);
+    });
+}
+
+function builderCollectStages() {
+    var stages = [];
+    document.querySelectorAll('#stagesContainer .cr-stage-card').forEach(function(card) {
+        var filter = {};
+        card.querySelectorAll('.cr-cond-row').forEach(function(row) {
+            var field = row.querySelector('.cr-cond-field').value;
+            var op = row.querySelector('.cr-cond-op').value;
+            var val = row.querySelector('.cr-cond-value').value;
+            if (!field || val === '') { return; }
+            var key = field + _opSuffix(op);
+            if (_fieldType('syslogs', field) === 'numeric' && val[0] !== '$' && !isNaN(Number(val))) {
+                filter[key] = Number(val);
+            } else {
+                filter[key] = val;
+            }
+        });
+        var gb = card.querySelector('.cr-stage-groupby').value;
+        if (gb) { filter.group_by = gb; }
+        stages.push({
+            name: card.querySelector('.cr-stage-name').value || ('Stage ' + (stages.length + 1)),
+            source: 'syslogs',
+            filter: filter,
+            threshold: parseInt(card.querySelector('.cr-stage-threshold').value, 10) || 1,
+            window: parseInt(card.querySelector('.cr-stage-window').value, 10) || 300,
+        });
+    });
+    return stages;
+}
+
+function builderSyncToJson() {
+    document.getElementById('ruleStagesJson').value =
+        JSON.stringify(builderCollectStages(), null, 2);
+    showToast('JSON updated from builder', 'success');
+}
+
+function builderApplyJson() {
+    var txt = document.getElementById('ruleStagesJson').value.trim();
+    if (!txt) { showToast('JSON box is empty', 'error'); return; }
+    var stages;
+    try { stages = JSON.parse(txt); }
+    catch (e) { showToast('Invalid JSON: ' + e.message, 'error'); return; }
+    if (!Array.isArray(stages) || !stages.length) {
+        showToast('JSON must be a non-empty array of stages', 'error'); return;
+    }
+    document.getElementById('stagesContainer').innerHTML = '';
+    stages.forEach(function(s) { builderAddStage(s); });
+    showToast('Builder rebuilt from JSON', 'success');
+}
+
+function builderValidate() {
+    var stages = builderCollectStages();
+    if (!stages.length) { return 'Add at least one stage.'; }
+    for (var i = 0; i < stages.length; i++) {
+        var s = stages[i];
+        if (!s.name.trim()) { return 'Stage ' + (i + 1) + ' needs a name.'; }
+        var conds = Object.keys(s.filter).filter(function(k) { return k !== 'group_by'; });
+        if (!conds.length) { return 'Stage ' + (i + 1) + ' needs at least one condition with a value.'; }
+        if (s.threshold < 1) { return 'Stage ' + (i + 1) + ' threshold must be at least 1.'; }
+        if (s.window < 1) { return 'Stage ' + (i + 1) + ' window must be at least 1 second.'; }
+    }
+    return null;
+}
+
+async function showAddRuleModal() {
+    await _ensureSchema();
+    _editingRuleId = null;
     document.getElementById('addRuleForm').reset();
+    document.getElementById('addRuleModalTitle').textContent = 'Add Correlation Rule';
+    document.getElementById('addRuleSubmitBtn').textContent = 'Create Rule';
+    document.getElementById('builderError').style.display = 'none';
+    document.getElementById('ruleStagesJson').value = '';
+    document.getElementById('stagesContainer').innerHTML = '';
+    builderAddStage();
     document.getElementById('addRuleModal').classList.add('active');
 }
 
+async function editRule(ruleId) {
+    await _ensureSchema();
+    try {
+        var rules = await (await fetch('/api/correlation/rules/')).json();
+        var rule = rules.filter(function(r) { return r.id === ruleId; })[0];
+        if (!rule) { showToast('Rule not found', 'error'); return; }
+        _editingRuleId = ruleId;
+        document.getElementById('addRuleForm').reset();
+        document.getElementById('addRuleModalTitle').textContent = 'Edit Correlation Rule';
+        document.getElementById('addRuleSubmitBtn').textContent = 'Save Changes';
+        document.getElementById('ruleName').value = rule.name || '';
+        document.getElementById('ruleDesc').value = rule.description || '';
+        document.getElementById('ruleSeverity').value = rule.severity || 'high';
+        document.getElementById('ruleEnabled').value = rule.is_enabled ? 'true' : 'false';
+        document.getElementById('ruleMitreTactic').value = rule.mitre_tactic || '';
+        document.getElementById('ruleMitreTechnique').value = rule.mitre_technique || '';
+        document.getElementById('ruleOrdering').value = rule.ordering || 'sequence';
+        document.getElementById('ruleMatchMode').value = rule.match_mode || 'discrete';
+        document.getElementById('ruleSuppressWindow').value = rule.suppress_window || 3600;
+        document.getElementById('ruleJoinKeys').value = (rule.join_keys || []).join(', ');
+        document.getElementById('builderError').style.display = 'none';
+        document.getElementById('ruleStagesJson').value = '';
+        document.getElementById('stagesContainer').innerHTML = '';
+        (rule.stages || []).forEach(function(s) { builderAddStage(s); });
+        if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+        document.getElementById('addRuleModal').classList.add('active');
+    } catch (e) {
+        showToast('Error loading rule: ' + e.message, 'error');
+    }
+}
+
 // ================================================================
-// SUBMIT ADD RULE
+// SUBMIT ADD / EDIT RULE
 // ================================================================
 async function submitAddRule(e) {
     e.preventDefault();
-    var stages;
-    try {
-        stages = JSON.parse(document.getElementById('ruleStages').value);
-    } catch (err) {
-        showToast('Invalid JSON in stages: ' + err.message, 'error');
-        return false;
-    }
+    var errBox = document.getElementById('builderError');
+    var err = builderValidate();
+    if (err) { errBox.textContent = err; errBox.style.display = 'block'; return false; }
+    errBox.style.display = 'none';
+
+    var joinRaw = document.getElementById('ruleJoinKeys').value.trim();
+    var joinKeys = joinRaw
+        ? joinRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+        : null;
+
     var data = {
         name: document.getElementById('ruleName').value,
         description: document.getElementById('ruleDesc').value,
@@ -1880,24 +2353,39 @@ async function submitAddRule(e) {
         is_enabled: document.getElementById('ruleEnabled').value === 'true',
         mitre_tactic: document.getElementById('ruleMitreTactic').value || null,
         mitre_technique: document.getElementById('ruleMitreTechnique').value || null,
-        stages: stages,
+        ordering: document.getElementById('ruleOrdering').value,
+        match_mode: document.getElementById('ruleMatchMode').value,
+        suppress_window: parseInt(document.getElementById('ruleSuppressWindow').value, 10) || 3600,
+        join_keys: joinKeys,
+        stages: builderCollectStages(),
     };
+
+    var editing = _editingRuleId !== null;
+    var url = editing ? '/api/correlation/rules/' + _editingRuleId : '/api/correlation/rules/';
     try {
-        var res = await fetch('/api/correlation/rules/', {
-            method: 'POST',
+        var res = await fetch(url, {
+            method: editing ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data),
         });
         var result = await res.json();
         if (res.ok) {
-            showToast('Rule created successfully', 'success');
+            showToast(editing ? 'Rule updated' : 'Rule created successfully', 'success');
             closeModal('addRuleModal');
             setTimeout(function() { location.reload(); }, 500);
         } else {
-            showToast(result.detail || 'Failed to create rule', 'error');
+            var msg = result.detail;
+            if (Array.isArray(msg)) {
+                msg = msg.map(function(d) {
+                    return (d.loc ? d.loc.slice(1).join('.') + ': ' : '') + d.msg;
+                }).join('; ');
+            }
+            errBox.textContent = msg || 'Failed to save rule';
+            errBox.style.display = 'block';
         }
-    } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+    } catch (err2) {
+        errBox.textContent = 'Error: ' + err2.message;
+        errBox.style.display = 'block';
     }
     return false;
 }
