@@ -98,6 +98,8 @@ class CorrelationRuleCreate(BaseModel):
     # Phase 2: stage ordering / join
     ordering: MatchOrdering = "sequence"
     join_keys: Optional[List[str]] = Field(default=None, max_length=4)
+    # Phase 6: response actions
+    actions: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10)
 
     @field_validator("join_keys")
     @classmethod
@@ -110,6 +112,18 @@ class CorrelationRuleCreate(BaseModel):
                 if key not in CANONICAL_ENTITIES and key not in fields:
                     raise ValueError(
                         f"join key '{key}' is not a canonical entity or known field")
+        return v
+
+    @field_validator("actions")
+    @classmethod
+    def _check_actions(cls, v):
+        if v:
+            valid = {"webhook", "log"}
+            for a in v:
+                if not isinstance(a, dict) or a.get("type") not in valid:
+                    raise ValueError(f"each action needs a 'type' of {sorted(valid)}")
+                if a["type"] == "webhook" and not a.get("url"):
+                    raise ValueError("a webhook action requires a 'url'")
         return v
 
 
@@ -127,6 +141,7 @@ class CorrelationRuleUpdate(BaseModel):
     suppress_window: Optional[int] = Field(default=None, ge=60, le=604_800)
     ordering: Optional[MatchOrdering] = None
     join_keys: Optional[List[str]] = Field(default=None, max_length=4)
+    actions: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10)
 
     @field_validator("join_keys")
     @classmethod
@@ -139,4 +154,16 @@ class CorrelationRuleUpdate(BaseModel):
                 if key not in CANONICAL_ENTITIES and key not in fields:
                     raise ValueError(
                         f"join key '{key}' is not a canonical entity or known field")
+        return v
+
+    @field_validator("actions")
+    @classmethod
+    def _check_actions(cls, v):
+        if v:
+            valid = {"webhook", "log"}
+            for a in v:
+                if not isinstance(a, dict) or a.get("type") not in valid:
+                    raise ValueError(f"each action needs a 'type' of {sorted(valid)}")
+                if a["type"] == "webhook" and not a.get("url"):
+                    raise ValueError("a webhook action requires a 'url'")
         return v

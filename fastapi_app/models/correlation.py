@@ -63,6 +63,11 @@ class CorrelationRule(Base):
     # entity. 0 = auto-derive from severity.
     risk_score = Column(Integer, nullable=False, default=0, server_default="0")
 
+    # Phase 6: response actions fired when this rule records a match —
+    # a JSON list, e.g. [{"type": "webhook", "url": "..."},
+    # {"type": "log", "level": "warning"}].
+    actions = Column(JSON, nullable=True)
+
     # Evaluation tracking
     last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)

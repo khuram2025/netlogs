@@ -5,9 +5,11 @@ Evaluates correlation rules by querying ClickHouse for events matching each stag
 in sequence, with variable substitution between stages.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -874,6 +876,57 @@ async def group_into_incident(db, match: dict, risk: float):
         logger.error(f"Failed to group match into incident: {e}")
 
 
+def _post_webhook(url: str, payload: dict):
+    """POST a JSON payload to a webhook URL (blocking — run in a thread)."""
+    data = json.dumps(payload, default=str).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"Content-Type": "application/json", "User-Agent": "Zentryc-Correlation"},
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        resp.read(1)
+
+
+async def fire_response_actions(rule, match: dict):
+    """Fire a rule's configured response actions for a recorded match.
+
+    Phase 6: supports ``webhook`` (POST the match summary to a URL) and
+    ``log`` (structured log line). More action types — notifications, EDL
+    blocklisting, ticketing — plug into the same dispatch.
+    """
+    actions = getattr(rule, "actions", None) or []
+    if not isinstance(actions, list) or not actions:
+        return
+    summary = {
+        "event": "correlation_match",
+        "rule": match.get("rule_name"),
+        "rule_id": match.get("rule_id"),
+        "severity": match.get("severity"),
+        "entity_type": match.get("entity_type"),
+        "entity_value": match.get("entity_value"),
+        "match_fingerprint": match.get("match_fingerprint"),
+        "total_events": match.get("total_events"),
+        "mitre_tactic": match.get("mitre_tactic"),
+        "mitre_technique": match.get("mitre_technique"),
+        "first_seen": str(match.get("first_seen")),
+        "last_seen": str(match.get("last_seen")),
+    }
+    for action in actions:
+        try:
+            atype = (action or {}).get("type")
+            if atype == "webhook" and action.get("url"):
+                await asyncio.to_thread(_post_webhook, action["url"], summary)
+                logger.info(f"Response action: webhook fired for '{match.get('rule_name')}'")
+            elif atype == "log":
+                level = (action.get("level") or "warning").lower()
+                msg = (f"Correlation response — rule '{match.get('rule_name')}' "
+                       f"matched entity {match.get('entity_value')} "
+                       f"(severity {match.get('severity')})")
+                (logger.error if level == "error" else logger.warning)(msg)
+        except Exception as e:
+            logger.error(f"Response action {action!r} failed: {e}")
+
+
 async def evaluate_all_correlation_rules():
     """Evaluate all enabled correlation rules. Called by the scheduler."""
     try:
@@ -913,6 +966,7 @@ async def evaluate_all_correlation_rules():
                         record_entity_risk(match, score)
                         risk = compute_entity_risk(match["entity_value"]) + score
                         await group_into_incident(db, match, risk)
+                        await fire_response_actions(rule, match)
                         recorded += 1
 
                     if recorded:

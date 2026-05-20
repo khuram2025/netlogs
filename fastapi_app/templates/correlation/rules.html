@@ -1224,6 +1224,43 @@
         color: #fbbf24;
     }
 
+    /* ===== Attack-chain visualization ===== */
+    .cd-chain {
+        display: flex;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0.25rem 0 1rem;
+    }
+    .cd-chain-node {
+        flex: 1;
+        min-width: 130px;
+        background: linear-gradient(145deg, rgba(59,130,246,0.12), rgba(99,102,241,0.08));
+        border: 1px solid rgba(59,130,246,0.3);
+        border-radius: 0.55rem;
+        padding: 0.55rem 0.7rem;
+    }
+    .cd-chain-num {
+        width: 1.3rem; height: 1.3rem;
+        display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff; font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem; font-weight: 600; border-radius: 0.3rem;
+        margin-bottom: 0.3rem;
+    }
+    .cd-chain-name {
+        font-family: 'Outfit', sans-serif; font-size: 0.8rem;
+        font-weight: 600; color: var(--cr-text); line-height: 1.25;
+    }
+    .cd-chain-meta {
+        font-family: 'Outfit', sans-serif; font-size: 0.66rem;
+        color: var(--cr-text-muted); margin-top: 0.2rem;
+    }
+    .cd-chain-arrow {
+        display: flex; align-items: center;
+        color: #6366f1; font-size: 1rem;
+    }
+
     /* ===== Rule health scorecard ===== */
     .cd-health {
         display: flex;
@@ -2088,6 +2125,16 @@
                     <label>Join Keys <span style="color:var(--cr-text-muted);font-weight:400;">(optional, comma-separated)</span></label>
                     <input type="text" id="ruleJoinKeys" placeholder="leave blank to use Stage 1 group-by — e.g. srcip  or  srcip,dstip">
                 </div>
+                <div class="cr-form-group">
+                    <label>Response Actions <span style="color:var(--cr-text-muted);font-weight:400;">(optional JSON)</span></label>
+                    <textarea id="ruleActions" rows="2" spellcheck="false"
+                              style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;"
+                              placeholder='[{"type": "log", "level": "warning"}, {"type": "webhook", "url": "https://..."}]'></textarea>
+                    <div class="cr-form-hint">
+                        Fired when the rule records a match. Action types:
+                        <code>log</code>, <code>webhook</code>.
+                    </div>
+                </div>
 
                 <!-- ===== Visual Stage Builder ===== -->
                 <div class="cr-form-group">
@@ -2640,6 +2687,16 @@ function builderValidate() {
         if (s.threshold < 1) { return 'Stage ' + (i + 1) + ' threshold must be at least 1.'; }
         if (s.window < 1) { return 'Stage ' + (i + 1) + ' window must be at least 1 second.'; }
     }
+    var actionsRaw = document.getElementById('ruleActions').value.trim();
+    if (actionsRaw) {
+        try {
+            if (!Array.isArray(JSON.parse(actionsRaw))) {
+                return 'Response Actions must be a JSON array.';
+            }
+        } catch (e) {
+            return 'Response Actions: invalid JSON — ' + e.message;
+        }
+    }
     return null;
 }
 
@@ -2681,6 +2738,8 @@ async function editRule(ruleId) {
         document.getElementById('ruleMatchMode').value = rule.match_mode || 'discrete';
         document.getElementById('ruleSuppressWindow').value = rule.suppress_window || 3600;
         document.getElementById('ruleJoinKeys').value = (rule.join_keys || []).join(', ');
+        document.getElementById('ruleActions').value =
+            rule.actions ? JSON.stringify(rule.actions, null, 2) : '';
         document.getElementById('builderError').style.display = 'none';
         document.getElementById('builderPreview').style.display = 'none';
         document.getElementById('ruleStagesJson').value = '';
@@ -2701,6 +2760,11 @@ function _builderCollectRuleData() {
     var joinKeys = joinRaw
         ? joinRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
         : null;
+    var actionsRaw = document.getElementById('ruleActions').value.trim();
+    var actions = null;
+    if (actionsRaw) {
+        try { actions = JSON.parse(actionsRaw); } catch (e) { actions = null; }
+    }
     return {
         name: document.getElementById('ruleName').value,
         description: document.getElementById('ruleDesc').value,
@@ -2712,6 +2776,7 @@ function _builderCollectRuleData() {
         match_mode: document.getElementById('ruleMatchMode').value,
         suppress_window: parseInt(document.getElementById('ruleSuppressWindow').value, 10) || 3600,
         join_keys: joinKeys,
+        actions: actions,
         stages: builderCollectStages(),
     };
 }
@@ -2907,6 +2972,28 @@ function _cdFetchAndRender(ruleId, hours) {
 
             // Description
             html += '<p class="cd-desc">' + _cdEsc(rule.description || 'No description provided.') + '</p>';
+
+            // Phase 6: attack-chain visualization — the rule's stages as a
+            // left-to-right kill chain.
+            if (rule.stages && rule.stages.length) {
+                html += '<div class="cd-chain">';
+                rule.stages.forEach(function(s, i) {
+                    if (i > 0) {
+                        html += '<div class="cd-chain-arrow">&#9656;</div>';
+                    }
+                    var win = s.window || 300;
+                    var winLabel = win >= 3600 ? (Math.round(win / 3600) + 'h')
+                                 : win >= 60 ? (Math.round(win / 60) + 'm')
+                                 : (win + 's');
+                    html += '<div class="cd-chain-node">' +
+                        '<div class="cd-chain-num">' + (i + 1) + '</div>' +
+                        '<div class="cd-chain-name">' + _cdEsc(s.name || ('Stage ' + (i + 1))) + '</div>' +
+                        '<div class="cd-chain-meta">' + (s.threshold || 1) + '+ events &middot; ' +
+                            winLabel + ' &middot; ' + _cdEsc(s.source || 'syslogs') + '</div>' +
+                        '</div>';
+                });
+                html += '</div>';
+            }
 
             // Time range selector
             html += '<div class="cd-time-range">';
