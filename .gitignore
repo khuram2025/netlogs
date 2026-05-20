@@ -53,6 +53,7 @@ backups/
 tmp/
 temp/
 .playwright-mcp/
+docs/features/tmp.md
 
 # Packer output
 packer/output-*/

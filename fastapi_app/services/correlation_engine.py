@@ -6,7 +6,7 @@ in sequence, with variable substitution between stages.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select, update
@@ -16,8 +16,38 @@ from ..db.clickhouse import ClickHouseClient
 from ..db.database import async_session_maker
 from ..models.correlation import CorrelationRule
 from ..models.alert import Alert, AlertRule
+from ..core.correlation_fields import (
+    DEFAULT_SOURCE,
+    NON_FIELD_FILTER_KEYS,
+    NUMERIC_ONLY_OPERATORS,
+    SOURCE_TABLES,
+    get_source_fields,
+    parse_field_op,
+)
 
 logger = logging.getLogger(__name__)
+
+# Duplicate-alert / match dedup window.
+ALERT_DEDUP_MINUTES = 5
+
+
+class StageEvalError(Exception):
+    """Raised when a correlation stage cannot be evaluated safely.
+
+    Covers an invalid filter field, an operator/type mismatch, a non-numeric
+    value for a numeric field, or a required ``$stageN.field`` variable that
+    could not be resolved. The engine treats any of these as a *stage failure*
+    (fail-closed) rather than silently broadening or skipping the condition.
+    """
+
+
+def _recent_alert_cutoff(minutes: int = ALERT_DEDUP_MINUTES) -> datetime:
+    """Return the UTC timestamp ``minutes`` ago.
+
+    Replaces the old ``datetime.replace(minute=now.minute - 5)`` which raised
+    ``ValueError`` during the first five minutes of every hour.
+    """
+    return datetime.now(timezone.utc) - timedelta(minutes=minutes)
 
 
 def ensure_correlation_matches_table():
@@ -47,46 +77,95 @@ def ensure_correlation_matches_table():
         logger.error(f"Failed to create correlation_matches table: {e}")
 
 
-def _build_where_clause(filter_config: dict, variables: dict = None) -> str:
-    """Build a ClickHouse WHERE clause from a stage filter config."""
-    conditions = []
+def _resolve_variable(value: str, variables: dict):
+    """Resolve a ``$stageN.field`` reference.
 
-    for field, value in filter_config.items():
-        if field in ("group_by", "threshold", "window"):
+    Returns (resolved_value, optional_flag). ``optional_flag`` is True when the
+    reference ended with ``?`` (an explicitly optional variable). Raises
+    ``StageEvalError`` when a *required* variable cannot be resolved — the
+    engine must fail closed rather than drop the join condition.
+    """
+    ref = value[1:]
+    optional = ref.endswith("?")
+    if optional:
+        ref = ref[:-1]
+
+    resolved = None
+    parts = ref.split(".", 1)
+    if len(parts) == 2 and variables:
+        stage_key, var_field = parts
+        resolved = (variables.get(stage_key) or {}).get(var_field)
+
+    if resolved is None or resolved == "":
+        if optional:
+            return None, True
+        raise StageEvalError(
+            f"Required variable '{value}' could not be resolved from a prior stage"
+        )
+    return resolved, optional
+
+
+def _build_where_clause(filter_config: dict, variables: dict = None,
+                        source: str = DEFAULT_SOURCE) -> Tuple[str, dict]:
+    """Build a parameterized ClickHouse WHERE clause from a stage filter config.
+
+    Returns ``(where_sql, params)`` where ``where_sql`` contains only
+    allow-listed identifiers and ``{pN:Type}`` placeholders, and ``params`` maps
+    each placeholder to its bound value. Raises ``StageEvalError`` on an
+    unknown field, an operator/type mismatch, a bad numeric value, or an
+    unresolved required variable (fail-closed).
+    """
+    fields = get_source_fields(source)
+    if fields is None:
+        raise StageEvalError(f"Unknown data source '{source}'")
+
+    conditions: List[str] = []
+    params: dict = {}
+    idx = 0
+
+    for key, value in (filter_config or {}).items():
+        if key in NON_FIELD_FILTER_KEYS:
             continue
 
-        # Variable substitution ($stage1.srcip -> actual value)
+        actual_field, op = parse_field_op(key)
+        if actual_field not in fields:
+            raise StageEvalError(
+                f"Field '{actual_field}' is not an allowed column for source '{source}'"
+            )
+        ftype = fields[actual_field]
+
+        # Variable substitution ($stage1.srcip -> actual value), fail-closed.
         if isinstance(value, str) and value.startswith("$"):
-            if variables:
-                var_parts = value[1:].split(".", 1)
-                if len(var_parts) == 2:
-                    stage_key, var_field = var_parts
-                    resolved = variables.get(stage_key, {}).get(var_field)
-                    if resolved:
-                        value = resolved
-                    else:
-                        continue  # Skip if variable not resolved
+            resolved, optional = _resolve_variable(value, variables)
+            if resolved is None and optional:
+                continue  # explicitly optional + unresolved -> skip condition
+            value = resolved
 
-        # Handle comparison operators
-        if field.endswith("_gt"):
-            actual_field = field[:-3]
-            conditions.append(f"{actual_field} > {value}")
-        elif field.endswith("_lt"):
-            actual_field = field[:-3]
-            conditions.append(f"{actual_field} < {value}")
-        elif field.endswith("_gte"):
-            actual_field = field[:-4]
-            conditions.append(f"{actual_field} >= {value}")
-        elif field.endswith("_lte"):
-            actual_field = field[:-4]
-            conditions.append(f"{actual_field} <= {value}")
-        elif field.endswith("_ne"):
-            actual_field = field[:-3]
-            conditions.append(f"{actual_field} != '{value}'")
-        else:
-            conditions.append(f"{field} = '{value}'")
+        if op in NUMERIC_ONLY_OPERATORS and ftype != "numeric":
+            raise StageEvalError(
+                f"Operator '{op}' on '{actual_field}' requires a numeric field"
+            )
 
-    return " AND ".join(conditions) if conditions else "1=1"
+        pname = f"p{idx}"
+        idx += 1
+
+        if ftype == "numeric":
+            try:
+                params[pname] = float(value)
+            except (TypeError, ValueError):
+                raise StageEvalError(
+                    f"Filter '{key}' requires a numeric value, got {value!r}"
+                )
+            conditions.append(f"{actual_field} {op} {{{pname}:Float64}}")
+        elif ftype == "ip":
+            params[pname] = str(value)
+            conditions.append(f"{actual_field} {op} toIPv4({{{pname}:String}})")
+        else:  # string
+            params[pname] = str(value)
+            conditions.append(f"{actual_field} {op} {{{pname}:String}}")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    return where, params
 
 
 def _evaluate_stage(
@@ -101,26 +180,48 @@ def _evaluate_stage(
     """
     try:
         client = ClickHouseClient.get_client()
-        filter_config = stage.get("filter", {})
-        threshold = stage.get("threshold", 1)
-        group_by = filter_config.get("group_by", stage.get("group_by"))
+        filter_config = stage.get("filter", {}) or {}
+        source = stage.get("source", DEFAULT_SOURCE)
+        table = SOURCE_TABLES.get(source)
+        if table is None:
+            raise StageEvalError(f"Unknown data source '{source}'")
 
-        where = _build_where_clause(filter_config, variables)
+        try:
+            threshold = int(stage.get("threshold", 1))
+        except (TypeError, ValueError):
+            raise StageEvalError(f"Invalid threshold: {stage.get('threshold')!r}")
+        try:
+            window_seconds = int(window_seconds)
+        except (TypeError, ValueError):
+            raise StageEvalError(f"Invalid window: {window_seconds!r}")
+
+        group_by = filter_config.get("group_by", stage.get("group_by"))
+        if group_by is not None:
+            allowed = get_source_fields(source) or {}
+            if group_by not in allowed:
+                raise StageEvalError(
+                    f"group_by field '{group_by}' is not an allowed column for source '{source}'"
+                )
+
+        where, params = _build_where_clause(filter_config, variables, source)
+        # reference_time and window_seconds are engine-controlled (constant or
+        # int-cast); group_by is allow-list validated. Only user values below
+        # are bound as parameters.
         time_filter = f"timestamp > {reference_time} - INTERVAL {window_seconds} SECOND"
-        full_where = f"{time_filter} AND {where}"
+        full_where = f"{time_filter} AND ({where})"
 
         if group_by:
             # Aggregation query: find groups exceeding threshold
             query = f"""
                 SELECT {group_by}, count() as cnt
-                FROM syslogs
+                FROM {table}
                 WHERE {full_where}
                 GROUP BY {group_by}
                 HAVING cnt >= {threshold}
                 ORDER BY cnt DESC
                 LIMIT 10
             """
-            result = client.query(query)
+            result = client.query(query, parameters=params)
             rows = result.result_rows
 
             if not rows:
@@ -140,16 +241,19 @@ def _evaluate_stage(
             # Simple count query
             query = f"""
                 SELECT count() as cnt
-                FROM syslogs
+                FROM {table}
                 WHERE {full_where}
             """
-            result = client.query(query)
+            result = client.query(query, parameters=params)
             count = result.result_rows[0][0] if result.result_rows else 0
 
             if count >= threshold:
                 return True, {"count": count}
             return False, {"count": count}
 
+    except StageEvalError as e:
+        logger.warning(f"Stage '{stage.get('name', '?')}' not evaluated: {e}")
+        return False, {"error": str(e)}
     except Exception as e:
         logger.error(f"Stage evaluation error: {e}")
         return False, {"error": str(e)}
@@ -243,9 +347,7 @@ async def create_correlation_alert(match: dict):
                 select(func.count(Alert.id)).where(
                     and_(
                         Alert.title.contains(match["rule_name"]),
-                        Alert.triggered_at > datetime.now(timezone.utc).replace(
-                            minute=datetime.now(timezone.utc).minute - 5
-                        ),
+                        Alert.triggered_at > _recent_alert_cutoff(),
                     )
                 )
             )

@@ -167,9 +167,13 @@
        ================================================================ */
     .cr-metrics {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         gap: 1rem;
         margin-bottom: 2rem;
+    }
+
+    @media (max-width: 1100px) {
+        .cr-metrics { grid-template-columns: repeat(3, 1fr); }
     }
 
     .cr-metric-card {
@@ -188,6 +192,8 @@
     .cr-metric-card:nth-child(2) { animation-delay: 0.12s; }
     .cr-metric-card:nth-child(3) { animation-delay: 0.19s; }
     .cr-metric-card:nth-child(4) { animation-delay: 0.26s; }
+    .cr-metric-card:nth-child(5) { animation-delay: 0.33s; }
+    .cr-metric-card:nth-child(6) { animation-delay: 0.40s; }
 
     .cr-metric-card::before {
         content: '';
@@ -214,6 +220,14 @@
         background: linear-gradient(90deg, #f59e0b, #f97316);
     }
 
+    .cr-metric-card:nth-child(5)::before {
+        background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    }
+
+    .cr-metric-card:nth-child(6)::before {
+        background: linear-gradient(90deg, #64748b, #94a3b8);
+    }
+
     .cr-metric-label {
         font-family: 'Outfit', sans-serif;
         font-size: 0.7rem;
@@ -234,6 +248,8 @@
 
     .cr-metric-value.cr-danger { color: var(--cr-danger); }
     .cr-metric-value.cr-warning { color: var(--cr-warning); }
+    .cr-metric-value.cr-info { color: #38bdf8; }
+    .cr-metric-value.cr-muted { color: var(--cr-text-muted); }
 
     .cr-metric-sub {
         font-family: 'Outfit', sans-serif;
@@ -585,6 +601,43 @@
         border: 1px solid var(--cr-border);
         border-radius: 0.875rem;
         overflow: hidden;
+    }
+
+    .cr-filter-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.75rem 1.125rem;
+        margin-bottom: 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        border-radius: 0.625rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        color: var(--cr-text);
+    }
+
+    .cr-filter-banner strong {
+        color: #60a5fa;
+        font-weight: 600;
+    }
+
+    .cr-filter-clear {
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .cr-filter-clear:hover {
+        background: rgba(59, 130, 246, 0.35);
     }
 
     .cr-matches-table {
@@ -1441,6 +1494,16 @@
         <div class="cr-metric-value cr-warning" data-count="{{ match_stats.high }}">0</div>
         <div class="cr-metric-sub">high severity matches</div>
     </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Medium</div>
+        <div class="cr-metric-value cr-info" data-count="{{ match_stats.medium }}">0</div>
+        <div class="cr-metric-sub">medium severity matches</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Low</div>
+        <div class="cr-metric-value cr-muted" data-count="{{ match_stats.low }}">0</div>
+        <div class="cr-metric-sub">low severity matches</div>
+    </div>
 </div>
 
 <!-- Rules Tab -->
@@ -1534,6 +1597,10 @@
 <!-- Matches Tab -->
 <div id="tab-matches" style="display:none;">
     {% if recent_matches %}
+    <div id="matchesFilterBanner" class="cr-filter-banner" style="display:none;">
+        <span>Showing matches for rule: <strong id="matchesFilterName"></strong></span>
+        <button type="button" class="cr-filter-clear" onclick="clearMatchesFilter()">&times; Clear filter</button>
+    </div>
     <div class="cr-matches-wrap">
         <table class="cr-matches-table">
             <thead>
@@ -1550,7 +1617,7 @@
             </thead>
             <tbody>
                 {% for m in recent_matches %}
-                <tr>
+                <tr data-rule="{{ m.rule_name }}">
                     <td><span class="cr-match-time">{{ m.timestamp }}</span></td>
                     <td><span class="cr-match-rule">{{ m.rule_name }}</span></td>
                     <td><span class="cr-severity-badge {{ m.severity }}">{{ m.severity }}</span></td>
@@ -1589,6 +1656,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        <div id="matchesNoResults" class="cr-empty" style="display:none;padding:2rem;">
+            <div class="cr-empty-title">No recent matches for this rule</div>
+            <div class="cr-empty-desc">This rule has no matches in the loaded window. Open the rule's Detail view for the full history.</div>
+        </div>
     </div>
     {% else %}
     <div class="cr-empty">
@@ -1612,7 +1683,7 @@
         </div>
         <div class="cr-modal-footer">
             <div class="cd-detail-footer-row">
-                <a id="detailViewAllMatches" href="#" class="cr-view-btn" style="display:none;" onclick="showTab('matches');closeModal('ruleDetailModal');">
+                <a id="detailViewAllMatches" href="#" class="cr-view-btn" style="display:none;" onclick="event.preventDefault();viewAllMatchesForRule();">
                     <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                     View All Matches
                 </a>
@@ -1724,12 +1795,48 @@
 // ================================================================
 // TAB SWITCHING
 // ================================================================
-function showTab(tab) {
+function showTab(tab, ruleFilter) {
     document.getElementById('tab-rules').style.display = tab === 'rules' ? 'block' : 'none';
     document.getElementById('tab-matches').style.display = tab === 'matches' ? 'block' : 'none';
     document.querySelectorAll('.cr-tab').forEach(function(a, i) {
         a.classList.toggle('active', (i === 0 && tab === 'rules') || (i === 1 && tab === 'matches'));
     });
+    if (tab === 'matches') {
+        applyMatchesFilter(ruleFilter || null);
+    }
+}
+
+// Filter the Recent Matches table to a single rule (or null to show all).
+function applyMatchesFilter(ruleName) {
+    var banner = document.getElementById('matchesFilterBanner');
+    var nameEl = document.getElementById('matchesFilterName');
+    var noResults = document.getElementById('matchesNoResults');
+    var rows = document.querySelectorAll('#tab-matches tbody tr');
+    if (!rows.length) return;  // no matches at all — empty state is shown
+    var visible = 0;
+    rows.forEach(function(tr) {
+        var show = !ruleName || tr.getAttribute('data-rule') === ruleName;
+        tr.style.display = show ? '' : 'none';
+        if (show) { visible++; }
+    });
+    if (banner) {
+        banner.style.display = ruleName ? 'flex' : 'none';
+        if (ruleName && nameEl) { nameEl.textContent = ruleName; }
+    }
+    if (noResults) {
+        noResults.style.display = (ruleName && visible === 0) ? 'block' : 'none';
+    }
+}
+
+function clearMatchesFilter() {
+    applyMatchesFilter(null);
+}
+
+// Open the Recent Matches tab filtered to the rule currently shown in the
+// detail modal.
+function viewAllMatchesForRule() {
+    closeModal('ruleDetailModal');
+    showTab('matches', _cdCurrentRuleName || null);
 }
 
 // ================================================================
@@ -1834,6 +1941,7 @@ async function deleteRule(ruleId, name) {
 // SHOW RULE DETAIL (full match dashboard)
 // ================================================================
 var _cdCurrentRuleId = null;
+var _cdCurrentRuleName = null;
 var _cdCurrentHours = 24;
 
 function showRuleDetail(ruleId) {
@@ -1861,6 +1969,7 @@ function _cdFetchAndRender(ruleId, hours) {
         .then(function(data) {
             var rule = data.rule;
             document.getElementById('detailRuleName').textContent = rule.name;
+            _cdCurrentRuleName = rule.name;
             document.getElementById('detailViewAllMatches').style.display = data.match_count > 0 ? 'inline-flex' : 'none';
 
             var html = '';

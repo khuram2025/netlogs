@@ -6,10 +6,11 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
@@ -18,6 +19,7 @@ from ..models.correlation import CorrelationRule
 from ..models.alert import AlertRule
 from ..core.permissions import require_min_role
 from ..core.mitre_attack import TACTICS, TECHNIQUES
+from ..schemas.correlation import CorrelationRuleCreate, CorrelationRuleUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,45 @@ def _render(template_name: str, request: Request, context: dict = None):
     return templates.TemplateResponse(template_name, ctx)
 
 
+def compute_coverage_stats(coverage: dict):
+    """Compute MITRE ATT&CK coverage statistics from a technique-id -> rules map.
+
+    ``covered`` counts only **detectable** techniques that have a rule, so the
+    coverage percentage is a true subset of ``detectable`` and can never exceed
+    100%. (The previous implementation counted *all* covered techniques over a
+    *detectable*-only denominator, which could inflate the percentage when a
+    non-detectable technique was mapped to a rule.)
+
+    Returns ``(tactic_stats, total_techniques, total_covered,
+    total_detectable, overall_pct)``.
+    """
+    tactic_stats = []
+    total_techniques = 0
+    total_covered = 0
+    total_detectable = 0
+    for tactic in TACTICS:
+        techniques = TECHNIQUES.get(tactic["name"], [])
+        detectable = [t for t in techniques if t.get("detectable")]
+        covered = [t for t in techniques
+                   if t.get("detectable") and t["id"].split(" ")[0] in coverage]
+        tactic_stats.append({
+            "id": tactic["id"],
+            "name": tactic["name"],
+            "description": tactic["description"],
+            "techniques": techniques,
+            "total": len(techniques),
+            "detectable": len(detectable),
+            "covered": len(covered),
+            "pct": round(len(covered) / len(detectable) * 100) if detectable else 0,
+        })
+        total_techniques += len(techniques)
+        total_covered += len(covered)
+        total_detectable += len(detectable)
+
+    overall_pct = round(total_covered / total_detectable * 100) if total_detectable else 0
+    return tactic_stats, total_techniques, total_covered, total_detectable, overall_pct
+
+
 # ============================================================
 # Correlation Rules UI
 # ============================================================
@@ -55,7 +96,8 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
 
     # Get recent matches from ClickHouse
     recent_matches = []
-    match_stats = {"total": 0, "today": 0, "critical": 0, "high": 0}
+    match_stats = {"total": 0, "today": 0,
+                   "critical": 0, "high": 0, "medium": 0, "low": 0}
     rule_match_counts = {}
     try:
         client = ClickHouseClient.get_client()
@@ -67,13 +109,12 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
         r = client.query("SELECT count() FROM correlation_matches WHERE toDate(timestamp) = today()")
         match_stats["today"] = r.result_rows[0][0] if r.result_rows else 0
 
-        # By severity
+        # By severity (critical / high / medium / low)
         r = client.query("SELECT severity, count() FROM correlation_matches GROUP BY severity")
         for row in r.result_rows:
-            if row[0] == "critical":
-                match_stats["critical"] = row[1]
-            elif row[0] == "high":
-                match_stats["high"] = row[1]
+            sev = row[0]
+            if sev in match_stats and sev not in ("total", "today"):
+                match_stats[sev] = row[1]
 
         # Per-rule 24h match counts
         r = client.query("""
@@ -141,23 +182,99 @@ async def api_list_rules(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/api/correlation/rules/", dependencies=[Depends(require_min_role("ADMIN"))])
-async def api_create_rule(request: Request, db: AsyncSession = Depends(get_db)):
-    """Create a new correlation rule."""
-    data = await request.json()
+async def api_create_rule(payload: CorrelationRuleCreate, db: AsyncSession = Depends(get_db)):
+    """Create a new correlation rule.
+
+    The request body is validated by ``CorrelationRuleCreate`` — a malformed
+    rule (bad severity, empty stages, unknown filter field, non-numeric value
+    for a numeric field, ...) is rejected with a 422 before it is ever stored.
+    """
     try:
         rule = CorrelationRule(
-            name=data["name"],
-            description=data.get("description", ""),
-            severity=data.get("severity", "high"),
-            stages=data["stages"],
-            mitre_tactic=data.get("mitre_tactic"),
-            mitre_technique=data.get("mitre_technique"),
-            is_enabled=data.get("is_enabled", True),
+            name=payload.name,
+            description=payload.description or "",
+            severity=payload.severity,
+            stages=[s.model_dump() for s in payload.stages],
+            mitre_tactic=payload.mitre_tactic,
+            mitre_technique=payload.mitre_technique,
+            is_enabled=payload.is_enabled,
         )
         db.add(rule)
         await db.commit()
         await db.refresh(rule)
         return {"status": "ok", "id": rule.id}
+    except IntegrityError:
+        await db.rollback()
+        return JSONResponse(status_code=400,
+                            content={"detail": f"A rule named '{payload.name}' already exists"})
+    except Exception as e:
+        await db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@router.put("/api/correlation/rules/{rule_id}", dependencies=[Depends(require_min_role("ADMIN"))])
+async def api_update_rule(rule_id: int, payload: CorrelationRuleUpdate,
+                          db: AsyncSession = Depends(get_db)):
+    """Update an existing correlation rule. Only the fields supplied in the
+    request body are changed; the rule's identity and history are preserved."""
+    result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        return JSONResponse(status_code=400, content={"detail": "No fields to update"})
+
+    try:
+        for field, value in data.items():
+            setattr(rule, field, value)
+        rule.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(rule)
+        return {"status": "ok", "id": rule.id}
+    except IntegrityError:
+        await db.rollback()
+        return JSONResponse(status_code=400,
+                            content={"detail": "A rule with that name already exists"})
+    except Exception as e:
+        await db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@router.post("/api/correlation/rules/{rule_id}/clone",
+             dependencies=[Depends(require_min_role("ADMIN"))])
+async def api_clone_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
+    """Duplicate a correlation rule. The copy is created **disabled** so it can
+    be reviewed and tuned before it starts firing."""
+    result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+
+    existing = await db.execute(select(CorrelationRule.name))
+    names = {r[0] for r in existing.all()}
+    base = f"{rule.name} (copy)"
+    new_name = base
+    suffix = 2
+    while new_name in names:
+        new_name = f"{base} {suffix}"
+        suffix += 1
+
+    try:
+        clone = CorrelationRule(
+            name=new_name,
+            description=rule.description,
+            severity=rule.severity,
+            stages=rule.stages,
+            mitre_tactic=rule.mitre_tactic,
+            mitre_technique=rule.mitre_technique,
+            is_enabled=False,
+        )
+        db.add(clone)
+        await db.commit()
+        await db.refresh(clone)
+        return {"status": "ok", "id": clone.id, "name": new_name}
     except Exception as e:
         await db.rollback()
         return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -233,29 +350,8 @@ async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db))
             })
 
     # Calculate stats per tactic
-    tactic_stats = []
-    total_techniques = 0
-    total_covered = 0
-    total_detectable = 0
-    for tactic in TACTICS:
-        techniques = TECHNIQUES.get(tactic["name"], [])
-        detectable = [t for t in techniques if t.get("detectable")]
-        covered = [t for t in techniques if t["id"].split(" ")[0] in coverage]
-        tactic_stats.append({
-            "id": tactic["id"],
-            "name": tactic["name"],
-            "description": tactic["description"],
-            "techniques": techniques,
-            "total": len(techniques),
-            "detectable": len(detectable),
-            "covered": len(covered),
-            "pct": round(len(covered) / len(detectable) * 100) if detectable else 0,
-        })
-        total_techniques += len(techniques)
-        total_covered += len(covered)
-        total_detectable += len(detectable)
-
-    overall_pct = round(total_covered / total_detectable * 100) if total_detectable else 0
+    (tactic_stats, total_techniques, total_covered,
+     total_detectable, overall_pct) = compute_coverage_stats(coverage)
 
     return _render("correlation/mitre_map.html", request, {
         "tactics": TACTICS,
@@ -270,7 +366,9 @@ async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/api/correlation/rules/{rule_id}/matches", dependencies=[Depends(require_min_role("ANALYST"))])
-async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession = Depends(get_db)):
+async def api_rule_match_detail(rule_id: int,
+                                hours: int = Query(24, ge=1, le=720),
+                                db: AsyncSession = Depends(get_db)):
     """Get detailed match data for a specific correlation rule."""
     # Get rule from PostgreSQL
     result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
@@ -378,7 +476,8 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
 
 
 @router.get("/api/correlation/matches/", dependencies=[Depends(require_min_role("ANALYST"))])
-async def api_list_matches(hours: int = 24, limit: int = 50):
+async def api_list_matches(hours: int = Query(24, ge=1, le=720),
+                           limit: int = Query(50, ge=1, le=500)):
     """List recent correlation matches."""
     try:
         client = ClickHouseClient.get_client()
