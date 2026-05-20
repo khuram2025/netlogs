@@ -32,12 +32,15 @@ from fastapi_app.services.correlation_engine import (
     _entity_type_for_field,
     _entity_where,
     _recent_alert_cutoff,
+    _max_severity,
     _resolve_variable,
     _rule_join_keys,
+    _rule_risk_contribution,
     _safe_int,
     _stage_time_filter,
     match_fingerprint,
     preview_correlation_rule,
+    severity_from_risk,
 )
 from fastapi_app.schemas.correlation import (
     CorrelationRuleCreate,
@@ -665,3 +668,50 @@ class TestMultiSourceStageSchema:
     def test_join_keys_accept_canonical_entity(self):
         rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], join_keys=["ip"])
         assert rule.join_keys == ["ip"]
+
+
+# ======================================================================
+# PHASE 5 — risk scoring & incidents
+# ======================================================================
+
+class TestSeverityFromRisk:
+    def test_critical_threshold(self):
+        assert severity_from_risk(200) == "critical"
+        assert severity_from_risk(500) == "critical"
+
+    def test_high_threshold(self):
+        assert severity_from_risk(100) == "high"
+        assert severity_from_risk(199) == "high"
+
+    def test_medium_threshold(self):
+        assert severity_from_risk(40) == "medium"
+        assert severity_from_risk(99) == "medium"
+
+    def test_low(self):
+        assert severity_from_risk(0) == "low"
+        assert severity_from_risk(39) == "low"
+
+
+class TestMaxSeverity:
+    def test_picks_higher(self):
+        assert _max_severity("high", "critical") == "critical"
+        assert _max_severity("critical", "low") == "critical"
+        assert _max_severity("medium", "high") == "high"
+
+    def test_equal(self):
+        assert _max_severity("high", "high") == "high"
+
+
+class TestRuleRiskContribution:
+    def test_explicit_risk_score_used(self):
+        rule = types.SimpleNamespace(risk_score=75, severity="low")
+        assert _rule_risk_contribution(rule) == 75
+
+    def test_zero_risk_score_derives_from_severity(self):
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="critical")) == 100
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="high")) == 50
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="medium")) == 20
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="low")) == 5
+
+    def test_unknown_severity_falls_back(self):
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="weird")) == 20

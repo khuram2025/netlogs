@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.clickhouse import ClickHouseClient
 from ..db.database import async_session_maker
-from ..models.correlation import CorrelationRule
+from ..models.correlation import CorrelationRule, CorrelationIncident
 from ..models.alert import Alert, AlertRule
 from ..core.correlation_fields import (
     DEFAULT_SOURCE,
@@ -729,6 +729,151 @@ async def create_correlation_alert(match: dict):
         logger.error(f"Failed to create correlation alert: {e}")
 
 
+# ── Phase 5: entity risk scoring & incident grouping ────────────────────
+SEVERITY_RISK = {"critical": 100, "high": 50, "medium": 20, "low": 5}
+_SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+INCIDENT_GROUP_WINDOW = 3600          # seconds: matches for one entity group
+RISK_HALF_LIFE_SECONDS = 86400        # 24h: an entity's risk halves each day
+INCIDENT_MATCH_EVIDENCE_CAP = 50      # cap on stored match summaries
+
+
+def _rule_risk_contribution(rule) -> int:
+    """Risk points a match of this rule adds to its entity — the rule's
+    explicit ``risk_score``, or a value derived from its severity."""
+    rs = getattr(rule, "risk_score", 0) or 0
+    if rs > 0:
+        return int(rs)
+    return SEVERITY_RISK.get((rule.severity or "medium").lower(), 20)
+
+
+def severity_from_risk(risk: float) -> str:
+    """Map an accumulated, decayed risk score to an incident severity."""
+    if risk >= 200:
+        return "critical"
+    if risk >= 100:
+        return "high"
+    if risk >= 40:
+        return "medium"
+    return "low"
+
+
+def _max_severity(a: str, b: str) -> str:
+    """Return the higher of two severity labels."""
+    return a if _SEVERITY_RANK.get(a, 0) >= _SEVERITY_RANK.get(b, 0) else b
+
+
+def record_entity_risk(match: dict, score: int):
+    """Append a time-stamped risk contribution for the match's entity."""
+    try:
+        client = ClickHouseClient.get_client()
+        client.insert(
+            "entity_risk",
+            [[
+                datetime.now(timezone.utc),
+                match.get("entity_type", "") or "",
+                match.get("entity_value", "") or "",
+                float(score),
+                match.get("rule_id", 0) or 0,
+                match.get("rule_name", "") or "",
+                match.get("match_fingerprint", "") or "",
+            ]],
+            column_names=["timestamp", "entity_type", "entity_value", "score",
+                          "rule_id", "rule_name", "match_fingerprint"],
+        )
+    except Exception as e:
+        logger.error(f"Failed to record entity risk: {e}")
+
+
+def compute_entity_risk(entity_value: str) -> float:
+    """An entity's current risk — the sum of its risk contributions with
+    exponential time-decay (24h half-life)."""
+    if not entity_value:
+        return 0.0
+    try:
+        client = ClickHouseClient.get_client()
+        r = client.query(
+            "SELECT sum(score * pow(2, -dateDiff('second', timestamp, now()) / "
+            "{hl:Float64})) FROM entity_risk "
+            "WHERE entity_value = {ev:String} AND timestamp > now() - INTERVAL 30 DAY",
+            parameters={"ev": entity_value, "hl": float(RISK_HALF_LIFE_SECONDS)},
+        )
+        val = r.result_rows[0][0] if r.result_rows else None
+        return round(float(val), 1) if val is not None else 0.0
+    except Exception as e:
+        logger.error(f"Failed to compute entity risk: {e}")
+        return 0.0
+
+
+async def group_into_incident(db, match: dict, risk: float):
+    """Group a recorded match into an open incident for the same entity, or
+    open a new one — so related matches become one prioritized incident
+    rather than a flat alert stream."""
+    try:
+        from sqlalchemy import and_
+        entity = match.get("entity_value", "") or ""
+        if not entity:
+            return
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=INCIDENT_GROUP_WINDOW)
+
+        result = await db.execute(
+            select(CorrelationIncident).where(and_(
+                CorrelationIncident.entity_value == entity,
+                CorrelationIncident.status.in_(("new", "investigating")),
+                CorrelationIncident.last_seen > cutoff,
+            )).order_by(CorrelationIncident.last_seen.desc()).limit(1)
+        )
+        incident = result.scalar_one_or_none()
+
+        evidence = {
+            "timestamp": str(match.get("first_seen") or now),
+            "rule_name": match.get("rule_name", ""),
+            "rule_id": match.get("rule_id", 0),
+            "severity": match.get("severity", ""),
+            "total_events": match.get("total_events", 0),
+            "fingerprint": match.get("match_fingerprint", ""),
+            "chain": " -> ".join(s.get("name", "") for s in match.get("stages", [])),
+        }
+        tactic = match.get("mitre_tactic") or ""
+        sev = _max_severity(severity_from_risk(risk), match.get("severity", "medium"))
+
+        if incident:
+            incident.match_count = (incident.match_count or 0) + 1
+            incident.risk_score = risk
+            incident.severity = _max_severity(incident.severity or "low", sev)
+            incident.last_seen = now
+            names = list(incident.rule_names or [])
+            if match.get("rule_name") and match["rule_name"] not in names:
+                names.append(match["rule_name"])
+            incident.rule_names = names
+            tactics = list(incident.mitre_tactics or [])
+            if tactic and tactic not in tactics:
+                tactics.append(tactic)
+            incident.mitre_tactics = tactics
+            incident.matches = ([evidence] + list(incident.matches or [])
+                                )[:INCIDENT_MATCH_EVIDENCE_CAP]
+        else:
+            db.add(CorrelationIncident(
+                entity_type=match.get("entity_type", "ip") or "ip",
+                entity_value=entity,
+                status="new",
+                severity=sev,
+                risk_score=risk,
+                match_count=1,
+                rule_names=[match["rule_name"]] if match.get("rule_name") else [],
+                mitre_tactics=[tactic] if tactic else [],
+                matches=[evidence],
+                first_seen=now,
+                last_seen=now,
+            ))
+            # Flush so a later match for this same entity — in this same
+            # evaluation run — groups into this incident instead of opening
+            # another (the session has autoflush disabled).
+            await db.flush()
+    except Exception as e:
+        logger.error(f"Failed to group match into incident: {e}")
+
+
 async def evaluate_all_correlation_rules():
     """Evaluate all enabled correlation rules. Called by the scheduler."""
     try:
@@ -762,6 +907,12 @@ async def evaluate_all_correlation_rules():
                             continue
                         record_correlation_match(match)
                         await create_correlation_alert(match)
+                        # Phase 5: contribute risk to the entity and group
+                        # the match into an incident.
+                        score = _rule_risk_contribution(rule)
+                        record_entity_risk(match, score)
+                        risk = compute_entity_risk(match["entity_value"]) + score
+                        await group_into_incident(db, match, risk)
                         recorded += 1
 
                     if recorded:

@@ -1207,6 +1207,23 @@
     }
     .cr-btn-test:hover { background: rgba(59, 130, 246, 0.28); }
 
+    /* ===== Incidents tab ===== */
+    .cr-inc-status {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        padding: 0.25rem 0.4rem;
+        border-radius: 0.35rem;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid var(--cr-border);
+        color: var(--cr-text);
+        cursor: pointer;
+    }
+    .cr-risk {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: #fbbf24;
+    }
+
     .cr-btn-submit {
         font-family: 'Outfit', sans-serif;
         display: inline-flex;
@@ -1726,6 +1743,7 @@
 <div class="cr-tab-nav">
     <a class="cr-tab active" onclick="showTab('rules')">Rules</a>
     <a class="cr-tab" onclick="showTab('matches')">Recent Matches</a>
+    <a class="cr-tab" onclick="showTab('incidents')">Incidents</a>
 </div>
 
 <!-- Hero Metrics -->
@@ -1929,6 +1947,26 @@
     {% endif %}
 </div>
 
+<!-- Incidents tab (Phase 5) -->
+<div id="tab-incidents" style="display:none;">
+    <div id="incidentsContainer">
+        <div class="cr-preview-loading">Loading incidents…</div>
+    </div>
+</div>
+
+<!-- Incident Detail Modal -->
+<div id="incidentDetailModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 class="cr-modal-title" id="incidentDetailTitle">Incident</h3>
+        </div>
+        <div class="cr-modal-body" id="incidentDetailBody"></div>
+        <div class="cr-modal-footer">
+            <button type="button" class="cr-btn-cancel" onclick="closeModal('incidentDetailModal')">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- Rule Detail Modal -->
 <div id="ruleDetailModal" class="cr-modal-overlay">
     <div class="cr-modal">
@@ -2095,12 +2133,103 @@
 function showTab(tab, ruleFilter) {
     document.getElementById('tab-rules').style.display = tab === 'rules' ? 'block' : 'none';
     document.getElementById('tab-matches').style.display = tab === 'matches' ? 'block' : 'none';
+    document.getElementById('tab-incidents').style.display = tab === 'incidents' ? 'block' : 'none';
+    var order = {rules: 0, matches: 1, incidents: 2};
     document.querySelectorAll('.cr-tab').forEach(function(a, i) {
-        a.classList.toggle('active', (i === 0 && tab === 'rules') || (i === 1 && tab === 'matches'));
+        a.classList.toggle('active', i === order[tab]);
     });
-    if (tab === 'matches') {
-        applyMatchesFilter(ruleFilter || null);
+    if (tab === 'matches') { applyMatchesFilter(ruleFilter || null); }
+    if (tab === 'incidents') { loadIncidents(); }
+}
+
+// ================================================================
+// INCIDENTS (Phase 5)
+// ================================================================
+var _incidentStatuses = ['new', 'investigating', 'contained', 'resolved', 'suppressed'];
+
+function loadIncidents() {
+    var c = document.getElementById('incidentsContainer');
+    c.innerHTML = '<div class="cr-preview-loading">Loading incidents…</div>';
+    fetch('/api/correlation/incidents')
+        .then(function(r) { return r.json(); })
+        .then(function(list) { c.innerHTML = _renderIncidents(list); })
+        .catch(function(e) {
+            c.innerHTML = '<div class="cr-preview-err">Failed to load incidents: ' + e.message + '</div>';
+        });
+}
+
+function _renderIncidents(list) {
+    if (!list || !list.length) {
+        return '<div class="cr-empty"><div class="cr-empty-title">No incidents yet</div>' +
+               '<div class="cr-empty-desc">Incidents form as correlation matches accumulate ' +
+               'risk on an entity — related matches group into one prioritized incident.</div></div>';
     }
+    var h = '<div class="cr-matches-wrap"><table class="cr-matches-table"><thead><tr>' +
+            '<th>Severity</th><th>Entity</th><th>Risk</th><th>Matches</th><th>Rules</th>' +
+            '<th>MITRE</th><th>Last Seen</th><th>Status</th><th>Actions</th>' +
+            '</tr></thead><tbody>';
+    list.forEach(function(i) {
+        var opts = _incidentStatuses.map(function(s) {
+            return '<option value="' + s + '"' + (s === i.status ? ' selected' : '') + '>' + s + '</option>';
+        }).join('');
+        h += '<tr>' +
+            '<td><span class="cr-severity-badge ' + i.severity + '">' + i.severity + '</span></td>' +
+            '<td><span class="cr-match-rule">' + _cdEsc(i.entity_type + ': ' + i.entity_value) + '</span></td>' +
+            '<td><span class="cr-risk">' + i.risk_score + '</span></td>' +
+            '<td>' + i.match_count + '</td>' +
+            '<td>' + _cdEsc((i.rule_names || []).join(', ') || '—') + '</td>' +
+            '<td>' + _cdEsc((i.mitre_tactics || []).join(', ') || '—') + '</td>' +
+            '<td><span class="cr-match-time">' + (i.last_seen || '').slice(0, 19) + '</span></td>' +
+            '<td><select class="cr-inc-status" onchange="changeIncidentStatus(' + i.id + ',this.value)">' +
+                opts + '</select></td>' +
+            '<td><button class="cr-btn" onclick="showIncidentDetail(' + i.id + ')">Detail</button></td>' +
+            '</tr>';
+    });
+    return h + '</tbody></table></div>';
+}
+
+function changeIncidentStatus(id, status) {
+    fetch('/api/correlation/incidents/' + id + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status}),
+    }).then(function(r) {
+        showToast(r.ok ? 'Incident marked ' + status : 'Failed to update incident',
+                  r.ok ? 'success' : 'error');
+    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
+}
+
+function showIncidentDetail(id) {
+    var body = document.getElementById('incidentDetailBody');
+    body.innerHTML = '<div class="cr-preview-loading">Loading…</div>';
+    document.getElementById('incidentDetailModal').classList.add('active');
+    fetch('/api/correlation/incidents/' + id)
+        .then(function(r) { return r.json(); })
+        .then(function(i) {
+            document.getElementById('incidentDetailTitle').textContent =
+                'Incident — ' + i.entity_type + ': ' + i.entity_value;
+            var h = '<div class="cd-header-row">' +
+                '<span class="cr-severity-badge ' + i.severity + '">' + i.severity + '</span>' +
+                '<span class="cd-status-tag enabled">' + _cdEsc(i.status) + '</span>' +
+                '<span class="cr-mitre-tag">risk ' + i.risk_score + '</span>' +
+                '<span class="cr-mitre-tag">' + i.match_count + ' matches</span></div>';
+            h += '<p class="cd-desc">Rules: ' + _cdEsc((i.rule_names || []).join(', ') || '—') +
+                 ' &middot; MITRE: ' + _cdEsc((i.mitre_tactics || []).join(', ') || '—') + '</p>';
+            var ms = i.matches || [];
+            h += '<div class="cd-section-title">Contributing matches (' + ms.length + ')</div>';
+            h += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>' +
+                 '<th>Time</th><th>Rule</th><th>Attack Chain</th><th>Events</th></tr></thead><tbody>';
+            ms.forEach(function(m) {
+                h += '<tr><td>' + _cdEsc((m.timestamp || '').slice(0, 19)) + '</td>' +
+                     '<td>' + _cdEsc(m.rule_name || '') + '</td>' +
+                     '<td>' + _cdEsc(m.chain || '') + '</td>' +
+                     '<td>' + (m.total_events || 0) + '</td></tr>';
+            });
+            body.innerHTML = h + '</tbody></table></div>';
+        })
+        .catch(function(e) {
+            body.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+        });
 }
 
 // Filter the Recent Matches table to a single rule (or null to show all).

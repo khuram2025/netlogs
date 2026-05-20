@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
-from ..models.correlation import CorrelationRule
+from ..models.correlation import CorrelationRule, CorrelationIncident
 from ..models.alert import AlertRule
 from ..core.permissions import require_min_role
 from ..core.mitre_attack import TACTICS, TECHNIQUES
@@ -605,3 +605,77 @@ async def api_list_matches(hours: int = Query(24, ge=1, le=720),
         return matches
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+# ============================================================
+# Incidents (Phase 5)
+# ============================================================
+
+_INCIDENT_STATUSES = {"new", "investigating", "contained", "resolved", "suppressed"}
+
+
+def _incident_dict(inc: CorrelationIncident, include_matches: bool = False) -> dict:
+    d = {
+        "id": inc.id,
+        "entity_type": inc.entity_type,
+        "entity_value": inc.entity_value,
+        "status": inc.status,
+        "severity": inc.severity,
+        "risk_score": inc.risk_score,
+        "match_count": inc.match_count,
+        "rule_names": inc.rule_names or [],
+        "mitre_tactics": inc.mitre_tactics or [],
+        "first_seen": str(inc.first_seen) if inc.first_seen else None,
+        "last_seen": str(inc.last_seen) if inc.last_seen else None,
+    }
+    if include_matches:
+        d["matches"] = inc.matches or []
+    return d
+
+
+@router.get("/api/correlation/incidents", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_list_incidents(status: str = Query(None),
+                             limit: int = Query(100, ge=1, le=500),
+                             db: AsyncSession = Depends(get_db)):
+    """List correlation incidents, most recently active first."""
+    q = select(CorrelationIncident).order_by(
+        desc(CorrelationIncident.last_seen))
+    if status and status in _INCIDENT_STATUSES:
+        q = q.where(CorrelationIncident.status == status)
+    q = q.limit(limit)
+    rows = (await db.execute(q)).scalars().all()
+    return [_incident_dict(i) for i in rows]
+
+
+@router.get("/api/correlation/incidents/{incident_id}",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_incident_detail(incident_id: int, db: AsyncSession = Depends(get_db)):
+    """Get one incident with its contributing-match evidence."""
+    inc = (await db.execute(
+        select(CorrelationIncident).where(CorrelationIncident.id == incident_id)
+    )).scalar_one_or_none()
+    if not inc:
+        return JSONResponse(status_code=404, content={"detail": "Incident not found"})
+    return _incident_dict(inc, include_matches=True)
+
+
+@router.post("/api/correlation/incidents/{incident_id}/status",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_incident_status(incident_id: int, request: Request,
+                              db: AsyncSession = Depends(get_db)):
+    """Move an incident through its lifecycle (new / investigating /
+    contained / resolved / suppressed)."""
+    data = await request.json()
+    new_status = data.get("status")
+    if new_status not in _INCIDENT_STATUSES:
+        return JSONResponse(status_code=400, content={
+            "detail": f"status must be one of {sorted(_INCIDENT_STATUSES)}"})
+    inc = (await db.execute(
+        select(CorrelationIncident).where(CorrelationIncident.id == incident_id)
+    )).scalar_one_or_none()
+    if not inc:
+        return JSONResponse(status_code=404, content={"detail": "Incident not found"})
+    inc.status = new_status
+    inc.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"status": "ok", "incident_status": new_status}

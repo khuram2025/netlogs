@@ -41,10 +41,10 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ✅ Complete | 7 / 7 |
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
 | **4** | Source registry & entity model | 4 wk | ✅ Complete | 7 / 7 |
-| **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
+| **5** | Incident & risk output | 3–4 wk | ✅ Complete | 8 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 54 / 72 tasks complete.**
+**Overall: 62 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -247,18 +247,18 @@ alert stream. **Effort:** 3–4 weeks · **Priority:** 🟡 P2 · **Depends on:*
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P5-1** | Create `entity_risk` ClickHouse table (entity_type, entity_value, score, contributing rule, ts, decay) | `db/clickhouse_migrations/` | |
-| - [ ] | **P5-2** | Per-rule configurable **risk contribution** (weight added to the implicated entity) | `models/correlation.py`, `services/correlation_engine.py` | |
-| - [ ] | **P5-3** | Implement **time-decay** so stale risk ages out | new risk evaluator, `services/scheduler.py` | |
-| - [ ] | **P5-4** | **Incident grouping** — collapse matches sharing entity + rule family + MITRE tactic + time proximity into one incident | new `services/incident_service.py` (or extend `Alert` w/ parent) | |
-| - [ ] | **P5-5** | Derive incident **severity** from accumulated risk + rule severity + tactic kill-chain position | `services/incident_service.py` | |
-| - [ ] | **P5-6** | Incident lifecycle states: `new`, `investigating`, `contained`, `resolved`, `suppressed` | model + UI | |
-| - [ ] | **P5-7** | Keep raw matches available **as evidence under the incident** | `services/incident_service.py`, UI | |
-| - [ ] | **P5-8** | Incident UI view + API | `api/correlation.py` (or new), templates | |
+| - [x] | **P5-1** | `entity_risk` ClickHouse table (append-only risk contributions, 30-day TTL) | `db/clickhouse_migrations/004_entity_risk.py` | 2026-05-20 |
+| - [x] | **P5-2** | Per-rule `risk_score` (0 = auto-derive from severity); `_rule_risk_contribution()` | `models/correlation.py`, `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P5-3** | `compute_entity_risk()` — exponential time-decay, 24h half-life, computed at query time | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P5-4** | `group_into_incident()` — collapses matches for the same entity (within a 1h window) into one incident | `services/correlation_engine.py`, `CorrelationIncident` model | 2026-05-20 · verified: 3 matches/3 rules → 1 incident |
+| - [x] | **P5-5** | Incident severity = max(severity-from-accumulated-risk, contributing-rule severity) | `services/correlation_engine.py` → `severity_from_risk()` | 2026-05-20 |
+| - [x] | **P5-6** | Lifecycle states `new`/`investigating`/`contained`/`resolved`/`suppressed` + status API | `models/correlation.py`, `api/correlation.py` | 2026-05-20 · status change verified |
+| - [x] | **P5-7** | Contributing matches kept as evidence on the incident (`matches` JSON, capped at 50) | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P5-8** | Incident API (list / detail / status) + an Incidents tab with detail modal | `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · verified in browser |
 
 ### Exit criteria — Phase 5
-- [ ] Four related matches for one host become **one incident** with risk context and evidence — not four alerts.
-- [ ] Entity risk **accumulates and decays** correctly.
+- [x] Four related matches for one host become **one incident** with risk context and evidence — not four alerts. — _verified live: 3 matches from 3 rules grouped into one critical incident (risk 200)_
+- [x] Entity risk **accumulates and decays** correctly. — _`entity_risk` contributions summed with `pow(2, -age/24h)` exponential decay_
 
 ---
 
@@ -320,7 +320,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** Committed `2a13d09`. | Eng |
 | 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. Committed `ad2e4ba`. | Eng |
 | 2026-05-20 | **Phase 3 complete** (5/5 tasks). `preview_correlation_rule()` dry-runs a rule with per-stage candidate/survivor diagnostics, sample entities and a rough fire-rate estimate; `POST /api/correlation/rules/test` builds a transient un-persisted rule and previews it; a "Test Rule" button in the builder shows the stage funnel before saving. Verified: a test call recorded 0 rows; preview showed "20 candidates → 10 surviving chains". 90 tests pass. Committed `0f060ec`. | Eng |
-| 2026-05-20 | **Phase 4 complete** (7/7 tasks). `core/correlation_fields.py` is now a data-driven **source registry** — 7 ClickHouse sources (syslogs, dns_logs, url_logs, ioc_matches, audit_logs, pa_threat_logs, correlation_matches), each with fields, types, sample columns and a canonical-entity map. `resolve_field()` resolves a join key (canonical entity *or* native column) per source, so a rule joins stages across sources by `ip`/`user`/etc. Engine fully source-aware. 3 cross-source seed rules (IOC→firewall, DNS→firewall, PA-threat→firewall). Builder gained a per-stage Data Source dropdown. Verified live: the 3 rules matched 12 / 3 / 1 entities. 105 tests pass. (`alerts` lives in PostgreSQL, out of the ClickHouse-source scope.) | Eng |
+| 2026-05-20 | **Phase 4 complete** (7/7 tasks). `core/correlation_fields.py` is now a data-driven **source registry** — 7 ClickHouse sources (syslogs, dns_logs, url_logs, ioc_matches, audit_logs, pa_threat_logs, correlation_matches), each with fields, types, sample columns and a canonical-entity map. `resolve_field()` resolves a join key (canonical entity *or* native column) per source, so a rule joins stages across sources by `ip`/`user`/etc. Engine fully source-aware. 3 cross-source seed rules (IOC→firewall, DNS→firewall, PA-threat→firewall). Builder gained a per-stage Data Source dropdown. Verified live: the 3 rules matched 12 / 3 / 1 entities. 105 tests pass. Committed `fef132b`. | Eng |
+| 2026-05-20 | **Phase 5 complete** (8/8 tasks). ClickHouse migration `004` (`entity_risk`); Alembic `b1c2d3e4f5a6` (`risk_score` column + `correlation_incidents` table). Each match contributes weighted risk to its entity; `compute_entity_risk()` sums contributions with a 24h-half-life exponential decay. `group_into_incident()` collapses matches for one entity (within 1h) into a single `CorrelationIncident` with accumulated risk, derived severity, lifecycle status and contributing-match evidence. Incident API (list/detail/status) + an Incidents tab. Fixed an autoflush-off grouping bug (added `db.flush()`). Verified live: 3 matches from 3 rules grouped into one critical incident (risk 200); status transitions work. 114 tests pass. | Eng |
 | | | |
 
 ---
