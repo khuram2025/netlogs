@@ -671,6 +671,71 @@ def preview_correlation_rule(rule: CorrelationRule, sample_limit: int = 5) -> di
         return diag
 
 
+def backtest_stage1(rule: CorrelationRule, days: int = 7) -> dict:
+    """Backtest a rule's first stage over the last ``days`` days.
+
+    For each day it evaluates stage 1 once (one window ending at that day's
+    mark) and counts how many entities would have met the window + threshold —
+    a read-only fire-frequency estimate of the rule's entry stage. Multi-stage
+    rules: this is the stage-1 upper bound on firings.
+    """
+    stages = rule.stages
+    if not stages or not isinstance(stages, list):
+        return {"error": "rule has no stages", "daily": []}
+    s1 = stages[0]
+    try:
+        source = s1.get("source", DEFAULT_SOURCE)
+        table = SOURCE_TABLES.get(source)
+        if table is None:
+            raise StageEvalError(f"unknown source '{source}'")
+        join_keys = _rule_join_keys(rule, stages)
+        if not join_keys:
+            return {"error": "stage 1 has no group-by / join key to backtest", "daily": []}
+        native = []
+        for k in join_keys:
+            col = resolve_field(source, k)
+            if col is None:
+                raise StageEvalError(f"join key '{k}' not valid for source '{source}'")
+            native.append(col)
+        gb = ", ".join(native)
+        threshold = _safe_int(s1.get("threshold", 1), "threshold")
+        window = _safe_int(s1.get("window", 300), "window")
+        where, params = _build_where_clause(s1.get("filter", {}) or {}, {}, source)
+
+        client = ClickHouseClient.get_client()
+        daily = []
+        for d in range(int(days)):
+            start = d * 86400 + window
+            end = d * 86400
+            query = f"""
+                SELECT count() FROM (
+                    SELECT {gb}, count() AS c
+                    FROM {table}
+                    WHERE timestamp > now() - INTERVAL {start} SECOND
+                      AND timestamp <= now() - INTERVAL {end} SECOND
+                      AND ({where})
+                    GROUP BY {gb}
+                    HAVING c >= {threshold}
+                )
+            """
+            r = client.query(query, parameters=params)
+            cnt = r.result_rows[0][0] if r.result_rows else 0
+            daily.append({"days_ago": d, "would_fire": cnt})
+        daily.reverse()  # oldest day first
+        return {
+            "stage": s1.get("name", "Stage 1"),
+            "window": window,
+            "threshold": threshold,
+            "daily": daily,
+            "total_would_fire": sum(x["would_fire"] for x in daily),
+        }
+    except StageEvalError as e:
+        return {"error": str(e), "daily": []}
+    except Exception as e:
+        logger.error(f"Backtest error for rule '{rule.name}': {e}")
+        return {"error": str(e), "daily": []}
+
+
 def record_correlation_match(match: dict):
     """Record a correlation match in ClickHouse.
 

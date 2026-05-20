@@ -2982,6 +2982,37 @@ function _cdChangeTimeRange(hours) {
     _cdFetchAndRender(_cdCurrentRuleId, hours);
 }
 
+// Phase 6: backtest the rule's first stage over the last 7 days.
+async function runBacktest() {
+    var box = document.getElementById('backtestResult');
+    if (!box) { return; }
+    box.innerHTML = '<div class="cr-preview-loading">Backtesting over the last 7 days…</div>';
+    try {
+        var d = await (await fetch('/api/correlation/rules/' + _cdCurrentRuleId +
+                                   '/backtest?days=7')).json();
+        if (d.error) {
+            box.innerHTML = '<div class="cr-preview-err">' + _cdEsc(d.error) + '</div>';
+            return;
+        }
+        var maxV = Math.max.apply(null,
+            d.daily.map(function(x) { return x.would_fire; }).concat([1]));
+        var bars = d.daily.map(function(x) {
+            var bh = Math.max(x.would_fire / maxV * 100, 3);
+            return '<div class="cd-tbar" style="height:' + bh + '%;">' +
+                   '<div class="cd-tbar-tip">' + x.days_ago + 'd ago: ' +
+                   x.would_fire + '</div></div>';
+        }).join('');
+        box.innerHTML =
+            '<div style="font-family:Outfit,sans-serif;font-size:0.78rem;' +
+            'color:var(--cr-text-muted);margin-bottom:0.3rem;">Backtest — stage "' +
+            _cdEsc(d.stage) + '" would have fired for <strong style="color:var(--cr-text);">' +
+            d.total_would_fire + '</strong> entity-windows over ' + d.days + ' days</div>' +
+            '<div class="cd-timeline-bars">' + bars + '</div>';
+    } catch (e) {
+        box.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+    }
+}
+
 function _cdFetchAndRender(ruleId, hours) {
     fetch('/api/correlation/rules/' + ruleId + '/matches?hours=' + hours)
         .then(function(r) { return r.json(); })
@@ -3043,7 +3074,9 @@ function _cdFetchAndRender(ruleId, hours) {
                 var label = h === 168 ? '7d' : h + 'h';
                 html += '<button class="cd-time-pill' + (h === hours ? ' active' : '') + '" data-hours="' + h + '" onclick="_cdChangeTimeRange(' + h + ')">' + label + '</button>';
             });
+            html += '<button class="cd-time-pill" style="margin-left:auto;" onclick="runBacktest()">&#9202; Backtest 7d</button>';
             html += '</div>';
+            html += '<div id="backtestResult" style="margin-bottom:0.75rem;"></div>';
 
             // Summary cards
             html += '<div class="cd-summary">';

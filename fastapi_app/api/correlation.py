@@ -417,6 +417,24 @@ async def api_correlation_templates():
     return out
 
 
+@router.get("/api/correlation/rules/{rule_id}/backtest",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_backtest_rule(rule_id: int, days: int = Query(7, ge=1, le=30),
+                            db: AsyncSession = Depends(get_db)):
+    """Backtest a rule's first stage over the last N days — a per-day estimate
+    of how often it would have fired."""
+    rule = (await db.execute(
+        select(CorrelationRule).where(CorrelationRule.id == rule_id)
+    )).scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+    from ..services.correlation_engine import backtest_stage1
+    result = backtest_stage1(rule, days)
+    result["rule"] = rule.name
+    result["days"] = days
+    return result
+
+
 @router.post("/api/correlation/sigma/import", dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_sigma_import(request: Request):
     """Convert a Sigma detection rule (YAML) into a correlation-rule draft for
