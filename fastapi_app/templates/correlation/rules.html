@@ -1980,6 +1980,17 @@ function _cdFetchAndRender(ruleId, hours) {
             html += '<span class="cd-status-tag ' + (rule.is_enabled ? 'enabled' : 'disabled') + '">' + (rule.is_enabled ? 'Enabled' : 'Disabled') + '</span>';
             if (rule.mitre_tactic) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_tactic) + '</span>';
             if (rule.mitre_technique) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_technique) + '</span>';
+            // Phase 1: match mode / suppression state
+            var _mm = rule.match_mode || 'discrete';
+            var _sw = rule.suppress_window || 3600;
+            var _swLabel = _sw >= 3600 ? (Math.round(_sw / 3600) + 'h') : (Math.round(_sw / 60) + 'm');
+            var _tagStyle = 'display:inline-block;padding:0.2rem 0.55rem;border-radius:0.4rem;font-size:0.68rem;font-weight:600;font-family:Outfit,sans-serif;';
+            if (_mm === 'recurring') {
+                html += '<span style="' + _tagStyle + 'background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.35);" title="Records every evaluation while the condition holds">Recurring monitor</span>';
+            } else {
+                html += '<span style="' + _tagStyle + 'background:rgba(59,130,246,0.12);color:#93c5fd;border:1px solid rgba(59,130,246,0.3);" title="Records each attack chain at most once per suppression window">Discrete &middot; suppress ' + _swLabel + '</span>';
+            }
+            if (rule.version) html += '<span style="' + _tagStyle + 'background:rgba(148,163,184,0.12);color:var(--cr-text-muted);border:1px solid rgba(148,163,184,0.25);">v' + rule.version + '</span>';
             html += '</div>';
 
             // Description
@@ -2039,17 +2050,25 @@ function _cdFetchAndRender(ruleId, hours) {
             if (data.recent_matches.length > 0) {
                 html += '<div class="cd-section-title">Recent Matches (' + data.recent_matches.length + ')</div>';
                 html += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>';
-                html += '<th>Time</th><th>Key</th><th>Stages</th><th>Events</th><th>Actions</th>';
+                html += '<th>Recorded</th><th>Entity</th><th>Stages</th><th>Events</th><th>Evidence Window</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 data.recent_matches.forEach(function(m) {
                     var ts = m.timestamp ? m.timestamp.replace('T', ' ').slice(0, 19) : '—';
                     var pct = m.total_stages ? Math.round(m.stages_matched / m.total_stages * 100) : 0;
                     var logUrl = '/logs/?q=srcip:' + encodeURIComponent(m.key_value) + ',dstip:' + encodeURIComponent(m.key_value) + '&time_range=1h';
+                    // Phase 1: event-chain evidence window (first -> last event)
+                    var evid = '—';
+                    var _t = function(s) { var p = String(s).replace('T', ' ').split(' '); return p[1] ? p[1].slice(0, 8) : s; };
+                    if (m.first_seen && m.last_seen && String(m.first_seen).indexOf('1970') !== 0) {
+                        evid = _t(m.first_seen) + ' → ' + _t(m.last_seen);
+                    }
+                    var entityLabel = (m.entity_type && m.entity_type !== '' ? m.entity_type + ': ' : '') + (m.entity_value || m.key_value || '—');
                     html += '<tr>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);">' + ts + '</span></td>';
-                    html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(m.key_value || '—') + '</a></td>';
+                    html += '<td><a href="' + logUrl + '" class="cd-ip-link" title="' + _cdEsc(entityLabel) + '">' + _cdEsc(m.entity_value || m.key_value || '—') + '</a></td>';
                     html += '<td><div class="cd-stage-mini"><span class="cd-stage-mini-text">' + m.stages_matched + '/' + m.total_stages + '</span><div class="cd-stage-mini-bar"><div class="cd-stage-mini-fill" style="width:' + pct + '%;"></div></div></div></td>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + m.total_events + '</span></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);" title="Earliest to latest matched event">' + evid + '</span></td>';
                     html += '<td><a href="' + logUrl + '" class="cd-logs-link"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Logs</a></td>';
                     html += '</tr>';
                 });

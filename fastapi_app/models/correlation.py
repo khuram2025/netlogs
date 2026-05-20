@@ -25,6 +25,23 @@ class CorrelationRule(Base):
     mitre_tactic = Column(String(100), nullable=True)
     mitre_technique = Column(String(100), nullable=True)
 
+    # Phase 1: rule version (bumped on each update; recorded in every match
+    # so a match can be tied to the exact rule definition that produced it).
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+
+    # Phase 1: match mode controls how repeated detections are recorded.
+    #   "discrete"  — one record per (rule, entity) per suppress_window
+    #                 (a real attack chain; suppress scheduler-tick repeats)
+    #   "recurring" — record every evaluation while the condition holds
+    #                 (an intentional continuous monitor)
+    match_mode = Column(String(20), nullable=False,
+                        default="discrete", server_default="discrete")
+
+    # Phase 1: suppression window in seconds. Within this window a discrete
+    # rule records a given (rule, entity) chain at most once.
+    suppress_window = Column(Integer, nullable=False,
+                             default=3600, server_default="3600")
+
     # Evaluation tracking
     last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)

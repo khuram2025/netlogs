@@ -74,6 +74,9 @@ class StageSchema(BaseModel):
         return self
 
 
+MatchMode = Literal["discrete", "recurring"]
+
+
 class CorrelationRuleCreate(BaseModel):
     """Payload for creating a correlation rule."""
 
@@ -84,6 +87,9 @@ class CorrelationRuleCreate(BaseModel):
     stages: List[StageSchema] = Field(..., min_length=1, max_length=10)
     mitre_tactic: Optional[str] = Field(default=None, max_length=100)
     mitre_technique: Optional[str] = Field(default=None, max_length=100)
+    # Phase 1: match identity / suppression
+    match_mode: MatchMode = "discrete"
+    suppress_window: int = Field(default=3600, ge=60, le=604_800)
 
 
 class CorrelationRuleUpdate(BaseModel):
@@ -96,3 +102,5 @@ class CorrelationRuleUpdate(BaseModel):
     stages: Optional[List[StageSchema]] = Field(default=None, min_length=1, max_length=10)
     mitre_tactic: Optional[str] = Field(default=None, max_length=100)
     mitre_technique: Optional[str] = Field(default=None, max_length=100)
+    match_mode: Optional[MatchMode] = None
+    suppress_window: Optional[int] = Field(default=None, ge=60, le=604_800)

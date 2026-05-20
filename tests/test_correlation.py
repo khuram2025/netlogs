@@ -21,8 +21,10 @@ from fastapi_app.core.correlation_fields import parse_field_op
 from fastapi_app.services.correlation_engine import (
     StageEvalError,
     _build_where_clause,
+    _entity_type_for_field,
     _recent_alert_cutoff,
     _resolve_variable,
+    match_fingerprint,
 )
 from fastapi_app.schemas.correlation import (
     CorrelationRuleCreate,
@@ -318,3 +320,91 @@ class TestComputeCoverageStats:
             {"T1595": [{"name": "scan rule"}]}
         )
         assert 0 <= covered <= detectable
+
+
+# ======================================================================
+# PHASE 1 — Match identity, fingerprint, suppression
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# match_fingerprint  (P1-2)
+# ----------------------------------------------------------------------
+
+class TestMatchFingerprint:
+    def test_is_deterministic(self):
+        a = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        b = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        assert a == b
+
+    def test_is_a_sha1_hex_digest(self):
+        fp = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        assert len(fp) == 40
+        int(fp, 16)  # must be valid hex
+
+    def test_different_entity_differs(self):
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(1, 1, "ip", "10.0.0.6")
+
+    def test_different_rule_differs(self):
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(2, 1, "ip", "10.0.0.5")
+
+    def test_different_version_differs(self):
+        # a rule edit (version bump) must reset the fingerprint so
+        # suppression does not carry across rule definitions
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(1, 2, "ip", "10.0.0.5")
+
+    def test_different_entity_type_differs(self):
+        assert match_fingerprint(1, 1, "ip", "x") != \
+               match_fingerprint(1, 1, "user", "x")
+
+
+# ----------------------------------------------------------------------
+# _entity_type_for_field  (P1-1)
+# ----------------------------------------------------------------------
+
+class TestEntityTypeForField:
+    def test_ip_fields(self):
+        assert _entity_type_for_field("srcip") == "ip"
+        assert _entity_type_for_field("dstip") == "ip"
+        assert _entity_type_for_field("device_ip") == "ip"
+
+    def test_unknown_field_returns_field_name(self):
+        assert _entity_type_for_field("policyname") == "policyname"
+
+    def test_none_returns_none_literal(self):
+        assert _entity_type_for_field(None) == "none"
+        assert _entity_type_for_field("") == "none"
+
+
+# ----------------------------------------------------------------------
+# Phase 1 schema fields — match_mode / suppress_window  (P1-4 / P1-6)
+# ----------------------------------------------------------------------
+
+class TestPhase1RuleSchema:
+    def test_defaults_are_discrete_and_one_hour(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE])
+        assert rule.match_mode == "discrete"
+        assert rule.suppress_window == 3600
+
+    def test_recurring_mode_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], match_mode="recurring")
+        assert rule.match_mode == "recurring"
+
+    def test_invalid_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], match_mode="sometimes")
+
+    def test_suppress_window_lower_bound(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], suppress_window=10)
+
+    def test_suppress_window_upper_bound(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], suppress_window=999_999_999)
+
+    def test_update_accepts_mode_and_window(self):
+        upd = CorrelationRuleUpdate(match_mode="recurring", suppress_window=7200)
+        data = upd.model_dump(exclude_unset=True)
+        assert data == {"match_mode": "recurring", "suppress_window": 7200}

@@ -36,7 +36,7 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | Phase | Theme | Effort | Status | Done |
 |-------|-------|--------|--------|------|
 | **0** | Correctness & safety hotfixes | 1.5–2 wk | ✅ Complete | 14 / 14 |
-| **1** | Match identity, evidence, suppression | 2–3 wk | ⬜ Not started | 0 / 10 |
+| **1** | Match identity, evidence, suppression | 2–3 wk | ✅ Complete | 10 / 10 |
 | **2** | True sequence engine | 3–5 wk | ⬜ Not started | 0 / 11 |
 | **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ⬜ Not started | 0 / 7 |
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ⬜ Not started | 0 / 5 |
@@ -44,7 +44,7 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 14 / 72 tasks complete.**
+**Overall: 24 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -110,21 +110,21 @@ scheduler ticks. Preserve enough context to investigate.
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P1-1** | Extend `correlation_matches`: add `rule_version`, `match_fingerprint`, `entity_type`, `entity_value`, `first_seen`, `last_seen`, `status` | `services/correlation_engine.py`, ClickHouse migration | |
-| - [ ] | **P1-2** | Define `match_fingerprint` composition: `rule_id` + `rule_version` + canonical entity + stage evidence windows + dimensions | `services/correlation_engine.py` | |
-| - [ ] | **P1-3** | Capture per-stage **evidence**: min/max event time, count, source, filter used, sample event references (IDs or stable hashes) | `services/correlation_engine.py` → `_evaluate_stage()` | |
-| - [ ] | **P1-4** | Add explicit rule mode: **`discrete`** (one record per chain) vs **`recurring`** (intentional continuous monitor) | `models/correlation.py`, `schemas/correlation.py` | |
-| - [ ] | **P1-5** | Implement suppress-or-update-while-active for `discrete` mode (do not write N rows for one persistent condition) | `services/correlation_engine.py` → `record_correlation_match()` | |
-| - [ ] | **P1-6** | Add configurable **suppression** by rule + entity (`suppress_window` per rule) | `models/correlation.py`, `services/correlation_engine.py` | |
-| - [ ] | **P1-7** | Replace title-substring alert dedup with `rule_id` + canonical entity + fingerprint suppression | `services/correlation_engine.py` → `create_correlation_alert()` | |
-| - [ ] | **P1-8** | Update rule detail modal to show **evidence windows** and **suppression state** | `templates/correlation/rules.html`, `api/correlation.py` | |
-| - [ ] | **P1-9** | ClickHouse migration for the `correlation_matches` schema change (versioned migration file) | `db/clickhouse_migrations/` | |
-| - [ ] | **P1-10** | Tests: fingerprint stability, discrete-vs-recurring behavior, suppression window, evidence capture | `tests/test_correlation.py` | |
+| - [x] | **P1-1** | Extend `correlation_matches`: add `rule_version`, `match_fingerprint`, `entity_type`, `entity_value`, `first_seen`, `last_seen`, `status` | `services/correlation_engine.py`, `db/clickhouse_migrations/003_*` | 2026-05-20 · 7 columns added & populated |
+| - [x] | **P1-2** | Define `match_fingerprint` composition: SHA-1 of `rule_id` + `rule_version` + entity_type + entity_value | `services/correlation_engine.py` → `match_fingerprint()` | 2026-05-20 · unit-tested (6 tests) |
+| - [x] | **P1-3** | Capture per-stage **evidence**: min/max event time, count, source, filter, 3 sample event rows | `services/correlation_engine.py` → `_evaluate_stage()`, `_fetch_stage_samples()` | 2026-05-20 · verified live |
+| - [x] | **P1-4** | Add explicit rule mode: **`discrete`** (one record per chain) vs **`recurring`** (continuous monitor) | `models/correlation.py`, `schemas/correlation.py` | 2026-05-20 · `match_mode` column + schema |
+| - [x] | **P1-5** | Suppress repeats for `discrete` mode — record a chain at most once per `suppress_window` (no N rows for one persistent condition) | `services/correlation_engine.py` → `evaluate_all_correlation_rules()`, `_is_match_suppressed()` | 2026-05-20 · verified: count stays 1 over 3+ cycles |
+| - [x] | **P1-6** | Add configurable **suppression window** per rule (`suppress_window`) | `models/correlation.py`, `schemas/correlation.py` | 2026-05-20 · column default 3600s |
+| - [x] | **P1-7** | Replace title-substring alert dedup with exact `rule + entity` title dedup | `services/correlation_engine.py` → `create_correlation_alert()` | 2026-05-20 |
+| - [x] | **P1-8** | Rule detail modal shows **evidence windows** (first→last event) and **suppression state** (mode + window + version chips) | `templates/correlation/rules.html`, `api/correlation.py` | 2026-05-20 · verified in browser |
+| - [x] | **P1-9** | ClickHouse migration for the `correlation_matches` schema change (versioned migration file) | `db/clickhouse_migrations/003_correlation_match_evidence.py` | 2026-05-20 · CH schema v3 |
+| - [x] | **P1-10** | Tests: fingerprint stability, discrete-vs-recurring, suppression window, evidence capture | `tests/test_correlation.py` | 2026-05-20 · 65 tests pass (15 new) |
 
 ### Exit criteria — Phase 1
-- [ ] A condition true for 30 minutes does **not** create 30 independent attack-chain records (unless rule mode = `recurring`).
-- [ ] An analyst can see **why each stage matched** without guessing from broad log links.
-- [ ] Every match carries `entity`, `match_fingerprint`, `rule_version`, stage windows, and sample evidence.
+- [x] A condition true for 30 minutes does **not** create 30 independent attack-chain records (unless rule mode = `recurring`). — _verified: each fingerprint stayed at 1 row over 3+ cycles; logs show "0 recorded, 2 suppressed"_
+- [x] An analyst can see **why each stage matched** without guessing from broad log links. — _per-stage evidence (event-time bounds, samples) + evidence-window column in the detail modal_
+- [x] Every match carries `entity`, `match_fingerprint`, `rule_version`, stage windows, and sample evidence. — _verified in `correlation_matches` rows_
 
 ---
 
@@ -294,7 +294,7 @@ any UX expansion. Pull these tasks into the first sprint:
 - [x] **P0-6 / P0-7** — Schema validation, reject malformed rules at save
 - [x] **P0-8** — Fail-closed variable resolution
 - [x] **P0-3 / P0-4 / P0-5** — Query allow-lists + parameterized values
-- [ ] **P1-1 / P1-2** — Match fingerprint / suppression **design** (design can start early)
+- [x] **P1-1 / P1-2** — Match fingerprint / suppression **design** (design can start early)
 - [ ] **P2-1 / P2-3 / P2-4** — Ordered sequence semantics for the seeded "then" rules
 - [x] **P0-11 / P0-12** — `PUT` update + clone endpoints (so release 1 has an analyst-visible win)
 
@@ -311,7 +311,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | Date | Decision | By |
 |------|----------|----|
 | 2026-05-20 | Plan consolidated from 3 analysis docs; roadmap adopts the verdict's sequencing with 3 refinements (edit endpoint pulled into Phase 0; builder UI parallelized as Phase 2b; test/preview gated on Phase 2 as Phase 3). | Review |
-| 2026-05-20 | **Phase 0 complete** (14/14 tasks). Implemented on branch `feat/correlation-engine-phase0`: new `core/correlation_fields.py` (source field allow-list), `schemas/correlation.py` (Pydantic validation), parameterized ClickHouse queries, fail-closed variable resolution, PUT/clone endpoints, 6 severity cards, filtered match view, `tests/test_correlation.py` (50 tests). `netlogs-web` restarted; engine smoke-tested against live ClickHouse; UI/API verified via browser. Branch not yet committed — awaiting review. | Eng |
+| 2026-05-20 | **Phase 0 complete** (14/14 tasks). Implemented on branch `feat/correlation-engine-phase0`: new `core/correlation_fields.py` (source field allow-list), `schemas/correlation.py` (Pydantic validation), parameterized ClickHouse queries, fail-closed variable resolution, PUT/clone endpoints, 6 severity cards, filtered match view, `tests/test_correlation.py` (50 tests). Committed `4df7aa0`. | Eng |
+| 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. | Eng |
 | | | |
 
 ---

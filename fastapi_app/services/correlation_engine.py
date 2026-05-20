@@ -5,6 +5,8 @@ Evaluates correlation rules by querying ClickHouse for events matching each stag
 in sequence, with variable substitution between stages.
 """
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -48,6 +50,57 @@ def _recent_alert_cutoff(minutes: int = ALERT_DEDUP_MINUTES) -> datetime:
     ``ValueError`` during the first five minutes of every hour.
     """
     return datetime.now(timezone.utc) - timedelta(minutes=minutes)
+
+
+# Maps a stage group-by field to a canonical entity type (Phase 1: IP-centric;
+# Phase 4 grows this into a full entity model).
+_ENTITY_TYPE_BY_FIELD = {
+    "srcip": "ip",
+    "dstip": "ip",
+    "device_ip": "ip",
+}
+
+
+def _entity_type_for_field(field: Optional[str]) -> str:
+    """Canonical entity type for a group-by field."""
+    if not field:
+        return "none"
+    return _ENTITY_TYPE_BY_FIELD.get(field, field)
+
+
+def match_fingerprint(rule_id: int, rule_version: int,
+                      entity_type: str, entity_value: str) -> str:
+    """Stable identifier for a (rule, rule-version, entity) attack chain.
+
+    Two matches with the same fingerprint are 'the same chain'. Suppression
+    keeps a discrete rule from recording the same fingerprint more than once
+    per suppression window — so match counts measure distinct chains, not
+    scheduler ticks.
+    """
+    raw = f"{rule_id}|{rule_version}|{entity_type}|{entity_value}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _is_match_suppressed(fingerprint: str, suppress_window: int) -> bool:
+    """True if a match with this fingerprint was already recorded inside the
+    suppression window — used to stop a discrete rule from re-recording the
+    same attack chain on every 60-second scheduler tick."""
+    if not fingerprint:
+        return False
+    try:
+        client = ClickHouseClient.get_client()
+        r = client.query(
+            "SELECT count() FROM correlation_matches "
+            "WHERE match_fingerprint = {fp:String} "
+            "AND timestamp > now() - INTERVAL {w:UInt32} SECOND",
+            parameters={"fp": fingerprint, "w": int(suppress_window)},
+        )
+        return bool(r.result_rows) and r.result_rows[0][0] > 0
+    except Exception as e:
+        # Fail open on the suppression check: recording a possible duplicate
+        # is safer than silently dropping a genuine new match.
+        logger.error(f"Suppression check failed: {e}")
+        return False
 
 
 def ensure_correlation_matches_table():
@@ -168,6 +221,40 @@ def _build_where_clause(filter_config: dict, variables: dict = None,
     return where, params
 
 
+def _fetch_stage_samples(table: str, full_where: str, params: dict,
+                         group_by: str = None, group_by_type: str = None,
+                         key_value: str = None, limit: int = 3) -> list:
+    """Best-effort: fetch a few representative raw events for a matched stage.
+
+    These are stored with the match as an evidence trail so an analyst can see
+    *why* a stage matched without re-querying approximate logs.
+    """
+    try:
+        client = ClickHouseClient.get_client()
+        where = full_where
+        p = dict(params)
+        # Narrow samples to the matched entity when the group-by field is a
+        # string/ip column (covers srcip/dstip — every current rule).
+        if group_by and key_value is not None and group_by_type in (None, "string", "ip"):
+            if group_by_type == "ip":
+                where += f" AND {group_by} = toIPv4({{skey:String}})"
+            else:
+                where += f" AND {group_by} = {{skey:String}}"
+            p["skey"] = str(key_value)
+        cols = "timestamp, srcip, dstip, dstport, action, policyname"
+        query = (f"SELECT {cols} FROM {table} WHERE {where} "
+                 f"ORDER BY timestamp DESC LIMIT {int(limit)}")
+        rows = client.query(query, parameters=p).result_rows
+        return [
+            {"timestamp": str(r[0]), "srcip": str(r[1]), "dstip": str(r[2]),
+             "dstport": r[3], "action": str(r[4]), "policyname": str(r[5])}
+            for r in rows
+        ]
+    except Exception as e:
+        logger.debug(f"Stage sample fetch failed: {e}")
+        return []
+
+
 def _evaluate_stage(
     stage: dict,
     window_seconds: int,
@@ -176,7 +263,8 @@ def _evaluate_stage(
 ) -> Tuple[bool, dict]:
     """
     Evaluate a single correlation stage against ClickHouse logs.
-    Returns (matched: bool, stage_result: dict with key values and event count).
+    Returns (matched: bool, stage_result: dict with key values, event count,
+    event-time bounds and sample evidence).
     """
     try:
         client = ClickHouseClient.get_client()
@@ -211,9 +299,11 @@ def _evaluate_stage(
         full_where = f"{time_filter} AND ({where})"
 
         if group_by:
-            # Aggregation query: find groups exceeding threshold
+            # Aggregation query: find groups exceeding threshold, capturing
+            # the event-time span of each group as evidence.
             query = f"""
-                SELECT {group_by}, count() as cnt
+                SELECT {group_by}, count() as cnt,
+                       min(timestamp) as first_ts, max(timestamp) as last_ts
                 FROM {table}
                 WHERE {full_where}
                 GROUP BY {group_by}
@@ -230,25 +320,42 @@ def _evaluate_stage(
             # Return the top match
             top_key = str(rows[0][0])
             top_count = rows[0][1]
+            first_ts, last_ts = rows[0][2], rows[0][3]
+            gb_type = (get_source_fields(source) or {}).get(group_by)
+            samples = _fetch_stage_samples(table, full_where, params,
+                                           group_by, gb_type, top_key)
 
             return True, {
                 "key": top_key,
                 "count": top_count,
                 group_by: top_key,
+                "first_event": first_ts,
+                "last_event": last_ts,
+                "source": source,
+                "samples": samples,
                 "all_matches": [{"key": str(r[0]), "count": r[1]} for r in rows[:5]],
             }
         else:
-            # Simple count query
+            # Simple count query with event-time bounds.
             query = f"""
-                SELECT count() as cnt
+                SELECT count() as cnt,
+                       min(timestamp) as first_ts, max(timestamp) as last_ts
                 FROM {table}
                 WHERE {full_where}
             """
             result = client.query(query, parameters=params)
-            count = result.result_rows[0][0] if result.result_rows else 0
+            row = result.result_rows[0] if result.result_rows else (0, None, None)
+            count = row[0]
 
             if count >= threshold:
-                return True, {"count": count}
+                samples = _fetch_stage_samples(table, full_where, params)
+                return True, {
+                    "count": count,
+                    "first_event": row[1],
+                    "last_event": row[2],
+                    "source": source,
+                    "samples": samples,
+                }
             return False, {"count": count}
 
     except StageEvalError as e:
@@ -271,6 +378,7 @@ def evaluate_correlation_rule(rule: CorrelationRule) -> Optional[dict]:
     variables = {}
     stage_results = []
     total_events = 0
+    event_times: List[datetime] = []
 
     for i, stage in enumerate(stages):
         stage_name = stage.get("name", f"Stage {i + 1}")
@@ -282,6 +390,8 @@ def evaluate_correlation_rule(rule: CorrelationRule) -> Optional[dict]:
             "name": stage_name,
             "matched": matched,
             "window": window,
+            "filter": stage.get("filter", {}),
+            "threshold": stage.get("threshold", 1),
             **result,
         })
 
@@ -292,26 +402,51 @@ def evaluate_correlation_rule(rule: CorrelationRule) -> Optional[dict]:
         stage_key = f"stage{i + 1}"
         variables[stage_key] = result
         total_events += result.get("count", 0)
+        for ts in (result.get("first_event"), result.get("last_event")):
+            if ts is not None:
+                event_times.append(ts)
 
-    # All stages matched!
+    # All stages matched — build the match record with entity identity,
+    # a stable fingerprint and the event-time span of the evidence.
+    entity_value = stage_results[0].get("key", "")
+    first_stage_filter = stages[0].get("filter", {}) or {}
+    group_by_field = first_stage_filter.get("group_by", stages[0].get("group_by"))
+    entity_type = _entity_type_for_field(group_by_field)
+    rule_version = getattr(rule, "version", 1) or 1
+    fingerprint = match_fingerprint(rule.id, rule_version, entity_type, entity_value)
+
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    first_seen = min(event_times) if event_times else now_naive
+    last_seen = max(event_times) if event_times else now_naive
+
     return {
         "rule_id": rule.id,
         "rule_name": rule.name,
+        "rule_version": rule_version,
         "severity": rule.severity,
         "stages": stage_results,
         "total_events": total_events,
         "mitre_tactic": rule.mitre_tactic,
         "mitre_technique": rule.mitre_technique,
-        "key_value": stage_results[0].get("key", ""),
+        "key_value": entity_value,
+        "entity_type": entity_type,
+        "entity_value": entity_value,
+        "match_fingerprint": fingerprint,
+        "first_seen": first_seen,
+        "last_seen": last_seen,
     }
 
 
 def record_correlation_match(match: dict):
-    """Record a correlation match in ClickHouse."""
+    """Record a correlation match in ClickHouse.
+
+    ``timestamp`` is the engine evaluation time; ``first_seen`` / ``last_seen``
+    are the event-chain time bounds drawn from the matched evidence.
+    """
     try:
-        import json
         client = ClickHouseClient.get_client()
         now = datetime.now(timezone.utc)
+        n_stages = len(match["stages"])
 
         client.insert("correlation_matches",
             [[
@@ -319,18 +454,27 @@ def record_correlation_match(match: dict):
                 match["rule_id"],
                 match["rule_name"],
                 match["severity"],
-                len(match["stages"]),
-                len(match["stages"]),
+                n_stages,
+                n_stages,
                 json.dumps(match["stages"], default=str),
-                match.get("key_value", ""),
+                match.get("key_value", "") or "",
                 match.get("total_events", 0),
-                match.get("mitre_tactic", ""),
-                match.get("mitre_technique", ""),
+                match.get("mitre_tactic", "") or "",
+                match.get("mitre_technique", "") or "",
+                match.get("rule_version", 1) or 1,
+                match.get("match_fingerprint", "") or "",
+                match.get("entity_type", "") or "",
+                match.get("entity_value", "") or "",
+                match.get("first_seen") or now,
+                match.get("last_seen") or now,
+                "open",
             ]],
             column_names=[
                 "timestamp", "rule_id", "rule_name", "severity",
                 "stages_matched", "total_stages", "stage_details",
-                "key_value", "total_events", "mitre_tactic", "mitre_technique"
+                "key_value", "total_events", "mitre_tactic", "mitre_technique",
+                "rule_version", "match_fingerprint", "entity_type",
+                "entity_value", "first_seen", "last_seen", "status",
             ]
         )
     except Exception as e:
@@ -338,38 +482,50 @@ def record_correlation_match(match: dict):
 
 
 async def create_correlation_alert(match: dict):
-    """Create an alert from a correlation match."""
+    """Create an alert from a correlation match.
+
+    Deduplicates on the exact alert title — which carries both the rule name
+    and the implicated entity — so a noisy entity and a genuinely new entity
+    no longer suppress each other (the old check matched the rule name only).
+    """
     try:
+        entity = match.get("entity_value", match.get("key_value", "")) or ""
+        title = f"Correlation: {match['rule_name']} [{entity}]"
+
         async with async_session_maker() as db:
-            # Check for recent duplicate alerts (within 5 minutes)
             from sqlalchemy import and_, func
             recent = await db.execute(
                 select(func.count(Alert.id)).where(
                     and_(
-                        Alert.title.contains(match["rule_name"]),
+                        Alert.title == title,
                         Alert.triggered_at > _recent_alert_cutoff(),
                     )
                 )
             )
             if recent.scalar() > 0:
-                return  # Avoid duplicate alerts
+                return  # this rule+entity already alerted recently
 
-            import json
             stages_summary = " -> ".join(
                 f"{s['name']} ({s.get('count', 0)} events)"
                 for s in match["stages"]
             )
 
             alert = Alert(
-                title=f"Correlation: {match['rule_name']} [{match.get('key_value', '')}]",
+                title=title,
                 severity=match["severity"],
                 status="new",
                 details=json.dumps({
                     "correlation_rule": match["rule_name"],
+                    "rule_version": match.get("rule_version", 1),
+                    "match_fingerprint": match.get("match_fingerprint", ""),
+                    "entity_type": match.get("entity_type", ""),
+                    "entity_value": entity,
                     "stages": match["stages"],
                     "total_events": match["total_events"],
                     "key_value": match.get("key_value", ""),
                     "attack_chain": stages_summary,
+                    "first_seen": match.get("first_seen"),
+                    "last_seen": match.get("last_seen"),
                     "mitre_tactic": match.get("mitre_tactic", ""),
                     "mitre_technique": match.get("mitre_technique", ""),
                 }, default=str),
@@ -377,7 +533,7 @@ async def create_correlation_alert(match: dict):
             )
             db.add(alert)
             await db.commit()
-            logger.info(f"Correlation alert created: {match['rule_name']}")
+            logger.info(f"Correlation alert created: {title}")
     except Exception as e:
         logger.error(f"Failed to create correlation alert: {e}")
 
@@ -395,17 +551,27 @@ async def evaluate_all_correlation_rules():
                 return
 
             matched_count = 0
+            suppressed_count = 0
             for rule in rules:
                 try:
                     match = evaluate_correlation_rule(rule)
                     if match:
-                        matched_count += 1
-                        record_correlation_match(match)
-                        await create_correlation_alert(match)
+                        mode = getattr(rule, "match_mode", "discrete") or "discrete"
+                        window = getattr(rule, "suppress_window", 3600) or 3600
 
-                        # Update rule stats
-                        rule.last_triggered_at = datetime.now(timezone.utc)
-                        rule.trigger_count = (rule.trigger_count or 0) + 1
+                        # Discrete rules record a given attack chain at most
+                        # once per suppression window — so match counts measure
+                        # distinct chains, not 60-second scheduler ticks.
+                        # Recurring rules are intentional monitors: always record.
+                        if mode == "discrete" and _is_match_suppressed(
+                                match["match_fingerprint"], window):
+                            suppressed_count += 1
+                        else:
+                            matched_count += 1
+                            record_correlation_match(match)
+                            await create_correlation_alert(match)
+                            rule.last_triggered_at = datetime.now(timezone.utc)
+                            rule.trigger_count = (rule.trigger_count or 0) + 1
 
                     rule.last_evaluated_at = datetime.now(timezone.utc)
                 except Exception as e:
@@ -413,8 +579,12 @@ async def evaluate_all_correlation_rules():
 
             await db.commit()
 
-            if matched_count > 0:
-                logger.info(f"Correlation engine: {matched_count} rules triggered out of {len(rules)}")
+            if matched_count or suppressed_count:
+                logger.info(
+                    f"Correlation engine: {matched_count} recorded, "
+                    f"{suppressed_count} suppressed (already recorded in window), "
+                    f"of {len(rules)} rules"
+                )
 
     except Exception as e:
         logger.error(f"Correlation engine error: {e}")

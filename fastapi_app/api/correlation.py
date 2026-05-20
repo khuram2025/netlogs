@@ -175,6 +175,9 @@ async def api_list_rules(db: AsyncSession = Depends(get_db)):
         "stages": r.stages,
         "mitre_tactic": r.mitre_tactic,
         "mitre_technique": r.mitre_technique,
+        "version": getattr(r, "version", 1) or 1,
+        "match_mode": getattr(r, "match_mode", "discrete") or "discrete",
+        "suppress_window": getattr(r, "suppress_window", 3600) or 3600,
         "trigger_count": r.trigger_count or 0,
         "last_evaluated_at": str(r.last_evaluated_at) if r.last_evaluated_at else None,
         "last_triggered_at": str(r.last_triggered_at) if r.last_triggered_at else None,
@@ -198,6 +201,8 @@ async def api_create_rule(payload: CorrelationRuleCreate, db: AsyncSession = Dep
             mitre_tactic=payload.mitre_tactic,
             mitre_technique=payload.mitre_technique,
             is_enabled=payload.is_enabled,
+            match_mode=payload.match_mode,
+            suppress_window=payload.suppress_window,
         )
         db.add(rule)
         await db.commit()
@@ -230,9 +235,12 @@ async def api_update_rule(rule_id: int, payload: CorrelationRuleUpdate,
         for field, value in data.items():
             setattr(rule, field, value)
         rule.updated_at = datetime.now(timezone.utc)
+        # Bump the version so matches can be tied to the exact rule definition
+        # that produced them; this also resets suppression after an edit.
+        rule.version = (rule.version or 1) + 1
         await db.commit()
         await db.refresh(rule)
-        return {"status": "ok", "id": rule.id}
+        return {"status": "ok", "id": rule.id, "version": rule.version}
     except IntegrityError:
         await db.rollback()
         return JSONResponse(status_code=400,
@@ -385,6 +393,9 @@ async def api_rule_match_detail(rule_id: int,
         "stages": rule.stages,
         "mitre_tactic": rule.mitre_tactic,
         "mitre_technique": rule.mitre_technique,
+        "version": getattr(rule, "version", 1) or 1,
+        "match_mode": getattr(rule, "match_mode", "discrete") or "discrete",
+        "suppress_window": getattr(rule, "suppress_window", 3600) or 3600,
         "trigger_count": rule.trigger_count or 0,
         "last_evaluated_at": str(rule.last_evaluated_at) if rule.last_evaluated_at else None,
         "last_triggered_at": str(rule.last_triggered_at) if rule.last_triggered_at else None,
@@ -442,10 +453,12 @@ async def api_rule_match_detail(rule_id: int,
                 "count": row[1],
             })
 
-        # Recent matches
+        # Recent matches — include match-identity & evidence columns
         r = client.query(f"""
             SELECT timestamp, key_value, stages_matched, total_stages,
-                   total_events, severity, stage_details
+                   total_events, severity, stage_details,
+                   entity_type, entity_value, match_fingerprint,
+                   first_seen, last_seen, status
             FROM correlation_matches
             WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
             ORDER BY timestamp DESC
@@ -460,6 +473,12 @@ async def api_rule_match_detail(rule_id: int,
                 "total_events": row[4],
                 "severity": row[5],
                 "stage_details": row[6],
+                "entity_type": row[7],
+                "entity_value": row[8],
+                "match_fingerprint": row[9],
+                "first_seen": str(row[10]) if row[10] else None,
+                "last_seen": str(row[11]) if row[11] else None,
+                "status": row[12],
             })
 
     except Exception as e:
