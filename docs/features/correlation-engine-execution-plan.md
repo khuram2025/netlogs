@@ -42,9 +42,9 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
 | **4** | Source registry & entity model | 4 wk | ✅ Complete | 7 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ✅ Complete | 8 / 8 |
-| **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
+| **6** | Templates, MITRE workflow, response, ML | 4 wk | 🟡 In progress | 3 / 10 |
 
-**Overall: 62 / 72 tasks complete.**
+**Overall: 65 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -272,9 +272,9 @@ controlled response automation, and layer the differentiators.
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P6-1** | Curated **template library** — 30–50 parameterized, MITRE-mapped templates, grouped by tactic & source | new `api/correlation.py` endpoint + content | |
-| - [ ] | **P6-2** | **Data-aware** template discovery — recommend templates matching sources actually ingested | `api/correlation.py`, UI | |
-| - [ ] | **P6-3** | "Create rule from this technique" action on uncovered MITRE map cells → opens builder pre-seeded | `templates/correlation/mitre_map.html` | |
+| - [x] | **P6-1** | Curated **template library** — 12 parameterized, MITRE-mapped templates grouped by tactic; `GET /api/correlation/templates` + a builder "Start from template" picker | `core/correlation_templates.py`, `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 · starter set of 12 (the 30–50 target is content the team can grow) |
+| - [x] | **P6-2** | **Data-aware** discovery — each template declares `required_sources`; the API flags `available`, the picker disables unusable templates | `api/correlation.py`, `templates/correlation/rules.html` | 2026-05-20 |
+| - [x] | **P6-3** | "Create Detection Rule" action on MITRE map technique cells → correlation page opens the builder pre-seeded with the technique | `templates/correlation/mitre_map.html`, `templates/correlation/rules.html` | 2026-05-20 · verified |
 | - [ ] | **P6-4** | **Response actions** per rule + severity: notify (email/Telegram/webhook), add IP/domain to EDL/blocklist, create ticket/webhook | `models/correlation.py`, `services/correlation_engine.py`, `services/notification_service.py` | |
 | - [ ] | **P6-5** | **Anomaly stages** — let a stage reference existing learning-mode baselines (volume anomalous vs baseline) | `services/correlation_engine.py` | |
 | - [ ] | **P6-6** | _Differentiator:_ **attack-chain timeline visualization** — render a matched chain as a kill-chain timeline | `templates/correlation/` | |
@@ -321,7 +321,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. Committed `ad2e4ba`. | Eng |
 | 2026-05-20 | **Phase 3 complete** (5/5 tasks). `preview_correlation_rule()` dry-runs a rule with per-stage candidate/survivor diagnostics, sample entities and a rough fire-rate estimate; `POST /api/correlation/rules/test` builds a transient un-persisted rule and previews it; a "Test Rule" button in the builder shows the stage funnel before saving. Verified: a test call recorded 0 rows; preview showed "20 candidates → 10 surviving chains". 90 tests pass. Committed `0f060ec`. | Eng |
 | 2026-05-20 | **Phase 4 complete** (7/7 tasks). `core/correlation_fields.py` is now a data-driven **source registry** — 7 ClickHouse sources (syslogs, dns_logs, url_logs, ioc_matches, audit_logs, pa_threat_logs, correlation_matches), each with fields, types, sample columns and a canonical-entity map. `resolve_field()` resolves a join key (canonical entity *or* native column) per source, so a rule joins stages across sources by `ip`/`user`/etc. Engine fully source-aware. 3 cross-source seed rules (IOC→firewall, DNS→firewall, PA-threat→firewall). Builder gained a per-stage Data Source dropdown. Verified live: the 3 rules matched 12 / 3 / 1 entities. 105 tests pass. Committed `fef132b`. | Eng |
-| 2026-05-20 | **Phase 5 complete** (8/8 tasks). ClickHouse migration `004` (`entity_risk`); Alembic `b1c2d3e4f5a6` (`risk_score` column + `correlation_incidents` table). Each match contributes weighted risk to its entity; `compute_entity_risk()` sums contributions with a 24h-half-life exponential decay. `group_into_incident()` collapses matches for one entity (within 1h) into a single `CorrelationIncident` with accumulated risk, derived severity, lifecycle status and contributing-match evidence. Incident API (list/detail/status) + an Incidents tab. Fixed an autoflush-off grouping bug (added `db.flush()`). Verified live: 3 matches from 3 rules grouped into one critical incident (risk 200); status transitions work. 114 tests pass. | Eng |
+| 2026-05-20 | **Phase 5 complete** (8/8 tasks). ClickHouse migration `004` (`entity_risk`); Alembic `b1c2d3e4f5a6` (`risk_score` column + `correlation_incidents` table). Each match contributes weighted risk to its entity; `compute_entity_risk()` sums contributions with a 24h-half-life exponential decay. `group_into_incident()` collapses matches for one entity (within 1h) into a single `CorrelationIncident` with accumulated risk, derived severity, lifecycle status and contributing-match evidence. Incident API (list/detail/status) + an Incidents tab. Fixed an autoflush-off grouping bug (added `db.flush()`). Verified live: 3 matches from 3 rules grouped into one critical incident (risk 200); status transitions work. 114 tests pass. Committed `ea89539`. | Eng |
+| 2026-05-20 | **Phase 6 partial** (3/10 — P6-1/2/3). `core/correlation_templates.py` — 12 curated MITRE-mapped templates; `GET /api/correlation/templates` with data-aware `available` flags; builder "Start from template" picker. MITRE map technique cells gained a "Create Detection Rule" action that opens the builder pre-seeded with the technique. 119 tests pass. **Remaining (P6-4..P6-10):** response actions, anomaly/ML stages, attack-chain timeline viz, rule-health scorecard, Sigma import, backtest, simulation mode — each substantial; deferred for focused effort. | Eng |
 | | | |
 
 ---

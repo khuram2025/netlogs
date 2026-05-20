@@ -177,7 +177,7 @@
                 {% for tech in ts.techniques %}
                 {% set tech_id_clean = tech.id.split(' ')[0] %}
                 <div class="technique-cell {% if tech_id_clean in coverage %}covered{% elif tech.detectable %}detectable-not-covered{% else %}not-detectable{% endif %}"
-                     onclick="showTechniqueDetail('{{ tech.id }}', '{{ tech.name }}', '{{ tech.description }}', {{ 'true' if tech.detectable else 'false' }})">
+                     onclick="showTechniqueDetail('{{ tech.id }}', '{{ tech.name }}', '{{ tech.description }}', {{ 'true' if tech.detectable else 'false' }}, '{{ ts.name }}')">
                     <div class="tech-id">{{ tech.id }}</div>
                     <div class="tech-name">{{ tech.name }}</div>
                     {% if tech_id_clean in coverage %}
@@ -201,6 +201,7 @@
         <div id="techRules"></div>
         <div class="modal-actions">
             <button class="btn btn-outline" onclick="document.getElementById('techDetailModal').classList.remove('active')">Close</button>
+            <a class="btn" id="techCreateRuleBtn" style="display:none;">Create Detection Rule</a>
         </div>
     </div>
 </div>
@@ -210,7 +211,7 @@
 <script>
 const coverageData = {{ coverage|tojson|safe }};
 
-function showTechniqueDetail(techId, name, description, detectable) {
+function showTechniqueDetail(techId, name, description, detectable, tactic) {
     document.getElementById('techTitle').textContent = name;
     document.getElementById('techId').textContent = techId;
     document.getElementById('techDesc').textContent = description;
@@ -225,6 +226,18 @@ function showTechniqueDetail(techId, name, description, detectable) {
     const rulesDiv = document.getElementById('techRules');
     const techIdClean = techId.split(' ')[0];
     const rules = coverageData[techIdClean] || [];
+
+    // Phase 6: detectable techniques get a "Create Detection Rule" action
+    // that opens the correlation builder pre-seeded with this technique.
+    const createBtn = document.getElementById('techCreateRuleBtn');
+    if (detectable) {
+        createBtn.style.display = '';
+        createBtn.href = '/correlation/?technique=' + encodeURIComponent(techIdClean) +
+                         '&tactic=' + encodeURIComponent(tactic || '');
+        createBtn.textContent = rules.length ? 'Add Another Rule' : 'Create Detection Rule';
+    } else {
+        createBtn.style.display = 'none';
+    }
 
     if (rules.length > 0) {
         let html = '<h4 style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">COVERING RULES</h4>';

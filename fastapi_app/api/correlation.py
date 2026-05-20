@@ -389,6 +389,31 @@ async def api_correlation_schema():
     }
 
 
+@router.get("/api/correlation/templates", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_correlation_templates():
+    """Curated correlation rule templates. Each is flagged ``available`` when
+    every data source it needs is registered on this deployment — so the UI
+    can do data-aware template discovery."""
+    from ..core.correlation_templates import TEMPLATES
+    from ..core.correlation_fields import SOURCES
+
+    out = []
+    for t in TEMPLATES:
+        req = t.get("required_sources", [])
+        out.append({
+            "id": t["id"],
+            "name": t["name"],
+            "description": t["description"],
+            "category": t["category"],
+            "mitre_tactic": t.get("mitre_tactic"),
+            "mitre_technique": t.get("mitre_technique"),
+            "required_sources": req,
+            "available": all(s in SOURCES for s in req),
+            "rule": t["rule"],
+        })
+    return out
+
+
 @router.get("/correlation/mitre/", response_class=HTMLResponse, name="mitre_attack_map",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db)):

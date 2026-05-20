@@ -715,3 +715,39 @@ class TestRuleRiskContribution:
 
     def test_unknown_severity_falls_back(self):
         assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="weird")) == 20
+
+
+# ======================================================================
+# PHASE 6 — rule template library
+# ======================================================================
+
+class TestCorrelationTemplates:
+    def test_library_is_populated(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        assert len(TEMPLATES) >= 10
+
+    def test_template_ids_unique(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        ids = [t["id"] for t in TEMPLATES]
+        assert len(ids) == len(set(ids))
+
+    def test_templates_have_required_keys(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            for key in ("id", "name", "description", "category",
+                        "required_sources", "rule"):
+                assert key in t, f"template {t.get('id')} missing '{key}'"
+
+    def test_required_sources_are_real(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            for src in t["required_sources"]:
+                assert is_valid_source(src), \
+                    f"template {t['id']} references unknown source '{src}'"
+
+    def test_every_template_is_a_valid_rule(self):
+        # each template's rule body must pass create-rule validation
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            payload = CorrelationRuleCreate(name=t["name"], **dict(t["rule"]))
+            assert len(payload.stages) >= 1, f"template {t['id']} has no stages"

@@ -1996,6 +1996,10 @@
         </div>
         <form id="addRuleForm" onsubmit="return submitAddRule(event)">
             <div class="cr-modal-body">
+                <div class="cr-form-group" id="templatePickerGroup">
+                    <label>Start from a Template <span style="color:var(--cr-text-muted);font-weight:400;">(optional)</span></label>
+                    <select id="ruleTemplate" onchange="applyTemplate(this.value)"></select>
+                </div>
                 <div class="cr-form-group">
                     <label>Rule Name</label>
                     <input type="text" id="ruleName" required placeholder="e.g., Scan then Exploit">
@@ -2294,6 +2298,51 @@ var _schemaPromise = fetch('/api/correlation/schema')
 
 async function _ensureSchema() { if (!corrSchema) { await _schemaPromise; } }
 
+// ---- Templates (Phase 6) ----
+var _corrTemplates = [];
+async function _loadTemplates() {
+    try {
+        _corrTemplates = await (await fetch('/api/correlation/templates')).json();
+    } catch (e) { _corrTemplates = []; }
+}
+function _populateTemplateSelect() {
+    var sel = document.getElementById('ruleTemplate');
+    if (!sel) { return; }
+    var byCat = {};
+    _corrTemplates.forEach(function(t) { (byCat[t.category] = byCat[t.category] || []).push(t); });
+    var opts = ['<option value="">— build from scratch —</option>'];
+    Object.keys(byCat).sort().forEach(function(cat) {
+        opts.push('<optgroup label="' + _cdEsc(cat) + '">');
+        byCat[cat].forEach(function(t) {
+            var label = t.name + (t.available ? '' : ' (data source unavailable)');
+            opts.push('<option value="' + t.id + '"' + (t.available ? '' : ' disabled') +
+                      '>' + _cdEsc(label) + '</option>');
+        });
+        opts.push('</optgroup>');
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+}
+function applyTemplate(templateId) {
+    if (!templateId) { return; }
+    var t = _corrTemplates.filter(function(x) { return x.id === templateId; })[0];
+    if (!t) { return; }
+    var r = t.rule || {};
+    document.getElementById('ruleName').value = t.name || '';
+    document.getElementById('ruleDesc').value = t.description || '';
+    document.getElementById('ruleSeverity').value = r.severity || 'high';
+    document.getElementById('ruleMitreTactic').value = t.mitre_tactic || '';
+    document.getElementById('ruleMitreTechnique').value = t.mitre_technique || '';
+    document.getElementById('ruleOrdering').value = r.ordering || 'sequence';
+    document.getElementById('ruleMatchMode').value = r.match_mode || 'discrete';
+    document.getElementById('ruleSuppressWindow').value = r.suppress_window || 3600;
+    document.getElementById('ruleJoinKeys').value = (r.join_keys || []).join(', ');
+    document.getElementById('stagesContainer').innerHTML = '';
+    (r.stages || []).forEach(function(s) { builderAddStage(s); });
+    if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+    showToast('Loaded template: ' + t.name, 'success');
+}
+
 function _srcFields(source) {
     var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
     return (s && s.fields) || [];
@@ -2568,10 +2617,13 @@ function builderValidate() {
 
 async function showAddRuleModal() {
     await _ensureSchema();
+    if (!_corrTemplates.length) { await _loadTemplates(); }
     _editingRuleId = null;
     document.getElementById('addRuleForm').reset();
     document.getElementById('addRuleModalTitle').textContent = 'Add Correlation Rule';
     document.getElementById('addRuleSubmitBtn').textContent = 'Create Rule';
+    document.getElementById('templatePickerGroup').style.display = '';
+    _populateTemplateSelect();
     document.getElementById('builderError').style.display = 'none';
     document.getElementById('builderPreview').style.display = 'none';
     document.getElementById('ruleStagesJson').value = '';
@@ -2590,6 +2642,7 @@ async function editRule(ruleId) {
         document.getElementById('addRuleForm').reset();
         document.getElementById('addRuleModalTitle').textContent = 'Edit Correlation Rule';
         document.getElementById('addRuleSubmitBtn').textContent = 'Save Changes';
+        document.getElementById('templatePickerGroup').style.display = 'none';
         document.getElementById('ruleName').value = rule.name || '';
         document.getElementById('ruleDesc').value = rule.description || '';
         document.getElementById('ruleSeverity').value = rule.severity || 'high';
@@ -2941,5 +2994,22 @@ document.querySelectorAll('.cr-modal-overlay').forEach(function(el) {
         if (e.target === this) this.classList.remove('active');
     });
 });
+
+// ================================================================
+// MITRE GAP -> RULE (Phase 6): ?technique=&tactic= opens the builder
+// pre-seeded with the technique, e.g. from the ATT&CK coverage map.
+// ================================================================
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var tech = params.get('technique');
+    if (!tech) { return; }
+    var tactic = params.get('tactic') || '';
+    showAddRuleModal().then(function() {
+        document.getElementById('ruleMitreTactic').value = tactic;
+        document.getElementById('ruleMitreTechnique').value = tech;
+        document.getElementById('ruleName').value = tech + ' — detection rule';
+        showToast('New rule for ' + tech + ' — pick a template or build the stages', 'success');
+    });
+})();
 </script>
 {% endblock %}
