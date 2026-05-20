@@ -435,6 +435,44 @@ async def api_backtest_rule(rule_id: int, days: int = Query(7, ge=1, le=30),
     return result
 
 
+@router.get("/api/correlation/validate", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_validate_detections(db: AsyncSession = Depends(get_db)):
+    """Purple-team detection validation: dry-run every enabled rule against
+    live data and report which rules currently fire, with their MITRE tactic
+    coverage. A read-only posture check — persists nothing."""
+    from ..services.correlation_engine import preview_correlation_rule
+
+    rules = (await db.execute(
+        select(CorrelationRule).where(CorrelationRule.is_enabled == True)
+    )).scalars().all()
+
+    results = []
+    tactics_firing = set()
+    firing = 0
+    for rule in rules:
+        diag = preview_correlation_rule(rule)
+        fires = bool(diag.get("ok"))
+        if fires:
+            firing += 1
+            if rule.mitre_tactic:
+                tactics_firing.add(rule.mitre_tactic)
+        results.append({
+            "rule": rule.name,
+            "severity": rule.severity,
+            "fires": fires,
+            "matched_chains": diag.get("matched_chains", 0),
+            "mitre_tactic": rule.mitre_tactic or "",
+            "error": diag.get("error"),
+        })
+    results.sort(key=lambda r: (not r["fires"], r["rule"]))
+    return {
+        "total_rules": len(rules),
+        "firing": firing,
+        "tactics_covered": sorted(tactics_firing),
+        "results": results,
+    }
+
+
 @router.post("/api/correlation/sigma/import", dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_sigma_import(request: Request):
     """Convert a Sigma detection rule (YAML) into a correlation-rule draft for

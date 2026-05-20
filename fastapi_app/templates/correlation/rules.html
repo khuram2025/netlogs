@@ -1798,6 +1798,7 @@
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             MITRE ATT&CK Map
         </a>
+        <button class="cr-btn-mitre" onclick="runValidation()">Validate Detections</button>
         {% if current_user and current_user.role == 'ADMIN' %}
         <button class="cr-btn-add" onclick="showAddRuleModal()">+ Add Rule</button>
         {% endif %}
@@ -2032,6 +2033,19 @@
     </div>
 </div>
 
+<!-- Detection Validation Modal (Phase 6 — purple-team) -->
+<div id="validateModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 class="cr-modal-title">Detection Validation</h3>
+        </div>
+        <div class="cr-modal-body" id="validateBody"></div>
+        <div class="cr-modal-footer">
+            <button type="button" class="cr-btn-cancel" onclick="closeModal('validateModal')">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- Rule Detail Modal -->
 <div id="ruleDetailModal" class="cr-modal-overlay">
     <div class="cr-modal">
@@ -2234,6 +2248,42 @@ function showTab(tab, ruleFilter) {
 // INCIDENTS (Phase 5)
 // ================================================================
 var _incidentStatuses = ['new', 'investigating', 'contained', 'resolved', 'suppressed'];
+
+// Phase 6: purple-team detection validation — dry-run every enabled rule.
+async function runValidation() {
+    var body = document.getElementById('validateBody');
+    body.innerHTML = '<div class="cr-preview-loading">Dry-running every enabled rule against live data…</div>';
+    document.getElementById('validateModal').classList.add('active');
+    try {
+        var d = await (await fetch('/api/correlation/validate')).json();
+        var h = '<div class="cd-header-row">' +
+            '<span class="cr-mitre-tag">' + d.firing + ' of ' + d.total_rules + ' rules firing</span>' +
+            '<span class="cr-mitre-tag">' + d.tactics_covered.length + ' MITRE tactics covered</span>' +
+            '</div>';
+        if (d.tactics_covered.length) {
+            h += '<p class="cd-desc">Tactics with a firing detection: ' +
+                 _cdEsc(d.tactics_covered.join(', ')) + '</p>';
+        }
+        h += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>' +
+             '<th>Rule</th><th>Severity</th><th>Status</th><th>Chains</th>' +
+             '<th>MITRE Tactic</th></tr></thead><tbody>';
+        d.results.forEach(function(r) {
+            var status = r.error
+                ? '<span class="cr-preview-bad">error</span>'
+                : r.fires
+                    ? '<span style="color:#4ade80;font-weight:600;">&#10003; fires</span>'
+                    : '<span style="color:var(--cr-text-muted);">&mdash; quiet</span>';
+            h += '<tr><td>' + _cdEsc(r.rule) + '</td>' +
+                 '<td><span class="cr-severity-badge ' + r.severity + '">' + r.severity + '</span></td>' +
+                 '<td>' + status + '</td>' +
+                 '<td>' + r.matched_chains + '</td>' +
+                 '<td>' + _cdEsc(r.mitre_tactic || '—') + '</td></tr>';
+        });
+        body.innerHTML = h + '</tbody></table></div>';
+    } catch (e) {
+        body.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+    }
+}
 
 function loadIncidents() {
     var c = document.getElementById('incidentsContainer');
