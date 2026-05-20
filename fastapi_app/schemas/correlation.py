@@ -11,9 +11,11 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..core.correlation_fields import (
+    CANONICAL_ENTITIES,
     DEFAULT_SOURCE,
     NON_FIELD_FILTER_KEYS,
     NUMERIC_ONLY_OPERATORS,
+    get_source_entities,
     get_source_fields,
     is_valid_source,
     parse_field_op,
@@ -46,12 +48,14 @@ class StageSchema(BaseModel):
         if not is_valid_source(self.source):
             raise ValueError(f"Unknown data source '{self.source}'")
         fields = get_source_fields(self.source)
+        entities = get_source_entities(self.source)
 
-        # group_by may be given at the top level or inside the filter dict.
+        # group_by may be given at the top level or inside the filter dict;
+        # it can be a native column or a canonical entity.
         gb = self.filter.get("group_by", self.group_by)
-        if gb is not None and gb not in fields:
+        if gb is not None and gb not in fields and gb not in entities:
             raise ValueError(
-                f"group_by field '{gb}' is not valid for source '{self.source}'"
+                f"group_by '{gb}' is not a valid field or entity for source '{self.source}'"
             )
 
         for key, value in self.filter.items():
@@ -99,10 +103,13 @@ class CorrelationRuleCreate(BaseModel):
     @classmethod
     def _check_join_keys(cls, v):
         if v:
+            # A join key is a canonical entity (cross-source) or a native
+            # column of the default source (same-source, back-compat).
             fields = get_source_fields(DEFAULT_SOURCE) or {}
             for key in v:
-                if key not in fields:
-                    raise ValueError(f"join key '{key}' is not a valid field")
+                if key not in CANONICAL_ENTITIES and key not in fields:
+                    raise ValueError(
+                        f"join key '{key}' is not a canonical entity or known field")
         return v
 
 
@@ -125,8 +132,11 @@ class CorrelationRuleUpdate(BaseModel):
     @classmethod
     def _check_join_keys(cls, v):
         if v:
+            # A join key is a canonical entity (cross-source) or a native
+            # column of the default source (same-source, back-compat).
             fields = get_source_fields(DEFAULT_SOURCE) or {}
             for key in v:
-                if key not in fields:
-                    raise ValueError(f"join key '{key}' is not a valid field")
+                if key not in CANONICAL_ENTITIES and key not in fields:
+                    raise ValueError(
+                        f"join key '{key}' is not a canonical entity or known field")
         return v

@@ -991,6 +991,21 @@
         margin: 0;
     }
 
+    .cr-stage-srcrow {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.7rem;
+    }
+
+    .cr-stage-srcrow select {
+        margin: 0;
+        flex: 1;
+        max-width: 340px;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.5rem;
+    }
+
     .cr-icon-btn {
         flex: none;
         width: 1.7rem;
@@ -2151,7 +2166,23 @@ var _schemaPromise = fetch('/api/correlation/schema')
 async function _ensureSchema() { if (!corrSchema) { await _schemaPromise; } }
 
 function _srcFields(source) {
-    return (corrSchema && corrSchema.sources && corrSchema.sources[source]) || [];
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.fields) || [];
+}
+function _srcEntities(source) {
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.entities) || [];
+}
+function _allSources() {
+    return (corrSchema && corrSchema.sources) ? Object.keys(corrSchema.sources) : ['syslogs'];
+}
+function _sourceLabel(source) {
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.label) || source;
+}
+function _stageSource(card) {
+    var sel = card.querySelector('.cr-stage-source');
+    return (sel && sel.value) || 'syslogs';
 }
 function _fieldType(source, field) {
     var f = _srcFields(source).filter(function(x) { return x.name === field; })[0];
@@ -2175,6 +2206,26 @@ function _fieldOptionsHtml(source, selected) {
                '>' + f.name + ' (' + f.type + ')</option>';
     }).join('');
 }
+function _sourceOptionsHtml(selected) {
+    return _allSources().map(function(s) {
+        return '<option value="' + s + '"' + (s === selected ? ' selected' : '') +
+               '>' + _cdEsc(_sourceLabel(s)) + '</option>';
+    }).join('');
+}
+function _groupByOptionsHtml(source, selected) {
+    var html = '<option value="">(none)</option>';
+    var ents = _srcEntities(source);
+    if (ents.length) {
+        html += '<optgroup label="Canonical entities — cross-source join">';
+        ents.forEach(function(e) {
+            html += '<option value="' + e + '"' + (e === selected ? ' selected' : '') +
+                    '>' + e + ' — entity</option>';
+        });
+        html += '</optgroup>';
+    }
+    html += '<optgroup label="Columns">' + _fieldOptionsHtml(source, selected) + '</optgroup>';
+    return html;
+}
 function _opOptionsHtml(type, selected) {
     var ops = (corrSchema && corrSchema.operators && corrSchema.operators[type]) ||
               (corrSchema && corrSchema.operators && corrSchema.operators.string) || [];
@@ -2196,6 +2247,10 @@ function builderAddStage(data) {
           '<button type="button" class="cr-icon-btn" title="Move down" onclick="builderMoveStage(this,1)">&darr;</button>' +
           '<button type="button" class="cr-icon-btn danger" title="Remove stage" onclick="builderRemoveStage(this)">&times;</button>' +
         '</div>' +
+        '<div class="cr-stage-srcrow">' +
+          '<span class="cr-stage-meta-label" style="margin:0;">Data source</span>' +
+          '<select class="cr-stage-source" onchange="_onStageSourceChange(this)"></select>' +
+        '</div>' +
         '<div class="cr-cond-label">Conditions — all must match</div>' +
         '<div class="cr-conds"></div>' +
         '<button type="button" class="cr-cond-add" onclick="builderAddCondition(this.closest(\'.cr-stage-card\'))">+ Condition</button>' +
@@ -2208,8 +2263,10 @@ function builderAddStage(data) {
             '<input type="number" class="cr-stage-window" min="1" value="300"></div>' +
         '</div>';
     container.appendChild(card);
-    card.querySelector('.cr-stage-groupby').innerHTML =
-        '<option value="">(none)</option>' + _fieldOptionsHtml('syslogs', '');
+
+    var source = (data && data.source) || 'syslogs';
+    card.querySelector('.cr-stage-source').innerHTML = _sourceOptionsHtml(source);
+    card.querySelector('.cr-stage-groupby').innerHTML = _groupByOptionsHtml(source, '');
 
     if (data) {
         card.querySelector('.cr-stage-name').value = data.name || '';
@@ -2229,14 +2286,15 @@ function builderAddStage(data) {
 
 function builderAddCondition(card, data) {
     var conds = card.querySelector('.cr-conds');
-    var fields = _srcFields('syslogs');
+    var source = _stageSource(card);
+    var fields = _srcFields(source);
     var field = (data && data.field) || (fields[0] || {}).name || '';
-    var ftype = _fieldType('syslogs', field);
+    var ftype = _fieldType(source, field);
     var row = document.createElement('div');
     row.className = 'cr-cond-row';
     row.innerHTML =
         '<select class="cr-cond-field" onchange="_onCondFieldChange(this)">' +
-            _fieldOptionsHtml('syslogs', field) + '</select>' +
+            _fieldOptionsHtml(source, field) + '</select>' +
         '<select class="cr-cond-op">' + _opOptionsHtml(ftype, (data && data.op) || 'eq') + '</select>' +
         '<input class="cr-cond-value" placeholder="value or $stage1.field">' +
         '<select class="cr-cond-var" title="insert a cross-stage variable" ' +
@@ -2251,9 +2309,20 @@ function builderAddCondition(card, data) {
 }
 
 function _onCondFieldChange(select) {
+    var card = select.closest('.cr-stage-card');
     var row = select.closest('.cr-cond-row');
     var opSel = row.querySelector('.cr-cond-op');
-    opSel.innerHTML = _opOptionsHtml(_fieldType('syslogs', select.value), opSel.value);
+    opSel.innerHTML = _opOptionsHtml(_fieldType(_stageSource(card), select.value), opSel.value);
+}
+
+function _onStageSourceChange(select) {
+    // Changing a stage's source resets its conditions and group-by, since
+    // the available columns differ per source.
+    var card = select.closest('.cr-stage-card');
+    var source = select.value;
+    card.querySelector('.cr-conds').innerHTML = '';
+    card.querySelector('.cr-stage-groupby').innerHTML = _groupByOptionsHtml(source, '');
+    builderAddCondition(card);
 }
 
 function _populateVarPicker(select) {
@@ -2307,6 +2376,7 @@ function _renumberStages() {
 function builderCollectStages() {
     var stages = [];
     document.querySelectorAll('#stagesContainer .cr-stage-card').forEach(function(card) {
+        var source = _stageSource(card);
         var filter = {};
         card.querySelectorAll('.cr-cond-row').forEach(function(row) {
             var field = row.querySelector('.cr-cond-field').value;
@@ -2314,7 +2384,7 @@ function builderCollectStages() {
             var val = row.querySelector('.cr-cond-value').value;
             if (!field || val === '') { return; }
             var key = field + _opSuffix(op);
-            if (_fieldType('syslogs', field) === 'numeric' && val[0] !== '$' && !isNaN(Number(val))) {
+            if (_fieldType(source, field) === 'numeric' && val[0] !== '$' && !isNaN(Number(val))) {
                 filter[key] = Number(val);
             } else {
                 filter[key] = val;
@@ -2324,7 +2394,7 @@ function builderCollectStages() {
         if (gb) { filter.group_by = gb; }
         stages.push({
             name: card.querySelector('.cr-stage-name').value || ('Stage ' + (stages.length + 1)),
-            source: 'syslogs',
+            source: source,
             filter: filter,
             threshold: parseInt(card.querySelector('.cr-stage-threshold').value, 10) || 1,
             window: parseInt(card.querySelector('.cr-stage-window').value, 10) || 300,

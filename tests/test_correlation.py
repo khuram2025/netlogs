@@ -19,7 +19,12 @@ from pydantic import ValidationError
 
 import types
 
-from fastapi_app.core.correlation_fields import parse_field_op
+from fastapi_app.core.correlation_fields import (
+    get_source_entities,
+    is_valid_source,
+    parse_field_op,
+    resolve_field,
+)
 from fastapi_app.services.correlation_engine import (
     StageEvalError,
     _as_list,
@@ -583,3 +588,80 @@ class TestPreviewCorrelationRule:
         for key in ("ok", "matched_chains", "stages", "sample_matches",
                     "estimated_per_hour", "error"):
             assert key in d
+
+
+# ======================================================================
+# PHASE 4 — Source registry & canonical entity model
+# ======================================================================
+
+class TestSourceRegistry:
+    def test_new_sources_registered(self):
+        for src in ("syslogs", "dns_logs", "url_logs", "ioc_matches",
+                    "audit_logs", "pa_threat_logs", "correlation_matches"):
+            assert is_valid_source(src), f"{src} should be registered"
+
+    def test_unknown_source_invalid(self):
+        assert not is_valid_source("nonexistent_table")
+
+    def test_resolve_native_field(self):
+        # a native column resolves to itself
+        assert resolve_field("syslogs", "srcip") == "srcip"
+
+    def test_resolve_canonical_entity_per_source(self):
+        # the same canonical entity maps to each source's own column
+        assert resolve_field("syslogs", "ip") == "srcip"
+        assert resolve_field("dns_logs", "ip") == "src_ip"
+        assert resolve_field("audit_logs", "ip") == "ip_address"
+        assert resolve_field("ioc_matches", "ip") == "srcip"
+
+    def test_resolve_unknown_key_returns_none(self):
+        assert resolve_field("syslogs", "totally_bogus") is None
+
+    def test_resolve_in_unknown_source_returns_none(self):
+        assert resolve_field("no_such_source", "ip") is None
+
+    def test_sources_expose_entities(self):
+        assert "ip" in get_source_entities("syslogs")
+        assert "domain" in get_source_entities("dns_logs")
+        assert "user" in get_source_entities("audit_logs")
+
+
+class TestCrossSourceEntityWhere:
+    def test_canonical_ip_resolves_to_dns_column(self):
+        # the join key "ip" must bind dns_logs' own src_ip column
+        sql, params = _entity_where({"ip": "10.0.0.9"}, "dns_logs")
+        assert sql == "src_ip = {e0:String}"
+        assert params == {"e0": "10.0.0.9"}
+
+    def test_canonical_ip_resolves_to_audit_column(self):
+        sql, params = _entity_where({"ip": "10.0.0.9"}, "audit_logs")
+        assert sql == "ip_address = {e0:String}"
+
+    def test_native_field_still_works(self):
+        sql, params = _entity_where({"srcip": "10.0.0.9"}, "syslogs")
+        assert sql == "srcip = {e0:String}"
+
+    def test_unmappable_key_raises(self):
+        with pytest.raises(StageEvalError):
+            _entity_where({"domain": "x"}, "syslogs")  # syslogs has no domain entity
+
+
+class TestMultiSourceStageSchema:
+    def test_dns_source_stage_valid(self):
+        stage = StageSchema(name="DNS", source="dns_logs",
+                            filter={"qname": "evil.example.com"})
+        assert stage.source == "dns_logs"
+
+    def test_canonical_entity_group_by_valid(self):
+        # "ip" is a canonical entity for syslogs even though no column is named "ip"
+        stage = StageSchema(name="x", filter={"action": "deny", "group_by": "ip"})
+        assert stage.filter["group_by"] == "ip"
+
+    def test_wrong_source_field_rejected(self):
+        # qname belongs to dns_logs, not syslogs
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", source="syslogs", filter={"qname": "x"})
+
+    def test_join_keys_accept_canonical_entity(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], join_keys=["ip"])
+        assert rule.join_keys == ["ip"]

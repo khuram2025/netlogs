@@ -23,8 +23,10 @@ from ..core.correlation_fields import (
     NON_FIELD_FILTER_KEYS,
     NUMERIC_ONLY_OPERATORS,
     SOURCE_TABLES,
+    get_sample_columns,
     get_source_fields,
     parse_field_op,
+    resolve_field,
 )
 
 logger = logging.getLogger(__name__)
@@ -221,35 +223,19 @@ def _build_where_clause(filter_config: dict, variables: dict = None,
     return where, params
 
 
-def _fetch_stage_samples(table: str, full_where: str, params: dict,
-                         group_by: str = None, group_by_type: str = None,
-                         key_value: str = None, limit: int = 3) -> list:
-    """Best-effort: fetch a few representative raw events for a matched stage.
-
-    These are stored with the match as an evidence trail so an analyst can see
-    *why* a stage matched without re-querying approximate logs.
-    """
+def _fetch_stage_samples(source: str, table: str, full_where: str,
+                         params: dict, limit: int = 3) -> list:
+    """Best-effort: fetch a few representative raw events for a matched stage,
+    using that source's sample columns, as an evidence trail so an analyst can
+    see *why* a stage matched without re-querying approximate logs."""
     try:
         client = ClickHouseClient.get_client()
-        where = full_where
-        p = dict(params)
-        # Narrow samples to the matched entity when the group-by field is a
-        # string/ip column (covers srcip/dstip — every current rule).
-        if group_by and key_value is not None and group_by_type in (None, "string", "ip"):
-            if group_by_type == "ip":
-                where += f" AND {group_by} = toIPv4({{skey:String}})"
-            else:
-                where += f" AND {group_by} = {{skey:String}}"
-            p["skey"] = str(key_value)
-        cols = "timestamp, srcip, dstip, dstport, action, policyname"
-        query = (f"SELECT {cols} FROM {table} WHERE {where} "
+        cols = get_sample_columns(source)
+        col_sql = ", ".join(cols)
+        query = (f"SELECT {col_sql} FROM {table} WHERE {full_where} "
                  f"ORDER BY timestamp DESC LIMIT {int(limit)}")
-        rows = client.query(query, parameters=p).result_rows
-        return [
-            {"timestamp": str(r[0]), "srcip": str(r[1]), "dstip": str(r[2]),
-             "dstport": r[3], "action": str(r[4]), "policyname": str(r[5])}
-            for r in rows
-        ]
+        rows = client.query(query, parameters=params).result_rows
+        return [{cols[i]: str(r[i]) for i in range(len(cols))} for r in rows]
     except Exception as e:
         logger.debug(f"Stage sample fetch failed: {e}")
         return []
@@ -293,25 +279,30 @@ def _stage_time_filter(window_seconds: int, anchor: Optional[datetime] = None):
 
 
 def _entity_where(entity: dict, source: str):
-    """Build (sql, params) binding each join-key column to the entity value.
+    """Build (sql, params) binding each join key to the entity value.
 
-    This makes the inter-stage join a first-class engine concern rather than
-    relying on the rule author remembering to write ``$stageN.field``.
+    Each key may be a canonical entity (``ip``, ``user``, ...) or a native
+    column; it is resolved to *this source's* column — which is what lets a
+    rule join stages across different data sources.
     """
     fields = get_source_fields(source) or {}
     conds, params = [], {}
-    for i, (field, value) in enumerate(entity.items()):
-        ftype = fields.get(field, "string")
+    for i, (key, value) in enumerate(entity.items()):
+        native = resolve_field(source, key)
+        if native is None:
+            raise StageEvalError(
+                f"Join key '{key}' has no column mapping for source '{source}'")
+        ftype = fields.get(native, "string")
         pn = f"e{i}"
         if ftype == "numeric":
             params[pn] = float(value)
-            conds.append(f"{field} = {{{pn}:Float64}}")
+            conds.append(f"{native} = {{{pn}:Float64}}")
         elif ftype == "ip":
             params[pn] = str(value)
-            conds.append(f"{field} = toIPv4({{{pn}:String}})")
+            conds.append(f"{native} = toIPv4({{{pn}:String}})")
         else:
             params[pn] = str(value)
-            conds.append(f"{field} = {{{pn}:String}}")
+            conds.append(f"{native} = {{{pn}:String}}")
     return (" AND ".join(conds) if conds else "1=1"), params
 
 
@@ -329,17 +320,21 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
         raise StageEvalError(f"Unknown data source '{source}'")
     threshold = _safe_int(stage.get("threshold", 1), "threshold")
 
-    allowed = get_source_fields(source) or {}
+    # Resolve each join key (canonical entity or native column) to this
+    # source's column; the GROUP BY uses native columns.
+    native_fields = []
     for gf in group_fields:
-        if gf not in allowed:
+        native = resolve_field(source, gf)
+        if native is None:
             raise StageEvalError(
-                f"join/group field '{gf}' is not an allowed column for source '{source}'"
+                f"join/group field '{gf}' is not valid for source '{source}'"
             )
+        native_fields.append(native)
 
     where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
     tf, tparams = _stage_time_filter(window, anchor)
     params = {**params, **tparams}
-    gb = ", ".join(group_fields)
+    gb = ", ".join(native_fields)
 
     query = f"""
         SELECT {gb}, count() AS cnt,
@@ -355,6 +350,8 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
     candidates = []
     n = len(group_fields)
     for row in rows:
+        # Entity is keyed by the join-key name (canonical), so it stays
+        # consistent when later stages resolve it against other sources.
         entity = {gf: str(row[i]) for i, gf in enumerate(group_fields)}
         candidates.append({
             "entity": entity,
@@ -393,7 +390,7 @@ def _stage_for_entity(stage: dict, entity: dict, variables: dict,
     row = rows[0] if rows else (0, None, None)
     count = row[0]
     if count >= threshold:
-        samples = _fetch_stage_samples(table, full_where, params)
+        samples = _fetch_stage_samples(source, table, full_where, params)
         return True, {
             "count": count, "first_event": row[1], "last_event": row[2],
             "source": source, "samples": samples,
@@ -890,6 +887,83 @@ async def seed_correlation_rules():
                 "mitre_tactic": "Exfiltration",
                 "mitre_technique": "T1048 - Exfiltration Over Alternative Protocol",
             },
+            # ── Phase 4: cross-source correlation rules ──────────────
+            {
+                "name": "Threat-Intel Source then Firewall Denials",
+                "description": "An IP flagged by a threat-intel feed is also generating repeated firewall denials. Cross-source: IOC hits + firewall traffic.",
+                "severity": "high",
+                "ordering": "any_order",
+                "join_keys": ["ip"],
+                "stages": [
+                    {
+                        "name": "Threat-Intel IOC Hit",
+                        "source": "ioc_matches",
+                        "filter": {"group_by": "ip"},
+                        "threshold": 1,
+                        "window": 86400,
+                    },
+                    {
+                        "name": "Firewall Denials",
+                        "source": "syslogs",
+                        "filter": {"action": "deny"},
+                        "threshold": 5,
+                        "window": 86400,
+                    },
+                ],
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1071 - Application Layer Protocol",
+            },
+            {
+                "name": "Suspicious DNS then Outbound Connection",
+                "description": "A host queried a security-related DNS category, then opened an allowed outbound connection. Cross-source: DNS logs + firewall traffic.",
+                "severity": "medium",
+                "ordering": "any_order",
+                "join_keys": ["ip"],
+                "stages": [
+                    {
+                        "name": "Security-Category DNS Query",
+                        "source": "dns_logs",
+                        "filter": {"category": "Information and Computer Security",
+                                   "group_by": "ip"},
+                        "threshold": 1,
+                        "window": 3600,
+                    },
+                    {
+                        "name": "Allowed Outbound Connection",
+                        "source": "syslogs",
+                        "filter": {"action": "allow"},
+                        "threshold": 1,
+                        "window": 3600,
+                    },
+                ],
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1071.004 - DNS",
+            },
+            {
+                "name": "PA Threat Alert then Firewall Allow",
+                "description": "A Palo Alto threat alert was raised for a host that also has allowed firewall traffic. Cross-source: PA threat logs + firewall traffic.",
+                "severity": "high",
+                "ordering": "any_order",
+                "join_keys": ["ip"],
+                "stages": [
+                    {
+                        "name": "PA Threat Alert",
+                        "source": "pa_threat_logs",
+                        "filter": {"severity": "high", "group_by": "ip"},
+                        "threshold": 1,
+                        "window": 3600,
+                    },
+                    {
+                        "name": "Allowed Firewall Traffic",
+                        "source": "syslogs",
+                        "filter": {"action": "allow"},
+                        "threshold": 1,
+                        "window": 3600,
+                    },
+                ],
+                "mitre_tactic": "Initial Access",
+                "mitre_technique": "T1190 - Exploit Public-Facing Application",
+            },
         ]
 
         added = 0
@@ -903,6 +977,8 @@ async def seed_correlation_rules():
                     mitre_tactic=rule_data.get("mitre_tactic"),
                     mitre_technique=rule_data.get("mitre_technique"),
                     is_enabled=True,
+                    ordering=rule_data.get("ordering", "sequence"),
+                    join_keys=rule_data.get("join_keys"),
                 )
                 db.add(rule)
                 added += 1

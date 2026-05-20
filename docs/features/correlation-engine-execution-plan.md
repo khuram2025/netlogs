@@ -40,11 +40,11 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **2** | True sequence engine | 3–5 wk | ✅ Complete | 11 / 11 |
 | **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ✅ Complete | 7 / 7 |
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
-| **4** | Source registry & entity model | 4 wk | ⬜ Not started | 0 / 7 |
+| **4** | Source registry & entity model | 4 wk | ✅ Complete | 7 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 47 / 72 tasks complete.**
+**Overall: 54 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -222,17 +222,19 @@ entities **before** adding many sources.
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P4-1** | Build a correlation **source registry**: table name, timestamp column, allowed fields, entity mappings, supported operators | new `services/correlation_sources.py` | |
-| - [ ] | **P4-2** | Register sources: `syslogs`, `url_logs`, `ioc_matches`, `audit_logs`, `alerts`, `correlation_matches` | `services/correlation_sources.py` | |
-| - [ ] | **P4-3** | Define **canonical entities**: `ip`, `user`, `host`, `domain`, `url`, `device` | `services/correlation_sources.py` | |
-| - [ ] | **P4-4** | Map each source's native fields → canonical entities (enables cross-source joins) | `services/correlation_sources.py` | |
-| - [ ] | **P4-5** | Engine reads `source` from stage config — remove hardcoded `FROM syslogs` | `services/correlation_engine.py` → `_evaluate_stage()` | |
-| - [ ] | **P4-6** | Seed 3 cross-source rules: (a) IOC hit → allowed firewall connection same IP; (b) suspicious DNS/URL → high outbound volume; (c) repeated denials → admin/audit change same entity | `services/correlation_engine.py` → `seed_correlation_rules()` | |
-| - [ ] | **P4-7** | Tests: cross-source join by canonical entity; new source addable without core-engine edits | `tests/test_correlation.py` | |
+| - [x] | **P4-1** | Source registry — per source: table, label, filterable fields+types, entity map, sample columns | `core/correlation_fields.py` → `SOURCES` | 2026-05-20 |
+| - [x] | **P4-2** | Registered the 7 real ClickHouse sources: `syslogs`, `dns_logs`, `url_logs`, `ioc_matches`, `audit_logs`, `pa_threat_logs`, `correlation_matches` (`alerts` is PostgreSQL — out of ClickHouse scope) | `core/correlation_fields.py` | 2026-05-20 |
+| - [x] | **P4-3** | Canonical entities: `ip`, `dst_ip`, `user`, `host`, `domain`, `url`, `device` | `core/correlation_fields.py` → `CANONICAL_ENTITIES` | 2026-05-20 |
+| - [x] | **P4-4** | Per-source `entities` map (canonical → native column); `resolve_field()` resolves a join key per source | `core/correlation_fields.py`, `services/correlation_engine.py` → `_entity_where()` | 2026-05-20 |
+| - [x] | **P4-5** | Engine reads `source` per stage; `_stage_candidates`/`_stage_for_entity`/`_fetch_stage_samples` all source-aware (no hardcoded `syslogs`) | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P4-6** | 3 cross-source seed rules — IOC→firewall, DNS→firewall, PA-threat→firewall — joined by canonical `ip` | `services/correlation_engine.py` → `seed_correlation_rules()` | 2026-05-20 · all 3 match live data |
+| - [x] | **P4-7** | Tests: registry, `resolve_field`, cross-source `_entity_where`, multi-source schema | `tests/test_correlation.py` | 2026-05-20 · 105 tests pass (15 new) |
 
 ### Exit criteria — Phase 4
-- [ ] At least **3 shipped rules span ≥2 data sources**.
-- [ ] A new source can be added by registry config without modifying core engine logic.
+- [x] At least **3 shipped rules span ≥2 data sources**. — _3 cross-source rules seeded; live: 12 / 3 / 1 matches respectively_
+- [x] A new source can be added by registry config without modifying core engine logic. — _the engine reads the data-driven `SOURCES` registry; a source is one dict entry_
+
+> **Builder bonus:** the visual builder gained a per-stage **Data Source** dropdown — switching a stage's source repopulates its field/group-by dropdowns — so cross-source rules can be built without the JSON editor.
 
 ---
 
@@ -317,7 +319,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. Committed `a4ced1f`. | Eng |
 | 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** Committed `2a13d09`. | Eng |
 | 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. Committed `ad2e4ba`. | Eng |
-| 2026-05-20 | **Phase 3 complete** (5/5 tasks). `preview_correlation_rule()` dry-runs a rule with per-stage candidate/survivor diagnostics, sample entities and a rough fire-rate estimate; `POST /api/correlation/rules/test` builds a transient un-persisted rule and previews it; a "Test Rule" button in the builder shows the stage funnel before saving. Verified: a test call recorded 0 rows; preview showed "20 candidates → 10 surviving chains". 90 tests pass. | Eng |
+| 2026-05-20 | **Phase 3 complete** (5/5 tasks). `preview_correlation_rule()` dry-runs a rule with per-stage candidate/survivor diagnostics, sample entities and a rough fire-rate estimate; `POST /api/correlation/rules/test` builds a transient un-persisted rule and previews it; a "Test Rule" button in the builder shows the stage funnel before saving. Verified: a test call recorded 0 rows; preview showed "20 candidates → 10 surviving chains". 90 tests pass. Committed `0f060ec`. | Eng |
+| 2026-05-20 | **Phase 4 complete** (7/7 tasks). `core/correlation_fields.py` is now a data-driven **source registry** — 7 ClickHouse sources (syslogs, dns_logs, url_logs, ioc_matches, audit_logs, pa_threat_logs, correlation_matches), each with fields, types, sample columns and a canonical-entity map. `resolve_field()` resolves a join key (canonical entity *or* native column) per source, so a rule joins stages across sources by `ip`/`user`/etc. Engine fully source-aware. 3 cross-source seed rules (IOC→firewall, DNS→firewall, PA-threat→firewall). Builder gained a per-stage Data Source dropdown. Verified live: the 3 rules matched 12 / 3 / 1 entities. 105 tests pass. (`alerts` lives in PostgreSQL, out of the ClickHouse-source scope.) | Eng |
 | | | |
 
 ---

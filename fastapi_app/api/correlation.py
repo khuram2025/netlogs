@@ -348,15 +348,22 @@ async def api_delete_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/api/correlation/schema", dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_correlation_schema():
-    """Field / operator catalog that drives the visual rule builder dropdowns."""
-    from ..core.correlation_fields import SOURCE_FIELDS
+    """Field / operator / source catalog that drives the visual rule builder."""
+    from ..core.correlation_fields import SOURCES, CANONICAL_ENTITIES, DEFAULT_SOURCE
 
     sources = {
-        src: [{"name": f, "type": t} for f, t in sorted(fields.items())]
-        for src, fields in SOURCE_FIELDS.items()
+        name: {
+            "label": src["label"],
+            "fields": [{"name": f, "type": t}
+                       for f, t in sorted(src["fields"].items())],
+            "entities": list(src["entities"].keys()),
+        }
+        for name, src in SOURCES.items()
     }
     return {
         "sources": sources,
+        "default_source": DEFAULT_SOURCE,
+        "canonical_entities": CANONICAL_ENTITIES,
         # operator -> field-name suffix the engine understands
         "operators": {
             "string": [
