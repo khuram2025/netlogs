@@ -1116,6 +1116,82 @@
     }
     .cr-adv-json-actions button { font-size: 0.72rem; padding: 0.35rem 0.7rem; }
 
+    /* ===== Test / preview panel ===== */
+    .cr-preview {
+        margin-top: 0.75rem;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.6rem;
+        padding: 0.85rem 1rem;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .cr-preview-loading {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        color: var(--cr-text-muted);
+    }
+    .cr-preview-head {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    .cr-preview-head.ok { color: #4ade80; }
+    .cr-preview-head.no { color: #fbbf24; }
+    .cr-preview-err {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        color: #fca5a5;
+        margin-bottom: 0.5rem;
+    }
+    .cr-preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+    }
+    .cr-preview-table th {
+        text-align: left;
+        color: var(--cr-text-muted);
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.25rem 0.4rem;
+        border-bottom: 1px solid var(--cr-border);
+    }
+    .cr-preview-table td {
+        padding: 0.35rem 0.4rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+        color: var(--cr-text);
+    }
+    .cr-preview-bad { color: #fca5a5; }
+    .cr-preview-samples {
+        margin-top: 0.6rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.74rem;
+        color: var(--cr-text-muted);
+    }
+    .cr-preview-samples code {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(59, 130, 246, 0.12);
+        color: #93c5fd;
+        padding: 0.1rem 0.35rem;
+        border-radius: 0.25rem;
+        font-size: 0.7rem;
+        margin: 0 0.15rem;
+    }
+    .cr-btn-test {
+        font-family: 'Outfit', sans-serif;
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-weight: 600;
+        font-size: 0.82rem;
+        padding: 0.55rem 1.1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+    }
+    .cr-btn-test:hover { background: rgba(59, 130, 246, 0.28); }
+
     .cr-btn-submit {
         font-family: 'Outfit', sans-serif;
         display: inline-flex;
@@ -1950,9 +2026,13 @@
                         <code>$stage1.field</code> for cross-stage variable references.
                     </div>
                 </details>
+
+                <!-- ===== Test / preview results ===== -->
+                <div id="builderPreview" class="cr-preview" style="display:none;"></div>
             </div>
             <div class="cr-modal-footer">
                 <button type="button" class="cr-btn-cancel" onclick="closeModal('addRuleModal')">Cancel</button>
+                <button type="button" class="cr-btn-test" onclick="builderTestRule()">Test Rule</button>
                 <button type="submit" class="cr-btn-submit" id="addRuleSubmitBtn">Create Rule</button>
             </div>
         </form>
@@ -2294,6 +2374,7 @@ async function showAddRuleModal() {
     document.getElementById('addRuleModalTitle').textContent = 'Add Correlation Rule';
     document.getElementById('addRuleSubmitBtn').textContent = 'Create Rule';
     document.getElementById('builderError').style.display = 'none';
+    document.getElementById('builderPreview').style.display = 'none';
     document.getElementById('ruleStagesJson').value = '';
     document.getElementById('stagesContainer').innerHTML = '';
     builderAddStage();
@@ -2321,6 +2402,7 @@ async function editRule(ruleId) {
         document.getElementById('ruleSuppressWindow').value = rule.suppress_window || 3600;
         document.getElementById('ruleJoinKeys').value = (rule.join_keys || []).join(', ');
         document.getElementById('builderError').style.display = 'none';
+        document.getElementById('builderPreview').style.display = 'none';
         document.getElementById('ruleStagesJson').value = '';
         document.getElementById('stagesContainer').innerHTML = '';
         (rule.stages || []).forEach(function(s) { builderAddStage(s); });
@@ -2328,6 +2410,86 @@ async function editRule(ruleId) {
         document.getElementById('addRuleModal').classList.add('active');
     } catch (e) {
         showToast('Error loading rule: ' + e.message, 'error');
+    }
+}
+
+// ================================================================
+// TEST RULE (dry-run preview)
+// ================================================================
+function _builderCollectRuleData() {
+    var joinRaw = document.getElementById('ruleJoinKeys').value.trim();
+    var joinKeys = joinRaw
+        ? joinRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+        : null;
+    return {
+        name: document.getElementById('ruleName').value,
+        description: document.getElementById('ruleDesc').value,
+        severity: document.getElementById('ruleSeverity').value,
+        is_enabled: document.getElementById('ruleEnabled').value === 'true',
+        mitre_tactic: document.getElementById('ruleMitreTactic').value || null,
+        mitre_technique: document.getElementById('ruleMitreTechnique').value || null,
+        ordering: document.getElementById('ruleOrdering').value,
+        match_mode: document.getElementById('ruleMatchMode').value,
+        suppress_window: parseInt(document.getElementById('ruleSuppressWindow').value, 10) || 3600,
+        join_keys: joinKeys,
+        stages: builderCollectStages(),
+    };
+}
+
+function _renderPreview(d) {
+    var h = '<div class="cr-preview-head ' + (d.ok ? 'ok' : 'no') + '">' +
+        (d.ok ? '✓ Rule would match — ' : '✕ Rule would not fire — ') +
+        d.matched_chains + ' chain(s), ≈' + d.estimated_per_hour + '/hour (rough)</div>';
+    if (d.error) { h += '<div class="cr-preview-err">' + _cdEsc(d.error) + '</div>'; }
+    h += '<table class="cr-preview-table"><thead><tr><th>Stage</th><th>Result</th></tr></thead><tbody>';
+    (d.stages || []).forEach(function(s) {
+        var cell = s.error
+            ? '<span class="cr-preview-bad">' + _cdEsc(s.error) + '</span>'
+            : s.result + ' ' + _cdEsc(s.label || '');
+        h += '<tr><td>' + s.index + '. ' + _cdEsc(s.name) + '</td><td>' + cell + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    if (d.sample_matches && d.sample_matches.length) {
+        h += '<div class="cr-preview-samples">Sample entities: ' +
+            d.sample_matches.map(function(m) {
+                return '<code>' + _cdEsc(m.entity) + '</code>';
+            }).join(' ') + '</div>';
+    }
+    return h;
+}
+
+async function builderTestRule() {
+    var errBox = document.getElementById('builderError');
+    var err = builderValidate();
+    if (err) { errBox.textContent = err; errBox.style.display = 'block'; return; }
+    errBox.style.display = 'none';
+
+    var preview = document.getElementById('builderPreview');
+    preview.style.display = 'block';
+    preview.innerHTML = '<div class="cr-preview-loading">Running test against recent logs…</div>';
+
+    var data = _builderCollectRuleData();
+    if (!data.name) { data.name = 'Draft (test)'; }   // name not required to test
+    try {
+        var res = await fetch('/api/correlation/rules/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        var d = await res.json();
+        if (!res.ok) {
+            var msg = d.detail;
+            if (Array.isArray(msg)) {
+                msg = msg.map(function(x) {
+                    return (x.loc ? x.loc.slice(1).join('.') + ': ' : '') + x.msg;
+                }).join('; ');
+            }
+            preview.innerHTML = '<div class="cr-preview-err">' + (msg || 'Test failed') + '</div>';
+            return;
+        }
+        preview.innerHTML = _renderPreview(d);
+    } catch (e) {
+        preview.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
     }
 }
 
@@ -2341,25 +2503,7 @@ async function submitAddRule(e) {
     if (err) { errBox.textContent = err; errBox.style.display = 'block'; return false; }
     errBox.style.display = 'none';
 
-    var joinRaw = document.getElementById('ruleJoinKeys').value.trim();
-    var joinKeys = joinRaw
-        ? joinRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
-        : null;
-
-    var data = {
-        name: document.getElementById('ruleName').value,
-        description: document.getElementById('ruleDesc').value,
-        severity: document.getElementById('ruleSeverity').value,
-        is_enabled: document.getElementById('ruleEnabled').value === 'true',
-        mitre_tactic: document.getElementById('ruleMitreTactic').value || null,
-        mitre_technique: document.getElementById('ruleMitreTechnique').value || null,
-        ordering: document.getElementById('ruleOrdering').value,
-        match_mode: document.getElementById('ruleMatchMode').value,
-        suppress_window: parseInt(document.getElementById('ruleSuppressWindow').value, 10) || 3600,
-        join_keys: joinKeys,
-        stages: builderCollectStages(),
-    };
-
+    var data = _builderCollectRuleData();
     var editing = _editingRuleId !== null;
     var url = editing ? '/api/correlation/rules/' + _editingRuleId : '/api/correlation/rules/';
     try {

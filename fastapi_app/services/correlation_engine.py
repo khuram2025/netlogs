@@ -537,6 +537,100 @@ def evaluate_correlation_rule(rule: CorrelationRule) -> List[dict]:
         return []
 
 
+def preview_correlation_rule(rule: CorrelationRule, sample_limit: int = 5) -> dict:
+    """Dry-run a rule against recent history and return per-stage diagnostics.
+
+    Read-only: queries ClickHouse but never records a match or creates an
+    alert. Drives the builder's "Test Rule" button so an analyst can see how
+    a rule behaves — and where its chain breaks — before enabling it.
+    """
+    diag = {
+        "ok": False, "matched_chains": 0, "stages": [],
+        "sample_matches": [], "estimated_per_hour": 0.0, "error": None,
+    }
+    stages = rule.stages
+    if not stages or not isinstance(stages, list):
+        diag["error"] = "Rule has no stages."
+        return diag
+
+    ordering = (getattr(rule, "ordering", "sequence") or "sequence").lower()
+    try:
+        join_keys = _rule_join_keys(rule, stages)
+
+        # Stage 1 — candidate entities
+        s1 = stages[0]
+        w1 = _safe_int(s1.get("window", 300), "window")
+        if join_keys:
+            candidates = _stage_candidates(s1, join_keys, {}, w1, anchor=None)
+        else:
+            matched, res = _stage_for_entity(s1, {}, {}, w1, anchor=None)
+            candidates = ([{"entity": {}, "count": res.get("count", 0),
+                            "first_event": res.get("first_event"),
+                            "last_event": res.get("last_event")}]
+                          if matched else [])
+        diag["stages"].append({
+            "index": 1, "name": s1.get("name", "Stage 1"),
+            "result": len(candidates),
+            "label": "candidate entities", "error": None,
+        })
+
+        chains = [{
+            "entity": c["entity"],
+            "variables": {"stage1": {**c["entity"], "count": c["count"]}},
+            "last_event": c["last_event"],
+        } for c in candidates]
+
+        # Stages 2..N — narrow
+        for idx in range(1, len(stages)):
+            stage = stages[idx]
+            wN = _safe_int(stage.get("window", 300), "window")
+            survivors = []
+            for chain in chains:
+                anchor = chain["last_event"] if ordering == "sequence" else None
+                matched, res = _stage_for_entity(
+                    stage, chain["entity"], chain["variables"], wN, anchor)
+                if matched:
+                    chain["variables"][f"stage{idx + 1}"] = {**chain["entity"], **res}
+                    if res.get("last_event"):
+                        chain["last_event"] = res["last_event"]
+                    survivors.append(chain)
+            diag["stages"].append({
+                "index": idx + 1, "name": stage.get("name", f"Stage {idx + 1}"),
+                "result": len(survivors),
+                "label": "chains surviving", "error": None,
+            })
+            chains = survivors
+            if not chains:
+                break
+
+        diag["matched_chains"] = len(chains)
+        diag["ok"] = len(chains) > 0
+        for chain in chains[:sample_limit]:
+            diag["sample_matches"].append({
+                "entity": "|".join(chain["entity"].values()) or "(global)",
+            })
+
+        # Rough fire-rate estimate. Discrete rules record an entity once per
+        # suppress_window; recurring rules record every ~60s evaluation.
+        mode = getattr(rule, "match_mode", "discrete") or "discrete"
+        sw = getattr(rule, "suppress_window", 3600) or 3600
+        per_hour = (3600.0 / sw) if mode == "discrete" else 60.0
+        diag["estimated_per_hour"] = round(len(chains) * per_hour, 1)
+        return diag
+
+    except StageEvalError as e:
+        diag["error"] = str(e)
+        diag["stages"].append({
+            "index": len(diag["stages"]) + 1, "name": "(failed)",
+            "result": 0, "label": "error", "error": str(e),
+        })
+        return diag
+    except Exception as e:
+        logger.error(f"Preview error for rule '{getattr(rule, 'name', '?')}': {e}")
+        diag["error"] = str(e)
+        return diag
+
+
 def record_correlation_match(match: dict):
     """Record a correlation match in ClickHouse.
 

@@ -293,6 +293,35 @@ async def api_clone_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
         return JSONResponse(status_code=400, content={"detail": str(e)})
 
 
+@router.post("/api/correlation/rules/test", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_test_rule(payload: CorrelationRuleCreate):
+    """Dry-run a draft correlation rule against recent history.
+
+    Builds a transient (un-persisted) rule and previews it — returns per-stage
+    diagnostics, sample matches and a rough fire-rate estimate. Records
+    nothing: no match row, no alert. Drives the builder's Test button.
+    """
+    from ..services.correlation_engine import preview_correlation_rule
+
+    rule = CorrelationRule(
+        name=payload.name or "Draft",
+        description=payload.description or "",
+        severity=payload.severity,
+        stages=[s.model_dump() for s in payload.stages],
+        mitre_tactic=payload.mitre_tactic,
+        mitre_technique=payload.mitre_technique,
+        is_enabled=True,
+        match_mode=payload.match_mode,
+        suppress_window=payload.suppress_window,
+        ordering=payload.ordering,
+        join_keys=payload.join_keys,
+    )
+    # Transient object — never added to a session, so nothing is persisted.
+    rule.id = 0
+    rule.version = 1
+    return preview_correlation_rule(rule)
+
+
 @router.post("/api/correlation/rules/{rule_id}/toggle", dependencies=[Depends(require_min_role("ADMIN"))])
 async def api_toggle_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
     """Toggle a correlation rule enabled/disabled."""

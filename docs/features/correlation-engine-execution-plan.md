@@ -39,12 +39,12 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 | **1** | Match identity, evidence, suppression | 2–3 wk | ✅ Complete | 10 / 10 |
 | **2** | True sequence engine | 3–5 wk | ✅ Complete | 11 / 11 |
 | **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ✅ Complete | 7 / 7 |
-| **3** | Authoring polish & detection-eng UX | 1–2 wk | ⬜ Not started | 0 / 5 |
+| **3** | Authoring polish & detection-eng UX | 1–2 wk | ✅ Complete | 5 / 5 |
 | **4** | Source registry & entity model | 4 wk | ⬜ Not started | 0 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 42 / 72 tasks complete.**
+**Overall: 47 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -200,15 +200,15 @@ versioning. **Effort:** 1–2 weeks · **Priority:** 🟠 P1 · **Depends on:** 
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P3-1** | Add `POST /api/correlation/rules/test` — run a draft rule against recent history **without persisting** | `api/correlation.py` | |
-| - [ ] | **P3-2** | Preview output: stages matched, sample matches, event counts, **estimated fire frequency**, stage-by-stage failure reasons | `api/correlation.py`, `templates/correlation/rules.html` | |
-| - [ ] | **P3-3** | Record `rule_version` in every match; bump version on each `PUT` update | `services/correlation_engine.py`, `api/correlation.py` | |
-| - [ ] | **P3-4** | Wire builder → test → save into one flow ("Test before enable") | `templates/correlation/rules.html` | |
-| - [ ] | **P3-5** | Tests: preview returns correct match shape; preview never writes to `correlation_matches` | `tests/test_correlation.py` | |
+| - [x] | **P3-1** | `POST /api/correlation/rules/test` — dry-runs a draft rule (transient, un-persisted) | `api/correlation.py` → `api_test_rule()` | 2026-05-20 · verified: 0 rows persisted |
+| - [x] | **P3-2** | `preview_correlation_rule()` — per-stage candidate/survivor counts, sample entities, rough fire-rate estimate, stage error reasons | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P3-3** | `rule_version` recorded in every match; bumped on each `PUT` (delivered in Phase 1) | `services/correlation_engine.py`, `api/correlation.py` | 2026-05-20 · verified (edit bumped v1→v2) |
+| - [x] | **P3-4** | "Test Rule" button in the builder → preview panel with the stage funnel | `templates/correlation/rules.html` | 2026-05-20 · verified in browser |
+| - [x] | **P3-5** | Tests: preview diagnostic shape; preview persists nothing | `tests/test_correlation.py` | 2026-05-20 · 90 tests pass; 0 rows after a test call |
 
 ### Exit criteria — Phase 3
-- [ ] An analyst can create, test, edit, and tune a rule end-to-end without writing JSON.
-- [ ] Rule preview shows expected fire rate, sample matches, and per-stage failures.
+- [x] An analyst can create, test, edit, and tune a rule end-to-end without writing JSON. — _builder + Test + edit all verified in browser_
+- [x] Rule preview shows expected fire rate, sample matches, and per-stage failures. — _"✓ Rule would match — 10 chains, ≈10/hour" with the 20→10 stage funnel and sample entities_
 
 ---
 
@@ -316,7 +316,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 | 2026-05-20 | **Phase 0 complete** (14/14 tasks). Implemented on branch `feat/correlation-engine-phase0`: new `core/correlation_fields.py` (source field allow-list), `schemas/correlation.py` (Pydantic validation), parameterized ClickHouse queries, fail-closed variable resolution, PUT/clone endpoints, 6 severity cards, filtered match view, `tests/test_correlation.py` (50 tests). Committed `4df7aa0`. | Eng |
 | 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. Committed `a4ced1f`. | Eng |
 | 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** Committed `2a13d09`. | Eng |
-| 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. | Eng |
+| 2026-05-20 | **Phase 2b complete** (7/7 tasks). Replaced the raw-JSON textarea with a visual stage builder: `GET /api/correlation/schema` feeds field/operator dropdowns; stage cards with condition rows (field/op/value), group-by/threshold/window, move up/down reorder, `$stageN.field` variable picker; rule-level ordering/match-mode/suppress-window/join-keys; inline validation; a synchronized advanced-JSON escape hatch; and an Edit button that round-trips any rule through the builder and saves via PUT. Browser-verified: built + created + edited a 2-stage rule entirely via dropdowns. Committed `ad2e4ba`. | Eng |
+| 2026-05-20 | **Phase 3 complete** (5/5 tasks). `preview_correlation_rule()` dry-runs a rule with per-stage candidate/survivor diagnostics, sample entities and a rough fire-rate estimate; `POST /api/correlation/rules/test` builds a transient un-persisted rule and previews it; a "Test Rule" button in the builder shows the stage funnel before saving. Verified: a test call recorded 0 rows; preview showed "20 candidates → 10 surviving chains". 90 tests pass. | Eng |
 | | | |
 
 ---

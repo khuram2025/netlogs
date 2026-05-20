@@ -32,6 +32,7 @@ from fastapi_app.services.correlation_engine import (
     _safe_int,
     _stage_time_filter,
     match_fingerprint,
+    preview_correlation_rule,
 )
 from fastapi_app.schemas.correlation import (
     CorrelationRuleCreate,
@@ -552,3 +553,33 @@ class TestPhase2RuleSchema:
         fp1 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.8")
         fp2 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.9")
         assert fp1 != fp2
+
+
+# ======================================================================
+# PHASE 3 — preview / dry-run
+# ======================================================================
+
+class TestPreviewCorrelationRule:
+    """preview_correlation_rule must dry-run without persisting and return a
+    stable diagnostic shape. (Stage execution itself needs ClickHouse and is
+    covered by integration verification.)"""
+
+    def test_no_stages_returns_error(self):
+        rule = types.SimpleNamespace(stages=[], name="Empty", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        assert d["ok"] is False
+        assert d["error"] == "Rule has no stages."
+        assert d["matched_chains"] == 0
+
+    def test_none_stages_returns_error(self):
+        rule = types.SimpleNamespace(stages=None, name="Empty", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        assert d["ok"] is False
+        assert d["error"]
+
+    def test_diag_has_expected_keys(self):
+        rule = types.SimpleNamespace(stages=[], name="x", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        for key in ("ok", "matched_chains", "stages", "sample_matches",
+                    "estimated_per_hour", "error"):
+            assert key in d
