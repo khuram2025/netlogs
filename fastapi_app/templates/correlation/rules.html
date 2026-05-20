@@ -2064,6 +2064,15 @@
                 <div class="cr-form-group" id="templatePickerGroup">
                     <label>Start from a Template <span style="color:var(--cr-text-muted);font-weight:400;">(optional)</span></label>
                     <select id="ruleTemplate" onchange="applyTemplate(this.value)"></select>
+                    <details class="cr-adv-json" id="sigmaImportGroup" style="margin-top:0.5rem;">
+                        <summary>…or import a Sigma rule</summary>
+                        <textarea id="sigmaYaml" rows="6" spellcheck="false"
+                                  placeholder="Paste Sigma rule YAML here…"></textarea>
+                        <div class="cr-adv-json-actions">
+                            <button type="button" class="cr-btn-cancel" onclick="importSigma()">Import Sigma → Builder</button>
+                        </div>
+                        <div id="sigmaWarnings" class="cr-form-hint"></div>
+                    </details>
                 </div>
                 <div class="cr-form-group">
                     <label>Rule Name</label>
@@ -2398,24 +2407,57 @@ function _populateTemplateSelect() {
     sel.innerHTML = opts.join('');
     sel.value = '';
 }
+// Populate the whole builder from a flat rule draft (template or Sigma import).
+function _applyRuleDraft(r) {
+    document.getElementById('ruleName').value = r.name || '';
+    document.getElementById('ruleDesc').value = r.description || '';
+    document.getElementById('ruleSeverity').value = r.severity || 'high';
+    document.getElementById('ruleMitreTactic').value = r.mitre_tactic || '';
+    document.getElementById('ruleMitreTechnique').value = r.mitre_technique || '';
+    document.getElementById('ruleOrdering').value = r.ordering || 'sequence';
+    document.getElementById('ruleMatchMode').value = r.match_mode || 'discrete';
+    document.getElementById('ruleSuppressWindow').value = r.suppress_window || 3600;
+    document.getElementById('ruleJoinKeys').value = (r.join_keys || []).join(', ');
+    document.getElementById('ruleActions').value =
+        r.actions ? JSON.stringify(r.actions, null, 2) : '';
+    document.getElementById('stagesContainer').innerHTML = '';
+    (r.stages || []).forEach(function(s) { builderAddStage(s); });
+    if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+}
+
 function applyTemplate(templateId) {
     if (!templateId) { return; }
     var t = _corrTemplates.filter(function(x) { return x.id === templateId; })[0];
     if (!t) { return; }
     var r = t.rule || {};
-    document.getElementById('ruleName').value = t.name || '';
-    document.getElementById('ruleDesc').value = t.description || '';
-    document.getElementById('ruleSeverity').value = r.severity || 'high';
-    document.getElementById('ruleMitreTactic').value = t.mitre_tactic || '';
-    document.getElementById('ruleMitreTechnique').value = t.mitre_technique || '';
-    document.getElementById('ruleOrdering').value = r.ordering || 'sequence';
-    document.getElementById('ruleMatchMode').value = r.match_mode || 'discrete';
-    document.getElementById('ruleSuppressWindow').value = r.suppress_window || 3600;
-    document.getElementById('ruleJoinKeys').value = (r.join_keys || []).join(', ');
-    document.getElementById('stagesContainer').innerHTML = '';
-    (r.stages || []).forEach(function(s) { builderAddStage(s); });
-    if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+    _applyRuleDraft({
+        name: t.name, description: t.description, severity: r.severity,
+        mitre_tactic: t.mitre_tactic, mitre_technique: t.mitre_technique,
+        ordering: r.ordering, match_mode: r.match_mode,
+        suppress_window: r.suppress_window, join_keys: r.join_keys, stages: r.stages,
+    });
     showToast('Loaded template: ' + t.name, 'success');
+}
+
+async function importSigma() {
+    var yamlText = document.getElementById('sigmaYaml').value.trim();
+    if (!yamlText) { showToast('Paste a Sigma rule first', 'error'); return; }
+    try {
+        var res = await fetch('/api/correlation/sigma/import', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({yaml: yamlText}),
+        });
+        var d = await res.json();
+        if (!res.ok) { showToast(d.detail || 'Sigma import failed', 'error'); return; }
+        _applyRuleDraft(d.rule);
+        document.getElementById('sigmaWarnings').textContent =
+            (d.warnings && d.warnings.length)
+                ? 'Imported with notes: ' + d.warnings.join('; ')
+                : 'Imported cleanly — review the fields before saving.';
+        showToast('Sigma rule imported — review before saving', 'success');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
 }
 
 function _srcFields(source) {

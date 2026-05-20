@@ -417,6 +417,23 @@ async def api_correlation_templates():
     return out
 
 
+@router.post("/api/correlation/sigma/import", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_sigma_import(request: Request):
+    """Convert a Sigma detection rule (YAML) into a correlation-rule draft for
+    the builder. Persists nothing — the analyst reviews and saves."""
+    data = await request.json()
+    text = (data.get("yaml") or "").strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"detail": "No Sigma YAML provided"})
+    from ..core.sigma_import import parse_sigma
+    try:
+        rule, warnings = parse_sigma(text)
+    except Exception as e:
+        return JSONResponse(status_code=400,
+                            content={"detail": f"Sigma import failed: {e}"})
+    return {"rule": rule, "warnings": warnings}
+
+
 @router.get("/correlation/mitre/", response_class=HTMLResponse, name="mitre_attack_map",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db)):

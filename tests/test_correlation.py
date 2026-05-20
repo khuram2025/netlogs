@@ -751,3 +751,55 @@ class TestCorrelationTemplates:
         for t in TEMPLATES:
             payload = CorrelationRuleCreate(name=t["name"], **dict(t["rule"]))
             assert len(payload.stages) >= 1, f"template {t['id']} has no stages"
+
+
+# ======================================================================
+# PHASE 6 — Sigma import
+# ======================================================================
+
+_SIGMA_YAML = """
+title: Suspicious Outbound Connection
+description: A test Sigma rule
+level: high
+tags:
+  - attack.t1071
+  - attack.command_and_control
+detection:
+  selection:
+    action: deny
+    dst_port: 4444
+  condition: selection
+"""
+
+
+class TestSigmaImport:
+    def test_parses_basic_sigma(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, warnings = parse_sigma(_SIGMA_YAML)
+        assert rule["name"] == "Suspicious Outbound Connection"
+        assert rule["severity"] == "high"
+        assert rule["mitre_technique"] == "T1071"
+        assert len(rule["stages"]) == 1
+
+    def test_field_name_mapped(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, _ = parse_sigma(_SIGMA_YAML)
+        # Sigma's dst_port maps to the syslogs column dstport
+        assert "dstport" in rule["stages"][0]["filter"]
+        assert rule["stages"][0]["filter"]["action"] == "deny"
+
+    def test_imported_rule_validates(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, _ = parse_sigma(_SIGMA_YAML)
+        payload = CorrelationRuleCreate(**dict(rule))
+        assert len(payload.stages) == 1
+
+    def test_invalid_yaml_raises(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        with pytest.raises(ValueError):
+            parse_sigma("just a plain string")
+
+    def test_no_detection_raises(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        with pytest.raises(ValueError):
+            parse_sigma("title: X\ndescription: Y\n")
