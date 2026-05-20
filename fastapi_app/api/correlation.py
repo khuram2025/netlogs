@@ -178,6 +178,9 @@ async def api_list_rules(db: AsyncSession = Depends(get_db)):
         "version": getattr(r, "version", 1) or 1,
         "match_mode": getattr(r, "match_mode", "discrete") or "discrete",
         "suppress_window": getattr(r, "suppress_window", 3600) or 3600,
+        "ordering": getattr(r, "ordering", "sequence") or "sequence",
+        "join_keys": getattr(r, "join_keys", None),
+        "schema_version": getattr(r, "schema_version", 2) or 2,
         "trigger_count": r.trigger_count or 0,
         "last_evaluated_at": str(r.last_evaluated_at) if r.last_evaluated_at else None,
         "last_triggered_at": str(r.last_triggered_at) if r.last_triggered_at else None,
@@ -203,6 +206,8 @@ async def api_create_rule(payload: CorrelationRuleCreate, db: AsyncSession = Dep
             is_enabled=payload.is_enabled,
             match_mode=payload.match_mode,
             suppress_window=payload.suppress_window,
+            ordering=payload.ordering,
+            join_keys=payload.join_keys,
         )
         db.add(rule)
         await db.commit()
@@ -396,6 +401,9 @@ async def api_rule_match_detail(rule_id: int,
         "version": getattr(rule, "version", 1) or 1,
         "match_mode": getattr(rule, "match_mode", "discrete") or "discrete",
         "suppress_window": getattr(rule, "suppress_window", 3600) or 3600,
+        "ordering": getattr(rule, "ordering", "sequence") or "sequence",
+        "join_keys": getattr(rule, "join_keys", None),
+        "schema_version": getattr(rule, "schema_version", 2) or 2,
         "trigger_count": rule.trigger_count or 0,
         "last_evaluated_at": str(rule.last_evaluated_at) if rule.last_evaluated_at else None,
         "last_triggered_at": str(rule.last_triggered_at) if rule.last_triggered_at else None,

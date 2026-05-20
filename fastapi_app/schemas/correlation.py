@@ -8,7 +8,7 @@ failing silently at scheduler-evaluation time.
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..core.correlation_fields import (
     DEFAULT_SOURCE,
@@ -20,6 +20,7 @@ from ..core.correlation_fields import (
 )
 
 Severity = Literal["critical", "high", "medium", "low"]
+MatchOrdering = Literal["sequence", "any_order"]
 
 
 def _is_number(value: Any) -> bool:
@@ -90,6 +91,19 @@ class CorrelationRuleCreate(BaseModel):
     # Phase 1: match identity / suppression
     match_mode: MatchMode = "discrete"
     suppress_window: int = Field(default=3600, ge=60, le=604_800)
+    # Phase 2: stage ordering / join
+    ordering: MatchOrdering = "sequence"
+    join_keys: Optional[List[str]] = Field(default=None, max_length=4)
+
+    @field_validator("join_keys")
+    @classmethod
+    def _check_join_keys(cls, v):
+        if v:
+            fields = get_source_fields(DEFAULT_SOURCE) or {}
+            for key in v:
+                if key not in fields:
+                    raise ValueError(f"join key '{key}' is not a valid field")
+        return v
 
 
 class CorrelationRuleUpdate(BaseModel):
@@ -104,3 +118,15 @@ class CorrelationRuleUpdate(BaseModel):
     mitre_technique: Optional[str] = Field(default=None, max_length=100)
     match_mode: Optional[MatchMode] = None
     suppress_window: Optional[int] = Field(default=None, ge=60, le=604_800)
+    ordering: Optional[MatchOrdering] = None
+    join_keys: Optional[List[str]] = Field(default=None, max_length=4)
+
+    @field_validator("join_keys")
+    @classmethod
+    def _check_join_keys(cls, v):
+        if v:
+            fields = get_source_fields(DEFAULT_SOURCE) or {}
+            for key in v:
+                if key not in fields:
+                    raise ValueError(f"join key '{key}' is not a valid field")
+        return v

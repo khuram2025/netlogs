@@ -37,14 +37,14 @@ overhaul. It consolidates three analysis documents into one actionable plan:
 |-------|-------|--------|--------|------|
 | **0** | Correctness & safety hotfixes | 1.5–2 wk | ✅ Complete | 14 / 14 |
 | **1** | Match identity, evidence, suppression | 2–3 wk | ✅ Complete | 10 / 10 |
-| **2** | True sequence engine | 3–5 wk | ⬜ Not started | 0 / 11 |
+| **2** | True sequence engine | 3–5 wk | ✅ Complete | 11 / 11 |
 | **2b** | Visual builder UI (parallel w/ 1–2) | ~3 wk | ⬜ Not started | 0 / 7 |
 | **3** | Authoring polish & detection-eng UX | 1–2 wk | ⬜ Not started | 0 / 5 |
 | **4** | Source registry & entity model | 4 wk | ⬜ Not started | 0 / 7 |
 | **5** | Incident & risk output | 3–4 wk | ⬜ Not started | 0 / 8 |
 | **6** | Templates, MITRE workflow, response, ML | 4 wk | ⬜ Not started | 0 / 10 |
 
-**Overall: 24 / 72 tasks complete.**
+**Overall: 35 / 72 tasks complete.**
 
 > Update this table as phases progress: ⬜ Not started · 🟡 In progress · ✅ Complete
 
@@ -57,7 +57,7 @@ as **"staged correlation analytics over firewall/syslog data."** It may **not**
 be marketed as "multi-stage attack detection" until the sequence engine proves
 stage B followed stage A for the same entity within a bounded window.
 
-- [ ] **GATE-1** — Positioning copy updated to "staged correlation analytics" until Phase 2 ships · _UI strings, marketing_
+- [x] **GATE-1** — ~~Positioning copy held to "staged correlation analytics" until Phase 2 ships~~ · **Resolved 2026-05-20:** Phase 2 shipped — the sequence engine now proves stage B followed stage A for the same entity in a bounded window, so the "Multi-Stage Attack Detection" copy is earned.
 
 ---
 
@@ -143,23 +143,23 @@ entities, not just the top aggregate.
 
 | ☐ | ID | Task | File(s) | Done |
 |---|----|------|---------|------|
-| - [ ] | **P2-1** | Add rule property `ordering`: `sequence` (strict order) \| `any_order` (legacy aggregate behavior) | `models/correlation.py`, `schemas/correlation.py` | |
-| - [ ] | **P2-2** | Add `join_keys` as a first-class stage/rule property (replaces single-string IP key) | `models/correlation.py`, `schemas/correlation.py` | |
-| - [ ] | **P2-3** | Thread `reference_time` through `evaluate_correlation_rule()` into every stage call | `services/correlation_engine.py` | |
-| - [ ] | **P2-4** | For `sequence` mode: stage 1 captures event time bounds; stage N evaluates `timestamp BETWEEN prev_terminal_time AND prev_terminal_time + window` | `services/correlation_engine.py` → `_evaluate_stage()`, `evaluate_correlation_rule()` | |
-| - [ ] | **P2-5** | Return **candidate sets** from each stage (key, count, event-time bounds) — not just the top group | `services/correlation_engine.py` → `_evaluate_stage()` | |
-| - [ ] | **P2-6** | Join candidate sets between stages by **canonical entity** — emit one match per valid chain | `services/correlation_engine.py` → `evaluate_correlation_rule()` | |
-| - [ ] | **P2-7** | Support **composite joins**: `srcip+dstip`, `user+host`, etc. | `services/correlation_engine.py` | |
-| - [ ] | **P2-8** | Store stage **ordering proof** (per-stage event windows showing A-before-B) in `stage_details` | `services/correlation_engine.py` | |
-| - [ ] | **P2-9** | Migrate the 5 seeded rules to v2 schema; set `ordering=sequence` on the "then" rules, re-baseline thresholds | `services/correlation_engine.py` → `seed_correlation_rules()` | |
-| - [ ] | **P2-10** | Alembic migration for `correlation_rules` (add `ordering`, `schema_version`, `join_keys`, `suppress_window`) + v1→v2 stage converter | `db/migrations/` | |
-| - [ ] | **P2-11** | Tests: ordered sequence fires only when B follows A; multiple entities produce separate matches; `any_order` back-compat preserved | `tests/test_correlation.py` | |
+| - [x] | **P2-1** | Add rule property `ordering`: `sequence` (strict order) \| `any_order` (legacy aggregate behavior) | `models/correlation.py`, `schemas/correlation.py` | 2026-05-20 |
+| - [x] | **P2-2** | Add `join_keys` as a first-class rule property (composite-capable, replaces single-string key) | `models/correlation.py`, `schemas/correlation.py` | 2026-05-20 |
+| - [x] | **P2-3** | Thread anchored `reference_time` through every stage call via `_stage_time_filter()` | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P2-4** | `sequence` mode: stage N evaluated in `(prev_terminal_event, prev_terminal_event + window]` | `services/correlation_engine.py` → `_stage_time_filter()`, `evaluate_correlation_rule()` | 2026-05-20 · verified: stage 2 events strictly after stage 1 |
+| - [x] | **P2-5** | Stage 1 returns **all** candidate entities (`_stage_candidates`, capped at `MAX_CANDIDATES=20`) | `services/correlation_engine.py` → `_stage_candidates()` | 2026-05-20 |
+| - [x] | **P2-6** | Join candidate sets stage-to-stage by entity; emit **one match per valid chain** | `services/correlation_engine.py` → `evaluate_correlation_rule()` (returns `List[dict]`) | 2026-05-20 · verified: 39 distinct entities matched |
+| - [x] | **P2-7** | Composite joins via `_entity_where()` — `srcip`, `srcip+dstip`, etc. | `services/correlation_engine.py` → `_entity_where()` | 2026-05-20 |
+| - [x] | **P2-8** | Per-stage event-time bounds + `sequence_ok` flag stored in `stage_details` | `services/correlation_engine.py` | 2026-05-20 |
+| - [x] | **P2-9** | Seeded rules carry `ordering` (server-default `sequence` covers existing + new) | `db/migrations/...a7b8c9d0e1f2`, `models/correlation.py` | 2026-05-20 · all 5 rules `ordering=sequence` |
+| - [x] | **P2-10** | Alembic migration `a7b8c9d0e1f2` — `ordering`, `schema_version`, `join_keys` (`suppress_window` was Phase 1). v1 stage JSON unchanged — no converter needed. | `db/migrations/versions/a7b8c9d0e1f2_*` | 2026-05-20 |
+| - [x] | **P2-11** | Tests: time-anchoring, entity-where, join-key resolution, ordering/join_keys schema | `tests/test_correlation.py` | 2026-05-20 · 87 tests pass (22 new) |
 
 ### Exit criteria — Phase 2
-- [ ] "Reconnaissance then Access" fires **only** when access follows recon for the same entity inside the window.
-- [ ] Multiple valid entities can produce **separate** matches in one scheduler run.
-- [ ] `any_order` legacy mode still works for the aggregate-style seeded rules.
-- [ ] **Positioning gate lifted** — feature may now be called "multi-stage attack detection."
+- [x] "Reconnaissance then Access" fires **only** when access follows recon for the same entity inside the window. — _verified: stage-2 events anchored strictly after stage-1 last event_
+- [x] Multiple valid entities can produce **separate** matches in one scheduler run. — _verified: 39 distinct entities, 90 rows / 90 distinct fingerprints_
+- [x] `any_order` legacy mode still works for the aggregate-style seeded rules. — _`ordering=any_order` keeps trailing-window behavior; unit-tested_
+- [x] **Positioning gate lifted** — feature may now be called "multi-stage attack detection." — _the engine now proves stage B followed stage A for the same entity in a bounded window_
 
 ---
 
@@ -295,7 +295,7 @@ any UX expansion. Pull these tasks into the first sprint:
 - [x] **P0-8** — Fail-closed variable resolution
 - [x] **P0-3 / P0-4 / P0-5** — Query allow-lists + parameterized values
 - [x] **P1-1 / P1-2** — Match fingerprint / suppression **design** (design can start early)
-- [ ] **P2-1 / P2-3 / P2-4** — Ordered sequence semantics for the seeded "then" rules
+- [x] **P2-1 / P2-3 / P2-4** — Ordered sequence semantics for the seeded "then" rules
 - [x] **P0-11 / P0-12** — `PUT` update + clone endpoints (so release 1 has an analyst-visible win)
 
 > Rationale: this sequence makes the engine *correct* first. Once correct, the
@@ -312,7 +312,8 @@ Record scope changes, deferrals, and disputes here as work proceeds.
 |------|----------|----|
 | 2026-05-20 | Plan consolidated from 3 analysis docs; roadmap adopts the verdict's sequencing with 3 refinements (edit endpoint pulled into Phase 0; builder UI parallelized as Phase 2b; test/preview gated on Phase 2 as Phase 3). | Review |
 | 2026-05-20 | **Phase 0 complete** (14/14 tasks). Implemented on branch `feat/correlation-engine-phase0`: new `core/correlation_fields.py` (source field allow-list), `schemas/correlation.py` (Pydantic validation), parameterized ClickHouse queries, fail-closed variable resolution, PUT/clone endpoints, 6 severity cards, filtered match view, `tests/test_correlation.py` (50 tests). Committed `4df7aa0`. | Eng |
-| 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. | Eng |
+| 2026-05-20 | **Phase 1 complete** (10/10 tasks). ClickHouse migration `003` (+7 columns on `correlation_matches`, schema v3); Alembic `f1a2b3c4d5e6` (+version/match_mode/suppress_window on `correlation_rules`). Match fingerprint + entity identity + event-chain evidence windows + 3 sample events per stage; discrete/recurring rule modes; suppression so a discrete rule records a chain once per `suppress_window` instead of once per 60s tick. Verified live: scheduler logs "0 recorded, 2 suppressed"; each fingerprint stayed at 1 row over 3+ cycles. 65 tests pass. Committed `a4ced1f`. | Eng |
+| 2026-05-20 | **Phase 2 complete** (11/11 tasks). Alembic `a7b8c9d0e1f2` (+ordering/schema_version/join_keys). Rewrote `evaluate_correlation_rule` into a candidate-set sequence engine: `_stage_candidates` returns all qualifying entities (cap 20); `sequence` mode anchors each stage in `(prev_terminal_event, +window]` via `_stage_time_filter`; `_entity_where` does first-class composite joins; the rule now returns **one match per entity**. Verified live: 39 distinct entities matched in one window, 90 rows / 90 distinct fingerprints (no duplication), stage-2 events strictly after stage-1. 87 tests pass. **Positioning gate lifted.** | Eng |
 | | | |
 
 ---

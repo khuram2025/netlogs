@@ -255,186 +255,286 @@ def _fetch_stage_samples(table: str, full_where: str, params: dict,
         return []
 
 
-def _evaluate_stage(
-    stage: dict,
-    window_seconds: int,
-    variables: dict = None,
-    reference_time: str = "now()",
-) -> Tuple[bool, dict]:
-    """
-    Evaluate a single correlation stage against ClickHouse logs.
-    Returns (matched: bool, stage_result: dict with key values, event count,
-    event-time bounds and sample evidence).
-    """
+# Phase 2: cap on how many stage-1 candidate entities are carried forward in
+# one evaluation. Bounds query cost; performance scaling (cursors / rollups)
+# is a documented later concern.
+MAX_CANDIDATES = 20
+
+
+def _safe_int(value, label: str) -> int:
     try:
-        client = ClickHouseClient.get_client()
-        filter_config = stage.get("filter", {}) or {}
-        source = stage.get("source", DEFAULT_SOURCE)
-        table = SOURCE_TABLES.get(source)
-        if table is None:
-            raise StageEvalError(f"Unknown data source '{source}'")
-
-        try:
-            threshold = int(stage.get("threshold", 1))
-        except (TypeError, ValueError):
-            raise StageEvalError(f"Invalid threshold: {stage.get('threshold')!r}")
-        try:
-            window_seconds = int(window_seconds)
-        except (TypeError, ValueError):
-            raise StageEvalError(f"Invalid window: {window_seconds!r}")
-
-        group_by = filter_config.get("group_by", stage.get("group_by"))
-        if group_by is not None:
-            allowed = get_source_fields(source) or {}
-            if group_by not in allowed:
-                raise StageEvalError(
-                    f"group_by field '{group_by}' is not an allowed column for source '{source}'"
-                )
-
-        where, params = _build_where_clause(filter_config, variables, source)
-        # reference_time and window_seconds are engine-controlled (constant or
-        # int-cast); group_by is allow-list validated. Only user values below
-        # are bound as parameters.
-        time_filter = f"timestamp > {reference_time} - INTERVAL {window_seconds} SECOND"
-        full_where = f"{time_filter} AND ({where})"
-
-        if group_by:
-            # Aggregation query: find groups exceeding threshold, capturing
-            # the event-time span of each group as evidence.
-            query = f"""
-                SELECT {group_by}, count() as cnt,
-                       min(timestamp) as first_ts, max(timestamp) as last_ts
-                FROM {table}
-                WHERE {full_where}
-                GROUP BY {group_by}
-                HAVING cnt >= {threshold}
-                ORDER BY cnt DESC
-                LIMIT 10
-            """
-            result = client.query(query, parameters=params)
-            rows = result.result_rows
-
-            if not rows:
-                return False, {}
-
-            # Return the top match
-            top_key = str(rows[0][0])
-            top_count = rows[0][1]
-            first_ts, last_ts = rows[0][2], rows[0][3]
-            gb_type = (get_source_fields(source) or {}).get(group_by)
-            samples = _fetch_stage_samples(table, full_where, params,
-                                           group_by, gb_type, top_key)
-
-            return True, {
-                "key": top_key,
-                "count": top_count,
-                group_by: top_key,
-                "first_event": first_ts,
-                "last_event": last_ts,
-                "source": source,
-                "samples": samples,
-                "all_matches": [{"key": str(r[0]), "count": r[1]} for r in rows[:5]],
-            }
-        else:
-            # Simple count query with event-time bounds.
-            query = f"""
-                SELECT count() as cnt,
-                       min(timestamp) as first_ts, max(timestamp) as last_ts
-                FROM {table}
-                WHERE {full_where}
-            """
-            result = client.query(query, parameters=params)
-            row = result.result_rows[0] if result.result_rows else (0, None, None)
-            count = row[0]
-
-            if count >= threshold:
-                samples = _fetch_stage_samples(table, full_where, params)
-                return True, {
-                    "count": count,
-                    "first_event": row[1],
-                    "last_event": row[2],
-                    "source": source,
-                    "samples": samples,
-                }
-            return False, {"count": count}
-
-    except StageEvalError as e:
-        logger.warning(f"Stage '{stage.get('name', '?')}' not evaluated: {e}")
-        return False, {"error": str(e)}
-    except Exception as e:
-        logger.error(f"Stage evaluation error: {e}")
-        return False, {"error": str(e)}
+        return int(value)
+    except (TypeError, ValueError):
+        raise StageEvalError(f"Invalid {label}: {value!r}")
 
 
-def evaluate_correlation_rule(rule: CorrelationRule) -> Optional[dict]:
+def _as_list(value) -> list:
+    """Normalise a scalar / list / None into a list."""
+    if value is None or value == "":
+        return []
+    return list(value) if isinstance(value, (list, tuple)) else [value]
+
+
+def _stage_time_filter(window_seconds: int, anchor: Optional[datetime] = None):
+    """Return (sql, params) for a stage's time predicate.
+
+    Trailing window ending at now() when ``anchor`` is None; an anchored
+    ``(anchor, anchor + window]`` window for sequence-ordered stages — this is
+    what makes "stage B follows stage A" provable.
     """
-    Evaluate a single correlation rule through all its stages.
-    Returns match details if all stages match, None otherwise.
+    w = _safe_int(window_seconds, "window")
+    if anchor is None:
+        return f"timestamp > now() - INTERVAL {w} SECOND", {}
+    return (
+        "timestamp > {_anchor:DateTime64(3)} "
+        f"AND timestamp <= {{_anchor:DateTime64(3)}} + INTERVAL {w} SECOND",
+        {"_anchor": anchor},
+    )
+
+
+def _entity_where(entity: dict, source: str):
+    """Build (sql, params) binding each join-key column to the entity value.
+
+    This makes the inter-stage join a first-class engine concern rather than
+    relying on the rule author remembering to write ``$stageN.field``.
+    """
+    fields = get_source_fields(source) or {}
+    conds, params = [], {}
+    for i, (field, value) in enumerate(entity.items()):
+        ftype = fields.get(field, "string")
+        pn = f"e{i}"
+        if ftype == "numeric":
+            params[pn] = float(value)
+            conds.append(f"{field} = {{{pn}:Float64}}")
+        elif ftype == "ip":
+            params[pn] = str(value)
+            conds.append(f"{field} = toIPv4({{{pn}:String}})")
+        else:
+            params[pn] = str(value)
+            conds.append(f"{field} = {{{pn}:String}}")
+    return (" AND ".join(conds) if conds else "1=1"), params
+
+
+def _stage_candidates(stage: dict, group_fields: list, variables: dict,
+                      window: int, anchor: Optional[datetime] = None,
+                      limit: int = MAX_CANDIDATES) -> list:
+    """Evaluate a grouped stage and return every entity that meets the
+    threshold as a candidate chain head:
+    ``[{entity: {field: value}, count, first_event, last_event}, ...]``.
+    """
+    client = ClickHouseClient.get_client()
+    source = stage.get("source", DEFAULT_SOURCE)
+    table = SOURCE_TABLES.get(source)
+    if table is None:
+        raise StageEvalError(f"Unknown data source '{source}'")
+    threshold = _safe_int(stage.get("threshold", 1), "threshold")
+
+    allowed = get_source_fields(source) or {}
+    for gf in group_fields:
+        if gf not in allowed:
+            raise StageEvalError(
+                f"join/group field '{gf}' is not an allowed column for source '{source}'"
+            )
+
+    where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
+    tf, tparams = _stage_time_filter(window, anchor)
+    params = {**params, **tparams}
+    gb = ", ".join(group_fields)
+
+    query = f"""
+        SELECT {gb}, count() AS cnt,
+               min(timestamp) AS first_ts, max(timestamp) AS last_ts
+        FROM {table}
+        WHERE {tf} AND ({where})
+        GROUP BY {gb}
+        HAVING cnt >= {threshold}
+        ORDER BY cnt DESC
+        LIMIT {int(limit)}
+    """
+    rows = client.query(query, parameters=params).result_rows
+    candidates = []
+    n = len(group_fields)
+    for row in rows:
+        entity = {gf: str(row[i]) for i, gf in enumerate(group_fields)}
+        candidates.append({
+            "entity": entity,
+            "count": row[n],
+            "first_event": row[n + 1],
+            "last_event": row[n + 2],
+        })
+    return candidates
+
+
+def _stage_for_entity(stage: dict, entity: dict, variables: dict,
+                      window: int, anchor: Optional[datetime] = None) -> Tuple[bool, dict]:
+    """Evaluate a stage for one specific entity within an (optionally anchored)
+    window. Returns (matched, result) with event count, time bounds and
+    sample evidence."""
+    client = ClickHouseClient.get_client()
+    source = stage.get("source", DEFAULT_SOURCE)
+    table = SOURCE_TABLES.get(source)
+    if table is None:
+        raise StageEvalError(f"Unknown data source '{source}'")
+    threshold = _safe_int(stage.get("threshold", 1), "threshold")
+
+    where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
+    ew, eparams = _entity_where(entity, source)
+    tf, tparams = _stage_time_filter(window, anchor)
+    params = {**params, **eparams, **tparams}
+    full_where = f"{tf} AND ({where}) AND ({ew})"
+
+    query = f"""
+        SELECT count() AS cnt,
+               min(timestamp) AS first_ts, max(timestamp) AS last_ts
+        FROM {table}
+        WHERE {full_where}
+    """
+    rows = client.query(query, parameters=params).result_rows
+    row = rows[0] if rows else (0, None, None)
+    count = row[0]
+    if count >= threshold:
+        samples = _fetch_stage_samples(table, full_where, params)
+        return True, {
+            "count": count, "first_event": row[1], "last_event": row[2],
+            "source": source, "samples": samples,
+        }
+    return False, {"count": count}
+
+
+def _rule_join_keys(rule: CorrelationRule, stages: list) -> list:
+    """Resolve the columns that link stages into one chain: the rule's
+    explicit ``join_keys`` if set, else stage 1's ``group_by``."""
+    explicit = _as_list(getattr(rule, "join_keys", None))
+    if explicit:
+        return explicit
+    s1_filter = stages[0].get("filter", {}) or {}
+    return _as_list(s1_filter.get("group_by", stages[0].get("group_by")))
+
+
+def evaluate_correlation_rule(rule: CorrelationRule) -> List[dict]:
+    """Evaluate a correlation rule through all its stages.
+
+    Phase 2: returns a list with **one match per entity** whose chain
+    satisfies every stage — not just the single busiest entity. In
+    ``sequence`` ordering each stage after the first is evaluated in an
+    *anchored* window starting at the previous stage's last event, so the
+    match proves stage B genuinely followed stage A.
     """
     stages = rule.stages
     if not stages or not isinstance(stages, list):
-        return None
+        return []
 
-    variables = {}
-    stage_results = []
-    total_events = 0
-    event_times: List[datetime] = []
-
-    for i, stage in enumerate(stages):
-        stage_name = stage.get("name", f"Stage {i + 1}")
-        window = stage.get("window", 300)
-
-        matched, result = _evaluate_stage(stage, window, variables)
-
-        stage_results.append({
-            "name": stage_name,
-            "matched": matched,
-            "window": window,
-            "filter": stage.get("filter", {}),
-            "threshold": stage.get("threshold", 1),
-            **result,
-        })
-
-        if not matched:
-            return None  # Chain broken
-
-        # Store variables for next stage
-        stage_key = f"stage{i + 1}"
-        variables[stage_key] = result
-        total_events += result.get("count", 0)
-        for ts in (result.get("first_event"), result.get("last_event")):
-            if ts is not None:
-                event_times.append(ts)
-
-    # All stages matched — build the match record with entity identity,
-    # a stable fingerprint and the event-time span of the evidence.
-    entity_value = stage_results[0].get("key", "")
-    first_stage_filter = stages[0].get("filter", {}) or {}
-    group_by_field = first_stage_filter.get("group_by", stages[0].get("group_by"))
-    entity_type = _entity_type_for_field(group_by_field)
+    ordering = (getattr(rule, "ordering", "sequence") or "sequence").lower()
     rule_version = getattr(rule, "version", 1) or 1
-    fingerprint = match_fingerprint(rule.id, rule_version, entity_type, entity_value)
 
-    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-    first_seen = min(event_times) if event_times else now_naive
-    last_seen = max(event_times) if event_times else now_naive
+    try:
+        join_keys = _rule_join_keys(rule, stages)
 
-    return {
-        "rule_id": rule.id,
-        "rule_name": rule.name,
-        "rule_version": rule_version,
-        "severity": rule.severity,
-        "stages": stage_results,
-        "total_events": total_events,
-        "mitre_tactic": rule.mitre_tactic,
-        "mitre_technique": rule.mitre_technique,
-        "key_value": entity_value,
-        "entity_type": entity_type,
-        "entity_value": entity_value,
-        "match_fingerprint": fingerprint,
-        "first_seen": first_seen,
-        "last_seen": last_seen,
-    }
+        # ── Stage 1 — gather candidate entities ──────────────────────
+        s1 = stages[0]
+        w1 = _safe_int(s1.get("window", 300), "window")
+        if join_keys:
+            candidates = _stage_candidates(s1, join_keys, {}, w1, anchor=None)
+        else:
+            # No join keys: a single global "entity".
+            matched, res = _stage_for_entity(s1, {}, {}, w1, anchor=None)
+            candidates = [{"entity": {}, "count": res.get("count", 0),
+                           "first_event": res.get("first_event"),
+                           "last_event": res.get("last_event")}] if matched else []
+        if not candidates:
+            return []
+
+        # Each candidate becomes a chain we try to extend stage by stage.
+        chains = []
+        for cand in candidates:
+            entity = cand["entity"]
+            chains.append({
+                "entity": entity,
+                "variables": {"stage1": {**entity,
+                                         "key": "|".join(entity.values()),
+                                         "count": cand["count"]}},
+                "last_event": cand["last_event"],
+                "stage1_window": w1,
+            })
+
+        # ── Stages 2..N — narrow the candidate set ───────────────────
+        stage_evidence = {id(c): [] for c in chains}  # chain -> [stage_result,...]
+        for idx in range(1, len(stages)):
+            stage = stages[idx]
+            wN = _safe_int(stage.get("window", 300), "window")
+            survivors = []
+            for chain in chains:
+                anchor = chain["last_event"] if ordering == "sequence" else None
+                matched, res = _stage_for_entity(
+                    stage, chain["entity"], chain["variables"], wN, anchor)
+                if not matched:
+                    continue
+                chain["variables"][f"stage{idx + 1}"] = {**chain["entity"], **res}
+                if res.get("last_event"):
+                    chain["last_event"] = res["last_event"]
+                stage_evidence[id(chain)].append({
+                    "name": stage.get("name", f"Stage {idx + 1}"),
+                    "matched": True, "window": wN,
+                    "filter": stage.get("filter", {}),
+                    "threshold": stage.get("threshold", 1),
+                    "sequence_ok": ordering == "sequence",
+                    **res,
+                })
+                survivors.append(chain)
+            chains = survivors
+            if not chains:
+                return []
+
+        # ── Build one match per surviving chain ──────────────────────
+        entity_type = ("composite" if len(join_keys) > 1
+                       else _entity_type_for_field(join_keys[0]) if join_keys
+                       else "none")
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        matches = []
+        for chain in chains:
+            # Re-evaluate stage 1 for this entity to capture per-entity
+            # evidence (count, time bounds, samples).
+            s1_matched, s1_res = _stage_for_entity(s1, chain["entity"], {}, w1, anchor=None)
+            s1_result = {
+                "name": s1.get("name", "Stage 1"), "matched": True,
+                "window": w1, "filter": s1.get("filter", {}),
+                "threshold": s1.get("threshold", 1),
+                **(s1_res if s1_matched else {}),
+            }
+            stage_results = [s1_result] + stage_evidence[id(chain)]
+
+            event_times = [t for sr in stage_results
+                           for t in (sr.get("first_event"), sr.get("last_event"))
+                           if t is not None]
+            total_events = sum(sr.get("count", 0) for sr in stage_results)
+            entity_value = "|".join(chain["entity"].values())
+            fingerprint = match_fingerprint(rule.id, rule_version,
+                                            entity_type, entity_value)
+            matches.append({
+                "rule_id": rule.id,
+                "rule_name": rule.name,
+                "rule_version": rule_version,
+                "severity": rule.severity,
+                "ordering": ordering,
+                "stages": stage_results,
+                "total_events": total_events,
+                "mitre_tactic": rule.mitre_tactic,
+                "mitre_technique": rule.mitre_technique,
+                "key_value": entity_value,
+                "entity_type": entity_type,
+                "entity_value": entity_value,
+                "match_fingerprint": fingerprint,
+                "first_seen": min(event_times) if event_times else now_naive,
+                "last_seen": max(event_times) if event_times else now_naive,
+            })
+        return matches
+
+    except StageEvalError as e:
+        logger.warning(f"Correlation rule '{rule.name}' not evaluated: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error evaluating correlation rule '{rule.name}': {e}")
+        return []
 
 
 def record_correlation_match(match: dict):
@@ -554,24 +654,29 @@ async def evaluate_all_correlation_rules():
             suppressed_count = 0
             for rule in rules:
                 try:
-                    match = evaluate_correlation_rule(rule)
-                    if match:
-                        mode = getattr(rule, "match_mode", "discrete") or "discrete"
-                        window = getattr(rule, "suppress_window", 3600) or 3600
+                    # Phase 2: a rule can match multiple entities in one pass.
+                    matches = evaluate_correlation_rule(rule)
+                    mode = getattr(rule, "match_mode", "discrete") or "discrete"
+                    window = getattr(rule, "suppress_window", 3600) or 3600
 
-                        # Discrete rules record a given attack chain at most
-                        # once per suppression window — so match counts measure
-                        # distinct chains, not 60-second scheduler ticks.
+                    recorded = 0
+                    for match in matches:
+                        # Discrete rules record a given (rule, entity) chain at
+                        # most once per suppression window — so match counts
+                        # measure distinct chains, not 60-second scheduler ticks.
                         # Recurring rules are intentional monitors: always record.
                         if mode == "discrete" and _is_match_suppressed(
                                 match["match_fingerprint"], window):
                             suppressed_count += 1
-                        else:
-                            matched_count += 1
-                            record_correlation_match(match)
-                            await create_correlation_alert(match)
-                            rule.last_triggered_at = datetime.now(timezone.utc)
-                            rule.trigger_count = (rule.trigger_count or 0) + 1
+                            continue
+                        record_correlation_match(match)
+                        await create_correlation_alert(match)
+                        recorded += 1
+
+                    if recorded:
+                        matched_count += recorded
+                        rule.last_triggered_at = datetime.now(timezone.utc)
+                        rule.trigger_count = (rule.trigger_count or 0) + recorded
 
                     rule.last_evaluated_at = datetime.now(timezone.utc)
                 except Exception as e:

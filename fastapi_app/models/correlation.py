@@ -42,6 +42,21 @@ class CorrelationRule(Base):
     suppress_window = Column(Integer, nullable=False,
                              default=3600, server_default="3600")
 
+    # Phase 2: stage ordering.
+    #   "sequence"  — stage N must occur *after* stage N-1 in event time,
+    #                 for the same entity, within stage N's window
+    #   "any_order" — legacy: each stage is an independent trailing window
+    ordering = Column(String(20), nullable=False,
+                      default="sequence", server_default="sequence")
+
+    # Phase 2: stage-JSON shape marker (2 = Phase 2).
+    schema_version = Column(Integer, nullable=False,
+                            default=2, server_default="2")
+
+    # Phase 2: columns that link stages into one chain, e.g. ["srcip"] or
+    # ["srcip", "dstip"]. NULL falls back to stage 1's group_by.
+    join_keys = Column(JSON, nullable=True)
+
     # Evaluation tracking
     last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)

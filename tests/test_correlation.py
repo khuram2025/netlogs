@@ -17,13 +17,20 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+import types
+
 from fastapi_app.core.correlation_fields import parse_field_op
 from fastapi_app.services.correlation_engine import (
     StageEvalError,
+    _as_list,
     _build_where_clause,
     _entity_type_for_field,
+    _entity_where,
     _recent_alert_cutoff,
     _resolve_variable,
+    _rule_join_keys,
+    _safe_int,
+    _stage_time_filter,
     match_fingerprint,
 )
 from fastapi_app.schemas.correlation import (
@@ -408,3 +415,140 @@ class TestPhase1RuleSchema:
         upd = CorrelationRuleUpdate(match_mode="recurring", suppress_window=7200)
         data = upd.model_dump(exclude_unset=True)
         assert data == {"match_mode": "recurring", "suppress_window": 7200}
+
+
+# ======================================================================
+# PHASE 2 — True sequence engine
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# _as_list / _safe_int
+# ----------------------------------------------------------------------
+
+class TestAsList:
+    def test_none_and_empty(self):
+        assert _as_list(None) == []
+        assert _as_list("") == []
+
+    def test_scalar_wrapped(self):
+        assert _as_list("srcip") == ["srcip"]
+
+    def test_list_passthrough(self):
+        assert _as_list(["srcip", "dstip"]) == ["srcip", "dstip"]
+
+
+class TestSafeInt:
+    def test_valid(self):
+        assert _safe_int("300", "window") == 300
+        assert _safe_int(10, "threshold") == 10
+
+    def test_invalid_raises(self):
+        with pytest.raises(StageEvalError):
+            _safe_int("not-a-number", "window")
+
+
+# ----------------------------------------------------------------------
+# _stage_time_filter  (P2-3 / P2-4 — temporal anchoring)
+# ----------------------------------------------------------------------
+
+class TestStageTimeFilter:
+    def test_trailing_window_without_anchor(self):
+        sql, params = _stage_time_filter(300, anchor=None)
+        assert sql == "timestamp > now() - INTERVAL 300 SECOND"
+        assert params == {}
+
+    def test_anchored_window_for_sequence(self):
+        anchor = datetime(2026, 5, 20, 12, 0, 0)
+        sql, params = _stage_time_filter(600, anchor=anchor)
+        # anchored window proves stage B follows stage A
+        assert "timestamp > {_anchor:DateTime64(3)}" in sql
+        assert "+ INTERVAL 600 SECOND" in sql
+        assert params == {"_anchor": anchor}
+
+    def test_bad_window_raises(self):
+        with pytest.raises(StageEvalError):
+            _stage_time_filter("xyz")
+
+
+# ----------------------------------------------------------------------
+# _entity_where  (P2-6 / P2-7 — first-class joins)
+# ----------------------------------------------------------------------
+
+class TestEntityWhere:
+    def test_single_string_field(self):
+        sql, params = _entity_where({"srcip": "10.0.0.5"}, "syslogs")
+        assert sql == "srcip = {e0:String}"
+        assert params == {"e0": "10.0.0.5"}
+
+    def test_numeric_field_binds_float(self):
+        sql, params = _entity_where({"dstport": 443}, "syslogs")
+        assert sql == "dstport = {e0:Float64}"
+        assert params == {"e0": 443.0}
+
+    def test_ip_field_wrapped(self):
+        sql, params = _entity_where({"device_ip": "10.1.1.1"}, "syslogs")
+        assert "toIPv4({e0:String})" in sql
+
+    def test_composite_join(self):
+        sql, params = _entity_where({"srcip": "10.0.0.5", "dstip": "8.8.8.8"}, "syslogs")
+        assert sql == "srcip = {e0:String} AND dstip = {e1:String}"
+        assert params == {"e0": "10.0.0.5", "e1": "8.8.8.8"}
+
+    def test_empty_entity_is_true(self):
+        sql, params = _entity_where({}, "syslogs")
+        assert sql == "1=1"
+        assert params == {}
+
+
+# ----------------------------------------------------------------------
+# _rule_join_keys
+# ----------------------------------------------------------------------
+
+class TestRuleJoinKeys:
+    def test_explicit_join_keys_win(self):
+        rule = types.SimpleNamespace(join_keys=["srcip", "dstip"])
+        stages = [{"filter": {"group_by": "policyname"}}]
+        assert _rule_join_keys(rule, stages) == ["srcip", "dstip"]
+
+    def test_falls_back_to_stage1_group_by(self):
+        rule = types.SimpleNamespace(join_keys=None)
+        stages = [{"filter": {"action": "deny", "group_by": "srcip"}}]
+        assert _rule_join_keys(rule, stages) == ["srcip"]
+
+    def test_no_join_keys_and_no_group_by(self):
+        rule = types.SimpleNamespace(join_keys=None)
+        stages = [{"filter": {"action": "deny"}}]
+        assert _rule_join_keys(rule, stages) == []
+
+
+# ----------------------------------------------------------------------
+# Phase 2 schema — ordering / join_keys  (P2-1 / P2-2)
+# ----------------------------------------------------------------------
+
+class TestPhase2RuleSchema:
+    def test_ordering_defaults_to_sequence(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE])
+        assert rule.ordering == "sequence"
+
+    def test_any_order_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], ordering="any_order")
+        assert rule.ordering == "any_order"
+
+    def test_invalid_ordering_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], ordering="backwards")
+
+    def test_valid_join_keys_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE],
+                                     join_keys=["srcip", "dstip"])
+        assert rule.join_keys == ["srcip", "dstip"]
+
+    def test_invalid_join_key_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], join_keys=["not_a_field"])
+
+    def test_composite_match_fingerprint(self):
+        # composite entity values are joined with "|"
+        fp1 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.8")
+        fp2 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.9")
+        assert fp1 != fp2
