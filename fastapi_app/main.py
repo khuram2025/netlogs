@@ -225,6 +225,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Warninglist seeding warning: {e}")
 
+    # Apply IOC decay — backfill expiry dates and age out stale indicators
+    try:
+        from .services.ioc_decay import decay_iocs
+        d = await decay_iocs()
+        logger.info(f"IOC decay: backfilled {d.get('backfilled', 0)}, "
+                    f"aged out {d.get('expired', 0)}")
+    except Exception as e:
+        logger.warning(f"IOC decay warning: {e}")
+
     # Initialize correlation engine
     try:
         from .services.correlation_engine import ensure_correlation_matches_table, seed_correlation_rules

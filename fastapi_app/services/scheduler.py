@@ -26,6 +26,7 @@ from .threat_intel_service import update_all_feeds
 from .ioc_matcher import refresh_ioc_cache, process_auto_block_queue
 from .ioc_sweep import sweep_ioc_logs
 from .ioc_sightings import rollup_sightings
+from .ioc_decay import decay_iocs
 from .correlation_engine import evaluate_all_correlation_rules
 
 logger = logging.getLogger(__name__)
@@ -474,6 +475,17 @@ def start_scheduler():
         trigger=IntervalTrigger(seconds=60),
         id='ioc_sightings_rollup',
         name='Roll up IOC matches into sightings',
+        replace_existing=True,
+        max_instances=1,
+    )
+
+    # Add IOC decay (every 6 hours) — ages out stale IOCs past their
+    # type-aware lifetime so the matcher stops loading them.
+    scheduler.add_job(
+        decay_iocs,
+        trigger=IntervalTrigger(hours=6),
+        id='ioc_decay',
+        name='Age out stale IOCs past their decay lifetime',
         replace_existing=True,
         max_instances=1,
     )

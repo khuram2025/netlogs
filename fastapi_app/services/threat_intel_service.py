@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from ..db.clickhouse import ClickHouseClient
 from ..db.database import async_session_maker
 from ..models.threat_intel import ThreatFeed, IOC, IOCType, IOCSeverity, FeedType
+from .ioc_decay import expiry_for
 
 logger = logging.getLogger(__name__)
 
@@ -509,9 +510,11 @@ async def _bulk_upsert_iocs(feed_id: int, iocs: List[dict]) -> int:
                 existing = result.scalar_one_or_none()
 
                 if existing:
-                    # Update last_seen
+                    # Re-asserted by the feed — bump last_seen, revive if
+                    # expired, and push the decay expiry forward.
                     existing.last_seen = now
                     existing.is_active = True
+                    existing.expires_at = expiry_for(ioc_data["ioc_type"], now)
                     if ioc_data.get("severity"):
                         existing.severity = ioc_data["severity"]
                     if ioc_data.get("confidence"):
@@ -529,6 +532,7 @@ async def _bulk_upsert_iocs(feed_id: int, iocs: List[dict]) -> int:
                         source=ioc_data.get("source"),
                         first_seen=now,
                         last_seen=now,
+                        expires_at=expiry_for(ioc_data["ioc_type"], now),
                         is_active=True,
                     )
                     session.add(ioc)
