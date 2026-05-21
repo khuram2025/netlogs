@@ -713,6 +713,25 @@ BUILTIN_FEEDS = [
         },
         "update_interval_minutes": 360,
     },
+    {
+        # DNS-domain (C2) feed — the high-yield surface for an embedded SIEM:
+        # every host makes DNS queries, so domain IOCs match dns_logs.qname.
+        "name": "ThreatFox - Malware Domains (abuse.ch)",
+        "feed_type": "csv_url",
+        "url": "https://threatfox.abuse.ch/export/csv/domains/recent/",
+        "ioc_types": ["domain"],
+        "parser_config": {
+            "value_column": 2,        # first_seen, ioc_id, ioc_value, ...
+            "comment_char": "#",
+            "skip_header": False,
+            "delimiter": ",",
+            "ioc_type": "domain",
+            "threat_type": "c2",
+            "severity": "high",
+            "confidence": 75,
+        },
+        "update_interval_minutes": 60,
+    },
 ]
 
 
