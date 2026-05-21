@@ -3209,7 +3209,11 @@
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td data-col="timestamp">
                                         <span class="timestamp">
-                                            {% if log.get('log_time') %}{{ log.get('log_time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                            {# Show the platform's normalized UTC timestamp — consistent with
+                                               filtering, sorting and correlation windows. The device-reported
+                                               log_time is in the device's own (often skewed) local clock and
+                                               remains available in the raw-log detail. #}
+                                            {% if log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
                                         </span>
                                     </td>
                                     <td data-col="action">
