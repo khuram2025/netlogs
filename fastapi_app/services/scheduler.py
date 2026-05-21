@@ -24,6 +24,7 @@ from .zone_service import ZoneService
 from .alert_engine import evaluate_all_rules
 from .threat_intel_service import update_all_feeds
 from .ioc_matcher import refresh_ioc_cache, process_auto_block_queue
+from .ioc_sweep import sweep_ioc_logs
 from .correlation_engine import evaluate_all_correlation_rules
 
 logger = logging.getLogger(__name__)
@@ -449,6 +450,18 @@ def start_scheduler():
         trigger=IntervalTrigger(seconds=30),
         id='process_auto_block_queue',
         name='Process auto-block EDL queue from IOC matches',
+        replace_existing=True,
+        max_instances=1,
+    )
+
+    # Add IOC log sweep (every 60 seconds) — matches domain / URL / hash / IP
+    # IOCs against the DNS, URL and PA-threat log streams the real-time
+    # firewall-only matcher does not cover.
+    scheduler.add_job(
+        sweep_ioc_logs,
+        trigger=IntervalTrigger(seconds=60),
+        id='ioc_log_sweep',
+        name='Sweep DNS/URL/threat logs for IOC matches',
         replace_existing=True,
         max_instances=1,
     )

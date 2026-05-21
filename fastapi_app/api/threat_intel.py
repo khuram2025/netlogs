@@ -77,12 +77,17 @@ async def threat_intel_feeds_page(request: Request, db: AsyncSession = Depends(g
     # Get match stats
     match_stats = get_ioc_match_stats(hours=24)
 
+    # Get batch-sweep coverage stats (domain/URL/hash detection)
+    from ..services.ioc_sweep import get_sweep_stats
+    sweep_stats = await get_sweep_stats()
+
     return _render("threat_intel/feeds.html", request, {
         "feeds": feeds,
         "feed_stats": feed_stats,
         "total_iocs": total_iocs,
         "matcher_stats": matcher_stats,
         "match_stats": match_stats,
+        "sweep_stats": sweep_stats,
     })
 
 

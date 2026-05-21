@@ -610,7 +610,7 @@
                 <div class="ti-metric-value" data-count="{{ match_stats.total_matches }}" style="color: {% if match_stats.total_matches > 0 %}#ef4444{% else %}#22c55e{% endif %}; cursor:pointer;">0</div>
             </a>
             <div class="ti-metric-sub">
-                Logs checked: {{ "{:,}".format(matcher_stats.checks) }}
+                Logs scanned: {{ "{:,}".format(sweep_stats.logs_scanned) }}
             </div>
             {% if match_stats.by_severity %}
             <div class="ti-severity-bar">
@@ -628,12 +628,12 @@
             <div class="ti-metric-glow"></div>
             <div class="ti-metric-label">
                 <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Matcher Engine
+                IOC Log Sweep
             </div>
-            <div class="ti-metric-value" data-count="{{ matcher_stats.checks }}">0</div>
+            <div class="ti-metric-value" data-count="{{ sweep_stats.matches_found }}">0</div>
             <div class="ti-metric-sub">
-                <span class="dot" style="background: {% if matcher_stats.errors > 0 %}#f59e0b{% else %}#22c55e{% endif %};"></span>
-                Checks completed | {{ matcher_stats.errors }} errors
+                <span class="dot" style="background:#22c55e;"></span>
+                Sweep matches &middot; last run {{ sweep_stats.last_run_ago }}
             </div>
         </div>
     </div>
@@ -708,10 +708,9 @@
                     {% if s.count > max_sev.val %}{% set max_sev.val = s.count %}{% endif %}
                 {% endfor %}
                 {% for sev_name, sev_color in [('critical', '#ef4444'), ('high', '#f97316'), ('medium', '#f59e0b'), ('low', '#22c55e')] %}
-                    {% set sev_count = 0 %}
-                    {% for s in match_stats.by_severity %}
-                        {% if s.severity == sev_name %}{% set sev_count = s.count %}{% endif %}
-                    {% endfor %}
+                    {# selectattr filter — a {% set %} inside a {% for %} does not
+                       escape the loop scope, which left every count stuck at 0. #}
+                    {% set sev_count = match_stats.by_severity | selectattr('severity', 'equalto', sev_name) | map(attribute='count') | first | default(0) %}
                     <div class="ti-match-row">
                         <div class="ti-match-sev-dot" style="background: {{ sev_color }};"></div>
                         <span class="ti-match-sev-label">{{ sev_name }}</span>
