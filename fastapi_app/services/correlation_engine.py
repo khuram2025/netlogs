@@ -13,7 +13,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.clickhouse import ClickHouseClient
@@ -1393,10 +1393,10 @@ async def seed_correlation_rules():
                 db.add(rule)
                 added += 1
 
-        # ── Retire the first-generation rules ────────────────────────
-        # Disabled (not deleted) so historical matches stay intact. They
-        # are superseded by the redesigned ruleset above; an analyst can
-        # still inspect them, but they no longer evaluate.
+        # ── Remove the first-generation rules ────────────────────────
+        # Superseded by the redesigned ruleset above and deleted outright.
+        # Recorded matches live in ClickHouse (no foreign key) and keep
+        # their rule_name snapshot, so detection history is unaffected.
         deprecated = [
             "Reconnaissance then Access",
             "Brute Force then Login",
@@ -1407,18 +1407,12 @@ async def seed_correlation_rules():
             "Suspicious DNS then Outbound Connection",
             "PA Threat Alert then Firewall Allow",
         ]
-        retire = await db.execute(
-            select(CorrelationRule).where(
-                CorrelationRule.name.in_(deprecated),
-                CorrelationRule.is_enabled.is_(True),
-            )
+        result = await db.execute(
+            delete(CorrelationRule).where(CorrelationRule.name.in_(deprecated))
         )
-        disabled = 0
-        for old in retire.scalars().all():
-            old.is_enabled = False
-            disabled += 1
+        removed = result.rowcount or 0
 
-        if added or disabled:
+        if added or removed:
             await db.commit()
             logger.info(
-                f"Correlation rules: seeded {added}, retired {disabled}")
+                f"Correlation rules: seeded {added}, removed {removed}")
