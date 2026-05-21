@@ -1286,11 +1286,11 @@
                     {% endif %}
                     <div class="noc-meta-item">
                         <span class="noc-meta-label">Created</span>
-                        <span class="noc-meta-value mono">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
+                        <span class="noc-meta-value mono">{{ project.created_at | localdt('%Y-%m-%d') }}</span>
                     </div>
                     <div class="noc-meta-item">
                         <span class="noc-meta-label">Updated</span>
-                        <span class="noc-meta-value mono">{{ project.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <span class="noc-meta-value mono">{{ project.updated_at | localdt('%Y-%m-%d %H:%M') }}</span>
                     </div>
                     {% if project.description %}
                     <div class="noc-meta-item" style="grid-column: 1 / -1;">
@@ -1478,7 +1478,7 @@
                         <td><span class="noc-desc" title="{{ entry.description or '' }}">{{ entry.description or '-' }}</span></td>
                         <td>
                             <div class="noc-row-actions">
-                                <button class="noc-row-btn" onclick="viewEntry({{ entry.id }}, '{{ entry.source_ip }}', '{{ entry.source_hostname or '' }}', '{{ entry.destination_ip }}', '{{ entry.destination_hostname or '' }}', '{{ entry.destination_port }}', '{{ entry.protocol }}', '{{ entry.connection_type }}', '{{ entry.description|replace("'", "\\'")|default('', true) }}', {{ 'true' if entry.is_active else 'false' }}, '{{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}')" title="View">
+                                <button class="noc-row-btn" onclick="viewEntry({{ entry.id }}, '{{ entry.source_ip }}', '{{ entry.source_hostname or '' }}', '{{ entry.destination_ip }}', '{{ entry.destination_hostname or '' }}', '{{ entry.destination_port }}', '{{ entry.protocol }}', '{{ entry.connection_type }}', '{{ entry.description|replace("'", "\\'")|default('', true) }}', {{ 'true' if entry.is_active else 'false' }}, '{{ entry.created_at | localdt('%Y-%m-%d %H:%M') }}')" title="View">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                         <circle cx="12" cy="12" r="3"></circle>

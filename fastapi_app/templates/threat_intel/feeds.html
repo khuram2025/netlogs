@@ -782,7 +782,7 @@
                     <span>
                         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                         {% if feed.last_fetched_at %}
-                        <span data-ts="{{ feed.last_fetched_at.strftime('%Y-%m-%dT%H:%M:%S') }}" class="ti-relative-time">{{ feed.last_fetched_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <span data-ts="{{ feed.last_fetched_at.strftime('%Y-%m-%dT%H:%M:%S') }}" class="ti-relative-time">{{ feed.last_fetched_at | localdt('%Y-%m-%d %H:%M') }}</span>
                         {% else %}Never{% endif %}
                     </span>
                     <span>

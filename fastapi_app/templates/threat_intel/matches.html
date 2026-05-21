@@ -525,10 +525,10 @@
                         <td>
                             <div class="ti-cell-time">
                                 {% if m.timestamp is not string %}
-                                    {{ m.timestamp.strftime('%H:%M:%S') }}
-                                    <span class="date">{{ m.timestamp.strftime('%Y-%m-%d') }}</span>
+                                    {{ m.timestamp | localdt('%H:%M:%S') }}
+                                    <span class="date">{{ m.timestamp | localdt('%Y-%m-%d') }}</span>
                                 {% else %}
-                                    {{ m.timestamp }}
+                                    {{ m.timestamp | localdt }}
                                 {% endif %}
                             </div>
                         </td>

@@ -312,8 +312,8 @@ window.rptUser = {{ (report_user or '') | tojson }};
         document.getElementById('ua-dests-sub').innerHTML = '&nbsp;';
 
         document.getElementById('ua-window').textContent =
-            (s.first_seen ? new Date(s.first_seen).toLocaleString() : '—') + ' → ' +
-            (s.last_seen ? new Date(s.last_seen).toLocaleString() : '—');
+            (s.first_seen ? window.fmtTime(s.first_seen) : '—') + ' → ' +
+            (s.last_seen ? window.fmtTime(s.last_seen) : '—');
 
         // Update subject pill in meta strip if username/IP came back
         const subj = s.username ? `${s.username} (${s.src_ip})` : (s.src_ip || window.rptUser);

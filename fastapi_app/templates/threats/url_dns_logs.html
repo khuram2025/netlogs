@@ -908,10 +908,7 @@
 
     // ============ TIMELINE CHART ============
     function tlBucketLabel(b) {
-        const d = new Date(b);
-        const h = String(d.getHours()).padStart(2,'0');
-        const m = String(d.getMinutes()).padStart(2,'0');
-        return `${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${h}:${m}`;
+        return window.fmtTime(b, {second:undefined});
     }
     function ensureTlChart() {
         if (tlChart) return tlChart;
@@ -1007,11 +1004,7 @@
     function fmtNum(n) { return (n||0).toLocaleString(); }
 
     function fmtTime(iso) {
-        try {
-            const d = new Date(iso);
-            return d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
-                 + ' ' + d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
-        } catch(e) { return iso; }
+        return window.fmtTime(iso);
     }
 
     function actionBadge(action) {

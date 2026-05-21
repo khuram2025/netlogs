@@ -1703,9 +1703,9 @@
                     <td class="tbl-size">{{ part.size_readable }}</td>
                     <td class="tbl-rows">{{ "{:,}".format(part.total_rows) }}</td>
                     <td class="text-muted text-sm">
-                        {% if part.min_time %}{{ part.min_time.strftime('%Y-%m-%d') if part.min_time.strftime is defined else part.min_time }}{% endif %}
+                        {% if part.min_time %}{{ part.min_time | localdt('%Y-%m-%d') }}{% endif %}
                         &mdash;
-                        {% if part.max_time %}{{ part.max_time.strftime('%Y-%m-%d') if part.max_time.strftime is defined else part.max_time }}{% endif %}
+                        {% if part.max_time %}{{ part.max_time | localdt('%Y-%m-%d') }}{% endif %}
                     </td>
                     <td>
                         <div class="size-bar">
@@ -1744,7 +1744,7 @@
                     <td class="text-sm text-muted" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
                         {{ mut.command[:60] }}{% if mut.command|length > 60 %}...{% endif %}
                     </td>
-                    <td class="text-sm text-muted">{{ mut.create_time }}</td>
+                    <td class="text-sm text-muted">{{ mut.create_time | localdt }}</td>
                     <td>
                         {% if mut.latest_fail_reason %}
                         <span class="status-pill critical">Failed</span>
@@ -1858,9 +1858,8 @@ async function loadStorageSettings() {
         document.getElementById('minRetention').value = s.min_retention_days;
         document.getElementById('autoCleanupEnabled').checked = s.auto_cleanup_enabled;
         if (s.last_cleanup_at) {
-            const dt = new Date(s.last_cleanup_at);
             document.getElementById('lastCleanupInfo').innerHTML =
-                `<strong>Time:</strong> ${dt.toLocaleString()}<br><strong>Status:</strong> ${s.last_cleanup_status || 'Unknown'}<br><strong>Freed:</strong> ${s.last_cleanup_freed_gb ? s.last_cleanup_freed_gb.toFixed(2) + ' GB' : 'N/A'}`;
+                `<strong>Time:</strong> ${window.fmtTime(s.last_cleanup_at)}<br><strong>Status:</strong> ${s.last_cleanup_status || 'Unknown'}<br><strong>Freed:</strong> ${s.last_cleanup_freed_gb ? s.last_cleanup_freed_gb.toFixed(2) + ' GB' : 'N/A'}`;
         }
     } catch (e) { console.error('Settings error:', e); }
 }

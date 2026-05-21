@@ -288,7 +288,7 @@ sudo systemctl enable --now zenai-updater</pre>
         <div><span class="muted">Max nodes:</span> <b>{{ sub.license.max_nodes or '—' }}</b></div>
         {% endif %}
         {% if sub.expires_at %}
-        <div><span class="muted">Expires:</span> {{ sub.expires_at[:10] }}</div>
+        <div><span class="muted">Expires:</span> {{ sub.expires_at | localdt('%Y-%m-%d') }}</div>
         {% endif %}
         {% if sub.days_remaining is not none %}
         <div><span class="muted">Days left:</span> <b>{{ sub.days_remaining }}</b></div>

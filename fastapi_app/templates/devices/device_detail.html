@@ -1366,7 +1366,7 @@
         </div>
 
         <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            Last fetched: {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            Last fetched: {{ snapshot.fetched_at | localdt }}
             (took {{ snapshot.fetch_duration_ms }}ms)
         </p>
 
@@ -1474,7 +1474,7 @@
 
         {% if zone_snapshot %}
         <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            Last fetched: {{ zone_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            Last fetched: {{ zone_snapshot.fetched_at | localdt }}
             (took {{ zone_snapshot.fetch_duration_ms }}ms)
         </p>
         {% endif %}
@@ -1574,7 +1574,7 @@
         </div>
 
         <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            Last fetched: {{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            Last fetched: {{ fw_snapshot.fetched_at | localdt }}
             (took {{ fw_snapshot.fetch_duration_ms or 0 }}ms)
         </p>
 
@@ -1832,7 +1832,7 @@
                 {% endif %}
 
                 <div class="pa-side-foot">
-                    Snapshot {{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                    Snapshot {{ fw_snapshot.fetched_at | localdt('%Y-%m-%d %H:%M') }}<br>
                     {{ A.kpi_active_rules + A.kpi_disabled_rules }} rules ·
                     {{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }} addrs ·
                     {{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }} svcs
@@ -1891,7 +1891,7 @@
                                         {% if hit_info %}
                                             <div class="pa-hits-cell">
                                                 <span class="pa-hits-num">{{ '{:,}'.format(hit_info.hits) }}</span>
-                                                <span class="pa-hits-last">last {{ hit_info.last_seen[:16] if hit_info.last_seen else '—' }}</span>
+                                                <span class="pa-hits-last">last {{ (hit_info.last_seen | localdt('%Y-%m-%d %H:%M')) if hit_info.last_seen else '—' }}</span>
                                             </div>
                                         {% else %}
                                             <span class="pa-hits-zero">no hits</span>
@@ -2674,7 +2674,7 @@
             <tbody>
                 {% for change in changes %}
                 <tr>
-                    <td>{{ change.detected_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ change.detected_at | localdt('%Y-%m-%d %H:%M') }}</td>
                     <td>
                         <span class="change-badge {{ change.change_type|lower }}">
                             {{ change.change_type }}
@@ -2716,7 +2716,7 @@
         {% for snap in snapshots %}
         <div class="snapshot-card">
             <div class="snapshot-info">
-                <div class="snapshot-time">{{ snap.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</div>
+                <div class="snapshot-time">{{ snap.fetched_at | localdt }}</div>
                 <div class="snapshot-meta">
                     {% if snap.success %}
                         {{ snap.route_count }} routes &bull; {{ snap.fetch_duration_ms }}ms

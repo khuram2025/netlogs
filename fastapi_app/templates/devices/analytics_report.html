@@ -1091,11 +1091,11 @@
             <dt>Device</dt>            <dd>{{ device.ip_address }}{% if device.hostname %} &middot; {{ device.hostname }}{% endif %}</dd>
             <dt>Vendor</dt>            <dd>{{ parser_display }}</dd>
             {% if fw_snapshot %}
-            <dt>Snapshot taken</dt>    <dd>{{ fw_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M UTC') if fw_snapshot.fetched_at else '—' }}</dd>
+            <dt>Snapshot taken</dt>    <dd>{{ (fw_snapshot.fetched_at | localdt('%Y-%m-%d %H:%M')) if fw_snapshot.fetched_at else '—' }}</dd>
             <dt>Rule base</dt>         <dd>{{ fw_snapshot.policy_count }} policies &middot; {{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }} address objects &middot; {{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }} service objects</dd>
             {% endif %}
             <dt>Analytics window</dt>  <dd>30 days of traffic logs (where available)</dd>
-            <dt>Report generated</dt>  <dd>{{ generated_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            <dt>Report generated</dt>  <dd>{{ generated_at | localdt('%Y-%m-%d %H:%M') }}</dd>
         </dl>
     </div>
 
@@ -1120,7 +1120,7 @@
             <span class="page-header-sep">·</span>
             <span>{{ device.hostname or device.ip_address }}</span>
         </div>
-        <div class="page-header-ctx">{{ generated_at.strftime('%Y-%m-%d') }}</div>
+        <div class="page-header-ctx">{{ generated_at | localdt('%Y-%m-%d') }}</div>
     </div>
 
     <div class="section-hdr">

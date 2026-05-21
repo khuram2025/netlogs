@@ -967,8 +967,8 @@
                         {% else %}<span class="pl-dim">-</span>{% endif %}
                     </td>
                     <td class="pl-mono pl-dim" style="font-size:10px;white-space:nowrap">
-                        <div>{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</div>
-                        <div>{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</div>
+                        <div>{{ row.first_seen | localdt }}</div>
+                        <div>{{ row.last_seen | localdt }}</div>
                     </td>
                     <td>
                         <span class="pl-spec-badge pl-spec-{{ row.specificity_label }}">{{ row.specificity_label }}</span>
@@ -1057,8 +1057,8 @@
                         {% else %}<span class="pl-dim">-</span>{% endif %}
                     </td>
                     <td class="pl-mono pl-dim" style="font-size:10px;white-space:nowrap">
-                        <div>{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</div>
-                        <div>{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</div>
+                        <div>{{ row.first_seen | localdt }}</div>
+                        <div>{{ row.last_seen | localdt }}</div>
                     </td>
                     <td class="pl-mono">{{ row.application or row.category or '-' }}</td>
                     <td>
@@ -1136,8 +1136,8 @@
                         <span class="pl-nat-chip"><span class="pl-nat-label">CONFIG</span></span>
                     </td>
                     <td class="pl-mono">{{ format_number(row.hit_count) if row.hit_count else '-' }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:10px">{{ row.last_hit_at[:19] if row.last_hit_at and row.last_hit_at|length > 19 else (row.last_hit_at or '-') }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:10px">{{ row.snapshot_fetched_at[:19] if row.snapshot_fetched_at and row.snapshot_fetched_at|length > 19 else (row.snapshot_fetched_at or '-') }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ (row.last_hit_at | localdt) or '-' }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ (row.snapshot_fetched_at | localdt) or '-' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

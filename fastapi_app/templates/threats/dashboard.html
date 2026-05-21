@@ -1410,8 +1410,7 @@
     function getHours() { return parseInt(document.getElementById('time-range').value) || 24; }
     function fmtNum(n) { if (n === null || n === undefined || n === '-') return '-'; return n.toLocaleString(); }
     function fmtTime(iso) {
-        try { const d = new Date(iso); return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
-        catch(e) { return iso; }
+        return window.fmtTime(iso);
     }
     function escHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function sevClass(s) { return (s || 'informational').toLowerCase(); }
@@ -1581,7 +1580,7 @@
                     html += '<div class="td-cat-tl-bar td-cat-tl-bar-total" style="height:' + h + 'px;" title="' + t.hour + ': ' + t.total + ' events">' + (ch > 0 ? '<div class="td-cat-tl-bar-blocked" style="height:' + ch + 'px;background:rgba(249,115,22,0.7);"></div>' : '') + '</div>';
                 });
                 html += '</div>';
-                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = new Date(f).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); l = new Date(l).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#fb923c;">■ crit/high</span><span>' + l + '</span></div>'; }
+                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = window.fmtTime(f, {year:undefined,month:undefined,day:undefined}); l = window.fmtTime(l, {year:undefined,month:undefined,day:undefined}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#fb923c;">■ crit/high</span><span>' + l + '</span></div>'; }
                 html += '</div>';
             }
             // Threats from this source
@@ -1696,7 +1695,7 @@
                     html += '<div class="td-cat-tl-bar td-cat-tl-bar-total" style="height:' + h + 'px;" title="' + t.hour + ': ' + t.total + ' events">' + (bh > 0 ? '<div class="td-cat-tl-bar-blocked" style="height:' + bh + 'px;"></div>' : '') + '</div>';
                 });
                 html += '</div>';
-                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = new Date(f).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); l = new Date(l).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#f87171;">■ blocked</span><span>' + l + '</span></div>'; }
+                if (data.timeline.length > 1) { var f = data.timeline[0].hour, l = data.timeline[data.timeline.length-1].hour; try { f = window.fmtTime(f, {year:undefined,month:undefined,day:undefined}); l = window.fmtTime(l, {year:undefined,month:undefined,day:undefined}); } catch(e){} html += '<div class="td-cat-tl-labels"><span>' + f + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#f87171;">■ blocked</span><span>' + l + '</span></div>'; }
                 html += '</div>';
             }
             // Top Sources
@@ -1843,7 +1842,7 @@
                 // Time labels
                 if (data.timeline.length > 1) {
                     var first = data.timeline[0].hour, last = data.timeline[data.timeline.length - 1].hour;
-                    try { first = new Date(first).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}); last = new Date(last).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}); } catch(e) {}
+                    try { first = window.fmtTime(first, {year:undefined,month:undefined,day:undefined}); last = window.fmtTime(last, {year:undefined,month:undefined,day:undefined}); } catch(e) {}
                     html += '<div class="td-cat-tl-labels"><span>' + first + '</span><span style="color:#60a5fa;">■ total</span><span style="color:#f87171;">■ blocked</span><span>' + last + '</span></div>';
                 }
                 html += '</div>';

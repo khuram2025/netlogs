@@ -615,8 +615,8 @@ window.rptHours = {{ report_hours }};
 (function(){
     // Generated/footer timestamps
     const now = new Date();
-    document.getElementById('rpt-meta-generated').textContent = now.toLocaleString();
-    document.getElementById('rpt-footer-ts').textContent = now.toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+    document.getElementById('rpt-meta-generated').textContent = window.fmtTime(now);
+    document.getElementById('rpt-footer-ts').textContent = window.fmtTime(now);
     const reportId = 'ZTR-' + now.toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*9000+1000);
     document.getElementById('rpt-meta-id').textContent = reportId;
 

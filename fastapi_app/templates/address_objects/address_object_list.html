@@ -253,7 +253,7 @@
                     {% endif %}
                 </td>
                 <td class="text-muted text-sm">{{ obj.description or '-' }}</td>
-                <td class="text-muted text-sm">{{ obj.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="text-muted text-sm">{{ obj.created_at | localdt('%Y-%m-%d %H:%M') }}</td>
                 <td>
                     <div class="actions-cell">
                         <div class="dropdown-wrap">

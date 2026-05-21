@@ -241,8 +241,14 @@ function formatBytes(b) {
 
 function formatTS(iso) {
     if (!iso) return '--';
-    const d = new Date(iso);
-    return d.toLocaleString('en-GB', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).replace(',','');
+    var s = String(iso).trim();
+    // A bare "YYYY-MM-DD HH:MM:SS" carries no zone — it is UTC in this app.
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s) && !/(z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+        s = s.replace(' ', 'T') + 'Z';
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('en-GB', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:"{{ app_tz() }}"}).replace(',','');
 }
 
 function setTime(h) {

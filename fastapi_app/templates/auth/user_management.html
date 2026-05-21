@@ -257,13 +257,13 @@
                     </td>
                     <td class="user-meta">
                         {% if user.last_login %}
-                        {{ user.last_login.strftime('%Y-%m-%d %H:%M') }}
+                        {{ user.last_login | localdt('%Y-%m-%d %H:%M') }}
                         {% else %}
                         Never
                         {% endif %}
                     </td>
                     <td class="user-meta">
-                        {{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}
+                        {{ (user.created_at | localdt('%Y-%m-%d')) if user.created_at else '—' }}
                     </td>
                     <td>
                         <div class="actions-cell">
