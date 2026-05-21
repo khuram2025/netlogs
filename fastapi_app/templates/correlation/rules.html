@@ -1893,7 +1893,7 @@
                         <span class="cr-stat-label">Last Triggered</span>
                         <span class="cr-stat-val" style="font-size:0.75rem;">
                             {% if rule.last_triggered_at %}
-                            {{ rule.last_triggered_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ rule.last_triggered_at | localdt('%Y-%m-%d %H:%M') }}
                             {% else %}
                             <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
                             {% endif %}
@@ -1903,7 +1903,7 @@
                         <span class="cr-stat-label">Last Evaluated</span>
                         <span class="cr-stat-val" style="font-size:0.75rem;">
                             {% if rule.last_evaluated_at %}
-                            {{ rule.last_evaluated_at.strftime('%H:%M:%S') }}
+                            {{ rule.last_evaluated_at | localdt('%H:%M:%S') }}
                             {% else %}
                             <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
                             {% endif %}
@@ -1959,7 +1959,7 @@
             <tbody>
                 {% for m in recent_matches %}
                 <tr data-rule="{{ m.rule_name }}">
-                    <td><span class="cr-match-time">{{ m.timestamp }}</span></td>
+                    <td><span class="cr-match-time">{{ m.timestamp | localdt }}</span></td>
                     <td><span class="cr-match-rule">{{ m.rule_name }}</span></td>
                     <td><span class="cr-severity-badge {{ m.severity }}">{{ m.severity }}</span></td>
                     <td>
@@ -2317,7 +2317,7 @@ function _renderIncidents(list) {
             '<td>' + i.match_count + '</td>' +
             '<td>' + _cdEsc((i.rule_names || []).join(', ') || '—') + '</td>' +
             '<td>' + _cdEsc((i.mitre_tactics || []).join(', ') || '—') + '</td>' +
-            '<td><span class="cr-match-time">' + (i.last_seen || '').slice(0, 19) + '</span></td>' +
+            '<td><span class="cr-match-time">' + window.fmtTime(i.last_seen) + '</span></td>' +
             '<td><select class="cr-inc-status" onchange="changeIncidentStatus(' + i.id + ',this.value)">' +
                 opts + '</select></td>' +
             '<td><button class="cr-btn" onclick="showIncidentDetail(' + i.id + ')">Detail</button></td>' +
@@ -2358,7 +2358,7 @@ function showIncidentDetail(id) {
             h += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>' +
                  '<th>Time</th><th>Rule</th><th>Attack Chain</th><th>Events</th></tr></thead><tbody>';
             ms.forEach(function(m) {
-                h += '<tr><td>' + _cdEsc((m.timestamp || '').slice(0, 19)) + '</td>' +
+                h += '<tr><td>' + _cdEsc(window.fmtTime(m.timestamp)) + '</td>' +
                      '<td>' + _cdEsc(m.rule_name || '') + '</td>' +
                      '<td>' + _cdEsc(m.chain || '') + '</td>' +
                      '<td>' + (m.total_events || 0) + '</td></tr>';
@@ -3147,7 +3147,7 @@ function _cdFetchAndRender(ruleId, hours) {
                 html += '<span class="cd-health-stat"><strong>' + hh.matches_30d + '</strong> / 30d</span>';
                 html += '<span class="cd-health-stat">rule <strong>v' + hh.version + '</strong></span>';
                 if (hh.last_modified) {
-                    html += '<span class="cd-health-stat">edited ' + _cdEsc(hh.last_modified.slice(0, 10)) + '</span>';
+                    html += '<span class="cd-health-stat">edited ' + _cdEsc(window.fmtDate(hh.last_modified)) + '</span>';
                 }
                 html += '</div>';
                 if (hh.daily && hh.daily.length) {
@@ -3169,7 +3169,7 @@ function _cdFetchAndRender(ruleId, hours) {
                 html += '<th>Key Value</th><th>Matches</th><th>Events</th><th>Last Seen</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 data.top_keys.forEach(function(k) {
-                    var ts = k.last_seen ? k.last_seen.replace('T', ' ').slice(0, 19) : '—';
+                    var ts = k.last_seen ? window.fmtTime(k.last_seen) : '—';
                     // Rule-aware drill-down (stage filter + entity + match window),
                     // computed server-side; falls back to a plain entity search.
                     var logUrl = k.log_url || ('/logs/?srcip=' + encodeURIComponent(k.key_value));
@@ -3206,14 +3206,14 @@ function _cdFetchAndRender(ruleId, hours) {
                 html += '<th>Recorded</th><th>Entity</th><th>Stages</th><th>Events</th><th>Evidence Window</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 data.recent_matches.forEach(function(m) {
-                    var ts = m.timestamp ? m.timestamp.replace('T', ' ').slice(0, 19) : '—';
+                    var ts = m.timestamp ? window.fmtTime(m.timestamp) : '—';
                     var pct = m.total_stages ? Math.round(m.stages_matched / m.total_stages * 100) : 0;
                     // Rule-aware drill-down: stage filter + entity + the match's
                     // own evidence window (server-computed in m.log_url).
                     var logUrl = m.log_url || ('/logs/?srcip=' + encodeURIComponent(m.key_value || m.entity_value || ''));
                     // Phase 1: event-chain evidence window (first -> last event)
                     var evid = '—';
-                    var _t = function(s) { var p = String(s).replace('T', ' ').split(' '); return p[1] ? p[1].slice(0, 8) : s; };
+                    var _t = function(s) { return window.fmtTime(s, {year: undefined, month: undefined, day: undefined}) || s; };
                     if (m.first_seen && m.last_seen && String(m.first_seen).indexOf('1970') !== 0) {
                         evid = _t(m.first_seen) + ' → ' + _t(m.last_seen);
                     }

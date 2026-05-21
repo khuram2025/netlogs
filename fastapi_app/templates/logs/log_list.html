@@ -3209,11 +3209,11 @@
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td data-col="timestamp">
                                         <span class="timestamp">
-                                            {# Show the platform's normalized UTC timestamp — consistent with
-                                               filtering, sorting and correlation windows. The device-reported
-                                               log_time is in the device's own (often skewed) local clock and
-                                               remains available in the raw-log detail. #}
-                                            {% if log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                            {# Show the platform's normalized timestamp, rendered in the app's
+                                               display timezone — consistent with filtering, sorting and
+                                               correlation windows. The device-reported log_time is in the
+                                               device's own (often skewed) clock and stays in the raw detail. #}
+                                            {% if log.get('timestamp') %}{{ log.timestamp | localdt }}{% else %}--{% endif %}
                                         </span>
                                     </td>
                                     <td data-col="action">
@@ -3436,8 +3436,8 @@
                                         {% endif %}
                                     </td>
                                     {% endif %}
-                                    <td><span class="agg-timestamp">{{ row.first_seen.strftime('%Y-%m-%d %H:%M:%S') if row.first_seen else '--' }}</span></td>
-                                    <td><span class="agg-timestamp">{{ row.last_seen.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen else '--' }}</span></td>
+                                    <td><span class="agg-timestamp">{{ (row.first_seen | localdt) if row.first_seen else '--' }}</span></td>
+                                    <td><span class="agg-timestamp">{{ (row.last_seen | localdt) if row.last_seen else '--' }}</span></td>
                                     <td>
                                         {% set agg_action = (row.top_action or '') | lower %}
                                         {% if agg_action in ['deny', 'drop', 'block', 'reject'] %}
@@ -4883,7 +4883,7 @@
             for (const col of displayCols) {
                 let val = row[col] ?? '';
                 if (col === 'timestamp' && val) {
-                    val = val.replace('T', ' ').substring(0, 19);
+                    val = window.fmtTime(val);
                 } else if (col === 'severity') {
                     val = sevNames[val] || val;
                 } else if (col === 'message' && typeof val === 'string' && val.length > 120) {
@@ -5231,8 +5231,8 @@
             }
 
             html += `<td><span class="event-count-badge">${g.totalEvents.toLocaleString()}</span></td>`;
-            html += `<td><span class="agg-timestamp">${g.firstSeen || '--'}</span></td>`;
-            html += `<td><span class="agg-timestamp">${g.lastSeen || '--'}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.firstSeen ? window.fmtTime(g.firstSeen) : '--'}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.lastSeen ? window.fmtTime(g.lastSeen) : '--'}</span></td>`;
 
             // Action badge
             const actLower = topAction.toLowerCase();

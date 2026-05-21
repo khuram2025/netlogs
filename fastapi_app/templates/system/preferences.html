@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Preferences - Zentryc{% endblock %}
+
+{% block content %}
+<div style="max-width: 720px; margin: 0 auto; padding: 1.5rem;">
+  <div style="margin-bottom: 1.25rem;">
+    <h1 style="font-size: 1.4rem; font-weight: 700; margin: 0;">Preferences</h1>
+    <p style="color: var(--text-muted); margin: 0.25rem 0 0;">App-wide display settings</p>
+  </div>
+
+  {% if saved == '1' %}
+  <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.4); color: #4ade80; padding: 0.7rem 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.9rem;">
+    Display timezone saved — all timestamps now render in <strong>{{ current_tz }}</strong>.
+  </div>
+  {% elif saved == 'err' %}
+  <div style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 0.7rem 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.9rem;">
+    That timezone was not recognized — no change was made.
+  </div>
+  {% endif %}
+
+  <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.6rem; padding: 1.25rem;">
+    <h2 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem;">Display Timezone</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem;">
+      The timezone every timestamp in the UI is shown in. Log data is always
+      stored and queried in UTC — this only changes how times are displayed.
+    </p>
+
+    <form method="post" action="{{ url_for('preferences_set_timezone') }}">
+      <label for="tzSelect" style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem;">Timezone</label>
+      <select name="tz" id="tzSelect"
+              style="width:100%; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border); border-radius:0.4rem; padding:0.55rem 0.6rem; font-size:0.9rem;">
+        {% for tz in timezones %}
+        <option value="{{ tz }}" {% if tz == current_tz %}selected{% endif %}>{{ tz }}</option>
+        {% endfor %}
+      </select>
+
+      <div style="margin-top:0.9rem; padding:0.7rem 0.85rem; background:var(--input-bg); border:1px solid var(--border); border-radius:0.4rem; font-size:0.85rem;">
+        <div style="color:var(--text-muted);">Server time (UTC):
+          <span style="font-family:'JetBrains Mono',monospace; color:var(--text-color);">{{ now_utc }}</span>
+        </div>
+        <div style="color:var(--text-muted); margin-top:0.3rem;">Shown as:
+          <span id="tzPreview" style="font-family:'JetBrains Mono',monospace; color:#4ade80;">—</span>
+        </div>
+      </div>
+
+      <button type="submit"
+              style="margin-top:1rem; background:var(--primary); color:white; border:none; border-radius:0.4rem; padding:0.55rem 1.1rem; font-size:0.9rem; font-weight:600; cursor:pointer;">
+        Save
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var sel = document.getElementById('tzSelect');
+    var preview = document.getElementById('tzPreview');
+    var serverUtc = "{{ now_utc }}";
+    function render() {
+      try {
+        var d = new Date(serverUtc.replace(' ', 'T') + 'Z');
+        var s = new Intl.DateTimeFormat('en-CA', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false, timeZone: sel.value
+        }).format(d).replace(', ', ' ');
+        preview.textContent = s + '  (' + sel.value + ')';
+      } catch (e) { preview.textContent = '—'; }
+    }
+    sel.addEventListener('change', render);
+    render();
+  })();
+</script>
+{% endblock %}

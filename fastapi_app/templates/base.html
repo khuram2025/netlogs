@@ -13,6 +13,38 @@
     <link rel="stylesheet" href="{{ vite_asset('static/src/main.css') }}">
     <!-- HTMX (built by Vite) -->
     <script src="{{ vite_asset('static/src/htmx.js') }}" defer></script>
+    <!-- App-wide display timezone: render UTC timestamps in the configured zone -->
+    <script>
+      window.APP_TZ = "{{ app_tz() }}";
+      /* Render a UTC timestamp (Date | ISO string | "YYYY-MM-DD HH:MM:SS") in
+         the app's configured display timezone. Empty input returns "". */
+      window.fmtTime = function (value, opts) {
+        if (value === null || value === undefined || value === "") return "";
+        var d;
+        if (value instanceof Date) {
+          d = value;
+        } else {
+          var s = String(value).trim();
+          /* A bare "YYYY-MM-DD HH:MM:SS" carries no zone — it is UTC here. */
+          if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s) &&
+              !/(z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+            s = s.replace(" ", "T") + "Z";
+          }
+          d = new Date(s);
+        }
+        if (isNaN(d.getTime())) return String(value);
+        var o = Object.assign({
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hour12: false, timeZone: window.APP_TZ
+        }, opts || {});
+        return new Intl.DateTimeFormat("en-CA", o).format(d).replace(", ", " ");
+      };
+      /* Date only — "YYYY-MM-DD" in the display timezone. */
+      window.fmtDate = function (value) {
+        return window.fmtTime(value, { hour: undefined, minute: undefined, second: undefined });
+      };
+    </script>
     {% block extra_head %}{% endblock %}
     <style>
         :root {
@@ -797,6 +829,10 @@
                     <a href="{{ url_for('llm_config_page') }}" class="sb-item" data-tip="AI Settings" data-path="/system/ai-settings">
                         <span class="sb-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m5.66-14.66l-4.24 4.24m-2.83 2.83l-4.24 4.24M23 12h-6m-6 0H1m14.66 5.66l-4.24-4.24m-2.83-2.83l-4.24-4.24"/></svg></span>
                         <span class="sb-item-label">AI Settings</span>
+                    </a>
+                    <a href="{{ url_for('preferences_page') }}" class="sb-item" data-tip="Preferences" data-path="/system/preferences">
+                        <span class="sb-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                        <span class="sb-item-label">Preferences</span>
                     </a>
                     {% endif %}
                 </div>

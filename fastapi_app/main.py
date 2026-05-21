@@ -132,6 +132,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize PostgreSQL: {e}")
 
+    # Load the app-wide display timezone into the in-process cache
+    try:
+        from .core.app_settings import load_display_timezone
+        tz = await load_display_timezone()
+        logger.info(f"Display timezone: {tz}")
+    except Exception as e:
+        logger.warning(f"Display timezone load warning: {e}")
+
     # Initialize Redis connection
     try:
         await get_redis()
@@ -352,8 +360,12 @@ app.include_router(reports_router)
 from .api.partials import router as partials_router
 app.include_router(partials_router)
 
-# Register vite_asset helper in ALL Jinja2Templates instances
+# Register shared Jinja helpers in ALL Jinja2Templates instances:
+#   vite_asset()  — built-asset URL resolver
+#   app_tz()      — current display timezone (for JS / <script> injection)
+#   | localdt     — render a datetime/ISO string in the display timezone
 from .core.vite import vite_asset
+from .core.app_settings import get_display_timezone, format_datetime
 import fastapi_app.api as _api_pkg
 import importlib, pkgutil
 for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
@@ -361,6 +373,8 @@ for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
     _tmpl = getattr(_mod, "templates", None)
     if _tmpl and hasattr(_tmpl, "env"):
         _tmpl.env.globals["vite_asset"] = vite_asset
+        _tmpl.env.globals["app_tz"] = get_display_timezone
+        _tmpl.env.filters["localdt"] = format_datetime
 
 
 @app.get("/api/")

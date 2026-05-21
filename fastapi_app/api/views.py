@@ -4386,6 +4386,40 @@ async def estimate_cleanup(request: Request):
 
 
 # ============================================================
+# Preferences — app-wide display settings (Admin Only)
+# ============================================================
+
+@router.get("/system/preferences/", response_class=HTMLResponse,
+            name="preferences_page",
+            dependencies=[Depends(require_role("ADMIN"))])
+async def preferences_page(request: Request, saved: Optional[str] = Query(None)):
+    """App-wide preferences page — currently the display timezone."""
+    from ..core.app_settings import all_timezones, get_display_timezone
+    return _render("system/preferences.html", request, {
+        "timezones": all_timezones(),
+        "current_tz": get_display_timezone(),
+        "saved": saved or "",
+        "now_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+    })
+
+
+@router.post("/system/preferences/timezone/", name="preferences_set_timezone",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def preferences_set_timezone(
+    request: Request,
+    tz: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist the app-wide display timezone."""
+    from ..core.app_settings import set_display_timezone
+    try:
+        await set_display_timezone(db, (tz or "").strip())
+        return RedirectResponse(url="/system/preferences/?saved=1", status_code=303)
+    except ValueError:
+        return RedirectResponse(url="/system/preferences/?saved=err", status_code=303)
+
+
+# ============================================================
 # Audit Log Viewer (Admin Only)
 # ============================================================
 
