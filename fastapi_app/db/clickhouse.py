@@ -1764,9 +1764,17 @@ class ClickHouseClient:
         # Use list columns by default (fast — excludes message/raw/parsed_data)
         columns = cls.FULL_COLUMNS if include_raw else cls.LIST_COLUMNS
 
-        # Determine the user's requested time bounds
+        # Determine the user's requested time bounds.
+        # Normalise to tz-aware UTC: an explicit start/end may arrive naive
+        # (an ISO string with no offset), and the progressive-narrowing logic
+        # below compares user_end against an aware now() — mixing naive and
+        # aware datetimes raises TypeError and silently empties the result.
         user_start = start_time
         user_end = end_time
+        if user_start is not None and user_start.tzinfo is None:
+            user_start = user_start.replace(tzinfo=timezone.utc)
+        if user_end is not None and user_end.tzinfo is None:
+            user_end = user_end.replace(tzinfo=timezone.utc)
         if user_start is None and user_end is None:
             # Default: restrict to default_hours
             user_time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
@@ -1809,7 +1817,6 @@ class ClickHouseClient:
             # - If end_time is in the past (custom historical range), probe for
             #   max(timestamp) so we land on actual data even if there's a gap
             #   right before end_time.
-            from datetime import datetime, timezone
             now_utc = datetime.now(timezone.utc)
             need_probe = (
                 user_end is not None and user_end < now_utc - timedelta(minutes=5)
