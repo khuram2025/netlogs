@@ -168,3 +168,31 @@ class IOCSighting(Base):
         Index("ix_ioc_sighting_triage", "status", "severity"),
         Index("ix_ioc_sighting_dir", "direction"),
     )
+
+
+class TIAllowlist(Base):
+    """Allow / warning list.
+
+    Values that should not generate threat sightings even if a feed lists
+    them — CDN / cloud ranges, public DNS resolvers, benign vendor domains —
+    or that an analyst has cleared as a false positive. A sighting whose IOC
+    matches an allowlist entry is *suppressed* (recorded, kept as evidence,
+    but kept out of the triage queue), never deleted.
+    """
+    __tablename__ = "ti_allowlist"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entry_type = Column(String(20), nullable=False)   # ip|cidr|domain|url|hash
+    value = Column(String(500), nullable=False)
+    list_name = Column(String(100), nullable=True)    # grouping, e.g. "Cloudflare"
+    reason = Column(Text, nullable=True)
+    source = Column(String(20), nullable=False, default="analyst")  # builtin|analyst
+    created_by = Column(String(100), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True),
+                        default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("entry_type", "value", name="uq_ti_allowlist"),
+        Index("ix_ti_allowlist_active", "is_active"),
+    )

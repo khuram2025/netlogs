@@ -20,6 +20,7 @@ from ..db.clickhouse import ClickHouseClient
 from ..db.database import async_session_maker
 from ..models.system_settings import SystemSetting
 from ..models.threat_intel import IOCSighting
+from .ti_allowlist import load_allowlist
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,9 @@ async def rollup_sightings():
     cutoff_str = (datetime.now(timezone.utc)
                   - timedelta(seconds=_LAG_SECONDS)).strftime(_TS_FMT)
 
+    # Allowlist — a sighting whose IOC matches is suppressed, not queued.
+    allow = await load_allowlist()
+
     async with async_session_maker() as db:
         wm = await _get_setting(db, _WM_KEY)
         if not wm:
@@ -184,7 +188,9 @@ async def rollup_sightings():
                 if _SEV_RANK.get(g["severity"], 1) > _SEV_RANK.get(s.severity, 1):
                     s.severity = g["severity"]
             else:
-                escalated = (g["direction"] == "outbound"
+                suppressed = allow.is_allowed(g["ioc_type"], g["ioc_value"])
+                escalated = (not suppressed
+                             and g["direction"] == "outbound"
                              and g["severity"] in ("high", "critical"))
                 db.add(IOCSighting(
                     sighting_key=k,
@@ -194,7 +200,8 @@ async def rollup_sightings():
                     feed_name=g["feed_name"], internal_asset=g["asset"],
                     direction=g["direction"], hit_count=g["hits"],
                     first_seen=g["first"], last_seen=g["last"],
-                    status="new", escalated=escalated,
+                    status=("suppressed" if suppressed else "new"),
+                    escalated=escalated,
                 ))
                 new_count += 1
 

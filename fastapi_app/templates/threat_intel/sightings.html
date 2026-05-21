@@ -102,6 +102,7 @@
     <a href="{{ url_for('threat_intel_feeds') }}" class="ti-tab">Feeds</a>
     <a href="{{ url_for('threat_intel_iocs') }}" class="ti-tab">IOCs</a>
     <a href="{{ url_for('threat_intel_matches') }}" class="ti-tab active">Sightings</a>
+    <a href="{{ url_for('threat_intel_allowlist') }}" class="ti-tab">Allowlist</a>
   </div>
 
   {% set cur = filters.status %}
@@ -111,6 +112,7 @@
     <a href="?status=escalated" class="sq-tab esc {% if cur == 'escalated' %}active{% endif %}">&#9888; Escalated<span class="n">{{ escalated_count }}</span></a>
     <a href="?status=resolved" class="sq-tab {% if cur == 'resolved' %}active{% endif %}">Resolved<span class="n">{{ sc.get('resolved', 0) }}</span></a>
     <a href="?status=false_positive" class="sq-tab {% if cur == 'false_positive' %}active{% endif %}">False Positive<span class="n">{{ sc.get('false_positive', 0) }}</span></a>
+    <a href="?status=suppressed" class="sq-tab {% if cur == 'suppressed' %}active{% endif %}">Suppressed<span class="n">{{ sc.get('suppressed', 0) }}</span></a>
     <a href="?status=all" class="sq-tab {% if cur == 'all' %}active{% endif %}">All</a>
   </div>
 
@@ -154,6 +156,7 @@
             {% if s.status in ('new','investigating') %}
             <button class="sq-btn good" onclick="sqStatus({{ s.id }},'resolved')">Resolve</button>
             <button class="sq-btn danger" onclick="sqStatus({{ s.id }},'false_positive')">False+</button>
+            <button class="sq-btn danger" onclick="sqAllowlist({{ s.id }})" title="Allowlist this indicator — suppresses it everywhere">Allowlist</button>
             {% else %}
             <button class="sq-btn" onclick="sqStatus({{ s.id }},'new')">Reopen</button>
             {% endif %}
@@ -203,6 +206,18 @@ function sqToggle(id) {
       d.innerHTML = h;
     })
     .catch(function(){ d.innerHTML = '<div style="color:#fca5a5;font-size:0.72rem;">Failed to load evidence.</div>'; });
+}
+
+function sqAllowlist(id) {
+  if (!confirm('Allowlist this indicator? It is treated as benign and every '
+             + 'sighting for it — now and future — is suppressed.')) return;
+  fetch('/api/threat-intel/allowlist/from-sighting/' + id, {method: 'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.success) { window.location.reload(); }
+      else { alert('Failed: ' + (j.error || 'unknown error')); }
+    })
+    .catch(function(){ alert('Failed.'); });
 }
 
 function sqStatus(id, status) {

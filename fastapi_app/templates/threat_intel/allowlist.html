@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Threat Intelligence - Allowlist{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ti-page { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+  .ti-header { margin-bottom: 1.25rem; }
+  .ti-title { font-size: 1.5rem; font-weight: 700; color: #fff; margin: 0; }
+  .ti-title-sub { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+                  color: var(--text-muted); display: block; margin-top: 0.15rem; }
+  .ti-tabs { display: inline-flex; gap: 0.25rem; padding: 0.25rem;
+             background: rgba(15,23,42,0.6); border: 1px solid var(--border);
+             border-radius: 0.6rem; margin-bottom: 1.25rem; }
+  .ti-tab { padding: 0.4rem 1.1rem; border-radius: 0.4rem; font-size: 0.8rem;
+            font-weight: 500; color: var(--text-muted); text-decoration: none; }
+  .ti-tab:hover:not(.active) { color: var(--text-color); background: rgba(255,255,255,0.04); }
+  .ti-tab.active { background: var(--primary); color: #fff; }
+
+  .al-intro { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 1rem; max-width: 780px; }
+  .al-stats { display: flex; gap: 0.75rem; margin-bottom: 1rem; }
+  .al-stat { background: var(--card-bg); border: 1px solid var(--border);
+             border-radius: 0.5rem; padding: 0.55rem 1rem; }
+  .al-stat .v { font-size: 1.3rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .al-stat .l { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em;
+                color: var(--text-muted); }
+
+  .al-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+             background: var(--card-bg); border: 1px solid var(--border);
+             border-radius: 0.55rem; padding: 0.75rem; margin-bottom: 1.25rem; }
+  .al-form select, .al-form input { background: var(--input-bg); color: var(--text-color);
+             border: 1px solid var(--border); border-radius: 0.4rem;
+             padding: 0.45rem 0.55rem; font-size: 0.82rem; }
+  .al-form input.val { flex: 2; min-width: 220px; font-family: 'JetBrains Mono', monospace; }
+  .al-form input.reason { flex: 1; min-width: 150px; }
+  .al-btn { background: var(--primary); color: #fff; border: none; border-radius: 0.4rem;
+            padding: 0.5rem 1.05rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+
+  .al-table { width: 100%; border-collapse: collapse; }
+  .al-table thead th { text-align: left; font-size: 0.64rem; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-muted); padding: 0.4rem 0.6rem;
+            border-bottom: 1px solid var(--border); }
+  .al-table tbody td { padding: 0.45rem 0.6rem; font-size: 0.8rem;
+            border-bottom: 1px solid rgba(51,65,85,0.4); }
+  .al-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .al-val { font-family: 'JetBrains Mono', monospace; color: #e2e8f0; }
+  .al-type { font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+             padding: 0.12rem 0.4rem; border-radius: 0.3rem;
+             background: rgba(59,130,246,0.15); color: #93c5fd; }
+  .al-src-builtin { color: #94a3b8; font-size: 0.72rem; }
+  .al-src-analyst { color: #4ade80; font-size: 0.72rem; }
+  .al-rm { background: var(--input-bg); border: 1px solid var(--border); color: var(--text-muted);
+           border-radius: 0.3rem; padding: 0.2rem 0.5rem; font-size: 0.68rem; cursor: pointer; }
+  .al-rm:hover { border-color: #ef4444; color: #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ti-page">
+  <div class="ti-header">
+    <h2 class="ti-title">Threat Intelligence
+      <span class="ti-title-sub">Allowlist &amp; Warninglists</span>
+    </h2>
+  </div>
+
+  <div class="ti-tabs">
+    <a href="{{ url_for('threat_intel_feeds') }}" class="ti-tab">Feeds</a>
+    <a href="{{ url_for('threat_intel_iocs') }}" class="ti-tab">IOCs</a>
+    <a href="{{ url_for('threat_intel_matches') }}" class="ti-tab">Sightings</a>
+    <a href="{{ url_for('threat_intel_allowlist') }}" class="ti-tab active">Allowlist</a>
+  </div>
+
+  <div class="al-intro">
+    Values here are treated as known-benign. A sighting whose indicator matches an
+    allowlist entry is <strong>suppressed</strong> — kept as evidence, but out of the
+    triage queue. Built-in warninglists cover bogon ranges, public DNS resolvers,
+    Cloudflare and major-vendor domains; analyst entries are added straight from
+    a false-positive sighting.
+  </div>
+
+  <div class="al-stats">
+    <div class="al-stat"><div class="v">{{ entries|length }}</div><div class="l">Allowlist Entries</div></div>
+    <div class="al-stat"><div class="v" style="color:#fbbf24;">{{ '{:,}'.format(suppressed_count) }}</div><div class="l">Sightings Suppressed</div></div>
+  </div>
+
+  <div class="al-form">
+    <select id="alType">
+      <option value="ip">IP</option>
+      <option value="cidr">CIDR</option>
+      <option value="domain">Domain</option>
+      <option value="url">URL</option>
+      <option value="hash">Hash</option>
+    </select>
+    <input class="val" id="alValue" placeholder="value — e.g. 203.0.113.0/24 or cdn.example.com">
+    <input class="reason" id="alReason" placeholder="reason (optional)">
+    <button class="al-btn" onclick="alAdd()">Add Entry</button>
+  </div>
+
+  <table class="al-table">
+    <thead><tr><th>Type</th><th>Value</th><th>List</th><th>Reason</th><th>Source</th><th>Added</th><th></th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr data-id="{{ e.id }}">
+        <td><span class="al-type">{{ e.entry_type }}</span></td>
+        <td class="al-val">{{ e.value }}</td>
+        <td style="color:var(--text-muted);">{{ e.list_name or '—' }}</td>
+        <td style="color:var(--text-muted);">{{ e.reason or '—' }}</td>
+        <td><span class="al-src-{{ e.source }}">{{ e.source }}{% if e.created_by %} &middot; {{ e.created_by }}{% endif %}</span></td>
+        <td style="color:var(--text-muted);font-size:0.72rem;">{{ e.created_at | localdt('%Y-%m-%d') }}</td>
+        <td><button class="al-rm" onclick="alRemove({{ e.id }})">Remove</button></td>
+      </tr>
+      {% endfor %}
+      {% if not entries %}
+      <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">No allowlist entries yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function alAdd() {
+  var v = document.getElementById('alValue').value.trim();
+  if (!v) { alert('Enter a value.'); return; }
+  fetch('/api/threat-intel/allowlist/', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      entry_type: document.getElementById('alType').value,
+      value: v,
+      reason: document.getElementById('alReason').value.trim()
+    })
+  }).then(function(r){ return r.json(); }).then(function(j){
+    if (j.success) { window.location.reload(); }
+    else { alert('Failed: ' + (j.error || 'unknown error')); }
+  }).catch(function(){ alert('Failed.'); });
+}
+function alRemove(id) {
+  if (!confirm('Remove this allowlist entry?')) return;
+  fetch('/api/threat-intel/allowlist/' + id, {method: 'DELETE'})
+    .then(function(r){ return r.json(); }).then(function(j){
+      if (j.success) { window.location.reload(); }
+      else { alert('Failed: ' + (j.error || 'unknown error')); }
+    }).catch(function(){ alert('Failed.'); });
+}
+</script>
+{% endblock %}

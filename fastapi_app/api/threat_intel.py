@@ -9,11 +9,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, desc, delete
+from sqlalchemy import select, func, desc, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..models.threat_intel import ThreatFeed, IOC, FeedType, IOCSighting
+from ..models.threat_intel import ThreatFeed, IOC, FeedType, IOCSighting, TIAllowlist
 from ..core.permissions import require_min_role
 from ..services.threat_intel_service import (
     fetch_feed, get_ioc_match_stats, get_ioc_matches_paginated,
@@ -199,6 +199,31 @@ async def threat_intel_matches_page(
         "status_counts": status_counts,
         "escalated_count": escalated_count,
         "filters": {"status": status, "direction": direction or ""},
+    })
+
+
+# ============================================================
+# Allowlist UI
+# ============================================================
+
+@router.get("/threat-intel/allowlist/", response_class=HTMLResponse,
+            name="threat_intel_allowlist",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def threat_intel_allowlist_page(request: Request,
+                                      db: AsyncSession = Depends(get_db)):
+    """Allow / warning list — known-benign values that suppress sightings."""
+    entries = list((await db.execute(
+        select(TIAllowlist).where(TIAllowlist.is_active.is_(True))
+        .order_by(TIAllowlist.list_name, TIAllowlist.entry_type,
+                  TIAllowlist.value)
+    )).scalars().all())
+    suppressed_count = (await db.execute(
+        select(func.count(IOCSighting.id)).where(
+            IOCSighting.status == "suppressed")
+    )).scalar() or 0
+    return _render("threat_intel/allowlist.html", request, {
+        "entries": entries,
+        "suppressed_count": suppressed_count,
     })
 
 
@@ -601,3 +626,105 @@ async def api_sighting_events(sighting_id: int, db: AsyncSession = Depends(get_d
     events = await get_sighting_events(s.ioc_value, s.internal_asset, s.direction)
     return {"success": True, "events": events,
             "ioc_value": s.ioc_value, "internal_asset": s.internal_asset}
+
+
+# Allowlist Endpoints
+
+_VALID_ALLOWLIST_TYPES = {"ip", "cidr", "domain", "url", "hash"}
+
+
+def _allowlist_type_for_ioc(ioc_type: str, value: str) -> str:
+    """Map an IOC type to an allowlist entry_type."""
+    if ioc_type == "ip":
+        return "cidr" if "/" in (value or "") else "ip"
+    if ioc_type == "domain":
+        return "domain"
+    if ioc_type == "url":
+        return "url"
+    return "hash"
+
+
+@router.post("/api/threat-intel/allowlist/",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_add_allowlist_entry(request: Request,
+                                  db: AsyncSession = Depends(get_db)):
+    """Add an allow / warning-list entry."""
+    data = await request.json()
+    entry_type = (data.get("entry_type") or "").strip().lower()
+    value = (data.get("value") or "").strip()
+    if entry_type not in _VALID_ALLOWLIST_TYPES:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "error": f"entry_type must be one of {sorted(_VALID_ALLOWLIST_TYPES)}"})
+    if not value:
+        return JSONResponse(status_code=400,
+                            content={"success": False, "error": "value is required"})
+    dup = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.entry_type == entry_type, TIAllowlist.value == value
+    ))).scalar_one_or_none()
+    if dup:
+        if not dup.is_active:
+            dup.is_active = True
+            await db.commit()
+        return {"success": True, "id": dup.id, "duplicate": True}
+    user = getattr(request.state, "current_user", None)
+    entry = TIAllowlist(
+        entry_type=entry_type, value=value,
+        list_name=(data.get("list_name") or "Analyst").strip() or "Analyst",
+        reason=(data.get("reason") or "").strip() or None,
+        source="analyst", created_by=getattr(user, "username", None),
+        is_active=True,
+    )
+    db.add(entry)
+    await db.commit()
+    return {"success": True, "id": entry.id}
+
+
+@router.delete("/api/threat-intel/allowlist/{entry_id}",
+               dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_delete_allowlist_entry(entry_id: int,
+                                     db: AsyncSession = Depends(get_db)):
+    """Remove an allowlist entry."""
+    entry = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.id == entry_id))).scalar_one_or_none()
+    if not entry:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Entry not found"})
+    await db.delete(entry)
+    await db.commit()
+    return {"success": True}
+
+
+@router.post("/api/threat-intel/allowlist/from-sighting/{sighting_id}",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_allowlist_from_sighting(sighting_id: int, request: Request,
+                                      db: AsyncSession = Depends(get_db)):
+    """Allowlist a sighting's IOC and suppress every open sighting for it."""
+    s = (await db.execute(select(IOCSighting).where(
+        IOCSighting.id == sighting_id))).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    entry_type = _allowlist_type_for_ioc(s.ioc_type, s.ioc_value)
+    dup = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.entry_type == entry_type,
+        TIAllowlist.value == s.ioc_value))).scalar_one_or_none()
+    if not dup:
+        user = getattr(request.state, "current_user", None)
+        db.add(TIAllowlist(
+            entry_type=entry_type, value=s.ioc_value, list_name="Analyst",
+            reason=f"False positive — allowlisted from sighting #{s.id}",
+            source="analyst", created_by=getattr(user, "username", None),
+            is_active=True,
+        ))
+    elif not dup.is_active:
+        dup.is_active = True
+    # Retroactively suppress every open sighting for this IOC.
+    result = await db.execute(
+        update(IOCSighting)
+        .where(IOCSighting.ioc_value == s.ioc_value,
+               IOCSighting.status.in_(("new", "investigating")))
+        .values(status="suppressed", escalated=False)
+    )
+    await db.commit()
+    return {"success": True, "suppressed": result.rowcount or 0}

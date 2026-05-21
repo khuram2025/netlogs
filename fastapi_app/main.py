@@ -218,6 +218,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Threat feed seeding warning: {e}")
 
+    # Seed built-in warninglists (allowlist of known-benign infrastructure)
+    try:
+        from .services.ti_allowlist import seed_builtin_warninglists
+        await seed_builtin_warninglists()
+    except Exception as e:
+        logger.warning(f"Warninglist seeding warning: {e}")
+
     # Initialize correlation engine
     try:
         from .services.correlation_engine import ensure_correlation_matches_table, seed_correlation_rules
