@@ -4,7 +4,8 @@ Correlation Rules management routes.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -82,6 +83,88 @@ def compute_coverage_stats(coverage: dict):
     return tactic_stats, total_techniques, total_covered, total_detectable, overall_pct
 
 
+# ── Rule-aware log drill-down ───────────────────────────────────────────
+# A correlation match's "Logs" link should open the *exact* events behind the
+# match — the matched stage's own filter, scoped to the matched entity and the
+# match's evidence window — not a generic "all traffic for this IP" search.
+
+# Correlation stage field -> log-viewer (/logs/) query parameter. Only fields
+# the firewall log viewer can filter on are mapped; anything else is dropped so
+# the drill-down narrows precisely instead of over-broadening.
+_LOG_PARAM_BY_FIELD = {
+    "action": "action", "srcip": "srcip", "dstip": "dstip",
+    "srcport": "srcport", "dstport": "dstport", "proto": "protocol",
+    "policyname": "policyname", "log_type": "log_type",
+    "application": "application", "session_end_reason": "session_end_reason",
+    "src_zone": "src_zone", "dst_zone": "dst_zone", "threat_id": "threat_id",
+    "device_ip": "device",
+}
+
+# Stage group-by field / canonical entity -> the log-viewer param the match's
+# entity value should bind to.
+_LOG_ENTITY_PARAM = {
+    "ip": "srcip", "srcip": "srcip", "src_ip": "srcip",
+    "dst_ip": "dstip", "dstip": "dstip", "dest_ip": "dstip",
+    "device": "device", "device_ip": "device",
+}
+
+
+def _to_dt(value):
+    """Best-effort parse of a ClickHouse timestamp (datetime or string)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    s = str(value).replace("T", " ").split("+")[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _log_drilldown_url(stage: dict, entity_value: str,
+                       first_seen=None, last_seen=None) -> str:
+    """Build a log-viewer URL showing the exact events behind a correlation
+    match: the stage's filter, scoped to the matched entity and the match's
+    evidence window. Unmapped fields are dropped; a missing window falls back
+    to a trailing 24h range."""
+    stage = stage or {}
+    fcfg = dict(stage.get("filter", {}) or {})
+    params = {}
+
+    # The matched entity, bound to the right column (srcip / dstip / device).
+    group_by = fcfg.get("group_by") or stage.get("group_by")
+    entity_param = _LOG_ENTITY_PARAM.get(group_by, "srcip")
+    ev = (entity_value or "").split("|")[0].strip()   # composite -> first key
+    if ev:
+        params[entity_param] = ev
+
+    # The stage's filter conditions — only those the log viewer supports;
+    # skip group-by, control keys, comparison-suffixed keys and $variables.
+    for key, val in fcfg.items():
+        if key in ("group_by", "threshold", "window"):
+            continue
+        if any(key.endswith(s) for s in ("_gt", "_lt", "_gte", "_lte", "_ne")):
+            continue
+        if isinstance(val, str) and val.startswith("$"):
+            continue
+        param = _LOG_PARAM_BY_FIELD.get(key)
+        if param and param not in params:
+            params[param] = val
+
+    # The match's evidence window, padded 60s each side; else a trailing 24h.
+    start, end = _to_dt(first_seen), _to_dt(last_seen)
+    if start and end and end >= start:
+        params["start"] = (start - timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+        params["end"] = (end + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+    else:
+        params["time_range"] = "24h"
+
+    return "/logs/?" + urlencode(params)
+
+
 # ============================================================
 # Correlation Rules UI
 # ============================================================
@@ -126,15 +209,20 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
         for row in r.result_rows:
             rule_match_counts[row[0]] = row[1]
 
-        # Recent matches
+        # Recent matches — first_seen/last_seen + the rule's entry stage drive
+        # a rule-aware log link (exact filter + entity + evidence window).
+        rule_by_name = {r.name: r for r in rules}
         r = client.query("""
             SELECT timestamp, rule_name, severity, stages_matched, total_stages,
-                   key_value, total_events, mitre_tactic, mitre_technique
+                   key_value, total_events, mitre_tactic, mitre_technique,
+                   first_seen, last_seen
             FROM correlation_matches
             ORDER BY timestamp DESC
             LIMIT 20
         """)
         for row in r.result_rows:
+            _rule = rule_by_name.get(row[1])
+            _stage0 = (_rule.stages[0] if _rule and _rule.stages else {})
             recent_matches.append({
                 "timestamp": row[0],
                 "rule_name": row[1],
@@ -145,6 +233,7 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
                 "total_events": row[6],
                 "mitre_tactic": row[7],
                 "mitre_technique": row[8],
+                "log_url": _log_drilldown_url(_stage0, row[5], row[9], row[10]),
             })
     except Exception as e:
         logger.error(f"Error fetching correlation matches: {e}")
@@ -613,12 +702,23 @@ async def api_rule_match_detail(rule_id: int,
             ORDER BY cnt DESC
             LIMIT 15
         """)
+        _stage0 = (rule.stages[0] if rule.stages else {})
+        try:
+            _stage0_win = int(_stage0.get("window", 3600) or 3600)
+        except (TypeError, ValueError):
+            _stage0_win = 3600
         for row in r.result_rows:
+            # top_keys carries only last_seen — anchor the window back by the
+            # entry stage's own length so the drill-down covers the match.
+            _ls = row[3]
+            _fs = (_ls - timedelta(seconds=_stage0_win)
+                   if isinstance(_ls, datetime) else None)
             top_keys.append({
                 "key_value": row[0],
                 "match_count": row[1],
                 "total_events": row[2],
                 "last_seen": str(row[3]),
+                "log_url": _log_drilldown_url(_stage0, row[0], _fs, _ls),
             })
 
         # Hourly timeline
@@ -661,6 +761,7 @@ async def api_rule_match_detail(rule_id: int,
                 "first_seen": str(row[10]) if row[10] else None,
                 "last_seen": str(row[11]) if row[11] else None,
                 "status": row[12],
+                "log_url": _log_drilldown_url(_stage0, row[1], row[10], row[11]),
             })
 
     except Exception as e:

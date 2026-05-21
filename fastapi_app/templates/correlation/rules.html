@@ -1964,7 +1964,7 @@
                     <td><span class="cr-severity-badge {{ m.severity }}">{{ m.severity }}</span></td>
                     <td>
                         {% if m.key_value %}
-                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-key-pill" title="Search logs for {{ m.key_value }}">{{ m.key_value }}</a>
+                        <a href="{{ m.log_url or '/logs/?srcip=' ~ m.key_value }}" class="cr-key-pill" title="Exact logs behind this match: {{ m.key_value }}">{{ m.key_value }}</a>
                         {% else %}
                         <span style="color:var(--cr-text-muted);">&mdash;</span>
                         {% endif %}
@@ -1987,7 +1987,7 @@
                     </td>
                     <td>
                         {% if m.key_value %}
-                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-view-btn" title="Investigate in logs">
+                        <a href="{{ m.log_url or '/logs/?srcip=' ~ m.key_value }}" class="cr-view-btn" title="Exact logs behind this match">
                             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             Logs
                         </a>
@@ -3170,7 +3170,9 @@ function _cdFetchAndRender(ruleId, hours) {
                 html += '</tr></thead><tbody>';
                 data.top_keys.forEach(function(k) {
                     var ts = k.last_seen ? k.last_seen.replace('T', ' ').slice(0, 19) : '—';
-                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(k.key_value) + ',dstip:' + encodeURIComponent(k.key_value) + '&time_range=' + (hours <= 6 ? hours + 'h' : '24h');
+                    // Rule-aware drill-down (stage filter + entity + match window),
+                    // computed server-side; falls back to a plain entity search.
+                    var logUrl = k.log_url || ('/logs/?srcip=' + encodeURIComponent(k.key_value));
                     html += '<tr>';
                     html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(k.key_value) + '</a></td>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + k.match_count + '</span></td>';
@@ -3206,7 +3208,9 @@ function _cdFetchAndRender(ruleId, hours) {
                 data.recent_matches.forEach(function(m) {
                     var ts = m.timestamp ? m.timestamp.replace('T', ' ').slice(0, 19) : '—';
                     var pct = m.total_stages ? Math.round(m.stages_matched / m.total_stages * 100) : 0;
-                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(m.key_value) + ',dstip:' + encodeURIComponent(m.key_value) + '&time_range=1h';
+                    // Rule-aware drill-down: stage filter + entity + the match's
+                    // own evidence window (server-computed in m.log_url).
+                    var logUrl = m.log_url || ('/logs/?srcip=' + encodeURIComponent(m.key_value || m.entity_value || ''));
                     // Phase 1: event-chain evidence window (first -> last event)
                     var evid = '—';
                     var _t = function(s) { var p = String(s).replace('T', ' ').split(' '); return p[1] ? p[1].slice(0, 8) : s; };
