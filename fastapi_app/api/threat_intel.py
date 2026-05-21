@@ -13,7 +13,7 @@ from sqlalchemy import select, func, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..models.threat_intel import ThreatFeed, IOC, FeedType
+from ..models.threat_intel import ThreatFeed, IOC, FeedType, IOCSighting
 from ..core.permissions import require_min_role
 from ..services.threat_intel_service import (
     fetch_feed, get_ioc_match_stats, get_ioc_matches_paginated,
@@ -154,29 +154,51 @@ async def threat_intel_iocs_page(
 # IOC Matches UI
 # ============================================================
 
+_SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
 @router.get("/threat-intel/matches/", response_class=HTMLResponse, name="threat_intel_matches",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def threat_intel_matches_page(
     request: Request,
-    severity: Optional[str] = None,
-    ioc_type: Optional[str] = None,
-    hours: int = Query(24, ge=1, le=720),
+    status: str = Query("new"),
+    direction: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
-    """IOC matches viewer page."""
-    matches, total = get_ioc_matches_paginated(
-        page=1, per_page=100, severity=severity, ioc_type=ioc_type, hours=hours
-    )
-    match_stats = get_ioc_match_stats(hours=hours)
+    """IOC Sightings — the de-duplicated triage queue over raw matches."""
+    # Status counts for the queue tabs.
+    rows = (await db.execute(
+        select(IOCSighting.status, func.count(IOCSighting.id))
+        .group_by(IOCSighting.status)
+    )).all()
+    status_counts = {r[0]: r[1] for r in rows}
+    escalated_count = (await db.execute(
+        select(func.count(IOCSighting.id)).where(
+            IOCSighting.escalated.is_(True),
+            IOCSighting.status.in_(("new", "investigating")))
+    )).scalar() or 0
 
-    return _render("threat_intel/matches.html", request, {
-        "matches": matches,
-        "total": total,
-        "match_stats": match_stats,
-        "filters": {
-            "severity": severity or "",
-            "ioc_type": ioc_type or "",
-            "hours": hours,
-        },
+    # The selected queue.
+    q = select(IOCSighting)
+    if status == "escalated":
+        q = q.where(IOCSighting.escalated.is_(True),
+                    IOCSighting.status.in_(("new", "investigating")))
+    elif status and status != "all":
+        q = q.where(IOCSighting.status == status)
+    if direction:
+        q = q.where(IOCSighting.direction == direction)
+    q = q.order_by(IOCSighting.escalated.desc(),
+                   IOCSighting.last_seen.desc()).limit(300)
+    sightings = list((await db.execute(q)).scalars().all())
+    # Severity-rank within the page so the worst float up.
+    sightings.sort(key=lambda s: (not s.escalated,
+                                  _SEV_ORDER.get(s.severity, 9)))
+
+    return _render("threat_intel/sightings.html", request, {
+        "sightings": sightings,
+        "status_counts": status_counts,
+        "escalated_count": escalated_count,
+        "filters": {"status": status, "direction": direction or ""},
     })
 
 
@@ -531,3 +553,51 @@ async def api_list_matches(
         page=page, per_page=per_page, severity=severity, ioc_type=ioc_type, hours=hours
     )
     return {"success": True, "total": total, "matches": matches}
+
+
+# Sighting Endpoints
+
+_VALID_SIGHTING_STATUS = {"new", "investigating", "resolved", "false_positive"}
+
+
+@router.post("/api/threat-intel/sightings/{sighting_id}/status",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_update_sighting_status(
+    sighting_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Update a sighting's triage status (and optional notes / assignee)."""
+    data = await request.json()
+    new_status = (data.get("status") or "").strip()
+    if new_status not in _VALID_SIGHTING_STATUS:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "error": f"status must be one of {sorted(_VALID_SIGHTING_STATUS)}"})
+    s = (await db.execute(
+        select(IOCSighting).where(IOCSighting.id == sighting_id)
+    )).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    s.status = new_status
+    if "notes" in data:
+        s.notes = (data.get("notes") or "").strip() or None
+    if "assigned_to" in data:
+        s.assigned_to = (data.get("assigned_to") or "").strip() or None
+    await db.commit()
+    return {"success": True, "status": s.status}
+
+
+@router.get("/api/threat-intel/sightings/{sighting_id}/events",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_sighting_events(sighting_id: int, db: AsyncSession = Depends(get_db)):
+    """The raw ioc_matches evidence behind a sighting."""
+    s = (await db.execute(
+        select(IOCSighting).where(IOCSighting.id == sighting_id)
+    )).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    from ..services.ioc_sightings import get_sighting_events
+    events = await get_sighting_events(s.ioc_value, s.internal_asset, s.direction)
+    return {"success": True, "events": events,
+            "ioc_value": s.ioc_value, "internal_asset": s.internal_asset}

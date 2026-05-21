@@ -113,3 +113,58 @@ class IOC(Base):
     @property
     def is_effective(self):
         return self.is_active and not self.is_expired
+
+
+class IOCSighting(Base):
+    """A de-duplicated IOC sighting.
+
+    Many raw ``ioc_matches`` events (a scanner IP logged once per packet, a
+    host resolving the same C2 domain hundreds of times) collapse into one
+    sighting per ``(ioc_value, internal_asset, direction)`` — the unit an
+    analyst actually triages. The raw events stay in ClickHouse as evidence.
+    """
+    __tablename__ = "ioc_sightings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Stable identity for upsert — sha1(ioc_value | internal_asset | direction).
+    sighting_key = Column(String(64), unique=True, nullable=False, index=True)
+
+    # The indicator.
+    ioc_id = Column(Integer, nullable=True)
+    ioc_type = Column(String(20), nullable=False)
+    ioc_value = Column(String(500), nullable=False, index=True)
+    threat_type = Column(String(100), nullable=True)
+    severity = Column(String(20), nullable=False, default="medium")
+    feed_name = Column(String(200), nullable=True)
+
+    # The internal host involved, and which way the traffic went.
+    internal_asset = Column(String(64), nullable=False, index=True)
+    direction = Column(String(12), nullable=False, default="inbound")
+    # inbound  — a known-bad source reached an internal asset
+    # outbound — an internal asset reached known-bad infrastructure (compromise)
+    # internal — both ends internal / undetermined
+
+    # Aggregated evidence.
+    hit_count = Column(Integer, nullable=False, default=0)
+    first_seen = Column(DateTime(timezone=True), nullable=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    # Triage workflow: new -> investigating -> resolved | false_positive.
+    status = Column(String(20), nullable=False, default="new", index=True)
+    assigned_to = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    # Outbound traffic to high/critical infrastructure — likely compromise.
+    escalated = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime(timezone=True),
+                        default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True),
+                        default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index("ix_ioc_sighting_triage", "status", "severity"),
+        Index("ix_ioc_sighting_dir", "direction"),
+    )

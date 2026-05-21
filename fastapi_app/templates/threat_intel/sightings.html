@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Threat Intelligence - Sightings{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ti-page { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+  .ti-header { margin-bottom: 1.25rem; }
+  .ti-title { font-size: 1.5rem; font-weight: 700; color: #fff; margin: 0; }
+  .ti-title-sub { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+                  color: var(--text-muted); display: block; margin-top: 0.15rem; }
+
+  .ti-tabs { display: inline-flex; gap: 0.25rem; padding: 0.25rem;
+             background: rgba(15,23,42,0.6); border: 1px solid var(--border);
+             border-radius: 0.6rem; margin-bottom: 1.25rem; }
+  .ti-tab { padding: 0.4rem 1.1rem; border-radius: 0.4rem; font-size: 0.8rem;
+            font-weight: 500; color: var(--text-muted); text-decoration: none; }
+  .ti-tab:hover:not(.active) { color: var(--text-color); background: rgba(255,255,255,0.04); }
+  .ti-tab.active { background: var(--primary); color: #fff; }
+
+  /* Status queue tabs */
+  .sq-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .sq-tab { padding: 0.45rem 0.9rem; border-radius: 0.5rem; font-size: 0.8rem;
+            font-weight: 600; text-decoration: none; border: 1px solid var(--border);
+            background: var(--card-bg); color: var(--text-muted); }
+  .sq-tab:hover { color: #fff; }
+  .sq-tab.active { background: rgba(59,130,246,0.15); border-color: var(--primary); color: #93c5fd; }
+  .sq-tab.esc.active { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #fca5a5; }
+  .sq-tab .n { font-family: 'JetBrains Mono', monospace; margin-left: 0.35rem; opacity: 0.85; }
+
+  .sq-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .sq-card { background: var(--card-bg); border: 1px solid var(--border);
+             border-left: 3px solid var(--border); border-radius: 0.55rem;
+             overflow: hidden; }
+  .sq-card.sev-critical { border-left-color: #ef4444; }
+  .sq-card.sev-high     { border-left-color: #f97316; }
+  .sq-card.sev-medium   { border-left-color: #f59e0b; }
+  .sq-card.sev-low      { border-left-color: #22c55e; }
+  .sq-card.escalated { box-shadow: inset 3px 0 0 #ef4444, 0 0 0 1px rgba(239,68,68,0.25); }
+
+  .sq-row { display: grid;
+            grid-template-columns: 58px minmax(140px,1fr) 116px 56px 124px 174px;
+            gap: 0.55rem; align-items: center; padding: 0.7rem 0.8rem; cursor: pointer; }
+  .sq-row:hover { background: rgba(255,255,255,0.02); }
+
+  .sq-dir { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
+            padding: 0.15rem 0.4rem; border-radius: 0.3rem; text-align: center; }
+  .sq-dir.outbound { background: rgba(239,68,68,0.16); color: #fca5a5; }
+  .sq-dir.inbound  { background: rgba(245,158,11,0.14); color: #fbbf24; }
+  .sq-dir.internal { background: rgba(148,163,184,0.14); color: #94a3b8; }
+
+  .sq-ioc { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #e2e8f0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sq-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sq-asset { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #93c5fd; }
+  .sq-hits { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.95rem; }
+  .sq-when { font-size: 0.7rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+  .sq-badge { font-size: 0.64rem; font-weight: 700; padding: 0.15rem 0.45rem;
+              border-radius: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .st-new { background: rgba(59,130,246,0.16); color: #93c5fd; }
+  .st-investigating { background: rgba(245,158,11,0.16); color: #fbbf24; }
+  .st-resolved { background: rgba(34,197,94,0.16); color: #86efac; }
+  .st-false_positive { background: rgba(148,163,184,0.16); color: #cbd5e1; }
+  .sq-esc-tag { background: rgba(239,68,68,0.2); color: #fca5a5; }
+
+  .sq-actions { display: flex; gap: 0.3rem; justify-content: flex-end; flex-wrap: wrap; }
+  .sq-btn { font-size: 0.68rem; font-weight: 600; padding: 0.28rem 0.55rem;
+            border-radius: 0.35rem; border: 1px solid var(--border);
+            background: var(--input-bg); color: var(--text-muted); cursor: pointer; }
+  .sq-btn:hover { color: #fff; border-color: var(--primary); }
+  .sq-btn.danger:hover { border-color: #ef4444; color: #fca5a5; }
+  .sq-btn.good:hover { border-color: #22c55e; color: #86efac; }
+
+  .sq-detail { display: none; padding: 0.5rem 0.9rem 0.9rem; border-top: 1px solid var(--border);
+               background: rgba(2,6,23,0.5); }
+  .sq-detail.open { display: block; }
+  .sq-ev-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .sq-ev-table th { text-align: left; color: var(--text-muted); font-weight: 600;
+                    padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
+  .sq-ev-table td { padding: 0.3rem 0.5rem; font-family: 'JetBrains Mono', monospace;
+                    color: #cbd5e1; border-bottom: 1px solid rgba(51,65,85,0.4); }
+  .sq-empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+  .sq-empty svg { width: 42px; height: 42px; stroke: #22c55e; margin-bottom: 0.6rem; }
+  .sq-colhead { display: grid;
+                grid-template-columns: 58px minmax(140px,1fr) 116px 56px 124px 174px;
+                gap: 0.55rem; padding: 0 0.8rem 0.4rem; font-size: 0.64rem;
+                text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set sc = status_counts %}
+<div class="ti-page">
+  <div class="ti-header">
+    <h2 class="ti-title">Threat Intelligence
+      <span class="ti-title-sub">IOC Sightings &middot; Triage Queue</span>
+    </h2>
+  </div>
+
+  <div class="ti-tabs">
+    <a href="{{ url_for('threat_intel_feeds') }}" class="ti-tab">Feeds</a>
+    <a href="{{ url_for('threat_intel_iocs') }}" class="ti-tab">IOCs</a>
+    <a href="{{ url_for('threat_intel_matches') }}" class="ti-tab active">Sightings</a>
+  </div>
+
+  {% set cur = filters.status %}
+  <div class="sq-tabs">
+    <a href="?status=new" class="sq-tab {% if cur == 'new' %}active{% endif %}">New<span class="n">{{ sc.get('new', 0) }}</span></a>
+    <a href="?status=investigating" class="sq-tab {% if cur == 'investigating' %}active{% endif %}">Investigating<span class="n">{{ sc.get('investigating', 0) }}</span></a>
+    <a href="?status=escalated" class="sq-tab esc {% if cur == 'escalated' %}active{% endif %}">&#9888; Escalated<span class="n">{{ escalated_count }}</span></a>
+    <a href="?status=resolved" class="sq-tab {% if cur == 'resolved' %}active{% endif %}">Resolved<span class="n">{{ sc.get('resolved', 0) }}</span></a>
+    <a href="?status=false_positive" class="sq-tab {% if cur == 'false_positive' %}active{% endif %}">False Positive<span class="n">{{ sc.get('false_positive', 0) }}</span></a>
+    <a href="?status=all" class="sq-tab {% if cur == 'all' %}active{% endif %}">All</a>
+  </div>
+
+  {% if sightings %}
+  <div class="sq-colhead">
+    <div>Direction</div><div>Indicator</div><div>Internal Asset</div>
+    <div>Hits</div><div>Last Seen</div><div>Triage</div>
+  </div>
+  <div class="sq-list">
+    {% for s in sightings %}
+    <div class="sq-card sev-{{ s.severity }} {% if s.escalated and s.status in ('new','investigating') %}escalated{% endif %}" data-id="{{ s.id }}">
+      <div class="sq-row" onclick="sqToggle({{ s.id }})">
+        <div>
+          <div class="sq-dir {{ s.direction }}">
+            {%- if s.direction == 'outbound' %}&#9650; OUT{% elif s.direction == 'inbound' %}&#9660; IN{% else %}INT{% endif -%}
+          </div>
+        </div>
+        <div style="min-width:0;">
+          <div class="sq-ioc" title="{{ s.ioc_value }}">{{ s.ioc_value }}</div>
+          <div class="sq-meta">
+            {{ s.ioc_type }} &middot; {{ s.threat_type or 'unknown' }}
+            {% if s.feed_name %}&middot; {{ s.feed_name }}{% endif %}
+            {% if s.escalated %}&middot; <span class="sq-badge sq-esc-tag">likely compromise</span>{% endif %}
+          </div>
+        </div>
+        <div class="sq-asset" title="{{ s.internal_asset }}">{{ s.internal_asset }}</div>
+        <div class="sq-hits sev-{{ s.severity }}"
+             style="color:{% if s.severity=='critical' %}#ef4444{% elif s.severity=='high' %}#f97316{% elif s.severity=='medium' %}#f59e0b{% else %}#22c55e{% endif %};">
+          {{ '{:,}'.format(s.hit_count) }}
+        </div>
+        <div>
+          <div class="sq-when">{{ s.last_seen | localdt('%Y-%m-%d %H:%M') }}</div>
+          <div class="sq-when" style="opacity:0.6;">first {{ s.first_seen | localdt('%m-%d %H:%M') }}</div>
+        </div>
+        <div>
+          <span class="sq-badge st-{{ s.status }}">{{ s.status.replace('_',' ') }}</span>
+          <div class="sq-actions" style="margin-top:0.3rem;" onclick="event.stopPropagation();">
+            {% if s.status in ('new',) %}
+            <button class="sq-btn" onclick="sqStatus({{ s.id }},'investigating')">Investigate</button>
+            {% endif %}
+            {% if s.status in ('new','investigating') %}
+            <button class="sq-btn good" onclick="sqStatus({{ s.id }},'resolved')">Resolve</button>
+            <button class="sq-btn danger" onclick="sqStatus({{ s.id }},'false_positive')">False+</button>
+            {% else %}
+            <button class="sq-btn" onclick="sqStatus({{ s.id }},'new')">Reopen</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="sq-detail" id="sq-detail-{{ s.id }}">
+        <div style="color:var(--text-muted);font-size:0.72rem;">Loading evidence&hellip;</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sq-empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <div>No sightings in the <strong>{{ cur }}</strong> queue.</div>
+    <div style="font-size:0.78rem;margin-top:0.3rem;">IOC matches are rolled up into sightings every minute.</div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function sqToggle(id) {
+  var d = document.getElementById('sq-detail-' + id);
+  if (!d) return;
+  if (d.classList.contains('open')) { d.classList.remove('open'); return; }
+  d.classList.add('open');
+  if (d.dataset.loaded) return;
+  d.dataset.loaded = '1';
+  fetch('/api/threat-intel/sightings/' + id + '/events')
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.success || !j.events.length) {
+        d.innerHTML = '<div style="color:var(--text-muted);font-size:0.72rem;">No raw events found (they may have aged out of retention).</div>';
+        return;
+      }
+      var h = '<table class="sq-ev-table"><thead><tr><th>Event Time</th><th>Src IP</th>'
+            + '<th>Dst IP</th><th>Dst Port</th><th>Matched</th><th>Action</th><th>Feed</th></tr></thead><tbody>';
+      j.events.forEach(function(e){
+        h += '<tr><td>' + window.fmtTime(e.log_timestamp) + '</td><td>' + (e.srcip||'') + '</td><td>'
+           + (e.dstip||'') + '</td><td>' + (e.dstport||'') + '</td><td>' + (e.matched_field||'')
+           + '</td><td>' + (e.action||'') + '</td><td>' + (e.feed_name||'') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div style="margin-top:0.5rem;"><a href="/logs/?srcip=' + encodeURIComponent(j.internal_asset)
+         + '&time_range=24h" style="font-size:0.72rem;color:#93c5fd;">Open this asset in the log viewer &rarr;</a></div>';
+      d.innerHTML = h;
+    })
+    .catch(function(){ d.innerHTML = '<div style="color:#fca5a5;font-size:0.72rem;">Failed to load evidence.</div>'; });
+}
+
+function sqStatus(id, status) {
+  fetch('/api/threat-intel/sightings/' + id + '/status', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: status})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(j){
+    if (j.success) { window.location.reload(); }
+    else { alert('Update failed: ' + (j.error || 'unknown error')); }
+  })
+  .catch(function(){ alert('Update failed.'); });
+}
+</script>
+{% endblock %}
