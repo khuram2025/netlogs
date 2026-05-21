@@ -46,6 +46,12 @@ class StageSchema(BaseModel):
     # in this window exceeds (baseline average x multiplier) rather than a
     # fixed threshold. {baseline_windows, multiplier, min_count}.
     anomaly: Optional[Dict[str, Any]] = None
+    # Phase 6: optional aggregate — changes the metric the threshold (and the
+    # anomaly baseline) is compared against. {"fn": "count"|"uniq"|"sum",
+    # "field": <column>}. Defaults to a plain row count. ``uniq`` enables real
+    # distinct-value detection (port scan, host sweep); ``sum`` enables real
+    # volume detection (bytes exfiltrated).
+    aggregate: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _validate_stage(self):
@@ -80,6 +86,28 @@ class StageSchema(BaseModel):
                 continue
             if ftype == "numeric" and not _is_number(value):
                 raise ValueError(f"filter '{key}' requires a numeric value")
+
+        # Aggregate: validate fn, and that a uniq/sum field resolves to a
+        # real column (sum additionally requires a numeric column).
+        if self.aggregate:
+            fn = str(self.aggregate.get("fn", "count")).lower()
+            if fn not in {"count", "uniq", "sum"}:
+                raise ValueError(
+                    f"aggregate fn must be count, uniq or sum (got '{fn}')")
+            if fn != "count":
+                agg_field = self.aggregate.get("field")
+                if not agg_field:
+                    raise ValueError(f"aggregate '{fn}' requires a 'field'")
+                if agg_field not in fields and agg_field not in entities:
+                    raise ValueError(
+                        f"aggregate field '{agg_field}' is not valid for "
+                        f"source '{self.source}'")
+                native = (agg_field if agg_field in fields
+                          else entities.get(agg_field))
+                if fn == "sum" and fields.get(native) != "numeric":
+                    raise ValueError(
+                        f"aggregate 'sum' requires a numeric field "
+                        f"(got '{agg_field}')")
         return self
 
 

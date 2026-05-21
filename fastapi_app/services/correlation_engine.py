@@ -263,6 +263,60 @@ def _as_list(value) -> list:
     return list(value) if isinstance(value, (list, tuple)) else [value]
 
 
+# ── Phase 6: per-stage aggregate ────────────────────────────────────────
+# By default a stage's threshold is compared against a plain row count. An
+# optional ``aggregate`` block changes the metric, so a rule can require many
+# *distinct* values (uniq) or a large *sum* — e.g. a real port scan (distinct
+# ports) or real data volume (summed bytes), not merely many log lines.
+_AGG_FUNCS = {"count", "uniq", "sum"}
+
+
+def _resolve_aggregate(stage: dict, source: str) -> Tuple[str, Tuple[str, Optional[str]]]:
+    """Resolve a stage's optional ``aggregate`` block.
+
+    Returns ``(metric_sql, agg_kind)``:
+      * ``metric_sql`` — the plain aggregate, e.g. ``count()`` or
+        ``uniq(dstport)`` — used by a fixed-threshold stage.
+      * ``agg_kind`` — ``(fn, native_column)``; ``_agg_if`` turns this into the
+        conditional form (``countIf`` / ``uniqIf`` / ``sumIf``) for anomaly
+        mode.
+
+    Defaults to a plain row count. Raises ``StageEvalError`` on a bad fn, a
+    missing field, or ``sum`` of a non-numeric column (fail-closed).
+    """
+    agg = stage.get("aggregate")
+    if not agg:
+        return "count()", ("count", None)
+    fn = str(agg.get("fn", "count")).lower()
+    if fn not in _AGG_FUNCS:
+        raise StageEvalError(
+            f"aggregate fn must be one of {sorted(_AGG_FUNCS)}, got '{fn}'")
+    if fn == "count":
+        return "count()", ("count", None)
+    field = agg.get("field")
+    if not field:
+        raise StageEvalError(f"aggregate fn '{fn}' requires a 'field'")
+    fields = get_source_fields(source) or {}
+    native = resolve_field(source, field)
+    if native is None or native not in fields:
+        raise StageEvalError(
+            f"aggregate field '{field}' is not a valid column for source '{source}'")
+    if fn == "sum" and fields[native] != "numeric":
+        raise StageEvalError(
+            f"aggregate 'sum' needs a numeric field, got '{field}'")
+    return f"{fn}({native})", (fn, native)
+
+
+def _agg_if(agg_kind: Tuple[str, Optional[str]], cond_sql: str) -> str:
+    """Conditional form of a stage aggregate (``countIf`` / ``uniqIf`` /
+    ``sumIf``) — lets anomaly mode compute the current and baseline windows in
+    a single grouped scan."""
+    fn, native = agg_kind
+    if fn == "count":
+        return f"countIf({cond_sql})"
+    return f"{fn}If({native}, {cond_sql})"
+
+
 def _stage_time_filter(window_seconds: int, anchor: Optional[datetime] = None):
     """Return (sql, params) for a stage's time predicate.
 
@@ -334,6 +388,7 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
         native_fields.append(native)
 
     where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
+    metric, agg_kind = _resolve_aggregate(stage, source)
     window = _safe_int(window, "window")
     gb = ", ".join(native_fields)
     n = len(group_fields)
@@ -350,12 +405,14 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
             raise StageEvalError("anomaly multiplier must be numeric")
         min_count = _safe_int(anomaly.get("min_count", threshold), "min_count")
         total_span = window * (bw + 1)
+        cur_win = f"timestamp > now() - INTERVAL {window} SECOND"
+        base_win = f"timestamp <= now() - INTERVAL {window} SECOND"
         query = f"""
             SELECT {gb},
-                   countIf(timestamp > now() - INTERVAL {window} SECOND) AS cur,
-                   count() AS tot,
-                   minIf(timestamp, timestamp > now() - INTERVAL {window} SECOND) AS first_ts,
-                   maxIf(timestamp, timestamp > now() - INTERVAL {window} SECOND) AS last_ts
+                   {_agg_if(agg_kind, cur_win)} AS cur,
+                   {_agg_if(agg_kind, base_win)} AS base_total,
+                   minIf(timestamp, {cur_win}) AS first_ts,
+                   maxIf(timestamp, {cur_win}) AS last_ts
             FROM {table}
             WHERE timestamp > now() - INTERVAL {total_span} SECOND AND ({where})
             GROUP BY {gb}
@@ -366,8 +423,10 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
         rows = client.query(query, parameters=params).result_rows
         candidates = []
         for row in rows:
-            cur, tot = row[n], row[n + 1]
-            baseline = (tot - cur) / bw
+            cur, base_total = row[n], row[n + 1]
+            # base_total is the aggregate over the bw baseline windows; the
+            # per-window baseline is that divided by the window count.
+            baseline = base_total / bw
             if cur < baseline * mult:
                 continue  # within normal range — not anomalous
             entity = {gf: str(row[i]) for i, gf in enumerate(group_fields)}
@@ -381,7 +440,7 @@ def _stage_candidates(stage: dict, group_fields: list, variables: dict,
     params = {**params, **tparams}
 
     query = f"""
-        SELECT {gb}, count() AS cnt,
+        SELECT {gb}, {metric} AS cnt,
                min(timestamp) AS first_ts, max(timestamp) AS last_ts
         FROM {table}
         WHERE {tf} AND ({where})
@@ -418,13 +477,14 @@ def _stage_for_entity(stage: dict, entity: dict, variables: dict,
     threshold = _safe_int(stage.get("threshold", 1), "threshold")
 
     where, params = _build_where_clause(stage.get("filter", {}) or {}, variables, source)
+    metric, _agg_kind = _resolve_aggregate(stage, source)
     ew, eparams = _entity_where(entity, source)
     tf, tparams = _stage_time_filter(window, anchor)
     params = {**params, **eparams, **tparams}
     full_where = f"{tf} AND ({where}) AND ({ew})"
 
     query = f"""
-        SELECT count() AS cnt,
+        SELECT {metric} AS cnt,
                min(timestamp) AS first_ts, max(timestamp) AS last_ts
         FROM {table}
         WHERE {full_where}
@@ -701,6 +761,7 @@ def backtest_stage1(rule: CorrelationRule, days: int = 7) -> dict:
         threshold = _safe_int(s1.get("threshold", 1), "threshold")
         window = _safe_int(s1.get("window", 300), "window")
         where, params = _build_where_clause(s1.get("filter", {}) or {}, {}, source)
+        metric, _agg_kind = _resolve_aggregate(s1, source)
 
         client = ClickHouseClient.get_client()
         daily = []
@@ -709,7 +770,7 @@ def backtest_stage1(rule: CorrelationRule, days: int = 7) -> dict:
             end = d * 86400
             query = f"""
                 SELECT count() FROM (
-                    SELECT {gb}, count() AS c
+                    SELECT {gb}, {metric} AS c
                     FROM {table}
                     WHERE timestamp > now() - INTERVAL {start} SECOND
                       AND timestamp <= now() - INTERVAL {end} SECOND
@@ -1104,43 +1165,182 @@ async def seed_correlation_rules():
         result = await db.execute(select(CorrelationRule.name))
         existing = {r[0] for r in result.all()}
 
+        # ── Redesigned ruleset ───────────────────────────────────────
+        # The first-generation rules treated a firewall verdict as a
+        # security outcome (deny == failed login, allow == success) and
+        # used fixed event-count thresholds. Against production data that
+        # produced tens of thousands of false positives a day. This set
+        # is built on three principles instead:
+        #   1. corroborate a high-fidelity signal (IOC / IPS) with an
+        #      outcome — never speculate from raw firewall verdicts;
+        #   2. baseline volumetric behaviour per-entity (anomaly mode)
+        #      rather than compare it to a global magic number;
+        #   3. measure what the rule actually claims — distinct ports for
+        #      a scan, distinct hosts for a sweep, summed bytes for
+        #      exfiltration (the per-stage ``aggregate`` block).
         rules = [
+            # ══ Group A — high-fidelity, no engine dependency ═════════
             {
-                "name": "Reconnaissance then Access",
-                "description": "Port scan (>10 denied ports) followed by allowed connection from same IP within 10 minutes.",
-                "severity": "high",
+                "name": "IOC Traffic Allowed Through Firewall",
+                "description": (
+                    "The firewall ALLOWED a session that matched a "
+                    "threat-intel IOC — a containment failure: known-bad "
+                    "traffic was not blocked. Replaces the old "
+                    "IOC-then-denials rule, which fired on the ~27k cases "
+                    "where the firewall correctly blocked the IOC."),
+                "severity": "critical",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
                 "stages": [
                     {
-                        "name": "Port Scan Detected",
-                        "filter": {"action": "deny", "group_by": "srcip"},
-                        "threshold": 10,
-                        "window": 300,
-                    },
-                    {
-                        "name": "Successful Access",
-                        "filter": {"action": "allow", "srcip": "$stage1.srcip"},
+                        "name": "Allowed IOC Match",
+                        "source": "ioc_matches",
+                        "filter": {"action": "allow", "group_by": "ip"},
                         "threshold": 1,
+                        "window": 3600,
+                    },
+                ],
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1071 - Application Layer Protocol",
+            },
+            {
+                "name": "Anomalous Threat Activity From Host",
+                "description": (
+                    "An internal host's rate of IPS/AV threat detections "
+                    "spiked far above its own 6-window baseline — a strong "
+                    "sign the host is newly infected or compromised. "
+                    "Baselined per host, so chronically-noisy hosts do not "
+                    "false-positive."),
+                "severity": "high",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
+                "stages": [
+                    {
+                        "name": "Threat Detection Spike",
+                        "source": "syslogs",
+                        "filter": {"session_end_reason": "threat",
+                                   "group_by": "srcip"},
+                        "window": 600,
+                        "anomaly": {"baseline_windows": 6,
+                                    "multiplier": 4.0, "min_count": 20},
+                    },
+                ],
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1071 - Application Layer Protocol",
+            },
+            {
+                "name": "Anomalous Denial Spike",
+                "description": (
+                    "A source IP's firewall-denial rate jumped 5x above "
+                    "its own baseline — sudden onset of scanning or recon. "
+                    "Replaces the static 'Port Scan' rule, which fired on "
+                    "~560 IPs every 5 minutes because it counted denied "
+                    "events instead of detecting a change in behaviour."),
+                "severity": "medium",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
+                "stages": [
+                    {
+                        "name": "Denial Rate Anomaly",
+                        "source": "syslogs",
+                        "filter": {"action": "deny", "group_by": "srcip"},
+                        "window": 300,
+                        "anomaly": {"baseline_windows": 6,
+                                    "multiplier": 5.0, "min_count": 50},
+                    },
+                ],
+                "mitre_tactic": "Reconnaissance",
+                "mitre_technique": "T1595 - Active Scanning",
+            },
+            {
+                "name": "Anonymizer / Proxy-Avoidance Spike",
+                "description": (
+                    "A host made an unusual burst of DNS lookups in the "
+                    "'Proxy Avoidance' category — web-filter evasion, often "
+                    "a precursor to unsanctioned tunnelling or "
+                    "exfiltration. Baselined per host."),
+                "severity": "medium",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
+                "stages": [
+                    {
+                        "name": "Proxy-Avoidance DNS Burst",
+                        "source": "dns_logs",
+                        "filter": {"category": "Proxy Avoidance",
+                                   "group_by": "ip"},
+                        "window": 600,
+                        "anomaly": {"baseline_windows": 6,
+                                    "multiplier": 4.0, "min_count": 15},
+                    },
+                ],
+                "mitre_tactic": "Command and Control",
+                "mitre_technique": "T1090 - Proxy",
+            },
+            # ══ Group B — use the per-stage `aggregate` feature ═══════
+            {
+                "name": "Port Scan (Distinct Ports)",
+                "description": (
+                    "A single source IP was denied across 100+ DISTINCT "
+                    "destination ports in 10 minutes — a genuine port "
+                    "scan. Counts distinct ports, not denied events, so a "
+                    "host retrying a few blocked ports no longer trips it."),
+                "severity": "medium",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
+                "stages": [
+                    {
+                        "name": "Many Distinct Denied Ports",
+                        "source": "syslogs",
+                        "filter": {"action": "deny", "group_by": "srcip"},
+                        "aggregate": {"fn": "uniq", "field": "dstport"},
+                        "threshold": 100,
                         "window": 600,
                     },
                 ],
-                "mitre_tactic": "Initial Access",
-                "mitre_technique": "T1190 - Exploit Public-Facing Application",
+                "mitre_tactic": "Reconnaissance",
+                "mitre_technique": "T1595.001 - Scanning IP Blocks",
             },
             {
-                "name": "Brute Force then Login",
-                "description": "Multiple denied connections followed by allowed connection from same source IP.",
-                "severity": "critical",
+                "name": "Network Host Sweep",
+                "description": (
+                    "A single source IP was denied while contacting 50+ "
+                    "DISTINCT destination hosts in 10 minutes — host "
+                    "sweeping / network enumeration, a common precursor to "
+                    "lateral movement."),
+                "severity": "high",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
                 "stages": [
                     {
-                        "name": "Multiple Denials",
+                        "name": "Many Distinct Denied Hosts",
+                        "source": "syslogs",
                         "filter": {"action": "deny", "group_by": "srcip"},
-                        "threshold": 20,
-                        "window": 300,
+                        "aggregate": {"fn": "uniq", "field": "dstip"},
+                        "threshold": 50,
+                        "window": 600,
                     },
+                ],
+                "mitre_tactic": "Discovery",
+                "mitre_technique": "T1046 - Network Service Discovery",
+            },
+            {
+                "name": "Inbound RDP Spray",
+                "description": (
+                    "One external (INTERNET-zone) IP reached 20+ DISTINCT "
+                    "internal RDP servers — credential spraying / RDP "
+                    "scanning from the perimeter. Confirm the firewall "
+                    "zone named 'INTERNET' matches this deployment."),
+                "severity": "high",
+                "join_keys": ["ip"],
+                "suppress_window": 3600,
+                "stages": [
                     {
-                        "name": "Successful Login",
-                        "filter": {"action": "allow", "srcip": "$stage1.srcip"},
-                        "threshold": 1,
+                        "name": "Many Distinct RDP Targets",
+                        "source": "syslogs",
+                        "filter": {"src_zone": "INTERNET", "dstport": 3389,
+                                   "group_by": "srcip"},
+                        "aggregate": {"fn": "uniq", "field": "dstip"},
+                        "threshold": 20,
                         "window": 600,
                     },
                 ],
@@ -1148,132 +1348,30 @@ async def seed_correlation_rules():
                 "mitre_technique": "T1110 - Brute Force",
             },
             {
-                "name": "Multi-Firewall Scan",
-                "description": "Same source IP denied on 3+ different firewalls within 5 minutes.",
+                "name": "Outbound Data Exfiltration (Volume Anomaly)",
+                "description": (
+                    "An internal host uploaded far more data than its own "
+                    "baseline — measured as SUM(sent_bytes), not "
+                    "connection count. min_count is 1 GiB so low-volume "
+                    "hosts never fire; the multiplier catches a host whose "
+                    "upload volume suddenly jumps."),
                 "severity": "high",
+                "join_keys": ["ip"],
+                "suppress_window": 7200,
                 "stages": [
                     {
-                        "name": "Multi-Device Denials",
-                        "filter": {"action": "deny", "group_by": "srcip"},
-                        "threshold": 15,
-                        "window": 300,
-                    },
-                ],
-                "mitre_tactic": "Reconnaissance",
-                "mitre_technique": "T1595 - Active Scanning",
-            },
-            {
-                "name": "Denied then Allowed - Same Source",
-                "description": "Source IP denied multiple times then allowed through. Possible policy bypass or misconfiguration.",
-                "severity": "medium",
-                "stages": [
-                    {
-                        "name": "Repeated Denials",
-                        "filter": {"action": "deny", "group_by": "srcip"},
-                        "threshold": 5,
-                        "window": 600,
-                    },
-                    {
-                        "name": "Access Granted",
-                        "filter": {"action": "allow", "srcip": "$stage1.srcip"},
-                        "threshold": 1,
-                        "window": 900,
-                    },
-                ],
-                "mitre_tactic": "Defense Evasion",
-                "mitre_technique": "T1562 - Impair Defenses",
-            },
-            {
-                "name": "High Volume Outbound Traffic",
-                "description": "Single internal IP sending unusually high volume of outbound traffic, potential data exfiltration.",
-                "severity": "high",
-                "stages": [
-                    {
-                        "name": "High Outbound Volume",
-                        "filter": {"action": "allow", "group_by": "srcip"},
-                        "threshold": 500,
-                        "window": 300,
+                        "name": "Upload Volume Anomaly",
+                        "source": "url_logs",
+                        "filter": {"group_by": "ip"},
+                        "aggregate": {"fn": "sum", "field": "sent_bytes"},
+                        "window": 3600,
+                        "anomaly": {"baseline_windows": 6,
+                                    "multiplier": 4.0,
+                                    "min_count": 1073741824},
                     },
                 ],
                 "mitre_tactic": "Exfiltration",
                 "mitre_technique": "T1048 - Exfiltration Over Alternative Protocol",
-            },
-            # ── Phase 4: cross-source correlation rules ──────────────
-            {
-                "name": "Threat-Intel Source then Firewall Denials",
-                "description": "An IP flagged by a threat-intel feed is also generating repeated firewall denials. Cross-source: IOC hits + firewall traffic.",
-                "severity": "high",
-                "ordering": "any_order",
-                "join_keys": ["ip"],
-                "stages": [
-                    {
-                        "name": "Threat-Intel IOC Hit",
-                        "source": "ioc_matches",
-                        "filter": {"group_by": "ip"},
-                        "threshold": 1,
-                        "window": 86400,
-                    },
-                    {
-                        "name": "Firewall Denials",
-                        "source": "syslogs",
-                        "filter": {"action": "deny"},
-                        "threshold": 5,
-                        "window": 86400,
-                    },
-                ],
-                "mitre_tactic": "Command and Control",
-                "mitre_technique": "T1071 - Application Layer Protocol",
-            },
-            {
-                "name": "Suspicious DNS then Outbound Connection",
-                "description": "A host queried a security-related DNS category, then opened an allowed outbound connection. Cross-source: DNS logs + firewall traffic.",
-                "severity": "medium",
-                "ordering": "any_order",
-                "join_keys": ["ip"],
-                "stages": [
-                    {
-                        "name": "Security-Category DNS Query",
-                        "source": "dns_logs",
-                        "filter": {"category": "Information and Computer Security",
-                                   "group_by": "ip"},
-                        "threshold": 1,
-                        "window": 3600,
-                    },
-                    {
-                        "name": "Allowed Outbound Connection",
-                        "source": "syslogs",
-                        "filter": {"action": "allow"},
-                        "threshold": 1,
-                        "window": 3600,
-                    },
-                ],
-                "mitre_tactic": "Command and Control",
-                "mitre_technique": "T1071.004 - DNS",
-            },
-            {
-                "name": "PA Threat Alert then Firewall Allow",
-                "description": "A Palo Alto threat alert was raised for a host that also has allowed firewall traffic. Cross-source: PA threat logs + firewall traffic.",
-                "severity": "high",
-                "ordering": "any_order",
-                "join_keys": ["ip"],
-                "stages": [
-                    {
-                        "name": "PA Threat Alert",
-                        "source": "pa_threat_logs",
-                        "filter": {"severity": "high", "group_by": "ip"},
-                        "threshold": 1,
-                        "window": 3600,
-                    },
-                    {
-                        "name": "Allowed Firewall Traffic",
-                        "source": "syslogs",
-                        "filter": {"action": "allow"},
-                        "threshold": 1,
-                        "window": 3600,
-                    },
-                ],
-                "mitre_tactic": "Initial Access",
-                "mitre_technique": "T1190 - Exploit Public-Facing Application",
             },
         ]
 
@@ -1290,10 +1388,37 @@ async def seed_correlation_rules():
                     is_enabled=True,
                     ordering=rule_data.get("ordering", "sequence"),
                     join_keys=rule_data.get("join_keys"),
+                    suppress_window=rule_data.get("suppress_window", 3600),
                 )
                 db.add(rule)
                 added += 1
 
-        if added > 0:
+        # ── Retire the first-generation rules ────────────────────────
+        # Disabled (not deleted) so historical matches stay intact. They
+        # are superseded by the redesigned ruleset above; an analyst can
+        # still inspect them, but they no longer evaluate.
+        deprecated = [
+            "Reconnaissance then Access",
+            "Brute Force then Login",
+            "Multi-Firewall Scan",
+            "Denied then Allowed - Same Source",
+            "High Volume Outbound Traffic",
+            "Threat-Intel Source then Firewall Denials",
+            "Suspicious DNS then Outbound Connection",
+            "PA Threat Alert then Firewall Allow",
+        ]
+        retire = await db.execute(
+            select(CorrelationRule).where(
+                CorrelationRule.name.in_(deprecated),
+                CorrelationRule.is_enabled.is_(True),
+            )
+        )
+        disabled = 0
+        for old in retire.scalars().all():
+            old.is_enabled = False
+            disabled += 1
+
+        if added or disabled:
             await db.commit()
-            logger.info(f"Seeded {added} correlation rules")
+            logger.info(
+                f"Correlation rules: seeded {added}, retired {disabled}")
