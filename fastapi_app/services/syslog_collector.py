@@ -34,6 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
+from ..core.app_settings import get_default_source_timezone
+from ..core.event_time import parse_event_time
 from ..db.database import get_database_url
 from ..db.clickhouse import ClickHouseClient
 from ..models.device import Device, DeviceStatus
@@ -77,6 +79,7 @@ class CachedDevice:
     status: str
     parser: str
     cached_at: float
+    timezone: Optional[str] = None  # IANA name; None = use default_source_tz
 
     def is_expired(self, ttl: int) -> bool:
         return (time.time() - self.cached_at) > ttl
@@ -100,8 +103,10 @@ class DeviceCache:
         self._misses += 1
         return None
 
-    def set(self, ip: str, status: str, parser: str):
-        self._cache[ip] = CachedDevice(status=status, parser=parser, cached_at=time.time())
+    def set(self, ip: str, status: str, parser: str, tz: Optional[str] = None):
+        self._cache[ip] = CachedDevice(
+            status=status, parser=parser, cached_at=time.time(), timezone=tz
+        )
 
     def get_stats(self) -> dict:
         total = self._hits + self._misses
@@ -815,15 +820,17 @@ def detect_parser(raw_data: bytes) -> str:
     return 'GENERIC'
 
 
-async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple[str, str]]:
+async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple[str, str, Optional[str]]]:
     """
-    Get device (status, parser) from PostgreSQL.
+    Get device ``(status, parser, timezone)`` from PostgreSQL.
     Auto-creates new devices as APPROVED. Detects parser from log format.
+    ``timezone`` is the IANA name configured for this device, or ``None``
+    to fall back to the global default source timezone.
     """
     try:
         async with _syslog_session_maker() as session:
             result = await session.execute(
-                text("SELECT status, parser FROM devices_device WHERE ip_address = :ip"),
+                text("SELECT status, parser, timezone FROM devices_device WHERE ip_address = :ip"),
                 {"ip": ip}
             )
             row = result.first()
@@ -844,14 +851,14 @@ async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple
                 })
                 await session.commit()
                 logger.info(f"New device auto-approved: {ip} (parser: {detected_parser})")
-                return (DeviceStatus.APPROVED, detected_parser)
+                return (DeviceStatus.APPROVED, detected_parser, None)
 
-            return (row.status, row.parser)
+            return (row.status, row.parser, row.timezone)
     except Exception as e:
         logger.error(f"DB error for device {ip}: {e}")
         # On DB error, still detect parser for this batch
         detected = detect_parser(raw_data)
-        return (DeviceStatus.APPROVED, detected)
+        return (DeviceStatus.APPROVED, detected, None)
 
 
 async def batch_update_device_stats(updates: Dict[str, dict]):
@@ -897,7 +904,7 @@ def flush_to_clickhouse(
     for attempt in range(retries):
         try:
             client.insert('syslogs', logs, column_names=[
-                'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+                'timestamp', 'ingest_time', 'device_ip', 'facility', 'severity', 'message', 'raw',
                 'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
                 'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
                 'threat_id', 'vdom', 'parsed_data', 'log_time',
@@ -1027,6 +1034,7 @@ class SyslogCollector:
 
         # Group by device IP for efficient cache lookup
         now = datetime.now(timezone.utc)
+        default_src_tz = get_default_source_timezone()
         logs = []
 
         for client_ip, data in batch_raw:
@@ -1037,10 +1045,10 @@ class SyslogCollector:
                 if result is None:
                     self.metrics.logs_dropped_device += 1
                     continue
-                status, parser = result
-                self.device_cache.set(client_ip, status, parser)
+                status, parser, dev_tz = result
+                self.device_cache.set(client_ip, status, parser, dev_tz)
             else:
-                status, parser = cached.status, cached.parser
+                status, parser, dev_tz = cached.status, cached.parser, cached.timezone
 
             if status != DeviceStatus.APPROVED:
                 self.metrics.logs_dropped_device += 1
@@ -1063,7 +1071,11 @@ class SyslogCollector:
                 if not log_time and parsed_data.get('date') and parsed_data.get('time'):
                     log_time = f"{parsed_data['date']} {parsed_data['time']}"
 
-            logs.append((now, client_ip, facility, severity, message, raw,
+            # Event time = device-reported event time (UTC); falls back to
+            # ingest time when parsing fails or the result is implausible.
+            event_time, _src = parse_event_time(parsed_data, dev_tz, default_src_tz, now)
+
+            logs.append((event_time, now, client_ip, facility, severity, message, raw,
                          srcip, dstip, srcport, dstport, proto, action, policyname,
                          log_type, application, src_zone, dst_zone, session_end_reason,
                          threat_id, vdom, parsed_data, log_time))
@@ -1082,15 +1094,16 @@ class SyslogCollector:
         try:
             from .ioc_matcher import check_and_record_matches
             for log in logs:
-                # log tuple: (now, ip, fac, sev, msg, raw, srcip, dstip, srcport, dstport, ...)
+                # log tuple: (event_time, ingest_time, ip, fac, sev, msg, raw,
+                #             srcip, dstip, srcport, dstport, proto, action, ...)
                 check_and_record_matches(
-                    srcip=log[6] or "",
-                    dstip=log[7] or "",
+                    srcip=log[7] or "",
+                    dstip=log[8] or "",
                     log_timestamp=log[0],
-                    device_ip=log[1],
-                    srcport=log[8] or 0,
-                    dstport=log[9] or 0,
-                    action=log[11] or "",
+                    device_ip=log[2],
+                    srcport=log[9] or 0,
+                    dstport=log[10] or 0,
+                    action=log[12] or "",
                 )
         except Exception:
             pass  # Never block the pipeline
@@ -1286,11 +1299,11 @@ class SyslogCollector:
         try:
             async with _syslog_session_maker() as session:
                 result = await session.execute(
-                    text("SELECT ip_address::text, status, parser FROM devices_device")
+                    text("SELECT ip_address::text, status, parser, timezone FROM devices_device")
                 )
                 rows = result.all()
                 for row in rows:
-                    self.device_cache.set(row.ip_address, row.status, row.parser)
+                    self.device_cache.set(row.ip_address, row.status, row.parser, row.timezone)
                 logger.info(f"Pre-loaded {len(rows)} devices into cache")
         except Exception as e:
             logger.warning(f"Device pre-load warning: {e}")

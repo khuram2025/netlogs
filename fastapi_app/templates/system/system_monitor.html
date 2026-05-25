@@ -1212,6 +1212,13 @@
         <span class="sys-tab-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">{{ cleanup_status.pending_mutations }}</span>
         {% endif %}
     </div>
+    <div class="sys-tab" data-tab="time" onclick="switchTab('time')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Time
+        {% if time_status and time_status.synchronized is sameas false %}
+        <span class="sys-tab-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">!</span>
+        {% endif %}
+    </div>
 </div>
 
 <!-- ============================================================
@@ -1760,6 +1767,115 @@
     {% endif %}
 </div>
 
+<!-- ============================================================
+     TAB: TIME & TIMEZONE
+     ============================================================ -->
+<div class="tab-panel" id="tab-time">
+    {% if saved == '1' %}
+    <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);color:#4ade80;padding:0.7rem 1rem;border-radius:0.5rem;margin-bottom:1rem;font-size:0.9rem;">
+        Time settings saved.
+    </div>
+    {% elif saved == 'err' %}
+    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#f87171;padding:0.7rem 1rem;border-radius:0.5rem;margin-bottom:1rem;font-size:0.9rem;">
+        Could not save — one of the timezones was not recognized.
+    </div>
+    {% endif %}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+        <!-- Current time card -->
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:0.6rem;padding:1.1rem 1.25rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
+                <h3 style="margin:0;font-size:0.92rem;font-weight:600;">Server Clock</h3>
+                <span class="auto-refresh"><span class="dot"></span>live</span>
+            </div>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:0.45rem 1rem;font-size:0.86rem;">
+                <span style="color:var(--text-muted);">Local</span>
+                <span style="font-family:'JetBrains Mono',monospace;" id="ts-local">{{ time_status.now_local }}</span>
+                <span style="color:var(--text-muted);">UTC</span>
+                <span style="font-family:'JetBrains Mono',monospace;" id="ts-utc">{{ time_status.now_utc }}</span>
+                <span style="color:var(--text-muted);">System TZ</span>
+                <span style="font-family:'JetBrains Mono',monospace;">{{ time_status.system_timezone }}</span>
+                <span style="color:var(--text-muted);">Environment</span>
+                <span>{% if time_status.in_container %}Container{% else %}Host{% endif %}</span>
+            </div>
+        </div>
+
+        <!-- NTP status card -->
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:0.6rem;padding:1.1rem 1.25rem;">
+            <h3 style="margin:0 0 0.55rem;font-size:0.92rem;font-weight:600;">NTP Synchronization</h3>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:0.45rem 1rem;font-size:0.86rem;">
+                <span style="color:var(--text-muted);">Sync status</span>
+                <span>
+                    {% if time_status.synchronized is sameas true %}
+                    <span style="color:#4ade80;font-weight:600;">● Synchronized</span>
+                    {% elif time_status.synchronized is sameas false %}
+                    <span style="color:#f87171;font-weight:600;">● Not synchronized</span>
+                    {% else %}
+                    <span style="color:var(--text-muted);">unknown — timedatectl unavailable</span>
+                    {% endif %}
+                </span>
+                <span style="color:var(--text-muted);">NTP service</span>
+                <span>
+                    {% if time_status.ntp_active is sameas true %}<span style="color:#4ade80;">active</span>
+                    {% elif time_status.ntp_active is sameas false %}<span style="color:var(--text-muted);">inactive</span>
+                    {% else %}<span style="color:var(--text-muted);">—</span>
+                    {% endif %}
+                </span>
+                {% if time_status.ntp_peers %}
+                <span style="color:var(--text-muted);align-self:start;">Peers</span>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;line-height:1.4;">
+                    {% for p in time_status.ntp_peers %}
+                    <div>{{ p.state }} {{ p.address }} (str {{ p.stratum }})</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% if time_status.in_container %}
+            <p style="margin:0.85rem 0 0;padding:0.55rem 0.7rem;background:var(--input-bg);border:1px solid var(--border);border-radius:0.4rem;font-size:0.78rem;color:var(--text-muted);line-height:1.5;">
+                The appliance runs as a container — NTP servers are configured on the host OS, not from this panel. See the deployment guide for host-level setup.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Application timezones -->
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:0.6rem;padding:1.25rem;margin-bottom:1.25rem;">
+        <h3 style="margin:0 0 0.35rem;font-size:0.95rem;font-weight:600;">Application Timezones</h3>
+        <p style="color:var(--text-muted);font-size:0.82rem;margin:0 0 1rem;line-height:1.5;">
+            <strong style="color:var(--text-color);">Display timezone</strong> renders timestamps in the UI.
+            <strong style="color:var(--text-color);">Default source timezone</strong> is used by the syslog collector to interpret device-local times that arrive without an offset (most firewall vendors do this). Set it to the timezone your firewalls are configured in. Per-device overrides take precedence when set.
+        </p>
+
+        <form method="post" action="{{ url_for('system_time_save') }}" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:end;">
+            <div>
+                <label for="displayTz" style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.3rem;">Display timezone (UI)</label>
+                <select name="display_tz" id="displayTz"
+                        style="width:100%;background:var(--input-bg);color:var(--text-color);border:1px solid var(--border);border-radius:0.4rem;padding:0.5rem 0.6rem;font-size:0.88rem;">
+                    {% for tz in timezones %}
+                    <option value="{{ tz }}" {% if tz == display_tz %}selected{% endif %}>{{ tz }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="sourceTz" style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.3rem;">Default source-device timezone</label>
+                <select name="source_tz" id="sourceTz"
+                        style="width:100%;background:var(--input-bg);color:var(--text-color);border:1px solid var(--border);border-radius:0.4rem;padding:0.5rem 0.6rem;font-size:0.88rem;">
+                    {% for tz in timezones %}
+                    <option value="{{ tz }}" {% if tz == source_tz %}selected{% endif %}>{{ tz }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="grid-column:1 / -1;display:flex;gap:0.6rem;align-items:center;">
+                <button type="submit"
+                        style="background:var(--primary,#3b82f6);color:white;border:none;border-radius:0.4rem;padding:0.5rem 1.1rem;font-size:0.88rem;font-weight:600;cursor:pointer;">
+                    Save timezones
+                </button>
+                <span style="font-size:0.78rem;color:var(--text-muted);">Applies immediately — new logs use the new source TZ; existing rows are not rewritten.</span>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1774,6 +1890,31 @@ function switchTab(tabId) {
     document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
     document.getElementById('tab-' + tabId).classList.add('active');
 }
+
+// Activate the tab named in the URL hash (#tab-time, #tab-quota, ...).
+(function () {
+    const m = (location.hash || '').match(/^#tab-([a-z]+)/);
+    if (m) try { switchTab(m[1]); } catch (e) {}
+})();
+
+// ---- Live Clock (Time tab) ----
+(function () {
+    const utcEl = document.getElementById('ts-utc');
+    const localEl = document.getElementById('ts-local');
+    if (!utcEl || !localEl) return;
+    async function refresh() {
+        try {
+            const r = await fetch('/api/system/time/', { credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            if (d.status) {
+                utcEl.textContent = d.status.now_utc;
+                localEl.textContent = d.status.now_local;
+            }
+        } catch (e) { /* keep the previous value */ }
+    }
+    setInterval(refresh, 1000);
+})();
 
 // ---- Toast ----
 function showToast(message, type = 'success') {

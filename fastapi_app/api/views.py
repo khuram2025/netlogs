@@ -3658,8 +3658,21 @@ def get_disk_usage(path: str = '/') -> dict:
 
 @router.get("/system/", response_class=HTMLResponse, name="system_monitor",
             dependencies=[Depends(require_min_role("ANALYST"))])
-async def system_monitor(request: Request):
+async def system_monitor(request: Request, saved: Optional[str] = Query(None)):
     """System monitoring page showing disk usage and ClickHouse storage."""
+    from ..core.app_settings import (
+        all_timezones, get_display_timezone, get_default_source_timezone,
+    )
+    from ..services.time_status import get_time_status
+
+    time_ctx = {
+        "time_status": get_time_status(),
+        "display_tz": get_display_timezone(),
+        "source_tz": get_default_source_timezone(),
+        "timezones": all_timezones(),
+        "saved": saved or "",
+    }
+
     try:
         # Get disk usage
         disk_info = get_disk_usage('/')
@@ -3705,6 +3718,7 @@ async def system_monitor(request: Request):
             "clickhouse_percent_of_used": clickhouse_percent_of_used,
             "sys_partitions": sys_partitions,
             "error": None,
+            **time_ctx,
         })
 
     except Exception as e:
@@ -3721,7 +3735,42 @@ async def system_monitor(request: Request):
             "clickhouse_percent_of_used": 0,
             "sys_partitions": {'disks': [], 'partitions': [], 'unallocated': [], 'has_hostfs': False},
             "error": str(e),
+            **time_ctx,
         })
+
+
+@router.post("/system/time/", name="system_time_save",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def system_time_save(
+    request: Request,
+    display_tz: str = Form(...),
+    source_tz: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist display + default source timezones from the Time tab."""
+    from ..core.app_settings import (
+        set_display_timezone, set_default_source_timezone,
+    )
+    try:
+        await set_display_timezone(db, (display_tz or "").strip())
+        await set_default_source_timezone(db, (source_tz or "").strip())
+        return RedirectResponse(url="/system/?saved=1#tab-time", status_code=303)
+    except ValueError:
+        return RedirectResponse(url="/system/?saved=err#tab-time", status_code=303)
+
+
+@router.get("/api/system/time/", name="system_time_status")
+async def system_time_status_api(request: Request):
+    """JSON snapshot for the live-updating clock in the Time tab."""
+    from ..core.app_settings import (
+        get_display_timezone, get_default_source_timezone,
+    )
+    from ..services.time_status import get_time_status
+    return JSONResponse({
+        "status": get_time_status(),
+        "display_tz": get_display_timezone(),
+        "source_tz": get_default_source_timezone(),
+    })
 
 
 @router.post("/api/system/truncate-table/", name="truncate_system_table",

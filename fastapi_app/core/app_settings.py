@@ -27,16 +27,25 @@ from ..models.system_settings import SystemSetting
 logger = logging.getLogger(__name__)
 
 DISPLAY_TZ_KEY = "display_timezone"
+SOURCE_TZ_KEY = "default_source_tz"
 DEFAULT_TIMEZONE = "UTC"
 
 # Cross-worker cache mirror. The DB is the persistent source of truth; this
 # file lets the other workers see a change made by the worker that handled
 # the save, without waiting for a restart.
 _TZ_FILE = os.path.join(tempfile.gettempdir(), "zentryc_display_tz")
+_SRC_TZ_FILE = os.path.join(tempfile.gettempdir(), "zentryc_source_tz")
 _CACHE_TTL = 5.0  # seconds
 
 _cache_val = DEFAULT_TIMEZONE
 _cache_at = 0.0
+
+# Default source-device timezone — used by the syslog collector when parsing
+# device-local timestamps that lack an offset and the device itself has no
+# per-device TZ override set. The syslog hot path hits this on every record
+# so the lookup must be lock-free and cheap (file mirror, no DB).
+_src_cache_val = DEFAULT_TIMEZONE
+_src_cache_at = 0.0
 
 
 def all_timezones() -> list:
@@ -61,6 +70,14 @@ def _write_mirror(tz: str) -> None:
             f.write(tz)
     except OSError as e:
         logger.warning(f"Could not write display-tz mirror file: {e}")
+
+
+def _write_src_mirror(tz: str) -> None:
+    try:
+        with open(_SRC_TZ_FILE, "w") as f:
+            f.write(tz)
+    except OSError as e:
+        logger.warning(f"Could not write source-tz mirror file: {e}")
 
 
 def get_display_timezone() -> str:
@@ -103,6 +120,75 @@ async def load_display_timezone() -> str:
     _cache_at = time.monotonic()
     _write_mirror(tz)
     return tz
+
+
+def get_default_source_timezone() -> str:
+    """Current default source-device timezone (IANA name). Cheap and
+    synchronous — called on the syslog hot path."""
+    global _src_cache_val, _src_cache_at
+    now = time.monotonic()
+    if now - _src_cache_at < _CACHE_TTL:
+        return _src_cache_val
+    _src_cache_at = now
+    try:
+        with open(_SRC_TZ_FILE) as f:
+            val = f.read().strip()
+        if is_valid_timezone(val):
+            _src_cache_val = val
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        logger.debug(f"source-tz mirror read failed: {e}")
+    return _src_cache_val
+
+
+async def load_default_source_timezone() -> str:
+    """Load the persisted default-source-tz from the DB at startup. On a
+    fresh install (no row yet) we seed it from the ``ZENTRYC_DEFAULT_SOURCE_TZ``
+    env var if set, otherwise leave it at UTC — the admin must pick one
+    explicitly to opt into event-time parsing for naive device timestamps."""
+    global _src_cache_val, _src_cache_at
+    tz = DEFAULT_TIMEZONE
+    try:
+        async with async_session_maker() as db:
+            row = (await db.execute(
+                select(SystemSetting).where(
+                    SystemSetting.key == SOURCE_TZ_KEY)
+            )).scalar_one_or_none()
+            if row and is_valid_timezone(row.value):
+                tz = row.value
+            elif row is None:
+                seed = os.environ.get("ZENTRYC_DEFAULT_SOURCE_TZ", "").strip()
+                if seed and is_valid_timezone(seed):
+                    tz = seed
+                    db.add(SystemSetting(key=SOURCE_TZ_KEY, value=tz))
+                    await db.commit()
+                    logger.info(f"Seeded default source timezone: {tz}")
+    except Exception as e:
+        logger.warning(f"Could not load default source timezone: {e}")
+    _src_cache_val = tz
+    _src_cache_at = time.monotonic()
+    _write_src_mirror(tz)
+    return tz
+
+
+async def set_default_source_timezone(db, name: str) -> str:
+    """Validate and persist the default source-device timezone."""
+    global _src_cache_val, _src_cache_at
+    if not is_valid_timezone(name):
+        raise ValueError(f"Unknown timezone: {name!r}")
+    row = (await db.execute(
+        select(SystemSetting).where(SystemSetting.key == SOURCE_TZ_KEY)
+    )).scalar_one_or_none()
+    if row:
+        row.value = name
+    else:
+        db.add(SystemSetting(key=SOURCE_TZ_KEY, value=name))
+    await db.commit()
+    _src_cache_val = name
+    _src_cache_at = time.monotonic()
+    _write_src_mirror(name)
+    return name
 
 
 async def set_display_timezone(db, name: str) -> str:

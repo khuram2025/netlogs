@@ -134,11 +134,13 @@ async def lifespan(app: FastAPI):
 
     # Load the app-wide display timezone into the in-process cache
     try:
-        from .core.app_settings import load_display_timezone
+        from .core.app_settings import load_display_timezone, load_default_source_timezone
         tz = await load_display_timezone()
         logger.info(f"Display timezone: {tz}")
+        src_tz = await load_default_source_timezone()
+        logger.info(f"Default source timezone: {src_tz}")
     except Exception as e:
-        logger.warning(f"Display timezone load warning: {e}")
+        logger.warning(f"Timezone settings load warning: {e}")
 
     # Initialize Redis connection
     try:

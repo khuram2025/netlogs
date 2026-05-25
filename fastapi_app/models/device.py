@@ -77,6 +77,10 @@ class Device(Base):
         DateTime(timezone=True), nullable=True
     )
     log_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    # IANA timezone (e.g. "Asia/Riyadh"). When NULL, the syslog collector
+    # falls back to the global default_source_tz setting. Used only when the
+    # device's own log payload doesn't carry an explicit offset.
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("idx_device_status", "status"),

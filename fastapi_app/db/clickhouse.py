@@ -109,6 +109,7 @@ class ClickHouseClient:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS syslogs (
             timestamp DateTime64(3) CODEC(DoubleDelta, LZ4),
+            ingest_time DateTime64(3) DEFAULT timestamp CODEC(DoubleDelta, LZ4),
             device_ip IPv4 CODEC(ZSTD(1)),
             facility UInt8 CODEC(T64, LZ4),
             severity UInt8 CODEC(T64, LZ4),
@@ -178,6 +179,8 @@ class ClickHouseClient:
         """Migrate existing table to add new columns and indexes."""
         client = cls.get_client()
         migrations = [
+            # Add ingest_time alongside the event-time `timestamp`
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS ingest_time DateTime64(3) DEFAULT timestamp CODEC(DoubleDelta, LZ4)",
             # Add dedicated columns for key parsed fields
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS srcip String DEFAULT '' CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstip String DEFAULT '' CODEC(ZSTD(1))",
@@ -903,7 +906,7 @@ class ClickHouseClient:
 
         Args:
             logs: List of tuples matching the schema columns
-                  (timestamp, device_ip, facility, severity, message, raw,
+                  (timestamp, ingest_time, device_ip, facility, severity, message, raw,
                    srcip, dstip, srcport, dstport, proto, action, policyname,
                    log_type, application, src_zone, dst_zone, session_end_reason,
                    threat_id, vdom, parsed_data)
@@ -913,7 +916,7 @@ class ClickHouseClient:
         client = cls.get_client()
 
         client.insert('syslogs', logs, column_names=[
-            'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+            'timestamp', 'ingest_time', 'device_ip', 'facility', 'severity', 'message', 'raw',
             'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
             'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
             'threat_id', 'vdom', 'parsed_data'
@@ -1725,8 +1728,8 @@ class ClickHouseClient:
     LIST_COLUMNS = "timestamp, device_ip, vdom, facility, severity, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, log_time"
     # Light columns (includes message, excludes raw and parsed_data)
     LIGHT_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
-    # Full columns including raw message
-    FULL_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+    # Full columns including raw message (and ingest_time for pipeline-lag visibility)
+    FULL_COLUMNS = "timestamp, ingest_time, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
 
     # Expression to compose device display name: IP_VDOM or just IP
     _DEVICE_DISPLAY_EXPR = "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(device_ip))"
