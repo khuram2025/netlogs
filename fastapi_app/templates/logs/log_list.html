@@ -386,32 +386,166 @@
         .toolbar {
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border-subtle);
-            padding: 4px 16px;
+            padding: 8px 16px;
             display: flex;
-            align-items: flex-end;
+            flex-direction: column;
             gap: 8px;
             flex-shrink: 0;
         }
 
-        .search-group {
+        .toolbar-row {
             display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .toolbar-filters {
+            flex: 1;
+            flex-wrap: wrap;
+            row-gap: 6px;
+        }
+
+        .toolbar-actions {
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            row-gap: 6px;
+        }
+
+        .search-field .search-input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            .toolbar-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .toolbar-right {
+                margin-left: 0;
+                justify-content: flex-end;
+            }
+        }
+
+        /* ===== FACET LIST (sidebar Top Values) ===== */
+        .facet-field-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .facet-field-btn {
+            padding: 3px 2px;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: var(--bg-deep);
+            border: 1px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .facet-field-btn:hover {
+            color: var(--text-secondary);
+            border-color: var(--border-default);
+        }
+        .facet-field-btn.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+        .facet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            max-height: 168px;
+            overflow-y: auto;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            background: var(--bg-deep);
+        }
+        .facet-item {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr auto;
             align-items: center;
             gap: 6px;
-            flex: 1;
+            padding: 3px 6px;
+            min-height: 22px;
+            cursor: pointer;
+            overflow: hidden;
+            font-size: 10px;
+        }
+        .facet-item + .facet-item { border-top: 1px solid var(--border-subtle); }
+        .facet-item:hover { background: var(--bg-hover); }
+        .facet-bar {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            z-index: 0;
+            background: var(--accent-cyan-dim);
+            opacity: 0.55;
+        }
+        .facet-val {
+            position: relative;
+            z-index: 1;
             min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 10px;
+        }
+        .facet-cnt {
+            position: relative;
+            z-index: 1;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            color: var(--text-muted);
+            background: var(--bg-surface);
+            padding: 1px 5px;
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+        .facet-empty, .facet-loading {
+            color: var(--text-ghost);
+            font-size: 10px;
+            padding: 10px 6px;
+            text-align: center;
         }
 
         .search-field {
             display: flex;
             flex-direction: column;
-            gap: 1px;
-            flex: 1;
-            min-width: 60px;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .search-field.ip {
+            flex: 1 1 130px;
+            max-width: 180px;
+        }
+
+        .search-field.port,
+        .search-field.protocol {
+            flex: 0 1 92px;
+            max-width: 100px;
+        }
+
+        .search-field.app {
+            flex: 1 1 130px;
+            max-width: 180px;
         }
 
         .search-field.narrow {
-            max-width: 80px;
-            flex: 0 1 80px;
+            max-width: 88px;
         }
 
         .search-label {
@@ -449,7 +583,8 @@
         .search-actions {
             display: flex;
             gap: 6px;
-            padding-top: 12px;
+            flex-shrink: 0;
+            align-items: center;
         }
 
         .btn {
@@ -507,11 +642,12 @@
         }
 
         .toolbar-right {
-            margin-left: auto;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         /* ===== STATS BAR (inline in toolbar) ===== */
@@ -635,6 +771,102 @@
         .filter-chip-remove svg {
             width: 10px;
             height: 10px;
+        }
+
+        .filter-chip.exclude {
+            background: var(--accent-red-dim);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: var(--accent-red);
+        }
+
+        .filter-chip.exclude .filter-chip-remove,
+        .filter-chip.exclude .filter-chip-toggle {
+            color: var(--accent-red);
+        }
+
+        .filter-chip.exclude .filter-chip-remove:hover,
+        .filter-chip.exclude .filter-chip-toggle:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        .filter-chip-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 16px;
+            padding: 0 4px;
+            background: transparent;
+            border: 1px solid currentColor;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            color: inherit;
+            opacity: 0.75;
+            transition: all 0.15s ease;
+        }
+
+        .filter-chip-toggle:hover,
+        .filter-chip-toggle.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .search-label-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            min-height: 16px;
+        }
+
+        .search-label-row .search-label {
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .label-spacer {
+            width: 28px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .exclude-toggle {
+            padding: 0 5px;
+            height: 14px;
+            min-width: 28px;
+            border: 1px solid var(--border-default);
+            border-radius: 7px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            line-height: 1;
+            flex-shrink: 0;
+            transition: all 0.15s ease;
+        }
+
+        .exclude-toggle:hover {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .exclude-toggle.active {
+            background: var(--accent-red-dim);
+            border-color: rgba(239, 68, 68, 0.45);
+            color: var(--accent-red);
+        }
+
+        .search-input.exclude-active {
+            border-color: rgba(239, 68, 68, 0.55);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
         }
 
         /* ===== TABLE CONTAINER ===== */
@@ -1839,195 +2071,157 @@
 
         /* ===== SIDEBAR (Right Panel) ===== */
         #filterSidebar {
-            width: 260px;
-            height: auto;
+            width: 248px;
+            min-width: 248px;
+            height: 100%;
             background: var(--bg-surface);
-            border-left: 1px solid var(--border-subtle);
+            border-left: 1px solid var(--border-default);
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         .sidebar-header {
-            padding: 14px 16px;
+            padding: 8px 10px;
             border-bottom: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
+            background: var(--bg-elevated);
+        }
+
+        .sidebar-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
         }
 
         .sidebar-title {
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
             color: var(--text-primary);
         }
 
+        .sidebar-subtitle {
+            font-size: 9px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .sidebar-close {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             cursor: pointer;
             color: var(--text-muted);
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: var(--radius-sm);
+            flex-shrink: 0;
         }
 
         .sidebar-close:hover {
             background: var(--bg-hover);
+            border-color: var(--border-default);
             color: var(--text-secondary);
         }
 
-        .sidebar-close svg {
-            width: 14px;
-            height: 14px;
+        .sidebar-close svg { width: 12px; height: 12px; }
+
+        .sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .sidebar-section {
             border-bottom: 1px solid var(--border-subtle);
         }
 
-        .sidebar-section.collapsed .sidebar-section-content {
-            display: none;
-        }
+        .sidebar-section.collapsed .sidebar-section-content { display: none; }
+        .sidebar-section.collapsed .sidebar-section-chevron { transform: rotate(-90deg); }
 
         .sidebar-section-header {
+            width: 100%;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
+            gap: 6px;
+            padding: 7px 10px;
             cursor: pointer;
-            transition: background 0.15s ease;
+            transition: background 0.12s ease;
+            background: transparent;
+            border: none;
+            color: inherit;
+            text-align: left;
         }
 
-        .sidebar-section-header:hover {
-            background: var(--bg-hover);
+        .sidebar-section-header:hover { background: var(--bg-hover); }
+
+        .sidebar-section-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .sidebar-section-chevron {
+            width: 10px;
+            height: 10px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
         }
 
         .sidebar-section-title {
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.06em;
             color: var(--text-secondary);
         }
 
-        .sidebar-section-icon {
-            width: 14px;
-            height: 14px;
-            color: var(--text-muted);
-            transition: transform 0.2s ease;
-        }
-
-        .sidebar-section.collapsed .sidebar-section-icon {
-            transform: rotate(-90deg);
+        .sidebar-section-meta {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+            padding: 1px 6px;
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .sidebar-section-content {
-            padding: 4px 8px 12px;
+            padding: 0 10px 8px;
         }
 
-        .sidebar-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--text-secondary);
-            transition: all 0.15s ease;
+        .sidebar-section-content.compact-grid {
+            display: grid;
+            gap: 6px;
         }
 
-        .sidebar-item:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .sidebar-item-count {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            color: var(--text-muted);
-            background: var(--bg-elevated);
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-        }
-
-        /* Time Range Inputs in Sidebar */
-        .time-inputs {
-            padding: 8px 12px;
-        }
-
-        .time-input-group {
-            margin-bottom: 10px;
-        }
+        .time-input-group { margin-bottom: 6px; }
+        .time-input-group:last-of-type { margin-bottom: 0; }
 
         .time-input-label {
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--text-muted);
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             display: block;
-        }
-
-        .time-input {
-            width: 100%;
-            height: 30px;
-            padding: 0 8px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 11px;
-        }
-
-        .time-input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-        }
-
-        .apply-time-btn {
-            width: 100%;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            margin-top: 4px;
-        }
-
-        .apply-time-btn:hover:not(:disabled) {
-            background: #2563eb;
-        }
-
-        .apply-time-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Static section header (non-collapsible) */
-        .sidebar-section-header-static {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-
-        /* Time Range Redesign */
-        .time-range-redesign {
-            padding: 8px 12px;
         }
 
         .calendar-input-wrapper {
@@ -2038,127 +2232,85 @@
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: border-color 0.12s ease;
         }
 
-        .calendar-input-wrapper:hover {
-            border-color: var(--border-emphasis);
-        }
-
+        .calendar-input-wrapper:hover { border-color: var(--border-emphasis); }
         .calendar-input-wrapper:focus-within {
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
         }
 
         .calendar-icon {
             position: absolute;
-            left: 10px;
-            width: 16px;
-            height: 16px;
+            left: 7px;
+            width: 12px;
+            height: 12px;
             color: var(--text-muted);
             pointer-events: none;
         }
 
         .calendar-input {
             width: 100%;
-            height: 36px;
-            padding: 0 10px 0 34px;
+            height: 26px;
+            padding: 0 8px 0 24px;
             background: transparent;
             border: none;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 10px;
             font-family: var(--font-mono);
             cursor: pointer;
         }
 
-        .calendar-input:focus {
-            outline: none;
-        }
-
+        .calendar-input:focus { outline: none; }
         .calendar-input::-webkit-calendar-picker-indicator {
             filter: invert(0.7);
             cursor: pointer;
-            padding: 4px;
-            border-radius: 4px;
+            padding: 2px;
         }
 
-        .calendar-input::-webkit-calendar-picker-indicator:hover {
-            background: var(--bg-hover);
-        }
-
-        /* Device Dropdown */
-        .filter-dropdown-wrapper {
-            position: relative;
-            padding: 0 12px;
-        }
-
-        .filter-dropdown {
+        .apply-time-btn {
             width: 100%;
-            height: 38px;
-            padding: 0 32px 0 12px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 12px;
-            font-family: var(--font-sans);
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            transition: all 0.15s ease;
-        }
-
-        .filter-dropdown:hover {
-            border-color: var(--border-emphasis);
-        }
-
-        .filter-dropdown:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
-        }
-
-        .filter-dropdown option {
-            background: var(--bg-surface);
-            color: var(--text-primary);
-            padding: 8px;
-        }
-
-        .dropdown-arrow {
-            position: absolute;
-            right: 22px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 14px;
-            height: 14px;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        /* Action Filter Buttons */
-        .action-filter-group {
-            display: flex;
-            gap: 6px;
-            padding: 0 12px;
-        }
-
-        .action-filter-btn {
-            flex: 1;
+            height: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 4px;
-            height: 34px;
-            padding: 0 10px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .apply-time-btn:hover:not(:disabled) { background: #2563eb; }
+        .apply-time-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .apply-time-btn svg { width: 11px; height: 11px; }
+
+        .action-filter-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+
+        .action-filter-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            height: 26px;
+            padding: 0 4px;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--text-secondary);
-            font-size: 11px;
-            font-weight: 500;
+            font-size: 10px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: all 0.12s ease;
         }
 
         .action-filter-btn:hover {
@@ -2185,87 +2337,110 @@
             color: var(--accent-red);
         }
 
-        .action-filter-btn svg {
-            flex-shrink: 0;
-        }
+        .action-filter-btn svg { width: 9px; height: 9px; flex-shrink: 0; }
 
-        /* Sidebar Filter Inputs */
-        .sidebar-filter-group {
-            margin-bottom: 12px;
-        }
-
-        .sidebar-filter-group.half {
-            flex: 1;
-            min-width: 0;
-        }
+        .sidebar-filter-group { margin-bottom: 0; }
+        .sidebar-filter-group.half { flex: 1; min-width: 0; }
 
         .sidebar-filter-row {
-            display: flex;
-            gap: 8px;
-            padding: 0 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
         }
 
         .sidebar-filter-label {
             display: block;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.05em;
             color: var(--text-muted);
-            margin-bottom: 6px;
-            padding-left: 2px;
+            margin-bottom: 3px;
         }
 
         .sidebar-filter-input {
             width: 100%;
-            height: 34px;
-            padding: 0 10px;
+            height: 26px;
+            padding: 0 8px;
+            box-sizing: border-box;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 11px;
             font-family: var(--font-mono);
-            transition: all 0.15s ease;
+            transition: border-color 0.12s ease;
         }
 
         .sidebar-filter-input:focus {
             outline: none;
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
         }
 
         .sidebar-filter-input::placeholder {
             color: var(--text-ghost);
             font-family: var(--font-sans);
+            font-size: 10px;
         }
 
         .sidebar-filter-input.threat-input:focus {
             border-color: var(--accent-red);
-            box-shadow: 0 0 0 2px var(--accent-red-dim);
+            box-shadow: 0 0 0 1px var(--accent-red-dim);
         }
 
-        /* Sidebar section icon on left */
-        .sidebar-section-icon-left {
-            color: var(--text-muted);
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
+        .filter-dropdown-wrapper { position: relative; }
 
-        /* Sidebar footer with buttons */
-        .sidebar-footer {
-            padding: 16px;
-            border-top: 1px solid var(--border-default);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: auto;
-        }
-
-        .btn-full {
+        .filter-dropdown {
             width: 100%;
-            justify-content: center;
+            height: 26px;
+            padding: 0 24px 0 8px;
+            box-sizing: border-box;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 10px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            appearance: none;
         }
+
+        .filter-dropdown:hover { border-color: var(--border-emphasis); }
+        .filter-dropdown:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
+        }
+
+        .dropdown-arrow {
+            position: absolute;
+            right: 7px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 11px;
+            height: 11px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .sidebar-footer {
+            padding: 8px 10px;
+            border-top: 1px solid var(--border-default);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            flex-shrink: 0;
+            background: var(--bg-elevated);
+        }
+
+        .sidebar-footer .btn {
+            height: 28px;
+            font-size: 11px;
+            padding: 0 8px;
+        }
+
+        .btn-full { width: 100%; justify-content: center; }
 
         /* Filter chip variants */
         .filter-chip.threat {
@@ -2862,8 +3037,8 @@
                 </button>
                 <span id="nqlStatus" class="nql-status"></span>
                 <div class="nql-divider"></div>
-                <div class="nql-stats">
-                    <span class="nql-stat"><span class="nql-stat-val">{{ total | format_number }}</span> {% if is_aggregate %}groups{% else %}logs{% endif %}</span>
+                <div class="nql-stats" role="status" aria-live="polite">
+                    <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate %}groups{% else %}logs{% endif %}</span>
                     <span class="nql-stat-sep"></span>
                     <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
                 </div>
@@ -2874,31 +3049,51 @@
 
             <!-- Search Toolbar -->
             <div class="toolbar">
-                <div class="search-group">
-                    <div class="search-field">
-                        <span class="search-label">Source IP</span>
-                        <input type="text" name="srcip" class="search-input" placeholder="192.168.1.1 or /24" value="{{ current_srcip or '' }}">
+                <div class="toolbar-row toolbar-filters">
+                    <div class="search-field ip">
+                        <div class="search-label-row">
+                            <span class="search-label">Src IP</span>
+                            <button type="button" class="exclude-toggle{% if current_srcip_not|default(false) %} active{% endif %}" id="srcipNotToggle" onclick="toggleExcludeField('srcip')" title="Exclude matching source IPs">NOT</button>
+                        </div>
+                        <input type="text" name="srcip" class="search-input{% if current_srcip_not|default(false) %} exclude-active{% endif %}" placeholder="192.168.1.1 or /24" value="{{ current_srcip or '' }}">
                     </div>
-                    <div class="search-field">
-                        <span class="search-label">Destination IP</span>
-                        <input type="text" name="dstip" class="search-input" placeholder="8.8.8.8 or /24" value="{{ current_dstip or '' }}">
+                    <div class="search-field ip">
+                        <div class="search-label-row">
+                            <span class="search-label">Dst IP</span>
+                            <button type="button" class="exclude-toggle{% if current_dstip_not|default(false) %} active{% endif %}" id="dstipNotToggle" onclick="toggleExcludeField('dstip')" title="Exclude matching destination IPs">NOT</button>
+                        </div>
+                        <input type="text" name="dstip" class="search-input{% if current_dstip_not|default(false) %} exclude-active{% endif %}" placeholder="8.8.8.8 or /24" value="{{ current_dstip or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Src Port</span>
-                        <input type="text" name="srcport" class="search-input" placeholder="Any" value="{{ current_srcport or '' }}">
+                    <div class="search-field port">
+                        <div class="search-label-row">
+                            <span class="search-label">Src Port</span>
+                            <button type="button" class="exclude-toggle{% if current_srcport_not|default(false) %} active{% endif %}" id="srcportNotToggle" onclick="toggleExcludeField('srcport')" title="Exclude matching source ports">NOT</button>
+                        </div>
+                        <input type="text" name="srcport" class="search-input{% if current_srcport_not|default(false) %} exclude-active{% endif %}" placeholder="Any" value="{{ current_srcport or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Dst Port</span>
-                        <input type="text" name="dstport" class="search-input" placeholder="443" value="{{ current_dstport or '' }}">
+                    <div class="search-field port">
+                        <div class="search-label-row">
+                            <span class="search-label">Dst Port</span>
+                            <button type="button" class="exclude-toggle{% if current_dstport_not|default(false) %} active{% endif %}" id="dstportNotToggle" onclick="toggleExcludeField('dstport')" title="Exclude matching destination ports">NOT</button>
+                        </div>
+                        <input type="text" name="dstport" class="search-input{% if current_dstport_not|default(false) %} exclude-active{% endif %}" placeholder="443" value="{{ current_dstport or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Protocol</span>
+                    <div class="search-field protocol">
+                        <div class="search-label-row">
+                            <span class="search-label">Proto</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
                         <input type="text" name="protocol" class="search-input" placeholder="TCP/UDP" value="{{ current_protocol or '' }}">
                     </div>
-                    <div class="search-field">
-                        <span class="search-label">Application</span>
+                    <div class="search-field app">
+                        <div class="search-label-row">
+                            <span class="search-label">App</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
                         <input type="text" name="application" class="search-input" placeholder="ssl, web-browsing" value="{{ current_application or '' }}">
                     </div>
+                </div>
+                <div class="toolbar-row toolbar-actions">
                     <div class="search-actions">
                         <button type="submit" class="btn btn-primary" onclick="showLoading()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2914,8 +3109,7 @@
                             Clear
                         </button>
                     </div>
-                </div>
-                <div class="toolbar-right">
+                    <div class="toolbar-right">
                     <div class="view-toggle">
                         <button type="button" class="view-pill {% if not is_aggregate %}active{% endif %}" onclick="setViewMode('')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -2973,14 +3167,22 @@
                             </div>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-ghost btn-icon" onclick="location.reload()" title="Refresh">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="btn btn-ghost btn-icon" aria-label="Export current results to CSV" onclick="(function(){var p=new URLSearchParams(window.location.search);p.set('format','csv');window.location.href='/logs/export?'+p.toString();})()" title="Export current results to CSV">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <path d="M7 10l5 5 5-5"/>
+                            <path d="M12 15V3"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon" aria-label="Refresh results" onclick="location.reload()" title="Refresh">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                             <path d="M3 3v5h5"/>
                             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
                             <path d="M16 21h5v-5"/>
                         </svg>
                     </button>
+                </div>
                 </div>
             </div>
 
@@ -2990,32 +3192,36 @@
             {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
             <div class="active-filters">
                 {% if current_srcip %}
-                <span class="filter-chip">
-                    Src IP: {{ current_srcip }}
+                <span class="filter-chip{% if current_srcip_not|default(false) %} exclude{% endif %}">
+                    {% if current_srcip_not|default(false) %}NOT {% endif %}Src IP: {{ current_srcip }}
+                    <button type="button" class="filter-chip-toggle{% if current_srcip_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('srcip')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('srcip')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_dstip %}
-                <span class="filter-chip">
-                    Dst IP: {{ current_dstip }}
+                <span class="filter-chip{% if current_dstip_not|default(false) %} exclude{% endif %}">
+                    {% if current_dstip_not|default(false) %}NOT {% endif %}Dst IP: {{ current_dstip }}
+                    <button type="button" class="filter-chip-toggle{% if current_dstip_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('dstip')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstip')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_srcport %}
-                <span class="filter-chip">
-                    Src Port: {{ current_srcport }}
+                <span class="filter-chip{% if current_srcport_not|default(false) %} exclude{% endif %}">
+                    {% if current_srcport_not|default(false) %}NOT {% endif %}Src Port: {{ current_srcport }}
+                    <button type="button" class="filter-chip-toggle{% if current_srcport_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('srcport')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('srcport')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_dstport %}
-                <span class="filter-chip">
-                    Dst Port: {{ current_dstport }}
+                <span class="filter-chip{% if current_dstport_not|default(false) %} exclude{% endif %}">
+                    {% if current_dstport_not|default(false) %}NOT {% endif %}Dst Port: {{ current_dstport }}
+                    <button type="button" class="filter-chip-toggle{% if current_dstport_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('dstport')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstport')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -3502,7 +3708,7 @@
                     {% if logs or agg_rows %}
                     <div class="pagination-bar">
                         <div class="pagination-info">
-                            Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total | format_number }}
+                            Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total_display if total_display is defined else (total | format_number) }}
                         </div>
                         <div class="pagination-controls">
                             <button type="button" class="page-btn" onclick="goToPage(1)" {% if page <= 1 %}disabled{% endif %}>
@@ -3527,159 +3733,173 @@
                 <!-- Right Sidebar - Advanced Filters -->
                 <aside class="sidebar" id="filterSidebar">
                     <div class="sidebar-header">
-                        <span class="sidebar-title">Advanced Filters</span>
-                        <button type="button" class="sidebar-close" onclick="toggleSidebar()">
+                        <div class="sidebar-header-left">
+                            <span class="sidebar-title">Filters</span>
+                            <span class="sidebar-subtitle">Refine results</span>
+                        </div>
+                        <button type="button" class="sidebar-close" onclick="toggleSidebar()" title="Hide panel">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                     </div>
 
-                    <!-- Time Range -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <span class="sidebar-section-title">Time Range</span>
+                    <div class="sidebar-scroll">
+                        <!-- Top Values -->
+                        <div class="sidebar-section">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Top Values</span>
+                                </span>
+                                <span class="sidebar-section-meta" id="facetFieldMeta">App</span>
+                            </button>
+                            <div class="sidebar-section-content">
+                                <div class="facet-field-grid" role="tablist" aria-label="Facet field">
+                                    <button type="button" class="facet-field-btn active" data-field="application" data-label="App" onclick="selectFacetField('application')">App</button>
+                                    <button type="button" class="facet-field-btn" data-field="action" data-label="Action" onclick="selectFacetField('action')">Action</button>
+                                    <button type="button" class="facet-field-btn" data-field="policyname" data-label="Policy" onclick="selectFacetField('policyname')">Policy</button>
+                                    <button type="button" class="facet-field-btn" data-field="log_type" data-label="Type" onclick="selectFacetField('log_type')">Type</button>
+                                    <button type="button" class="facet-field-btn" data-field="srcip" data-label="Src IP" onclick="selectFacetField('srcip')">Src IP</button>
+                                    <button type="button" class="facet-field-btn" data-field="dstip" data-label="Dst IP" onclick="selectFacetField('dstip')">Dst IP</button>
+                                    <button type="button" class="facet-field-btn" data-field="src_zone" data-label="Src Zone" onclick="selectFacetField('src_zone')">Src Zone</button>
+                                    <button type="button" class="facet-field-btn" data-field="dst_zone" data-label="Dst Zone" onclick="selectFacetField('dst_zone')">Dst Zone</button>
+                                </div>
+                                <div id="facetList" class="facet-list"><div class="facet-empty">—</div></div>
+                            </div>
                         </div>
-                        <div class="sidebar-section-content">
-                            <div class="time-range-redesign">
+
+                        <!-- Time Range -->
+                        <div class="sidebar-section{% if not current_start and not current_end %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Time Range</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
                                 <div class="time-input-group">
-                                    <label class="time-input-label">Start Date & Time</label>
+                                    <label class="time-input-label" for="startDateTime">Start</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                                            <line x1="16" y1="2" x2="16" y2="6"/>
-                                            <line x1="8" y1="2" x2="8" y2="6"/>
-                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                         <input type="datetime-local" id="startDateTime" name="start" class="calendar-input" value="{{ current_start or '' }}" onchange="updateCustomRange()">
                                     </div>
                                 </div>
                                 <div class="time-input-group">
-                                    <label class="time-input-label">End Date & Time</label>
+                                    <label class="time-input-label" for="endDateTime">End</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                                            <line x1="16" y1="2" x2="16" y2="6"/>
-                                            <line x1="8" y1="2" x2="8" y2="6"/>
-                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                         <input type="datetime-local" id="endDateTime" name="end" class="calendar-input" value="{{ current_end or '' }}" onchange="updateCustomRange()">
                                     </div>
                                 </div>
                                 <button type="button" id="applyRangeBtn" class="apply-time-btn" onclick="applyCustomRange()" disabled>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                    Apply Range
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Apply
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Traffic Analysis -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                            </svg>
-                            <span class="sidebar-section-title">Traffic Analysis</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Action</label>
-                                <div class="action-filter-group">
-                                    <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">All</button>
-                                    <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
-                                        Accept
-                                    </button>
-                                    <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                        Deny
-                                    </button>
+                        <!-- Traffic -->
+                        <div class="sidebar-section">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Traffic</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label">Action</label>
+                                    <div class="action-filter-group">
+                                        <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">All</button>
+                                        <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                            Allow
+                                        </button>
+                                        <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                            Deny
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Session End Reason</label>
-                                <input type="text" name="session_end_reason" class="sidebar-filter-input" placeholder="e.g. aged-out, tcp-fin" value="{{ current_session_end_reason or '' }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Policy & Security -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                            </svg>
-                            <span class="sidebar-section-title">Policy & Security</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Policy/Rule Name</label>
-                                <input type="text" name="policyname" class="sidebar-filter-input" placeholder="e.g. allow-internet" value="{{ current_policyname or '' }}">
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Log Type</label>
-                                <input type="text" name="log_type" class="sidebar-filter-input" placeholder="e.g. TRAFFIC, THREAT" value="{{ current_log_type or '' }}">
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Threat ID</label>
-                                <input type="text" name="threat_id" class="sidebar-filter-input threat-input" placeholder="e.g. 40000, 50000" value="{{ current_threat_id or '' }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Zones & Infrastructure -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                            </svg>
-                            <span class="sidebar-section-title">Zones & Infrastructure</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-row">
-                                <div class="sidebar-filter-group half">
-                                    <label class="sidebar-filter-label">Source Zone</label>
-                                    <input type="text" name="src_zone" class="sidebar-filter-input" placeholder="trust" value="{{ current_src_zone or '' }}">
-                                </div>
-                                <div class="sidebar-filter-group half">
-                                    <label class="sidebar-filter-label">Dest Zone</label>
-                                    <input type="text" name="dst_zone" class="sidebar-filter-input" placeholder="untrust" value="{{ current_dst_zone or '' }}">
-                                </div>
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Device</label>
-                                <div class="filter-dropdown-wrapper">
-                                    <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
-                                        <option value="" {% if not current_device %}selected{% endif %}>All Devices</option>
-                                        {% for device in devices %}
-                                        <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="6 9 12 15 18 9"/>
-                                    </svg>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label" for="sessionEndReason">Session End</label>
+                                    <input type="text" id="sessionEndReason" name="session_end_reason" class="sidebar-filter-input" placeholder="aged-out, tcp-fin" value="{{ current_session_end_reason or '' }}">
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Policy & Security -->
+                        <div class="sidebar-section{% if not current_policyname and not current_log_type and not current_threat_id %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Policy</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-row">
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Rule</label>
+                                        <input type="text" name="policyname" class="sidebar-filter-input" placeholder="allow-internet" value="{{ current_policyname or '' }}">
+                                    </div>
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Log Type</label>
+                                        <input type="text" name="log_type" class="sidebar-filter-input" placeholder="TRAFFIC" value="{{ current_log_type or '' }}">
+                                    </div>
+                                </div>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label">Threat ID</label>
+                                    <input type="text" name="threat_id" class="sidebar-filter-input threat-input" placeholder="40000" value="{{ current_threat_id or '' }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Infrastructure -->
+                        <div class="sidebar-section{% if not current_src_zone and not current_dst_zone and not current_device %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Infrastructure</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-row">
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Src Zone</label>
+                                        <input type="text" name="src_zone" class="sidebar-filter-input" placeholder="trust" value="{{ current_src_zone or '' }}">
+                                    </div>
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Dst Zone</label>
+                                        <input type="text" name="dst_zone" class="sidebar-filter-input" placeholder="untrust" value="{{ current_dst_zone or '' }}">
+                                    </div>
+                                </div>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label" for="deviceSelect">Device</label>
+                                    <div class="filter-dropdown-wrapper">
+                                        <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
+                                            <option value="" {% if not current_device %}selected{% endif %}>All devices</option>
+                                            {% for device in devices %}
+                                            <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Apply Filters Button -->
                     <div class="sidebar-footer">
                         <button type="submit" class="btn btn-primary btn-full" onclick="showLoading()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                            </svg>
-                            Apply Filters
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                            Apply
                         </button>
                         <button type="button" class="btn btn-ghost btn-full" onclick="clearFilters()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                            Clear All
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            Clear
                         </button>
                     </div>
                 </aside>
@@ -3698,6 +3918,10 @@
     <input type="hidden" name="group_by" id="hiddenGroupBy" value="{{ current_group_by or 'srcip,dstip,dstport' }}">
     <input type="hidden" name="subnet_rollup" id="hiddenSubnetRollup" value="{{ '1' if is_subnet_rollup else '' }}">
     <input type="hidden" name="compare" id="hiddenCompare" value="{{ '1' if is_compare_mode else '' }}">
+    <input type="hidden" name="srcip_not" id="hiddenSrcipNot" value="{{ '1' if current_srcip_not|default(false) else '' }}">
+    <input type="hidden" name="dstip_not" id="hiddenDstipNot" value="{{ '1' if current_dstip_not|default(false) else '' }}">
+    <input type="hidden" name="srcport_not" id="hiddenSrcportNot" value="{{ '1' if current_srcport_not|default(false) else '' }}">
+    <input type="hidden" name="dstport_not" id="hiddenDstportNot" value="{{ '1' if current_dstport_not|default(false) else '' }}">
     </form>
 
     <script>
@@ -4031,6 +4255,37 @@
         }
 
         // Filter functions
+        const EXCLUDABLE_FILTERS = ['srcip', 'dstip', 'srcport', 'dstport'];
+
+        function excludeHiddenId(name) {
+            return 'hidden' + name.charAt(0).toUpperCase() + name.slice(1) + 'Not';
+        }
+
+        function syncExcludeUI(name) {
+            const hidden = document.getElementById(excludeHiddenId(name));
+            const toggle = document.getElementById(name + 'NotToggle');
+            const input = document.querySelector(`input[name="${name}"]`);
+            const isExclude = hidden && hidden.value === '1';
+            if (toggle) toggle.classList.toggle('active', !!isExclude);
+            if (input) input.classList.toggle('exclude-active', !!isExclude);
+        }
+
+        function toggleExcludeField(name) {
+            if (!EXCLUDABLE_FILTERS.includes(name)) return;
+            const hidden = document.getElementById(excludeHiddenId(name));
+            if (!hidden) return;
+            hidden.value = hidden.value === '1' ? '' : '1';
+            syncExcludeUI(name);
+        }
+
+        function toggleFilterExclude(name) {
+            if (!EXCLUDABLE_FILTERS.includes(name)) return;
+            toggleExcludeField(name);
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
         function setFilter(name, value) {
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
             if (hiddenInput) {
@@ -4046,6 +4301,9 @@
             if (input) input.value = '';
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
             if (hiddenInput) hiddenInput.value = '';
+            const excludeHidden = document.getElementById(excludeHiddenId(name));
+            if (excludeHidden) excludeHidden.value = '';
+            syncExcludeUI(name);
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
@@ -4054,6 +4312,11 @@
         function clearFilters() {
             // Clear all text inputs in toolbar and sidebar
             document.querySelectorAll('.search-input, .sidebar-filter-input').forEach(input => input.value = '');
+            EXCLUDABLE_FILTERS.forEach(name => {
+                const excludeHidden = document.getElementById(excludeHiddenId(name));
+                if (excludeHidden) excludeHidden.value = '';
+                syncExcludeUI(name);
+            });
             // Clear hidden inputs
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
@@ -4307,7 +4570,8 @@
 
         // Sidebar
         function toggleSection(header) {
-            header.closest('.sidebar-section').classList.toggle('collapsed');
+            const section = header.closest('.sidebar-section');
+            if (section) section.classList.toggle('collapsed');
         }
 
         function toggleSidebar() {
@@ -4549,7 +4813,7 @@
     function getCurrentFilters() {
         const form = document.getElementById('filterForm');
         const params = {};
-        const fields = ['srcip', 'dstip', 'srcport', 'dstport', 'protocol', 'application',
+        const fields = ['srcip', 'dstip', 'srcport', 'dstport', 'srcip_not', 'dstip_not', 'srcport_not', 'dstport_not', 'protocol', 'application',
                         'device', 'severity', 'action', 'time_range', 'per_page', 'q',
                         'session_end_reason', 'policyname', 'log_type', 'threat_id', 'src_zone', 'dst_zone',
                         'start', 'end'];
@@ -5509,4 +5773,69 @@
     }
     </script>
     {% endif %}
+
+    <!-- ===== Log Explorer: Top Values facets ===== -->
+    <script>
+    const FACET_FIELD_LABELS = {
+        application: 'App', action: 'Action', policyname: 'Policy', log_type: 'Type',
+        srcip: 'Src IP', dstip: 'Dst IP', src_zone: 'Src Zone', dst_zone: 'Dst Zone',
+    };
+
+    function getActiveFacetField() {
+        const active = document.querySelector('.facet-field-btn.active');
+        return active ? active.dataset.field : 'application';
+    }
+
+    function selectFacetField(field) {
+        document.querySelectorAll('.facet-field-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.field === field);
+        });
+        const meta = document.getElementById('facetFieldMeta');
+        if (meta) meta.textContent = FACET_FIELD_LABELS[field] || field;
+        loadFacets(field);
+    }
+
+    function _facetParams(field){
+        const u = new URLSearchParams(window.location.search);
+        const keep = ['time_range','start','end','device','severity','q','action','log_type','application',
+                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone'];
+        const p = new URLSearchParams();
+        keep.forEach(k => { const v = u.get(k); if (v) p.set(k, v); });
+        if (!p.get('time_range') && !p.get('start')) p.set('time_range', '{{ current_time_range }}');
+        p.set('field', field); p.set('limit', '10');
+        return p.toString();
+    }
+    function applyFacet(field, value){
+        const p = new URLSearchParams(window.location.search);
+        p.set(field, value); p.set('page', '1');
+        try { showLoading(); } catch(e) {}
+        window.location.search = p.toString();
+    }
+    function loadFacets(forcedField){
+        const list = document.getElementById('facetList');
+        if (!list) return;
+        const field = forcedField || getActiveFacetField();
+        list.innerHTML = '<div class="facet-loading">Loading…</div>';
+        fetch('/api/logs/facets?' + _facetParams(field), {headers:{'Accept':'application/json'}})
+          .then(r => r.json())
+          .then(d => {
+            const vals = (d && d.values) || [];
+            if (!vals.length){ list.innerHTML = '<div class="facet-empty">No values</div>'; return; }
+            const max = vals[0].count || 1;
+            list.innerHTML = vals.map(v => {
+                const pct = Math.max(4, Math.round((v.count / max) * 100));
+                const raw = v.value || '';
+                const esc = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const jsEsc = raw.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                return '<div class="facet-item" onclick="applyFacet(\'' + field + '\', \'' + jsEsc + '\')" title="' + esc + ' · ' + v.count.toLocaleString() + '">' +
+                       '<span class="facet-bar" style="width:' + pct + '%"></span>' +
+                       '<span class="facet-val">' + (esc || '(empty)') + '</span>' +
+                       '<span class="facet-cnt">' + v.count.toLocaleString() + '</span></div>';
+            }).join('');
+          })
+          .catch(() => { list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
+    }
+    if (document.readyState !== 'loading') loadFacets();
+    else document.addEventListener('DOMContentLoaded', () => loadFacets());
+    </script>
 {% endblock %}

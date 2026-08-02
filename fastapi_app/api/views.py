@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
 from typing import Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +37,10 @@ logger = logging.getLogger(__name__)
 
 # Thread pool for running blocking ClickHouse queries in parallel
 _executor = ThreadPoolExecutor(max_workers=8)
+
+# Upper bound for exact log counts. Past this the pager shows "100,000+" instead
+# of forcing a multi-second full scan to get an exact (and rarely useful) total.
+COUNT_CAP = 100000
 
 router = APIRouter(tags=["views"])
 
@@ -1054,6 +1058,10 @@ async def log_list(
     dstip: Optional[str] = Query(None),
     srcport: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
+    srcip_not: Optional[str] = Query(None),
+    dstip_not: Optional[str] = Query(None),
+    srcport_not: Optional[str] = Query(None),
+    dstport_not: Optional[str] = Query(None),
     protocol: Optional[str] = Query(None),
     # Policy & Security filters
     policyname: Optional[str] = Query(None),
@@ -1144,24 +1152,29 @@ async def log_list(
         # Build search query from direct filter parameters (srcip, dstip, dstport)
         search_parts = []
 
-        def _fmt(field, val):
+        def _fmt(field, val, negated: bool = False):
             """Quote values with spaces so the regex parser captures the full value."""
-            return f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+            return _nql_term(field, val, negated)
+
+        srcip_not_flag = _is_not_flag(srcip_not)
+        dstip_not_flag = _is_not_flag(dstip_not)
+        srcport_not_flag = _is_not_flag(srcport_not)
+        dstport_not_flag = _is_not_flag(dstport_not)
 
         # Handle srcip parameter
         srcip_clean = srcip.strip() if srcip and srcip.strip() else None
         if srcip_clean:
-            search_parts.append(_fmt("srcip", srcip_clean))
+            search_parts.append(_fmt("srcip", srcip_clean, srcip_not_flag))
 
         # Handle dstip parameter
         dstip_clean = dstip.strip() if dstip and dstip.strip() else None
         if dstip_clean:
-            search_parts.append(_fmt("dstip", dstip_clean))
+            search_parts.append(_fmt("dstip", dstip_clean, dstip_not_flag))
 
         # Handle dstport parameter
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
-            search_parts.append(_fmt("dstport", dstport_clean))
+            search_parts.append(_fmt("dstport", dstport_clean, dstport_not_flag))
 
         # Handle policyname parameter
         policyname_clean = policyname.strip() if policyname and policyname.strip() else None
@@ -1171,7 +1184,7 @@ async def log_list(
         # Handle srcport parameter
         srcport_clean = srcport.strip() if srcport and srcport.strip() else None
         if srcport_clean:
-            search_parts.append(_fmt("srcport", srcport_clean))
+            search_parts.append(_fmt("srcport", srcport_clean, srcport_not_flag))
 
         # Handle protocol parameter
         protocol_clean = protocol.strip() if protocol and protocol.strip() else None
@@ -1299,6 +1312,7 @@ async def log_list(
                     start_time=start_time,
                     end_time=end_time,
                     query_text=search_query if search_query else None,
+                    max_count=COUNT_CAP,
                 )
             )
 
@@ -1322,9 +1336,15 @@ async def log_list(
             logs_future, total_future, stats_future, devices_future
         )
 
-        # Format count display
-        is_approximate = False
-        total_display = f"{total:,}"
+        # Format count display. count_logs returns -1 when the exact count timed
+        # out (a non-indexed Map-column filter over a wide window). In that case
+        # show "100,000+" and cap the pager; otherwise show the true exact count.
+        is_approximate = total < 0
+        if is_approximate:
+            total = COUNT_CAP
+            total_display = f"{COUNT_CAP:,}+"
+        else:
+            total_display = f"{total:,}"
 
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
 
@@ -1358,6 +1378,10 @@ async def log_list(
             "current_dstip": dstip_clean,
             "current_srcport": srcport_clean,
             "current_dstport": dstport_clean,
+            "current_srcip_not": srcip_not_flag,
+            "current_dstip_not": dstip_not_flag,
+            "current_srcport_not": srcport_not_flag,
+            "current_dstport_not": dstport_not_flag,
             "current_protocol": protocol_clean,
             # Policy & Security filter values
             "current_policyname": policyname_clean,
@@ -1550,6 +1574,10 @@ async def log_list(
             "current_dstip": dstip if dstip else None,
             "current_srcport": srcport if srcport else None,
             "current_dstport": dstport if dstport else None,
+            "current_srcip_not": False,
+            "current_dstip_not": False,
+            "current_srcport_not": False,
+            "current_dstport_not": False,
             "current_protocol": protocol if protocol else None,
             # Policy & Security filter values
             "current_policyname": policyname if policyname else None,
@@ -4639,7 +4667,8 @@ WHERE {compiled['where']}
 {group_by}
 {having}
 {order_by}
-LIMIT {limit_val}"""
+LIMIT {limit_val}
+SETTINGS max_execution_time=20"""
 
             result = await loop.run_in_executor(_executor, lambda: _run_query(sql))
             columns = result.column_names
@@ -4667,17 +4696,24 @@ FROM syslogs
 PREWHERE {time_filter}
 WHERE {compiled['where']}
 {order_by}
-LIMIT {limit_val} OFFSET {offset}"""
+LIMIT {limit_val} OFFSET {offset}
+SETTINGS max_execution_time=20"""
 
-            count_sql = f"""SELECT count()
-FROM syslogs
+            # Cap the count: stop scanning at COUNT_CAP+1 rows so an expensive
+            # full-scan filter can't hang the page. Display "100,000+" when capped.
+            COUNT_CAP = 100000
+            count_sql = f"""SELECT count() FROM (
+SELECT 1 FROM syslogs
 PREWHERE {time_filter}
-WHERE {compiled['where']}"""
+WHERE {compiled['where']}
+LIMIT {COUNT_CAP + 1}
+) SETTINGS max_execution_time=20"""
 
             result_future = loop.run_in_executor(_executor, lambda: list(_run_query(sql).named_results()))
             count_future = loop.run_in_executor(_executor, lambda: _run_query(count_sql).result_rows[0][0])
 
             logs, total = await asyncio.gather(result_future, count_future)
+            is_approximate = total > COUNT_CAP
 
             # Serialize results
             serialized = []
@@ -4691,6 +4727,7 @@ WHERE {compiled['where']}"""
                 "type": "logs",
                 "rows": serialized,
                 "total": total,
+                "is_approximate": is_approximate,
                 "page": page,
                 "per_page": per_page,
                 "sql": sql,
@@ -4698,7 +4735,8 @@ WHERE {compiled['where']}"""
 
     except Exception as e:
         logger.error(f"NQL query error: {e}")
-        return JSONResponse(status_code=400, content={"detail": f"Query execution error: {str(e)}"})
+        # Do not leak ClickHouse SQL fragments / schema to the client.
+        return JSONResponse(status_code=400, content={"detail": "Query execution error. Check your query syntax."})
 
 
 @router.get("/api/nql/fields", dependencies=[Depends(require_min_role("VIEWER"))])
@@ -4719,3 +4757,197 @@ def _serialize_value(v):
     if isinstance(v, dict):
         return {k: _serialize_value(val) for k, val in v.items()}
     return v
+
+
+# ============================================================
+# Log Explorer: field facets, raw export
+# (shared filter helpers so all three honor the same filters as the log list)
+# ============================================================
+
+def _explorer_time_window(time_range, start, end):
+    """Resolve (start_time, end_time) from a relative range (e.g. '1h','24h','7d')
+    or explicit ISO start/end. Returns (None, None) to let the query layer apply
+    its default 1h bound."""
+    now = datetime.now(timezone.utc)
+    start_time = end_time = None
+    if start and start.strip():
+        try: start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        except ValueError: pass
+    if end and end.strip():
+        try: end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        except ValueError: pass
+    if start_time is None and end_time is None and time_range and time_range.strip():
+        m = re.match(r'^(\d+)([mhd])$', time_range.strip().lower())
+        if m:
+            n, u = int(m.group(1)), m.group(2)
+            start_time = now - {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
+                                'd': timedelta(days=n)}[u]
+    return start_time, end_time
+
+
+def _explorer_severities(severity):
+    if not severity or not severity.strip():
+        return None
+    out = []
+    for tok in severity.split(','):
+        tok = tok.strip()
+        if tok.isdigit():
+            out.append(int(tok))
+    return out or None
+
+
+def _is_not_flag(val: Optional[str]) -> bool:
+    return bool(val and val.strip().lower() in ('1', 'true', 'on', 'yes'))
+
+
+def _nql_term(field: str, val: str, negated: bool = False) -> str:
+    inner = f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+    return f'-{inner}' if negated else inner
+
+
+def _explorer_search_query(q=None, action=None, log_type=None, application=None,
+                           srcip=None, dstip=None, policyname=None, src_zone=None,
+                           dst_zone=None, session_end_reason=None, dstport=None,
+                           srcport=None, src_country=None, dst_country=None, service=None,
+                           srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None):
+    """Compose an advanced-query string (field:value terms) parsed by
+    ClickHouseClient._build_where_clause, so facet/histogram refresh on filters."""
+    parts = []
+    if q and q.strip():
+        parts.append(q.strip())
+    for field, val, negated in (
+        ("action", action, False),
+        ("log_type", log_type, False),
+        ("application", application, False),
+        ("srcip", srcip, _is_not_flag(srcip_not)),
+        ("dstip", dstip, _is_not_flag(dstip_not)),
+        ("srcport", srcport, _is_not_flag(srcport_not)),
+        ("dstport", dstport, _is_not_flag(dstport_not)),
+        ("policyname", policyname, False),
+        ("src_zone", src_zone, False),
+        ("dst_zone", dst_zone, False),
+        ("session_end_reason", session_end_reason, False),
+        ("src_country", src_country, False),
+        ("dst_country", dst_country, False),
+        ("service", service, False),
+    ):
+        if val is not None and str(val).strip():
+            parts.append(_nql_term(field, str(val).strip(), negated))
+    return ' '.join(parts) if parts else None
+
+
+@router.get("/api/logs/facets", dependencies=[Depends(require_min_role("VIEWER"))])
+async def logs_facets(
+    field: str = Query(...), time_range: Optional[str] = Query(None),
+    start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+    device: Optional[str] = Query(None), severity: Optional[str] = Query(None),
+    q: Optional[str] = Query(None), action: Optional[str] = Query(None),
+    log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+    limit: int = Query(10),
+):
+    """Top-N values (+counts) for a facetable field — the left-rail click-to-filter."""
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sev = _explorer_severities(severity)
+    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application)
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_field_facets(
+        field=field, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
+        query_text=sq, limit=min(max(int(limit), 1), 50)))
+    return data
+
+
+@router.get("/logs/export", dependencies=[Depends(require_min_role("VIEWER"))])
+async def logs_export(
+    format: str = Query("csv"), time_range: Optional[str] = Query(None),
+    start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+    device: Optional[str] = Query(None), severity: Optional[str] = Query(None),
+    q: Optional[str] = Query(None), action: Optional[str] = Query(None),
+    log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+    srcip: Optional[str] = Query(None), dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None), dstport: Optional[str] = Query(None),
+    srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
+    srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
+    policyname: Optional[str] = Query(None), limit: int = Query(100000),
+):
+    """Stream the current filtered logs as CSV or JSON (capped at `limit` rows)."""
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sev = _explorer_severities(severity)
+    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+                                srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
+                                srcip_not=srcip_not, dstip_not=dstip_not,
+                                srcport_not=srcport_not, dstport_not=dstport_not,
+                                policyname=policyname)
+    cap = min(max(int(limit), 1), 500000)
+    cols = ["timestamp", "device_ip", "vdom", "severity", "srcip", "dstip", "srcport",
+            "dstport", "proto", "action", "policyname", "log_type", "application",
+            "src_zone", "dst_zone", "sent_bytes", "recv_bytes", "src_country",
+            "dst_country", "service", "session_end_reason", "threat_id"]
+    fmt = (format or "csv").lower()
+
+    def _run():
+        prewhere_clause, where_sql = ClickHouseClient._count_prewhere_where(
+            device_ips, sev, st, et, sq, None)
+        sql = (f"SELECT {', '.join(cols)} FROM syslogs PREWHERE {prewhere_clause} "
+               f"WHERE {where_sql} ORDER BY timestamp DESC LIMIT {cap} "
+               f"SETTINGS max_execution_time=60")
+        return ClickHouseClient.get_client().query(sql).result_rows
+
+    rows = await asyncio.get_event_loop().run_in_executor(_executor, _run)
+
+    if fmt == "json":
+        def jgen():
+            yield "[\n"
+            for i, r in enumerate(rows):
+                obj = {c: _serialize_value(v) for c, v in zip(cols, r)}
+                yield ("," if i else "") + json.dumps(obj, default=str)
+            yield "\n]"
+        return StreamingResponse(jgen(), media_type="application/json",
+                                 headers={"Content-Disposition": "attachment; filename=zentryc_logs.json"})
+
+    def cgen():
+        import csv, io
+        buf = io.StringIO(); w = csv.writer(buf)
+        w.writerow(cols); yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+        for r in rows:
+            w.writerow([_serialize_value(v) for v in r])
+            yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+    return StreamingResponse(cgen(), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=zentryc_logs.csv"})
+
+
+# ============================================================
+# Traffic Analytics (FortiView-style bandwidth/top-talker/geo)
+# ============================================================
+
+def _hours_from_range(tr, fallback=24):
+    if not tr:
+        return fallback
+    m = re.match(r'^(\d+)([mhd])$', tr.strip().lower())
+    if not m:
+        return fallback
+    n, u = int(m.group(1)), m.group(2)
+    return max(1, n // 60) if u == 'm' else (n if u == 'h' else n * 24)
+
+
+@router.get("/analytics/traffic", response_class=HTMLResponse, name="traffic_analytics",
+            dependencies=[Depends(require_min_role("VIEWER"))])
+async def traffic_analytics_page(request: Request, time_range: str = Query("1h")):
+    return _render("analytics/traffic.html", request, {"current_time_range": time_range})
+
+
+@router.get("/api/analytics/traffic", dependencies=[Depends(require_min_role("VIEWER"))])
+async def api_traffic_analytics(
+    time_range: Optional[str] = Query("24h"), start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None), device: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+):
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sq = _explorer_search_query(q=q)
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_traffic_analytics(
+        start_time=st, end_time=et, device_ips=device_ips, query_text=sq,
+        default_hours=_hours_from_range(time_range)))
+    return data

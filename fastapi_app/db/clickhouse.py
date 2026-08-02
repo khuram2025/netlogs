@@ -1265,10 +1265,16 @@ class ClickHouseClient:
                         return f"NOT startsWith({col}, '{prefix}')"
                     return f"startsWith({col}, '{prefix}')"
                 else:
-                    # For other masks, use IPv4 range comparison
-                    if negated:
-                        return f"({col} = '' OR NOT isIPAddressInRange({col}, '{safe_value}'))"
-                    return f"({col} != '' AND isIPAddressInRange({col}, '{safe_value}'))"
+                    # For other masks (/12, /23, ...) use the IPv4-typed companion
+                    # column with a numeric range. toIPv4OrDefault makes this
+                    # crash-proof on the empty/non-IPv4 values present in the data
+                    # (isIPAddressInRange on the String column throws on those),
+                    # and the minmax skip-index on {col}_v4 prunes granules.
+                    safe_ip = ip_part.replace("'", "''")
+                    col_v4 = f"{col}_v4"
+                    rng = f"IPv4CIDRToRange(toIPv4OrDefault('{safe_ip}'), {mask_int})"
+                    cond = f"({col_v4} >= tupleElement({rng}, 1) AND {col_v4} <= tupleElement({rng}, 2))"
+                    return f"NOT {cond}" if negated else cond
 
             # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
             if cls._is_ip_range(value):
@@ -1919,15 +1925,174 @@ class ClickHouseClient:
         # Use PREWHERE for time + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
+        # For time/indexed filters count() is served from granule metadata and is
+        # near-instant even on 100M rows, so we keep the EXACT count for the common
+        # case. Only a filter that touches a parsed_data Map column (no index) can
+        # full-scan for 60-77s — bound that with max_execution_time and, on
+        # timeout, return -1 so the caller renders an "approximate" indicator
+        # instead of hanging the page.
         query = f"""
         SELECT count() as total
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
+        SETTINGS max_execution_time = 5
         """
 
-        result = client.query(query).result_rows
-        return result[0][0] if result else 0
+        try:
+            result = client.query(query).result_rows
+            return result[0][0] if result else 0
+        except Exception as e:
+            logger.warning(f"count_logs exceeded time budget, returning approximate: {e}")
+            return -1
+
+    @classmethod
+    def _count_prewhere_where(cls, device_ips, severities, start_time, end_time,
+                              query_text, facilities, default_hours=1):
+        """Shared PREWHERE (time + indexed) and WHERE builder — same semantics as
+        count_logs/search_logs so facets honor the active filters."""
+        prewhere_parts = []
+        if start_time is None and end_time is None:
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
+        else:
+            if start_time:
+                prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if end_time:
+                prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+        return prewhere_clause, where_sql
+
+    # Facetable fields → SQL column expression (allowlist; blocks arbitrary input)
+    _FACET_FIELDS = {
+        "action": "action", "log_type": "log_type", "application": "application",
+        "policyname": "policyname", "src_zone": "src_zone", "dst_zone": "dst_zone",
+        "srcip": "srcip", "dstip": "dstip", "dstport": "toString(dstport)",
+        "proto": "toString(proto)", "severity": "toString(severity)", "vdom": "vdom",
+        "src_country": "src_country", "dst_country": "dst_country", "service": "service",
+        "src_intf": "src_intf", "dst_intf": "dst_intf", "src_user": "src_user",
+        "session_end_reason": "session_end_reason",
+        "device": "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(device_ip))",
+    }
+
+    @classmethod
+    def get_field_facets(cls, field: str, device_ips=None, severities=None, start_time=None,
+                         end_time=None, query_text=None, facilities=None,
+                         limit: int = 10, default_hours: int = 1) -> Dict[str, Any]:
+        """Top-N values (+counts) for a facetable field, honoring active filters."""
+        col = cls._FACET_FIELDS.get(field)
+        if not col:
+            return {"field": field, "values": [], "error": "not facetable"}
+        client = cls.get_client()
+        prewhere_clause, where_sql = cls._count_prewhere_where(
+            device_ips, severities, start_time, end_time, query_text, facilities, default_hours)
+        # skip empty string values for text columns
+        extra = "" if col.startswith("toString(") or field in ("dstport", "proto", "severity") else f" AND {col} != ''"
+        query = f"""
+            SELECT {col} AS v, count() AS c
+            FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}{extra}
+            GROUP BY v ORDER BY c DESC LIMIT {int(limit)}
+            SETTINGS max_execution_time = 10
+        """
+        try:
+            rows = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"get_field_facets({field}) failed: {e}")
+            return {"field": field, "values": []}
+        return {"field": field, "values": [{"value": str(v), "count": int(c)} for v, c in rows]}
+
+    # src/dst_country values that are NOT real countries (FortiGate puts these
+    # for private/reserved space) — excluded from the geo breakdown.
+    _NON_COUNTRY = "(src_country='' OR src_country='Reserved' OR match(src_country,'[0-9]'))"
+    _NON_COUNTRY_DST = "(dst_country='' OR dst_country='Reserved' OR match(dst_country,'[0-9]'))"
+
+    @classmethod
+    def get_traffic_analytics(cls, start_time=None, end_time=None, device_ips=None,
+                              query_text=None, default_hours: int = 24, top_n: int = 12) -> Dict[str, Any]:
+        """FortiView-style traffic analytics. Bytes are DEDUPED per session
+        (FortiGate/PA emit CUMULATIVE per-session byte counters; summing the raw
+        rows over-counts ~37x for multi-log sessions) by taking max(sent+recv)
+        per (device_ip, session_id). Done ONCE into a scratch table, then cheap
+        aggregations run over it (avoids 8 separate high-cardinality dedup passes)."""
+        pw, where = cls._count_prewhere_where(device_ips, None, start_time, end_time,
+                                              query_text, None, default_hours)
+        if start_time and end_time:
+            window_s = max(60, int((end_time - start_time).total_seconds()))
+        else:
+            window_s = default_hours * 3600
+        bucket_s = max(60, window_s // 60)
+
+        import uuid as _uuid
+        client = cls.get_client()
+        # ── One expensive pass: dedup to one row per (device, session) in a scratch
+        # table, then run cheap aggregations over it (instead of 8 dedup passes). ──
+        scratch = "default._ta_" + _uuid.uuid4().hex[:16]
+        results = {}
+        try:
+            client.command(
+                f"CREATE TABLE {scratch} (device_ip IPv4, session_id UInt64, srcip String, dstip String, "
+                f"app LowCardinality(String), service LowCardinality(String), "
+                f"src_country LowCardinality(String), dst_country LowCardinality(String), "
+                f"ts DateTime64(3), bytes UInt64) ENGINE = MergeTree ORDER BY tuple()")
+            client.command(
+                f"INSERT INTO {scratch} SELECT device_ip, session_id, any(srcip), any(dstip), "
+                f"any(application), any(service), any(src_country), any(dst_country), "
+                f"max(timestamp), max(sent_bytes + recv_bytes) "
+                f"FROM syslogs PREWHERE {pw} WHERE {where} AND session_id != 0 "
+                f"GROUP BY device_ip, session_id SETTINGS max_execution_time=90, max_threads=4")
+
+            def q(sql):
+                try:
+                    return client.query(sql).result_rows
+                except Exception as e:
+                    logger.warning(f"traffic_analytics agg failed: {e}")
+                    return []
+
+            def top_by(dim, extra=""):
+                return ("top:" + dim, q(
+                    f"SELECT {dim} AS k, sum(bytes) AS b, count() AS sessions FROM {scratch} "
+                    f"WHERE {dim} != ''{extra} GROUP BY k ORDER BY b DESC LIMIT {top_n}"))
+
+            results["totals"] = q(f"SELECT sum(bytes), count(), uniqExact(srcip) FROM {scratch}")
+            # Timeline = SESSIONS per bucket (reliable). Byte-rate over time is
+            # unreliable here: cumulative counters + only ~17% delta coverage make
+            # any per-bucket byte sum either spike (session totals land in one
+            # bucket) or over-count. Session activity is exact and meaningful.
+            results["timeline"] = q(
+                f"SELECT toStartOfInterval(ts, INTERVAL {bucket_s} SECOND) AS bkt, count() "
+                f"FROM {scratch} GROUP BY bkt ORDER BY bkt")
+            for d in ("srcip", "dstip", "app", "service"):
+                k, rows = top_by(d); results[k] = rows
+            k, rows = top_by("src_country", extra=" AND src_country!='Reserved' AND NOT match(src_country,'[0-9]')"); results[k] = rows
+            k, rows = top_by("dst_country", extra=" AND dst_country!='Reserved' AND NOT match(dst_country,'[0-9]')"); results[k] = rows
+        finally:
+            try:
+                client.command(f"DROP TABLE IF EXISTS {scratch}")
+            except Exception as e:
+                logger.warning(f"traffic_analytics scratch drop failed: {e}")
+
+        def rows_to_items(rows):
+            return [{"key": str(r[0]), "bytes": int(r[1] or 0), "sessions": int(r[2] or 0)} for r in rows]
+
+        tot = results.get("totals") or []
+        timeline = [{"ts": r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0]), "sessions": int(r[1] or 0)}
+                    for r in (results.get("timeline") or [])]
+        return {
+            "totals": {
+                "bytes": int(tot[0][0]) if tot and tot[0][0] is not None else 0,
+                "sessions": int(tot[0][1]) if tot else 0,
+                "talkers": int(tot[0][2]) if tot else 0,
+            },
+            "bucket_seconds": bucket_s,
+            "timeline": timeline,
+            "top_sources": rows_to_items(results.get("top:srcip") or []),
+            "top_destinations": rows_to_items(results.get("top:dstip") or []),
+            "top_apps": rows_to_items(results.get("top:app") or []),
+            "top_services": rows_to_items(results.get("top:service") or []),
+            "top_src_countries": rows_to_items(results.get("top:src_country") or []),
+            "top_dst_countries": rows_to_items(results.get("top:dst_country") or []),
+        }
 
     # SQL expression to compute /24 subnet from srcip column
     _SUBNET24_EXPR = "if(srcip = '', '', concat(IPv4NumToString(toUInt32(bitAnd(IPv4StringToNumOrDefault(srcip), 4294967040))), '/24'))"

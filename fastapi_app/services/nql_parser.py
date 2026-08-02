@@ -148,6 +148,13 @@ NUMERIC_FIELDS = {"srcport", "dstport", "severity", "facility"}
 # Pipeline command keywords
 PIPELINE_COMMANDS = {"stats", "where", "sort", "limit"}
 
+# Security gates: any identifier interpolated into ORDER BY / HAVING / a field
+# name MUST match this strict SQL-identifier pattern. This blocks injection such
+# as `sort srcip)/**/UNION/**/SELECT ...` or `where x > (select ...)`.
+_IDENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+# HAVING compares aggregates, which are numeric — the RHS must be a number.
+_NUM_RE = re.compile(r'^-?\d+(\.\d+)?$')
+
 
 # ============================================================
 # Tokenizer
@@ -500,13 +507,20 @@ class NQLCompiler:
 
     def _compile_field_term(self, node: FieldTermNode) -> str:
         """Compile a field:value term using ClickHouseClient's field condition builder."""
+        # Gate the field NAME (interpolated raw into SQL by _build_field_condition).
+        # Values are escaped downstream; an unknown identifier just yields a CH
+        # "unknown identifier" error rather than allowing injection.
+        if not _IDENT_RE.match(node.field or ""):
+            raise NQLSyntaxError(f"Invalid field name: '{node.field}'")
         return self.ch._build_field_condition(
             node.field, node.value, node.negated, node.operator
         )
 
     def _compile_text_term(self, node: TextTermNode) -> str:
         """Compile a text search term."""
-        safe_value = node.value.replace("'", "''")
+        # Escape backslash FIRST (ClickHouse interprets \\ in string literals),
+        # then single quotes, so a trailing backslash can't escape the closing '.
+        safe_value = node.value.replace("\\", "\\\\").replace("'", "''")
         if node.negated:
             return f"NOT (message ILIKE '%{safe_value}%' OR raw ILIKE '%{safe_value}%')"
         return f"(message ILIKE '%{safe_value}%' OR raw ILIKE '%{safe_value}%')"
@@ -541,7 +555,10 @@ class NQLCompiler:
                 if func == "count":
                     result["select"] = f"count() as {alias}"
                 else:
+                    if not col or not _IDENT_RE.match(col):
+                        raise NQLSyntaxError(f"{func}() requires a valid column, e.g. {func}(srcport)")
                     result["select"] = f"{func}({col}) as {alias}"
+                result.setdefault("_sortable", set()).add(alias)
                 return
             raise NQLSyntaxError(
                 f"Invalid stats syntax: '{args}'. Expected: stats count by field"
@@ -568,11 +585,24 @@ class NQLCompiler:
                 raise NQLSyntaxError(f"{func}() requires a column name, e.g., {func}(bytes_sent)")
             select_agg = f"{func}({col}) as {alias}"
 
+        if col and not _IDENT_RE.match(col):
+            raise NQLSyntaxError(f"Invalid column in {func}(): '{col}'")
         result["select"] = f"{group_by_str}, {select_agg}"
         result["group_by"] = group_by_str
+        sortable = result.setdefault("_sortable", set())
+        sortable.update(group_fields)
+        sortable.add(alias)
+
+    def _sortable_fields(self, result: Dict) -> set:
+        """Identifiers that may appear in ORDER BY / HAVING: declared fields,
+        timestamp, and any aggregate aliases/group-by columns seen so far."""
+        allowed = {f.lower() for f in VALID_FIELDS}
+        allowed.update({"timestamp", "count", "value"})
+        allowed.update(s.lower() for s in result.get("_sortable", set()))
+        return allowed
 
     def _compile_pipeline_where(self, args: str, result: Dict):
-        """Parse: where count > 100"""
+        """Parse: where count > 100  (post-aggregate HAVING on numeric aggregates)"""
         # Simple comparison: field op value
         match = re.match(r'(\w+)\s*(>=|<=|!=|>|<|=)\s*(\S+)', args.strip())
         if not match:
@@ -582,19 +612,28 @@ class NQLCompiler:
         op = match.group(2)
         value = match.group(3)
 
+        if not _IDENT_RE.match(field_name) or field_name.lower() not in self._sortable_fields(result):
+            raise NQLSyntaxError(f"Invalid field in where: '{field_name}'")
+        if not _NUM_RE.match(value):
+            raise NQLSyntaxError(f"where value must be numeric (HAVING on an aggregate): '{value}'")
+
         result["having"] = f"{field_name} {op} {value}"
 
     def _compile_sort(self, args: str, result: Dict):
         """Parse: sort -count (desc) or sort count (asc) or sort srcip, -count"""
         parts = [p.strip() for p in args.split(',')]
+        allowed = self._sortable_fields(result)
         order_parts = []
         for part in parts:
+            direction = "ASC"
+            field = part
             if part.startswith('-'):
-                order_parts.append(f"{part[1:]} DESC")
+                field, direction = part[1:].strip(), "DESC"
             elif part.startswith('+'):
-                order_parts.append(f"{part[1:]} ASC")
-            else:
-                order_parts.append(f"{part} ASC")
+                field, direction = part[1:].strip(), "ASC"
+            if not _IDENT_RE.match(field) or field.lower() not in allowed:
+                raise NQLSyntaxError(f"Invalid sort field: '{field}'")
+            order_parts.append(f"{field} {direction}")
         result["order_by"] = ", ".join(order_parts)
 
     def _compile_limit(self, args: str, result: Dict):

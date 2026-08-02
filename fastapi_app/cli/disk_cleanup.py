@@ -20,14 +20,14 @@ from typing import Dict, List, Tuple, Optional
 
 import clickhouse_connect
 
-# Configure logging
+# Log to stdout only. The systemd unit already redirects stdout/stderr to
+# logs/disk_cleanup.log (StandardOutput=append:). The previous code hardcoded a
+# stale /home/net/zentryc/... path AND opened a FileHandler on the same file
+# systemd writes as root, which crashed this script at import on every run.
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/home/net/zentryc/logs/disk_cleanup.log', mode='a')
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 

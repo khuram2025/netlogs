@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Zentryc - Traffic Analytics{% endblock %}
+{% block page_title %}Traffic Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ta-page { padding: 4px 0 24px; }
+    .ta-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .ta-toolbar .ta-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted,#94a3b8); }
+    .ta-range { display:flex; gap:4px; }
+    .ta-range button {
+        background:var(--bg-deep,#0d1117); color:var(--text-muted,#94a3b8); border:1px solid var(--border-default,#30363d);
+        border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; font-family:var(--font-mono,monospace);
+    }
+    .ta-range button.active { background:var(--accent-blue,#1f6feb); color:#fff; border-color:var(--accent-blue,#1f6feb); }
+    .ta-updated { margin-left:auto; font-size:11px; color:var(--text-ghost,#6e7681); font-family:var(--font-mono,monospace); }
+    .ta-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+    .ta-card { background:var(--bg-surface,#161b22); border:1px solid var(--border-subtle,#21262d); border-radius:10px; padding:14px 16px; }
+    .ta-card .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-muted,#94a3b8); margin-bottom:6px; }
+    .ta-card .val { font-size:26px; font-weight:700; color:var(--text-bright,#e6edf3); font-family:var(--font-mono,monospace); }
+    .ta-hint { color:var(--text-ghost,#6e7681); cursor:help; font-size:11px; }
+    .ta-panel { background:var(--bg-surface,#161b22); border:1px solid var(--border-subtle,#21262d); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+    .ta-panel h3 { margin:0 0 8px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--text-secondary,#c9d1d9); }
+    .ta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+    .ta-chart { width:100%; height:240px; }
+    .ta-bandwidth-chart { width:100%; height:200px; }
+    .ta-empty { color:var(--text-ghost,#6e7681); font-size:13px; padding:30px; text-align:center; }
+    @media (max-width:1000px){ .ta-cards{grid-template-columns:1fr;} .ta-grid{grid-template-columns:1fr;} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ta-page">
+    <div class="ta-toolbar">
+        <span class="ta-title">Bandwidth · Top Talkers · Geo</span>
+        <div class="ta-range" id="taRange">
+            <button data-range="1h">1H</button>
+            <button data-range="6h">6H</button>
+            <button data-range="24h">24H</button>
+            <button data-range="7d">7D</button>
+        </div>
+        <span class="ta-updated" id="taUpdated"></span>
+    </div>
+
+    <div class="ta-cards">
+        <div class="ta-card"><div class="lbl">Total Volume <span class="ta-hint" title="Sum of per-session byte totals (max sent+recv per session), deduped across a session's logs — the standard FortiView 'bytes' metric.">&#9432;</span></div><div class="val" id="taBytes">—</div></div>
+        <div class="ta-card"><div class="lbl">Sessions</div><div class="val" id="taSessions">—</div></div>
+        <div class="ta-card"><div class="lbl">Unique Talkers</div><div class="val" id="taTalkers">—</div></div>
+    </div>
+
+    <div class="ta-panel">
+        <h3>Sessions over time</h3>
+        <div class="ta-bandwidth-chart" id="taBandwidth"></div>
+    </div>
+
+    <div class="ta-grid">
+        <div class="ta-panel"><h3>Top Sources by bandwidth</h3><div class="ta-chart" id="taSrc"></div></div>
+        <div class="ta-panel"><h3>Top Destinations by bandwidth</h3><div class="ta-chart" id="taDst"></div></div>
+        <div class="ta-panel"><h3>Top Applications</h3><div class="ta-chart" id="taApp"></div></div>
+        <div class="ta-panel"><h3>Top Services</h3><div class="ta-chart" id="taSvc"></div></div>
+        <div class="ta-panel"><h3>Source Countries</h3><div class="ta-chart" id="taSrcCtry"></div></div>
+        <div class="ta-panel"><h3>Destination Countries</h3><div class="ta-chart" id="taDstCtry"></div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
+<script>
+(function(){
+    let range = '{{ current_time_range }}' || '24h';
+    const charts = {};
+    function chart(id){ if(!charts[id]){ charts[id]=echarts.init(document.getElementById(id), null, {renderer:'canvas'}); } return charts[id]; }
+    function fmtBytes(n){ n=Number(n)||0; const u=['B','KB','MB','GB','TB','PB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return n.toFixed(i?1:0)+' '+u[i]; }
+    function fmtNum(n){ return (Number(n)||0).toLocaleString(); }
+    const AX = { color:'#6e7681', fontSize:10 };
+    const SPLIT = { lineStyle:{ color:'#21262d' } };
+    const EMPTY = (label)=>({title:{text:label||'No data in range',left:'center',top:'middle',textStyle:{color:'#6e7681',fontSize:12,fontWeight:400}}});
+    function barH(id, items, color){
+        const c = chart(id);
+        if(!items || !items.length){ c.clear(); c.setOption(EMPTY()); return; }
+        const data = items.slice().reverse();
+        c.setOption({
+            grid:{left:4,right:74,top:6,bottom:6,containLabel:true},
+            tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'#161b22',borderColor:'#30363d',textStyle:{color:'#e6edf3',fontSize:11},
+                formatter:(p)=>{const i=data[p[0].dataIndex]; return '<b>'+i.key+'</b><br>'+fmtBytes(i.bytes)+' &middot; '+(i.sessions||0).toLocaleString()+' sessions';}},
+            xAxis:{type:'value',axisLabel:{...AX,formatter:fmtBytes},splitLine:SPLIT,axisLine:{show:false}},
+            yAxis:{type:'category',data:data.map(d=>d.key),axisLabel:{...AX,width:140,overflow:'truncate'},axisLine:{lineStyle:{color:'#30363d'}}},
+            series:[{type:'bar',data:data.map(d=>d.bytes),itemStyle:{color,borderRadius:[0,3,3,0]},barWidth:'64%',
+                label:{show:true,position:'right',formatter:(p)=>fmtBytes(p.value),color:'#8b949e',fontSize:10}}]
+        }, true);
+    }
+    function compactNum(n){ n=Number(n)||0; if(n>=1e6) return (n/1e6).toFixed(1)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'k'; return String(n); }
+    function area(id, tl){
+        const c = chart(id);
+        if(!tl || !tl.length){ c.clear(); c.setOption(EMPTY()); return; }
+        c.setOption({
+            grid:{left:8,right:14,top:10,bottom:18,containLabel:true},
+            tooltip:{trigger:'axis',backgroundColor:'#161b22',borderColor:'#30363d',textStyle:{color:'#e6edf3',fontSize:11},
+                formatter:(p)=>new Date(p[0].axisValue).toLocaleString()+'<br><b>'+(p[0].value||0).toLocaleString()+'</b> sessions'},
+            xAxis:{type:'category',data:tl.map(d=>d.ts),boundaryGap:false,axisLabel:{...AX,formatter:(v)=>{const t=new Date(v);return ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);}},axisLine:{lineStyle:{color:'#30363d'}}},
+            yAxis:{type:'value',axisLabel:{...AX,formatter:compactNum},splitLine:SPLIT},
+            series:[{type:'line',smooth:true,showSymbol:false,data:tl.map(d=>d.sessions),
+                lineStyle:{color:'#1f6feb',width:2},
+                areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(31,111,235,0.35)'},{offset:1,color:'rgba(31,111,235,0.02)'}])}}]
+        }, true);
+    }
+    function load(){
+        document.getElementById('taUpdated').textContent = 'loading…';
+        fetch('/api/analytics/traffic?time_range='+encodeURIComponent(range), {headers:{'Accept':'application/json'}})
+          .then(r=>r.json()).then(d=>{
+            document.getElementById('taBytes').textContent = fmtBytes(d.totals.bytes);
+            document.getElementById('taSessions').textContent = fmtNum(d.totals.sessions);
+            document.getElementById('taTalkers').textContent = fmtNum(d.totals.talkers);
+            area('taBandwidth', d.timeline);
+            barH('taSrc', d.top_sources, '#1f6feb');
+            barH('taDst', d.top_destinations, '#3fb950');
+            barH('taApp', d.top_apps, '#a371f7');
+            barH('taSvc', d.top_services, '#db61a2');
+            barH('taSrcCtry', d.top_src_countries, '#d29922');
+            barH('taDstCtry', d.top_dst_countries, '#1f9b9b');
+            document.getElementById('taUpdated').textContent = 'updated ' + new Date().toLocaleTimeString();
+          }).catch(()=>{ document.getElementById('taUpdated').textContent = 'failed to load'; });
+    }
+    function setRange(r){
+        range = r;
+        document.querySelectorAll('#taRange button').forEach(b=>b.classList.toggle('active', b.dataset.range===r));
+        load();
+    }
+    document.getElementById('taRange').addEventListener('click', (e)=>{ const b=e.target.closest('button'); if(b) setRange(b.dataset.range); });
+    window.addEventListener('resize', ()=>Object.values(charts).forEach(c=>c.resize()));
+    setRange(range);
+})();
+</script>
+{% endblock %}

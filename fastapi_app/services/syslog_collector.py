@@ -169,6 +169,14 @@ class MetricsCollector:
 
 PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 
+# Palo Alto emits the L4 protocol as a NAME (tcp/udp/...); FortiGate sends the
+# numeric IANA value. Map names → IANA protocol numbers so the dedicated `proto`
+# column is consistent across vendors (PA rows were 100% proto=0 before this).
+_PROTO_NAME_TO_NUM = {
+    'icmp': 1, 'igmp': 2, 'tcp': 6, 'udp': 17, 'gre': 47, 'esp': 50,
+    'ah': 51, 'icmpv6': 58, 'ipv6-icmp': 58, 'ospf': 89, 'sctp': 132,
+}
+
 # Regex to decompose PA threat_id: "HTTP Trojan.Gen(30001)" → name + numeric id
 _THREAT_ID_RE = re.compile(r'^(.*?)\((\d+)\)\s*$')
 
@@ -215,7 +223,8 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         try:
             proto = int(proto_str) if proto_str else 0
         except (ValueError, TypeError):
-            proto = 0
+            # Palo Alto sends protocol as a name (tcp/udp/icmp) — map to IANA number.
+            proto = _PROTO_NAME_TO_NUM.get(str(proto_str).strip().lower(), 0)
 
         log_type = parsed_data.get('log_type', '')
         if not log_type:
@@ -224,12 +233,20 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
             if fgt_type:
                 log_type = f"{fgt_type}/{fgt_subtype}" if fgt_subtype else fgt_type
 
-        application = parsed_data.get('app') or parsed_data.get('application', '')
+        # L7 application: prefer the identified app, then the application-control
+        # category. FortiGate traffic logs rarely carry `app` (88%+ empty) but
+        # almost always carry `appcat` — fall back to it (the url_logs builder
+        # already does). L4 `service` is intentionally NOT folded in here so the
+        # column stays semantically "application", not "service".
+        application = (parsed_data.get('app') or parsed_data.get('application')
+                       or parsed_data.get('appcat', ''))
         src_zone = parsed_data.get('src_zone') or parsed_data.get('srczone') or parsed_data.get('srcintf', '')
         dst_zone = parsed_data.get('dst_zone') or parsed_data.get('dstzone') or parsed_data.get('dstintf', '')
         session_end_reason = parsed_data.get('session_end_reason', '')
         threat_id = parsed_data.get('threat_id', '')
-        vdom = parsed_data.get('vd', '') if parsed_data else ''
+        # FortiGate uses `vd` (vdom); Palo Alto uses `vsys`/`vsys_name`.
+        vdom = (parsed_data.get('vd') or parsed_data.get('vsys')
+                or parsed_data.get('vsys_name', '')) if parsed_data else ''
 
         return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto,
                 action, policyname, log_type, application, src_zone, dst_zone,
@@ -908,6 +925,8 @@ def flush_to_clickhouse(
                 'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
                 'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
                 'threat_id', 'vdom', 'parsed_data', 'log_time',
+                'sent_bytes', 'recv_bytes', 'src_country', 'dst_country',
+                'src_intf', 'dst_intf', 'service', 'session_id', 'duration', 'src_user',
             ])
             return True, attempt
         except Exception as e:
@@ -1075,10 +1094,28 @@ class SyslogCollector:
             # ingest time when parsing fails or the result is implausible.
             event_time, _src = parse_event_time(parsed_data, dev_tz, default_src_tz, now)
 
+            # Promote high-value fields from the parsed_data Map to dedicated
+            # columns so bandwidth / geo / session analytics don't need a Map
+            # scan. Normalized names work for both vendors (PA bytes_sent→sentbyte,
+            # src_location→srccountry, inbound_if→srcintf etc. via FIELD_NORMALIZATION).
+            pd = parsed_data or {}
+            sent_bytes = _safe_uint(pd.get('sentbyte'), 0)
+            recv_bytes = _safe_uint(pd.get('rcvdbyte'), 0)
+            src_country = pd.get('srccountry', '')
+            dst_country = pd.get('dstcountry', '')
+            src_intf = pd.get('srcintf', '')
+            dst_intf = pd.get('dstintf', '')
+            service = pd.get('service', '')
+            session_id = _safe_uint(pd.get('sessionid'), 0)
+            duration = _safe_uint(pd.get('duration'), 0)
+            src_user = pd.get('srcuser') or pd.get('user') or pd.get('unauthuser', '')
+
             logs.append((event_time, now, client_ip, facility, severity, message, raw,
                          srcip, dstip, srcport, dstport, proto, action, policyname,
                          log_type, application, src_zone, dst_zone, session_end_reason,
-                         threat_id, vdom, parsed_data, log_time))
+                         threat_id, vdom, parsed_data, log_time,
+                         sent_bytes, recv_bytes, src_country, dst_country,
+                         src_intf, dst_intf, service, session_id, duration, src_user))
 
             # Accumulate device stats
             if client_ip not in self._device_stats:
@@ -1128,34 +1165,40 @@ class SyslogCollector:
                 logger.info(f"Flushed {len(logs):,} logs (queue: {len(self._raw_queue):,})")
 
             # ── Dual-write: specialized tables ──
-            # log tuple index 13 = log_type, index 20 = parsed_data
+            # log tuple layout (see logs.append above):
+            #   [0]=event_time [1]=ingest_time [2]=device_ip(client_ip) ...
+            #   [13]=policyname [14]=log_type ... [20]=vdom [21]=parsed_data
+            # build_*_row(timestamp, device_ip, parsed_data) — pass event_time,
+            # client_ip and the parsed_data dict (NOT vdom).
             threat_rows = []
             url_rows = []
             dns_rows = []
             for log in logs:
-                log_type_val = (log[13] or '').lower()
+                log_type_val = (log[14] or '').lower()
+                pd = log[21]
                 try:
                     if log_type_val == 'threat':
-                        row = build_threat_row(log[0], log[1], log[20])
+                        row = build_threat_row(log[0], log[2], pd)
                         threat_rows.append(row)
                         # PA URL subtype → url_logs, spyware subtype → dns_logs
-                        subtype = (log[20].get('subtype') or '').lower()
+                        subtype = (pd.get('subtype') or '').lower()
                         if subtype == 'url':
-                            url_row = build_paloalto_url_row(log[0], log[1], log[20])
+                            url_row = build_paloalto_url_row(log[0], log[2], pd)
                             url_rows.append(url_row)
                         elif subtype == 'spyware':
-                            dns_row = build_paloalto_dns_row(log[0], log[1], log[20])
+                            dns_row = build_paloalto_dns_row(log[0], log[2], pd)
                             dns_rows.append(dns_row)
                     elif log_type_val == 'utm/webfilter':
-                        url_row = build_fortinet_url_row(log[0], log[1], log[20])
+                        url_row = build_fortinet_url_row(log[0], log[2], pd)
                         url_rows.append(url_row)
                     elif log_type_val == 'utm/dns':
-                        dns_row = build_fortinet_dns_row(log[0], log[1], log[20])
+                        dns_row = build_fortinet_dns_row(log[0], log[2], pd)
                         dns_rows.append(dns_row)
                     elif log_type_val == 'windows-dns':
-                        dns_row = build_windows_dns_row(log[0], log[1], log[20])
+                        dns_row = build_windows_dns_row(log[0], log[2], pd)
                         dns_rows.append(dns_row)
                 except Exception as e:
+                    self.metrics.fanout_errors = getattr(self.metrics, 'fanout_errors', 0) + 1
                     logger.debug(f"Row build error ({log_type_val}): {e}")
 
             if threat_rows:
