@@ -167,6 +167,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"ClickHouse setup warning: {e}")
 
+    # Warm the search-bar field catalog off the request path, so the first
+    # keystroke in the Log Explorer never waits on field discovery.
+    try:
+        import threading as _threading
+        from .services.nql_schema import warm_field_cache
+        _threading.Thread(target=warm_field_cache, name="nql-field-warmup",
+                          daemon=True).start()
+    except Exception as e:
+        logger.warning(f"NQL field cache warm-up skipped: {e}")
+
     # Initialize Palo Alto threat/URL dedicated table + materialized views
     try:
         ClickHouseClient.ensure_pa_threat_table()

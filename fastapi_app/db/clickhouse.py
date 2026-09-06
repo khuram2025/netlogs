@@ -1140,6 +1140,28 @@ class ClickHouseClient:
         'dst_port': 'dstport',
     }
 
+    # Typed native columns the collector promotes out of the parsed_data Map.
+    # Filtering them directly is far cheaper than a Map lookup, and both vendors
+    # feed them through FIELD_NORMALIZATION so the vendor aliases are equivalent.
+    _NATIVE_NUMERIC_COLUMNS = {
+        'sent_bytes': 'sent_bytes', 'sentbyte': 'sent_bytes', 'bytes_sent': 'sent_bytes',
+        'recv_bytes': 'recv_bytes', 'rcvdbyte': 'recv_bytes', 'bytes_recv': 'recv_bytes',
+        'session_id': 'session_id', 'sessionid': 'session_id',
+        'duration': 'duration', 'elapsed_time': 'duration',
+        'proto': 'proto', 'protocol': 'proto',
+        'facility': 'facility',
+    }
+
+    _NATIVE_STRING_COLUMNS = {
+        'src_country': 'src_country', 'srccountry': 'src_country', 'src_location': 'src_country',
+        'dst_country': 'dst_country', 'dstcountry': 'dst_country', 'dst_location': 'dst_country',
+        'src_intf': 'src_intf', 'srcintf': 'src_intf', 'inbound_if': 'src_intf',
+        'dst_intf': 'dst_intf', 'dstintf': 'dst_intf', 'outbound_if': 'dst_intf',
+        'service': 'service',
+        'src_user': 'src_user', 'srcuser': 'src_user',
+        'vdom': 'vdom', 'vd': 'vdom', 'vsys': 'vdom',
+    }
+
     @classmethod
     def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
         """
@@ -1149,6 +1171,19 @@ class ClickHouseClient:
         """
         if not query_text:
             return []
+
+        # NQL first: pushes every top-level AND-ed condition that touches only
+        # native columns (so it can prune granules through the skip indexes
+        # before wide columns are read). Falls back to the legacy flat parser
+        # only when the text is not valid NQL.
+        try:
+            from ..services.nql_parser import compile_filter, NQLSyntaxError
+            _, prewhere = compile_filter(query_text)
+            return list(prewhere)
+        except NQLSyntaxError:
+            pass
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"NQL prewhere compile failed, using legacy parser: {e}")
 
         terms = cls._parse_advanced_query(query_text)
         conditions = []
@@ -1386,6 +1421,54 @@ class ClickHouseClient:
                 return f"{col} = {num_val}"
             except ValueError:
                 pass  # Fall through to field_mapping for non-numeric values
+
+        # ── Native string columns (bytes/geo/interface/user/vdom) ──
+        if field in cls._NATIVE_STRING_COLUMNS:
+            col = cls._NATIVE_STRING_COLUMNS[field]
+
+            if '|' in value and operator == '=':
+                or_values = [v.strip().replace("'", "''") for v in value.split('|')]
+                combined = "(" + " OR ".join(f"lower({col}) = lower('{v}')" for v in or_values) + ")"
+                return f"NOT {combined}" if negated else combined
+
+            if operator == '~':
+                like_value = safe_value.replace('*', '%')
+                if '%' not in like_value:
+                    like_value = f"%{like_value}%"
+                return f"{col} NOT ILIKE '{like_value}'" if negated else f"{col} ILIKE '{like_value}'"
+
+            if operator in ('>', '>=', '<', '<='):
+                return f"{col} {operator} '{safe_value}'"
+
+            if negated:
+                return f"lower({col}) != lower('{safe_value}')"
+            return f"lower({col}) = lower('{safe_value}')"
+
+        # ── Native numeric columns (UInt8/16/32/64) ──
+        if field in cls._NATIVE_NUMERIC_COLUMNS:
+            col = cls._NATIVE_NUMERIC_COLUMNS[field]
+
+            # Range: sent_bytes:1000-5000
+            if operator == '=' and re.match(r'^\d+-\d+$', value):
+                lo, hi = value.split('-')
+                cond = f"({col} >= {lo} AND {col} <= {hi})"
+                return f"NOT {cond}" if negated else cond
+
+            # OR list: proto:6|17
+            if operator == '=' and '|' in value:
+                nums = [v.strip() for v in value.split('|') if v.strip().isdigit()]
+                if nums:
+                    cond = "(" + " OR ".join(f"{col} = {n}" for n in nums) + ")"
+                    return f"NOT {cond}" if negated else cond
+
+            try:
+                num_val = int(value)
+            except ValueError:
+                pass
+            else:
+                if operator in ('>', '>=', '<', '<='):
+                    return f"{col} {operator} {num_val}"
+                return f"{col} != {num_val}" if negated else f"{col} = {num_val}"
 
         # Field mapping for normalized and vendor-specific fields
         # Uses indexed columns where available, with fallback to parsed_data
@@ -1702,6 +1785,24 @@ class ClickHouseClient:
             where_clauses.append(f"timestamp <= '{end_str}'")
 
         if query_text:
+            # Full NQL: boolean AND/OR/NOT, parentheses, quoted values, any
+            # parsed_data field. Pipeline stages (| stats ...) are ignored here —
+            # only the filter expression contributes to WHERE.
+            nql_where = None
+            try:
+                from ..services.nql_parser import compile_filter, NQLSyntaxError
+                nql_where, _ = compile_filter(query_text)
+            except NQLSyntaxError:
+                nql_where = None
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"NQL where compile failed, using legacy parser: {e}")
+                nql_where = None
+
+            if nql_where is not None:
+                if nql_where != "1=1":
+                    where_clauses.append(nql_where)
+                return " AND ".join(where_clauses)
+
             terms = cls._parse_advanced_query(query_text)
 
             if terms:
@@ -1752,10 +1853,15 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
         default_hours: int = 1,
-        include_raw: bool = False
+        include_raw: bool = False,
+        order_by: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search logs with advanced filtering. Defaults to last 1 hour for performance.
+
+        `order_by` (already-validated SQL such as "dstport DESC") replaces the
+        default newest-first ordering. It disables progressive time narrowing,
+        which assumes the newest rows are wanted, so the full window is sorted.
 
         Uses progressive time narrowing: tries a narrow recent window first to avoid
         scanning hundreds of millions of rows when only the most recent N are needed.
@@ -1818,9 +1924,11 @@ class ClickHouseClient:
 
         chosen_time_filter = user_time_filter  # fallback to full range
 
+        custom_order = bool(order_by) and order_by.strip().lower() not in ("timestamp desc",)
+
         # For very deep offsets (>1M rows), narrow windows are too small.
         # Cursor pagination is the proper fix; for now, fall through.
-        if required_rows < 1_000_000:
+        if required_rows < 1_000_000 and not custom_order:
             # Determine the anchor for narrow windows.
             # - If end_time is None or in the future, use now() (no probe needed).
             # - If end_time is in the past (custom historical range), probe for
@@ -1850,8 +1958,20 @@ class ClickHouseClient:
                         f"'{max_ts.strftime('%Y-%m-%d %H:%M:%S.%f')}', 3)"
                     )
 
+            # A narrow window wider than the requested range can't prune
+            # anything — every probe past that point re-scans the full range,
+            # which for a filter with few matches multiplies the cost ~7x.
+            range_seconds = None
+            if user_start is not None:
+                range_end = user_end if user_end is not None else now_utc
+                range_seconds = max(0, (range_end - user_start).total_seconds())
+            elif user_end is None:
+                range_seconds = default_hours * 3600
+
             # Progressive narrowing
             for secs in narrow_window_seconds:
+                if range_seconds is not None and secs >= range_seconds:
+                    break                      # fall back to the full range
                 narrow_filter = (
                     f"timestamp > {anchor_sql} - INTERVAL {secs} SECOND "
                     f"AND timestamp <= {anchor_sql}"
@@ -1873,17 +1993,67 @@ class ClickHouseClient:
         prewhere_parts = [chosen_time_filter] + list(indexed_prewhere)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
+        order_sql = order_by.strip() if custom_order else "timestamp DESC"
+        settings = " SETTINGS max_execution_time = 30" if custom_order else ""
         query = f"""
         SELECT {columns}
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
-        ORDER BY timestamp DESC
-        LIMIT {limit} OFFSET {offset}
+        ORDER BY {order_sql}
+        LIMIT {limit} OFFSET {offset}{settings}
         """
 
         result = client.query(query).named_results()
         return list(result)
+
+    # Upper bound on aggregate rows returned to the UI (the pipeline `limit`
+    # may ask for more, but a page can't usefully render more than this).
+    NQL_AGG_MAX_ROWS = 2000
+
+    @classmethod
+    def run_nql_aggregate(
+        cls,
+        compiled: Dict[str, Any],
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        query_text: Optional[str] = None,
+        default_hours: int = 1,
+        default_limit: int = 100,
+        max_execution_time: int = 30,
+    ) -> Dict[str, Any]:
+        """Execute a compiled `| stats ...` pipeline over the same filter set the
+        log table uses (time window, device, severity, NQL filter).
+
+        Returns {"columns": [...], "rows": [{col: value}], "sql": str}.
+        With no explicit `sort`, rows come back largest-aggregate first, which
+        is what a "top N" question wants."""
+        select_clause = compiled.get("select") or "count() as count"
+        group_by = f"GROUP BY {compiled['group_by']}" if compiled.get("group_by") else ""
+        having = f"HAVING {compiled['having']}" if compiled.get("having") else ""
+        order_by = compiled.get("order_by")
+        if not order_by:
+            # Last SELECT item is the aggregate alias ("... as count").
+            m = re.search(r'\bas\s+(\w+)\s*$', select_clause.strip(), re.IGNORECASE)
+            order_by = f"{m.group(1)} DESC" if m else None
+        order_sql = f"ORDER BY {order_by}" if order_by else ""
+        limit_val = min(int(compiled.get("limit") or default_limit), cls.NQL_AGG_MAX_ROWS)
+
+        prewhere_clause, where_sql = cls._count_prewhere_where(
+            device_ips, severities, start_time, end_time, query_text, None, default_hours)
+
+        sql = (
+            f"SELECT {select_clause} FROM syslogs "
+            f"PREWHERE {prewhere_clause} WHERE {where_sql} "
+            f"{group_by} {having} {order_sql} LIMIT {limit_val} "
+            f"SETTINGS max_execution_time = {int(max_execution_time)}"
+        )
+        result = cls.get_client().query(sql)
+        columns = list(result.column_names)
+        rows = [dict(zip(columns, r)) for r in result.result_rows]
+        return {"columns": columns, "rows": rows, "sql": sql}
 
     @classmethod
     def count_logs(

@@ -38,6 +38,11 @@ logger = logging.getLogger(__name__)
 # Thread pool for running blocking ClickHouse queries in parallel
 _executor = ThreadPoolExecutor(max_workers=8)
 
+# Separate, smaller pool for search-bar autocomplete. Suggestions fire on every
+# keystroke, so they get their own lane — a burst of typing must never starve the
+# actual log queries.
+_suggest_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="nql-suggest")
+
 # Upper bound for exact log counts. Past this the pager shows "100,000+" instead
 # of forcing a multi-second full scan to get an exact (and rarely useful) total.
 COUNT_CAP = 100000
@@ -1221,15 +1226,6 @@ async def log_list(
         if dst_zone_clean:
             search_parts.append(_fmt("dst_zone", dst_zone_clean))
 
-        # Combine with existing q parameter if present
-        search_query = q or ""
-        if search_parts:
-            direct_filters = " ".join(search_parts)
-            if search_query:
-                search_query = f"{search_query} {direct_filters}"
-            else:
-                search_query = direct_filters
-
         if action:
             # Map action filter to search terms using pipe for OR logic
             action_terms = {
@@ -1239,10 +1235,34 @@ async def log_list(
                 'timeout': 'action:timeout',
             }
             if action in action_terms:
-                if search_query:
-                    search_query = f"{search_query} {action_terms[action]}"
-                else:
-                    search_query = action_terms[action]
+                search_parts.append(action_terms[action])
+
+        # The NQL bar (`q`) is the primary search. Toolbar/sidebar fields are
+        # AND-ed onto it with the user's expression parenthesised, so an OR in the
+        # bar keeps its meaning. Any `| stats ...` pipeline in `q` stays at the end.
+        from ..services.nql_parser import compose_nql, compile_nql, NQLSyntaxError
+        search_query = compose_nql(q or "", search_parts)
+
+        # Compile once up front: a syntax error renders as an inline message
+        # instead of a 500, and a `| stats` pipeline switches the main table
+        # into aggregate mode.
+        nql_error: Optional[str] = None
+        nql_compiled: Optional[dict] = None
+        if search_query:
+            try:
+                nql_compiled = compile_nql(search_query)
+            except NQLSyntaxError as e:
+                nql_error = str(e)
+        nql_mode = 'aggregate' if (nql_compiled and nql_compiled.get('is_aggregate')) else 'logs'
+        nql_order_by = None
+        nql_limit = None
+        if nql_compiled and nql_mode == 'logs':
+            nql_order_by = nql_compiled.get('order_by') or None
+            nql_limit = nql_compiled.get('limit') or None
+            if nql_limit:
+                # `| limit N` on a log search caps the result set, not the page.
+                per_page_num = max(1, min(per_page_num, nql_limit))
+                offset = (page_num - 1) * per_page_num
 
         # Determine if aggregate view
         is_aggregate = view and view.strip().lower() == 'aggregate'
@@ -1261,8 +1281,47 @@ async def log_list(
 
         # Run all ClickHouse queries in parallel for better performance
         loop = asyncio.get_event_loop()
+        query_started = time.perf_counter()
+        nql_columns: List[str] = []
+        nql_rows: List[dict] = []
 
-        if is_aggregate:
+        if nql_error:
+            # Nothing to run — the page shows the syntax error where the query is.
+            devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            logs_or_agg, total, stats = [], 0, {}
+            is_aggregate = False
+        elif nql_mode == 'aggregate':
+            is_aggregate = False   # the NQL result table replaces the log table
+            agg_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.run_nql_aggregate(
+                    nql_compiled,
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query,
+                    default_limit=per_page_num,
+                )
+            )
+            stats_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.get_log_stats_summary(
+                    device_ips=device_ips, start_time=start_time, end_time=end_time,
+                    query_text=search_query,
+                )
+            )
+            devices_future = loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            try:
+                agg_result, stats, devices = await asyncio.gather(agg_future, stats_future, devices_future)
+                nql_columns = agg_result["columns"]
+                nql_rows = [{k: _serialize_value(v) for k, v in r.items()} for r in agg_result["rows"]]
+            except Exception as e:
+                logger.error(f"NQL aggregate failed for {search_query!r}: {e}")
+                nql_error = _friendly_ch_error(e)
+                stats, devices = {}, await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            logs_or_agg, total = [], len(nql_rows)
+        elif is_aggregate:
             logs_future = loop.run_in_executor(
                 _executor,
                 lambda: ClickHouseClient.aggregate_logs(
@@ -1301,6 +1360,7 @@ async def log_list(
                     start_time=start_time,
                     end_time=end_time,
                     query_text=search_query if search_query else None,
+                    order_by=nql_order_by,
                 )
             )
 
@@ -1316,25 +1376,41 @@ async def log_list(
                 )
             )
 
-        stats_future = loop.run_in_executor(
-            _executor,
-            lambda: ClickHouseClient.get_log_stats_summary(
-                device_ips=device_ips,
-                start_time=start_time,
-                end_time=end_time,
-                query_text=search_query if search_query else None,
+        if not nql_error and nql_mode != 'aggregate':
+            stats_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.get_log_stats_summary(
+                    device_ips=device_ips,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                )
             )
-        )
 
-        devices_future = loop.run_in_executor(
-            _executor,
-            ClickHouseClient.get_distinct_devices
-        )
+            devices_future = loop.run_in_executor(
+                _executor,
+                ClickHouseClient.get_distinct_devices
+            )
 
-        # Wait for all queries to complete
-        logs_or_agg, total, stats, devices = await asyncio.gather(
-            logs_future, total_future, stats_future, devices_future
-        )
+            # Wait for all queries to complete
+            try:
+                logs_or_agg, total, stats, devices = await asyncio.gather(
+                    logs_future, total_future, stats_future, devices_future
+                )
+            except Exception as e:
+                if not search_query:
+                    raise
+                # A query that parsed but ClickHouse rejected (e.g. an aggregate
+                # over a non-numeric field) is a user error, not a server fault.
+                logger.error(f"NQL log query failed for {search_query!r}: {e}")
+                nql_error = _friendly_ch_error(e)
+                logs_or_agg, total, stats = [], 0, {}
+                devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+
+            if nql_limit and total >= 0:
+                total = min(total, nql_limit)
+
+        nql_elapsed_ms = int((time.perf_counter() - query_started) * 1000)
 
         # Format count display. count_logs returns -1 when the exact count timed
         # out (a non-indexed Map-column filter over a wide window). In that case
@@ -1400,7 +1476,23 @@ async def log_list(
             "group_fields": group_fields,
             "is_subnet_rollup": is_subnet_rollup,
             "error": None,
+            # NQL search state
+            "nql_mode": nql_mode,
+            "nql_error": nql_error,
+            "nql_columns": nql_columns,
+            "nql_rows": nql_rows,
+            "nql_group_fields": _nql_group_fields(nql_compiled) if nql_mode == 'aggregate' else [],
+            "nql_table": _nql_table(nql_columns, nql_rows, _nql_group_fields(nql_compiled)) if nql_mode == 'aggregate' else None,
+            "nql_effective_query": search_query,
+            "nql_elapsed_ms": nql_elapsed_ms,
+            "nql_sorted": bool(nql_order_by),
+            "nql_limit": nql_limit,
         }
+
+        if nql_mode == 'aggregate':
+            context["total_display"] = f"{len(nql_rows):,}"
+            context["total_pages"] = 1
+            context["has_prev"] = context["has_next"] = False
 
         if is_aggregate:
             # Tier 1 aggregate enrichment:
@@ -1597,7 +1689,75 @@ async def log_list(
             "is_subnet_rollup": False,
             "agg_rows": [],
             "error": str(e),
+            "nql_mode": "logs",
+            "nql_error": None,
+            "nql_columns": [],
+            "nql_rows": [],
+            "nql_group_fields": [],
+            "nql_table": None,
+            "nql_effective_query": q or "",
+            "nql_elapsed_ms": 0,
+            "nql_sorted": False,
+            "nql_limit": None,
         })
+
+
+def _friendly_ch_error(e: Exception) -> str:
+    """Turn a ClickHouse exception into a short, non-leaky message for the
+    search bar. The full error goes to the log."""
+    text = str(e)
+    low = text.lower()
+    if "timeout" in low or "max_execution_time" in low:
+        return "Query timed out — narrow the time range or add a filter on an indexed field (srcip, dstip, action, policyname, dstport)."
+    if "memory" in low:
+        return "Query needs too much memory — group by fewer fields or narrow the time range."
+    if "illegal type" in low or "cannot convert" in low or "no function matches" in low:
+        return "Aggregate function does not fit that field's type — sum/avg/min/max need a numeric field such as sent_bytes, recv_bytes or duration."
+    return "Query could not be executed — check field names and aggregate columns."
+
+
+def _nql_table(columns: List[str], rows: List[dict], group_fields: List[str]) -> dict:
+    """Presentation model for a `| stats` result: which columns are group keys,
+    per-cell display text, and a 0-100 bar width for numeric columns relative
+    to the column maximum (so the table doubles as a bar chart)."""
+    group_set = set(group_fields)
+    cols = []
+    for c in columns:
+        numeric = c not in group_set and all(
+            isinstance(r.get(c), (int, float)) and not isinstance(r.get(c), bool)
+            for r in rows if r.get(c) is not None)
+        cols.append({"name": c, "is_group": c in group_set, "numeric": numeric,
+                     "bytes": numeric and "byte" in c.lower()})
+    maxes = {c["name"]: max((float(r.get(c["name"]) or 0) for r in rows), default=0.0)
+             for c in cols if c["numeric"]}
+    out_rows = []
+    for r in rows:
+        cells = []
+        for c in cols:
+            v = r.get(c["name"])
+            if c["numeric"]:
+                num = float(v or 0)
+                if c["bytes"]:
+                    text = format_bytes(int(num))
+                elif isinstance(v, float) and not num.is_integer():
+                    text = f"{num:,.2f}"
+                else:
+                    text = f"{int(num):,}"
+                mx = maxes.get(c["name"]) or 0
+                pct = round(num / mx * 100, 1) if mx > 0 else 0
+                cells.append({"text": text, "raw": v, "pct": pct})
+            else:
+                text = "" if v is None else str(v)
+                cells.append({"text": text, "raw": text, "pct": None})
+        out_rows.append(cells)
+    return {"columns": cols, "rows": out_rows}
+
+
+def _nql_group_fields(compiled: Optional[dict]) -> List[str]:
+    """Group-by column names of a compiled `| stats ... by a, b` pipeline."""
+    if not compiled or not compiled.get("group_by"):
+        return []
+    return [g.strip() for g in compiled["group_by"].split(",") if g.strip()]
 
 
 @router.get("/logs/detail-panel", response_class=HTMLResponse, name="log_detail_panel")
@@ -4639,111 +4799,120 @@ async def nql_query(request: Request):
     except NQLSyntaxError as e:
         return JSONResponse(status_code=400, content={"detail": str(e), "type": "syntax_error"})
 
-    # Build time filter
-    time_map = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440, "7d": 10080, "30d": 43200}
-    minutes = time_map.get(time_range, 60)
-    time_filter = f"timestamp > now() - INTERVAL {minutes} MINUTE"
+    # Same time semantics as the explorer: an explicit start/end wins, otherwise
+    # a relative window ending now.
+    start_time, end_time = _explorer_time_window(None, data.get("start"), data.get("end"))
+    if start_time is None and end_time is None:
+        start_time = datetime.now(timezone.utc) - timedelta(minutes=_nql_minutes(time_range))
+    device_ips = [data["device"]] if data.get("device") else None
 
     loop = asyncio.get_event_loop()
-
-    def _run_query(sql_text):
-        """Run a ClickHouse query with a fresh client to avoid concurrency issues."""
-        c = ClickHouseClient.get_client()
-        return c.query(sql_text)
-
     try:
         if compiled["is_aggregate"]:
-            # Aggregate query
-            select_clause = compiled["select"] or "count() as count"
-            group_by = f"GROUP BY {compiled['group_by']}" if compiled["group_by"] else ""
-            having = f"HAVING {compiled['having']}" if compiled["having"] else ""
-            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else ""
-            limit_val = compiled["limit"] or per_page
+            result = await loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.run_nql_aggregate(
+                    compiled, device_ips=device_ips, start_time=start_time, end_time=end_time,
+                    query_text=query_text, default_limit=per_page, max_execution_time=20),
+            )
+            rows = [{k: _serialize_value(v) for k, v in r.items()} for r in result["rows"]]
+            return {"type": "aggregate", "columns": result["columns"], "rows": rows,
+                    "total": len(rows), "sql": result["sql"]}
 
-            sql = f"""SELECT {select_clause}
-FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}
-{group_by}
-{having}
-{order_by}
-LIMIT {limit_val}
-SETTINGS max_execution_time=20"""
-
-            result = await loop.run_in_executor(_executor, lambda: _run_query(sql))
-            columns = result.column_names
-            rows = []
-            for row in result.result_rows:
-                rows.append({columns[i]: _serialize_value(row[i]) for i in range(len(columns))})
-
-            return {
-                "type": "aggregate",
-                "columns": columns,
-                "rows": rows,
-                "total": len(rows),
-                "sql": sql,
-            }
-        else:
-            # Regular query
-            offset = (page - 1) * per_page
-            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else "ORDER BY timestamp DESC"
-            limit_val = compiled["limit"] or per_page
-
-            columns_str = ClickHouseClient.LIGHT_COLUMNS
-
-            sql = f"""SELECT {columns_str}
-FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}
-{order_by}
-LIMIT {limit_val} OFFSET {offset}
-SETTINGS max_execution_time=20"""
-
-            # Cap the count: stop scanning at COUNT_CAP+1 rows so an expensive
-            # full-scan filter can't hang the page. Display "100,000+" when capped.
-            COUNT_CAP = 100000
-            count_sql = f"""SELECT count() FROM (
-SELECT 1 FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}
-LIMIT {COUNT_CAP + 1}
-) SETTINGS max_execution_time=20"""
-
-            result_future = loop.run_in_executor(_executor, lambda: list(_run_query(sql).named_results()))
-            count_future = loop.run_in_executor(_executor, lambda: _run_query(count_sql).result_rows[0][0])
-
-            logs, total = await asyncio.gather(result_future, count_future)
-            is_approximate = total > COUNT_CAP
-
-            # Serialize results
-            serialized = []
-            for log in logs:
-                row = {}
-                for k, v in log.items():
-                    row[k] = _serialize_value(v)
-                serialized.append(row)
-
-            return {
-                "type": "logs",
-                "rows": serialized,
-                "total": total,
-                "is_approximate": is_approximate,
-                "page": page,
-                "per_page": per_page,
-                "sql": sql,
-            }
+        limit_cap = compiled.get("limit")
+        if limit_cap:
+            per_page = max(1, min(per_page, limit_cap))
+        offset = (page - 1) * per_page
+        rows_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.search_logs(
+                limit=per_page, offset=offset, device_ips=device_ips,
+                start_time=start_time, end_time=end_time, query_text=query_text,
+                order_by=compiled.get("order_by") or None),
+        )
+        count_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.count_logs(
+                device_ips=device_ips, start_time=start_time, end_time=end_time,
+                query_text=query_text, max_count=COUNT_CAP),
+        )
+        logs, total = await asyncio.gather(rows_future, count_future)
+        is_approximate = total < 0
+        if is_approximate:
+            total = COUNT_CAP
+        if limit_cap:
+            total = min(total, limit_cap)
+        serialized = [{k: _serialize_value(v) for k, v in log.items()} for log in logs]
+        return {"type": "logs", "rows": serialized, "total": total,
+                "is_approximate": is_approximate, "page": page, "per_page": per_page}
 
     except Exception as e:
         logger.error(f"NQL query error: {e}")
         # Do not leak ClickHouse SQL fragments / schema to the client.
-        return JSONResponse(status_code=400, content={"detail": "Query execution error. Check your query syntax."})
+        return JSONResponse(status_code=400, content={"detail": _friendly_ch_error(e)})
 
 
 @router.get("/api/nql/fields", dependencies=[Depends(require_min_role("VIEWER"))])
 async def nql_fields():
     """Return field metadata for NQL autocomplete."""
     from ..services.nql_parser import FIELD_METADATA
-    return {"fields": FIELD_METADATA}
+    return {"fields": dict(FIELD_METADATA)}
+
+
+# Relative time range -> minutes, shared by the suggestion endpoints so value
+# counts reflect the window the explorer is currently showing.
+_NQL_RANGE_MINUTES = {
+    "15m": 15, "30m": 30, "1h": 60, "3h": 180, "6h": 360, "12h": 720,
+    "24h": 1440, "2d": 2880, "7d": 10080, "30d": 43200,
+}
+
+
+def _nql_minutes(time_range: Optional[str]) -> int:
+    if not time_range:
+        return 60
+    tr = time_range.strip().lower()
+    if tr in _NQL_RANGE_MINUTES:
+        return _NQL_RANGE_MINUTES[tr]
+    m = re.match(r'^(\d+)([mhd])$', tr)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)
+        minutes = n * {"m": 1, "h": 60, "d": 1440}[unit]
+        return max(1, min(minutes, 43200))
+    return 60
+
+
+@router.get("/api/nql/suggest", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_suggest(
+    q: str = "",
+    cursor: Optional[int] = None,
+    time_range: str = "1h",
+):
+    """Context-aware completions for the search bar.
+
+    Works out whether the cursor sits on a field name, a value, an operator or a
+    pipeline stage, and returns the matching suggestions — including live values
+    counted from ClickHouse over the current time window."""
+    from ..services.nql_schema import build_suggestions
+
+    minutes = _nql_minutes(time_range)
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            _suggest_executor, lambda: build_suggestions(q or "", cursor, minutes)
+        )
+    except Exception as e:
+        logger.warning(f"NQL suggest failed: {e}")
+        return {"context": "field", "token": "", "replace_start": 0,
+                "replace_end": 0, "suggestions": []}
+    return result
+
+
+@router.get("/api/nql/schema", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_schema():
+    """Full searchable-field reference for the query-help panel."""
+    from ..services.nql_schema import field_catalog
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_suggest_executor, field_catalog)
 
 
 def _serialize_value(v):
@@ -4810,11 +4979,11 @@ def _explorer_search_query(q=None, action=None, log_type=None, application=None,
                            dst_zone=None, session_end_reason=None, dstport=None,
                            srcport=None, src_country=None, dst_country=None, service=None,
                            srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None):
-    """Compose an advanced-query string (field:value terms) parsed by
-    ClickHouseClient._build_where_clause, so facet/histogram refresh on filters."""
+    """Compose an NQL query string (user query + toolbar field:value terms)
+    parsed by ClickHouseClient._build_where_clause, so facets, exports and
+    analytics honor exactly the filters the log table shows."""
+    from ..services.nql_parser import compose_nql
     parts = []
-    if q and q.strip():
-        parts.append(q.strip())
     for field, val, negated in (
         ("action", action, False),
         ("log_type", log_type, False),
@@ -4833,7 +5002,8 @@ def _explorer_search_query(q=None, action=None, log_type=None, application=None,
     ):
         if val is not None and str(val).strip():
             parts.append(_nql_term(field, str(val).strip(), negated))
-    return ' '.join(parts) if parts else None
+    combined = compose_nql(q or "", parts)
+    return combined or None
 
 
 @router.get("/api/logs/facets", dependencies=[Depends(require_min_role("VIEWER"))])
@@ -4886,15 +5056,31 @@ async def logs_export(
             "dst_country", "service", "session_end_reason", "threat_id"]
     fmt = (format or "csv").lower()
 
+    # A `| stats ...` search exports the aggregate table, not raw rows.
+    from ..services.nql_parser import compile_nql, NQLSyntaxError
+    compiled = None
+    if sq:
+        try:
+            compiled = compile_nql(sq)
+        except NQLSyntaxError as e:
+            return JSONResponse(status_code=400, content={"detail": str(e)})
+
     def _run():
+        if compiled and compiled.get("is_aggregate"):
+            res = ClickHouseClient.run_nql_aggregate(
+                compiled, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
+                query_text=sq, default_limit=ClickHouseClient.NQL_AGG_MAX_ROWS,
+                max_execution_time=60)
+            return res["columns"], [tuple(r[c] for c in res["columns"]) for r in res["rows"]]
         prewhere_clause, where_sql = ClickHouseClient._count_prewhere_where(
             device_ips, sev, st, et, sq, None)
+        order = (compiled or {}).get("order_by") or "timestamp DESC"
         sql = (f"SELECT {', '.join(cols)} FROM syslogs PREWHERE {prewhere_clause} "
-               f"WHERE {where_sql} ORDER BY timestamp DESC LIMIT {cap} "
+               f"WHERE {where_sql} ORDER BY {order} LIMIT {cap} "
                f"SETTINGS max_execution_time=60")
-        return ClickHouseClient.get_client().query(sql).result_rows
+        return cols, ClickHouseClient.get_client().query(sql).result_rows
 
-    rows = await asyncio.get_event_loop().run_in_executor(_executor, _run)
+    cols, rows = await asyncio.get_event_loop().run_in_executor(_executor, _run)
 
     if fmt == "json":
         def jgen():

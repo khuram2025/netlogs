@@ -46,6 +46,7 @@ Architecture:
 import re
 import logging
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import List, Optional, Tuple, Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -134,12 +135,17 @@ class NQLQuery:
 # NQL field names (valid fields for the syslogs table)
 # ============================================================
 
+# Native `syslogs` columns. Any other identifier is resolved against the
+# parsed_data map by nql_schema, so this set is a fast-path list, not a
+# whitelist of everything that can be searched.
 VALID_FIELDS = {
     "srcip", "dstip", "srcport", "dstport", "proto", "protocol",
     "action", "severity", "device", "device_ip", "policyname",
     "log_type", "application", "app", "src_zone", "dst_zone",
     "session_end_reason", "threat_id", "message", "raw",
-    "facility", "timestamp",
+    "facility", "timestamp", "vdom", "service", "src_intf", "dst_intf",
+    "src_country", "dst_country", "src_user", "session_id", "duration",
+    "sent_bytes", "recv_bytes", "log_time", "ingest_time",
 }
 
 # Fields that accept numeric comparisons
@@ -191,8 +197,13 @@ class NQLTokenizer:
                         self.tokens.append(Token(TokenType.PIPELINE_ARG, args))
                 else:
                     raise NQLSyntaxError(
-                        f"Unknown pipeline command: '{cmd}'. Valid commands: {', '.join(sorted(PIPELINE_COMMANDS))}"
+                        f"Unknown pipeline command '{cmd}' — use one of: "
+                        f"{', '.join(sorted(PIPELINE_COMMANDS))} (e.g. | stats count by srcip)"
                     )
+            else:
+                raise NQLSyntaxError(
+                    "Expected a pipeline command after '|' — e.g. | stats count by srcip"
+                )
 
         self.tokens.append(Token(TokenType.EOF, ""))
         return self.tokens
@@ -281,11 +292,31 @@ class NQLTokenizer:
                 i += 1
 
             # field:operator?value  or  bare_word
-            term_match = re.match(r'(\w+):(!=|>=|<=|>|<|=|~)?([^\s()]+)', text[i:])
+            # The value may be quoted ("Allow Web Traffic") so it can contain
+            # spaces, parentheses and pipes without breaking the expression.
+            term_match = re.match(
+                r'(\w+):(!=|>=|<=|>|<|=|~)?("(?:[^"\\]|\\.)*"|[^\s()]+)', text[i:]
+            )
+            if not term_match:
+                dangling = re.match(r'(\w+):(!=|>=|<=|>|<|=|~)?(?=[\s()]|$)', text[i:])
+                if dangling:
+                    raise NQLSyntaxError(
+                        f"Missing value after '{dangling.group(0)}' — "
+                        f"e.g. {dangling.group(1)}:{dangling.group(2) or ''}<value>"
+                    )
             if term_match:
                 field_name = term_match.group(1).lower()
                 operator = term_match.group(2) or '='
                 value = term_match.group(3)
+                if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                    value = value[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+                elif re.fullmatch(r'[=<>!~]+', value):
+                    # `dstport:>=` — the regex backtracked and took part of the
+                    # operator as the value.
+                    typed = text[i:i + term_match.end()]
+                    raise NQLSyntaxError(
+                        f"Missing value after '{typed}' — e.g. {typed}1024"
+                    )
 
                 if operator == '!=':
                     negated = not negated  # double negation cancels
@@ -360,8 +391,11 @@ class NQLParser:
             pipeline.append(PipelineStage(command=cmd, args=args))
 
         if self.current().type != TokenType.EOF:
+            tok = self.current()
+            if tok.type == TokenType.RPAREN:
+                raise NQLSyntaxError("Unmatched ')' — remove it or add the opening '('")
             raise NQLSyntaxError(
-                f"Unexpected token: '{self.current().value}' at position {self.current().pos}"
+                f"Unexpected '{tok.value}' at position {tok.pos + 1}"
             )
 
         return NQLQuery(filter_ast=filter_ast, pipeline=pipeline)
@@ -380,9 +414,21 @@ class NQLParser:
         left = self._parse_and()
         while self.current().type == TokenType.OR:
             self.advance()
+            self._expect_operand("OR")
             right = self._parse_and()
             left = OrNode(left, right)
         return left
+
+    def _expect_operand(self, keyword: str):
+        """A boolean keyword must be followed by something to combine."""
+        cur = self.current()
+        if cur.type in (TokenType.EOF, TokenType.PIPE, TokenType.RPAREN):
+            raise NQLSyntaxError(
+                f"Incomplete expression — add a condition after {keyword} "
+                f"(e.g. {keyword} action:deny)"
+            )
+        if cur.type in (TokenType.AND, TokenType.OR):
+            raise NQLSyntaxError(f"Unexpected '{cur.value}' right after {keyword}")
 
     def _parse_and(self):
         left = self._parse_not()
@@ -390,6 +436,7 @@ class NQLParser:
             cur = self.current()
             if cur.type == TokenType.AND:
                 self.advance()
+                self._expect_operand("AND")
                 right = self._parse_not()
                 left = AndNode(left, right)
             elif cur.type in (TokenType.FIELD_TERM, TokenType.TEXT_TERM,
@@ -404,7 +451,8 @@ class NQLParser:
     def _parse_not(self):
         if self.current().type == TokenType.NOT:
             self.advance()
-            child = self._parse_primary()
+            self._expect_operand("NOT")
+            child = self._parse_not()          # NOT NOT x, NOT (a OR b)
             return NotNode(child)
         return self._parse_primary()
 
@@ -413,11 +461,11 @@ class NQLParser:
 
         if tok.type == TokenType.LPAREN:
             self.advance()
+            if self.current().type == TokenType.RPAREN:
+                raise NQLSyntaxError("Empty parentheses — put a condition inside ( )")
             node = self._parse_or()
             if self.current().type != TokenType.RPAREN:
-                raise NQLSyntaxError(
-                    f"Expected closing parenthesis, got '{self.current().value}'"
-                )
+                raise NQLSyntaxError("Missing closing ')'")
             self.advance()
             return node
 
@@ -434,9 +482,50 @@ class NQLParser:
             self.advance()
             return TextTermNode(value=tok.value, negated=getattr(tok, '_negated', False))
 
-        raise NQLSyntaxError(
-            f"Unexpected token: '{tok.value}' (type={tok.type}) at position {tok.pos}"
-        )
+        if tok.type == TokenType.RPAREN:
+            raise NQLSyntaxError("Unmatched ')' — remove it or add the opening '('")
+        if tok.type in (TokenType.AND, TokenType.OR):
+            raise NQLSyntaxError(
+                f"'{tok.value}' needs a condition on both sides (e.g. action:deny {tok.value} action:drop)"
+            )
+        if tok.type in (TokenType.EOF, TokenType.PIPE):
+            raise NQLSyntaxError("Incomplete expression — a condition is missing")
+        raise NQLSyntaxError(f"Unexpected '{tok.value}' at position {tok.pos + 1}")
+
+
+# ============================================================
+# Field -> SQL expression helpers (shared with the suggestion engine)
+# ============================================================
+
+# Native numeric columns can be aggregated as-is; everything else lives in the
+# parsed_data string map and has to be cast before sum/avg/min/max.
+_NATIVE_NUMERIC = {
+    "srcport", "dstport", "proto", "severity", "facility",
+    "sent_bytes", "recv_bytes", "session_id", "duration",
+}
+
+
+def _resolve_expr(name: str) -> Optional[str]:
+    """SQL expression for a field usable in SELECT/GROUP BY/ORDER BY, or None if
+    the name isn't a legal identifier."""
+    if not name or not _IDENT_RE.match(name):
+        return None
+    from .nql_schema import field_sql_expr
+    return field_sql_expr(name)
+
+
+def _agg_operand(col: str, numeric: bool = True) -> str:
+    """Operand for an aggregate function. parsed_data values are strings, so
+    numeric aggregates get an explicit cast."""
+    low = (col or "").lower()
+    if low in _NATIVE_NUMERIC:
+        return low
+    expr = _resolve_expr(col)
+    if expr is None:
+        raise NQLSyntaxError(f"Invalid column: '{col}'")
+    if not numeric:
+        return expr
+    return f"toFloat64OrZero({expr})"
 
 
 # ============================================================
@@ -546,56 +635,86 @@ class NQLCompiler:
             args.strip(), re.IGNORECASE
         )
         if not match:
-            # Simple count without group by
-            count_match = re.match(r'(count|sum|avg|min|max|uniq|uniqExact)(?:\((\w*)\))?', args.strip(), re.IGNORECASE)
+            # Simple aggregate without group by — must consume the whole clause
+            # so `stats sum(x) as y, by z` fails loudly instead of dropping `by`.
+            count_match = re.fullmatch(
+                r'(count|sum|avg|min|max|uniq|uniqExact)(?:\((\w*)\))?(?:\s+as\s+(\w+))?',
+                args.strip(), re.IGNORECASE)
             if count_match:
                 func = count_match.group(1).lower()
                 col = count_match.group(2) or ""
-                alias = "value"
+                alias = count_match.group(3) or "value"
+                if not _IDENT_RE.match(alias):
+                    raise NQLSyntaxError(f"Invalid alias: '{alias}'")
                 if func == "count":
                     result["select"] = f"count() as {alias}"
                 else:
                     if not col or not _IDENT_RE.match(col):
                         raise NQLSyntaxError(f"{func}() requires a valid column, e.g. {func}(srcport)")
-                    result["select"] = f"{func}({col}) as {alias}"
+                    numeric = func not in ("uniq", "uniqExact")
+                    result["select"] = f"{func}({_agg_operand(col, numeric)}) as {alias}"
                 result.setdefault("_sortable", set()).add(alias)
                 return
             raise NQLSyntaxError(
-                f"Invalid stats syntax: '{args}'. Expected: stats count by field"
+                f"Invalid stats syntax '{args}' — expected e.g. stats count by srcip "
+                f"or stats sum(sent_bytes) as bytes by srcip, dstip"
             )
 
         func = match.group(1).lower()
         col = match.group(2) or ""
         alias = match.group(3) or func
-        group_fields = [f.strip() for f in match.group(4).split(',')]
+        if not _IDENT_RE.match(alias):
+            raise NQLSyntaxError(f"Invalid alias: '{alias}'")
+        group_fields = [f.strip() for f in match.group(4).split(',') if f.strip()]
+        if not group_fields:
+            raise NQLSyntaxError("stats ... by needs at least one field, e.g. by srcip")
 
-        # Validate group_by fields
+        # Resolve each group-by field to its SQL expression, so grouping works on
+        # native columns AND on any parsed_data key (`stats count by srccountry`).
+        select_groups = []
         for gf in group_fields:
-            if gf.lower() not in VALID_FIELDS and gf != "timestamp":
+            low = gf.lower()
+            expr = _resolve_expr(gf)
+            if expr is None:
                 raise NQLSyntaxError(f"Invalid field in group by: '{gf}'")
-
+            # `toString(col) AS col` would shadow the native column with a
+            # different type (ClickHouse rejects it for DateTime). Group on the
+            # typed column directly — cheaper, and it keeps its natural type.
+            if expr in (low, f"toString({low})"):
+                select_groups.append(low)
+            else:
+                select_groups.append(f"{expr} AS {low}")
+        group_fields = [gf.lower() for gf in group_fields]
         group_by_str = ", ".join(group_fields)
+
+        if col and not _IDENT_RE.match(col):
+            raise NQLSyntaxError(f"Invalid column in {func}(): '{col}'")
 
         if func == "count":
             select_agg = f"count() as {alias}"
         elif func in ("uniq", "uniqExact"):
-            select_agg = f"{func}({col or group_fields[0]}) as {alias}"
+            target = col or group_fields[0]
+            select_agg = f"{func}({_agg_operand(target, numeric=False)}) as {alias}"
         else:
             if not col:
-                raise NQLSyntaxError(f"{func}() requires a column name, e.g., {func}(bytes_sent)")
-            select_agg = f"{func}({col}) as {alias}"
+                raise NQLSyntaxError(f"{func}() requires a column name, e.g., {func}(sent_bytes)")
+            select_agg = f"{func}({_agg_operand(col, numeric=True)}) as {alias}"
 
-        if col and not _IDENT_RE.match(col):
-            raise NQLSyntaxError(f"Invalid column in {func}(): '{col}'")
-        result["select"] = f"{group_by_str}, {select_agg}"
+        result["select"] = f"{', '.join(select_groups)}, {select_agg}"
         result["group_by"] = group_by_str
         sortable = result.setdefault("_sortable", set())
         sortable.update(group_fields)
         sortable.add(alias)
 
     def _sortable_fields(self, result: Dict) -> set:
-        """Identifiers that may appear in ORDER BY / HAVING: declared fields,
-        timestamp, and any aggregate aliases/group-by columns seen so far."""
+        """Identifiers that may appear in ORDER BY / HAVING.
+
+        After a `stats` stage the row set is the aggregate — only its aliases and
+        group-by columns exist. Before one, the raw log columns are available."""
+        if result.get("is_aggregate"):
+            allowed = {"count", "value"}
+            allowed.update(s.lower() for s in result.get("_sortable", set()))
+            return allowed
         allowed = {f.lower() for f in VALID_FIELDS}
         allowed.update({"timestamp", "count", "value"})
         allowed.update(s.lower() for s in result.get("_sortable", set()))
@@ -620,7 +739,11 @@ class NQLCompiler:
         result["having"] = f"{field_name} {op} {value}"
 
     def _compile_sort(self, args: str, result: Dict):
-        """Parse: sort -count (desc) or sort count (asc) or sort srcip, -count"""
+        """Parse: sort -count (desc) or sort count (asc) or sort srcip, -count
+
+        In aggregate queries only the aggregate aliases and group-by columns are
+        sortable. In plain log queries any known field may be sorted, resolving
+        through its SQL expression so parsed_data keys work too."""
         parts = [p.strip() for p in args.split(',')]
         allowed = self._sortable_fields(result)
         order_parts = []
@@ -631,9 +754,20 @@ class NQLCompiler:
                 field, direction = part[1:].strip(), "DESC"
             elif part.startswith('+'):
                 field, direction = part[1:].strip(), "ASC"
-            if not _IDENT_RE.match(field) or field.lower() not in allowed:
+            if not _IDENT_RE.match(field):
                 raise NQLSyntaxError(f"Invalid sort field: '{field}'")
-            order_parts.append(f"{field} {direction}")
+            if field.lower() in allowed:
+                order_parts.append(f"{field.lower()} {direction}")
+                continue
+            if result["is_aggregate"]:
+                raise NQLSyntaxError(
+                    f"Cannot sort by '{field}' — only aggregated columns "
+                    f"({', '.join(sorted(result.get('_sortable', {'count'})))}) are available"
+                )
+            expr = _resolve_expr(field)
+            if expr is None:
+                raise NQLSyntaxError(f"Invalid sort field: '{field}'")
+            order_parts.append(f"{expr} {direction}")
         result["order_by"] = ", ".join(order_parts)
 
     def _compile_limit(self, args: str, result: Dict):
@@ -676,6 +810,77 @@ def parse_nql(query_text: str) -> NQLQuery:
     tokens = tokenizer.tokenize()
     parser = NQLParser(tokens)
     return parser.parse()
+
+
+def split_filter_and_pipeline(query_text: str) -> Tuple[str, str]:
+    """Split a query into its filter expression and its pipeline tail.
+
+    Returns (filter_text, pipeline_text) where pipeline_text is everything after
+    the first pipeline pipe (without the leading '|'), or '' if there is none.
+    A '|' inside a value (action:deny|drop) is not a pipeline separator."""
+    if not query_text or not query_text.strip():
+        return "", ""
+    filter_part, stages = NQLTokenizer(query_text)._split_pipeline(query_text.strip())
+    pipeline = " | ".join(s.strip() for s in stages if s.strip())
+    return filter_part.strip(), pipeline
+
+
+def compose_nql(base: Optional[str], extra_terms: List[str]) -> str:
+    """Combine a user query with additional AND-ed filter terms without
+    breaking boolean precedence. `srcip:a OR srcip:b` plus `action:deny` must
+    become `(srcip:a OR srcip:b) action:deny`, not `srcip:a OR (srcip:b action:deny)`.
+    Pipeline stages in `base` are preserved at the end."""
+    filter_text, pipeline = split_filter_and_pipeline(base or "")
+    extras = [t for t in (extra_terms or []) if t and t.strip()]
+    parts: List[str] = []
+    if filter_text:
+        parts.append(f"({filter_text})" if extras else filter_text)
+    parts.extend(extras)
+    combined = " ".join(parts)
+    if pipeline:
+        combined = f"{combined} | {pipeline}" if combined else f"| {pipeline}"
+    return combined
+
+
+# Columns that are cheap to evaluate: every native column. A condition that
+# touches none of these heavy sources may be evaluated in PREWHERE, where
+# ClickHouse applies it before reading the wide columns.
+_HEAVY_COLUMN_RE = re.compile(r"parsed_data|\bmessage\b|\braw\b")
+
+
+def _cheap_conjuncts(node, compiler: "NQLCompiler") -> List[str]:
+    """Top-level AND-ed sub-expressions whose SQL touches only native columns.
+    These are safe to push to PREWHERE: they are implied by the full WHERE and
+    can prune granules via the skip indexes before wide columns are read."""
+    if node is None:
+        return []
+    if isinstance(node, AndNode):
+        return _cheap_conjuncts(node.left, compiler) + _cheap_conjuncts(node.right, compiler)
+    if isinstance(node, TextTermNode):
+        return []
+    sql = compiler._compile_node(node)
+    if _HEAVY_COLUMN_RE.search(sql):
+        return []
+    return [sql]
+
+
+@lru_cache(maxsize=1024)
+def compile_filter(query_text: str) -> Tuple[str, Tuple[str, ...]]:
+    """Compile only the filter expression of a query (pipeline stages are
+    ignored) into (where_sql, prewhere_conditions).
+
+    Cached: the same query is compiled several times per page (rows, count,
+    stats, facets) and compilation is pure.
+
+    Raises NQLSyntaxError on a malformed filter."""
+    filter_text, _ = split_filter_and_pipeline(query_text or "")
+    if not filter_text:
+        return "1=1", ()
+    ast = parse_nql(filter_text)
+    compiler = NQLCompiler()
+    where = compiler._compile_node(ast.filter_ast) if ast.filter_ast is not None else "1=1"
+    prewhere = tuple(_cheap_conjuncts(ast.filter_ast, compiler))
+    return where, prewhere
 
 
 def compile_nql(query_text: str) -> Dict[str, Any]:
@@ -770,24 +975,63 @@ def validate_nql(query_text: str) -> Tuple[bool, Optional[str]]:
         return False, f"Unexpected error: {str(e)}"
 
 
-# Field metadata for autocomplete
-FIELD_METADATA = {
-    "srcip": {"type": "ip", "description": "Source IP address"},
-    "dstip": {"type": "ip", "description": "Destination IP address"},
-    "srcport": {"type": "number", "description": "Source port"},
-    "dstport": {"type": "number", "description": "Destination port"},
-    "proto": {"type": "string", "description": "Protocol number"},
-    "protocol": {"type": "string", "description": "Protocol name (alias for proto)"},
-    "action": {"type": "string", "description": "Firewall action (accept, deny, drop, close, timeout)"},
-    "severity": {"type": "number", "description": "Syslog severity (0=Emergency, 7=Debug)"},
-    "device": {"type": "ip", "description": "Device IP (alias for device_ip)"},
-    "device_ip": {"type": "ip", "description": "Device IP address"},
-    "policyname": {"type": "string", "description": "Firewall policy/rule name"},
-    "log_type": {"type": "string", "description": "Log type (traffic, utm, event)"},
-    "application": {"type": "string", "description": "Application name"},
-    "src_zone": {"type": "string", "description": "Source zone"},
-    "dst_zone": {"type": "string", "description": "Destination zone"},
-    "session_end_reason": {"type": "string", "description": "Session end reason"},
-    "threat_id": {"type": "string", "description": "Threat/IPS signature ID"},
-    "message": {"type": "text", "description": "Log message (supports ~ for contains)"},
-}
+def _build_field_metadata() -> Dict[str, Dict[str, str]]:
+    """Field metadata for autocomplete, derived from the shared catalog so the
+    parser and the suggestion engine can never drift apart."""
+    from .nql_schema import CURATED_FIELDS
+    meta: Dict[str, Dict[str, str]] = {}
+    for fld in CURATED_FIELDS:
+        meta[fld.name] = {
+            "type": fld.type,
+            "description": fld.description,
+            "category": fld.category,
+            "example": fld.example,
+        }
+        for alias in fld.aliases:
+            meta.setdefault(alias, {
+                "type": fld.type,
+                "description": f"{fld.description} (alias of {fld.name})",
+                "category": fld.category,
+                "example": fld.example,
+            })
+    return meta
+
+
+class _LazyFieldMetadata(dict):
+    """Populated on first access — the catalog import would otherwise be circular
+    at module-import time."""
+
+    def _ensure(self):
+        if not super().__len__():
+            self.update(_build_field_metadata())
+
+    def __getitem__(self, key):
+        self._ensure()
+        return super().__getitem__(key)
+
+    def __iter__(self):
+        self._ensure()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure()
+        return super().__len__()
+
+    def items(self):
+        self._ensure()
+        return super().items()
+
+    def keys(self):
+        self._ensure()
+        return super().keys()
+
+    def values(self):
+        self._ensure()
+        return super().values()
+
+    def get(self, key, default=None):
+        self._ensure()
+        return super().get(key, default)
+
+
+FIELD_METADATA = _LazyFieldMetadata()

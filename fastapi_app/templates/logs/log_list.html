@@ -194,7 +194,11 @@
             align-items: center;
             gap: 6px;
             flex-shrink: 0;
-            overflow: hidden;
+            /* visible, not hidden — the suggestion dropdown hangs below the bar
+               and would otherwise be clipped away */
+            overflow: visible;
+            position: relative;
+            z-index: 200;
         }
         .nql-bar .nql-label {
             font-size: 10px;
@@ -207,24 +211,84 @@
             background: var(--accent-cyan-dim);
             border-radius: var(--radius-sm);
         }
+        .nql-input-wrap {
+            position: relative;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            min-width: 240px;
+            background: var(--bg-deep);
+            border-radius: var(--radius-sm);
+        }
+        .nql-search-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            width: 13px; height: 13px; color: var(--text-muted);
+            pointer-events: none; z-index: 3;
+        }
         .nql-bar .nql-input {
             flex: 1;
-            min-width: 180px;
-            height: 30px;
-            padding: 0 10px;
-            background: var(--bg-deep);
+            width: 100%;
+            min-width: 0;
+            height: 34px;
+            box-sizing: border-box;
+            padding: 0 56px 0 30px;
+            background: transparent;
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
-            color: var(--accent-cyan);
+            /* The text itself is painted by .nql-hl underneath (syntax colours);
+               the input only shows its caret and selection. */
+            color: transparent;
+            caret-color: var(--accent-cyan);
             font-family: var(--font-mono);
             font-size: 12px;
-            transition: all 0.15s ease;
+            letter-spacing: 0;
+            position: relative;
+            z-index: 2;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
+        .nql-bar .nql-input::selection { background: rgba(56, 189, 248, 0.35); color: transparent; }
         .nql-bar .nql-input:focus {
             outline: none;
             border-color: var(--accent-cyan);
             box-shadow: 0 0 0 2px var(--accent-cyan-dim);
         }
+        .nql-bar .nql-run-btn { height: 34px; }
+        .nql-bar .nql-run-btn svg { width: 13px; height: 13px; }
+        .nql-hl {
+            position: absolute; inset: 0;
+            box-sizing: border-box;
+            padding: 0 56px 0 30px;
+            border: 1px solid transparent;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0;
+            line-height: 32px;
+            white-space: pre;
+            overflow: hidden;
+            pointer-events: none;
+            color: var(--text-primary);
+            z-index: 1;
+        }
+        .nql-hl .t-field { color: #7dd3fc; }
+        .nql-hl .t-op    { color: var(--text-muted); }
+        .nql-hl .t-val   { color: #e2e8f0; }
+        .nql-hl .t-str   { color: #fbbf24; }
+        .nql-hl .t-kw    { color: #fb923c; font-weight: 700; }
+        .nql-hl .t-pipe,
+        .nql-hl .t-cmd   { color: #c4b5fd; font-weight: 700; }
+        .nql-hl .t-paren { color: #94a3b8; font-weight: 700; }
+        .nql-hl .t-neg   { color: #f87171; font-weight: 700; }
+        .nql-hl .t-text  { color: #a5f3fc; }
+        .nql-clear-btn {
+            position: absolute; right: 30px; top: 50%; transform: translateY(-50%);
+            width: 18px; height: 18px; padding: 0;
+            border: none; border-radius: 50%;
+            background: var(--bg-elevated); color: var(--text-muted);
+            font-size: 13px; line-height: 1; cursor: pointer; z-index: 3;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .nql-clear-btn:hover { color: var(--text-bright); background: var(--bg-hover); }
+        .nql-clear-btn[hidden] { display: none; }
         .nql-bar .nql-input::placeholder {
             color: var(--text-ghost);
             font-family: var(--font-mono);
@@ -258,6 +322,9 @@
             color: var(--text-muted);
             white-space: nowrap;
             min-width: 60px;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .nql-bar .nql-status.error { color: var(--accent-red); }
         .nql-bar .nql-status.success { color: var(--accent-green); }
@@ -289,98 +356,204 @@
         }
         .nql-autocomplete {
             position: absolute;
-            top: 100%;
+            top: calc(100% + 4px);
             left: 0;
             right: 0;
             background: var(--bg-elevated);
             border: 1px solid var(--border-default);
-            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-            max-height: 200px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+            min-width: min(520px, 60vw);   /* descriptions stay readable on narrow bars */
+            max-width: 92vw;
+            max-height: 380px;
             overflow-y: auto;
-            z-index: 100;
+            overscroll-behavior: contain;
+            z-index: 300;
             display: none;
         }
         .nql-autocomplete.visible { display: block; }
-        .nql-autocomplete-item {
-            padding: 6px 12px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--text-primary);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-        }
-        .nql-autocomplete-item:hover, .nql-autocomplete-item.selected {
-            background: var(--bg-hover);
-        }
-        .nql-autocomplete-item .nql-ac-type {
-            color: var(--text-muted);
-            font-size: 10px;
-        }
-        /* NQL results overlay */
-        .nql-results-panel {
-            display: none;
-            background: var(--bg-surface);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            margin: 12px 20px;
-            overflow: hidden;
-        }
-        .nql-results-panel.visible { display: block; }
-        .nql-results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .nql-results-header .nql-results-info {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-        .nql-results-header .nql-results-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 16px;
-            padding: 2px 6px;
-        }
-        .nql-results-body {
-            max-height: 500px;
-            overflow: auto;
-        }
-        .nql-results-body table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            font-family: var(--font-mono);
-        }
-        .nql-results-body th {
+        .nql-ac-group {
             position: sticky;
             top: 0;
             background: var(--bg-elevated);
-            padding: 6px 10px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 10px;
+            padding: 6px 12px 3px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid var(--border-default);
-        }
-        .nql-results-body td {
-            padding: 5px 10px;
+            color: var(--text-muted);
             border-bottom: 1px solid var(--border-subtle);
+            z-index: 1;
+        }
+        .nql-autocomplete-item {
+            padding: 5px 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
             color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-left: 2px solid transparent;
+        }
+        .nql-autocomplete-item:hover, .nql-autocomplete-item.selected {
+            background: var(--bg-hover);
+            border-left-color: var(--accent-cyan);
+        }
+        .nql-ac-label {
+            color: var(--text-bright);
             white-space: nowrap;
-            max-width: 300px;
+            flex-shrink: 0;
+            max-width: 62%;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .nql-results-body tr:hover td { background: var(--bg-hover); }
+        .nql-ac-badge.t-recent  { color: var(--text-secondary); }
+        .nql-ac-label .nql-ac-hit { color: var(--accent-cyan); font-weight: 700; }
+        .nql-ac-detail {
+            color: var(--text-muted);
+            font-family: var(--font-sans, inherit);
+            font-size: 11px;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .nql-ac-badge {
+            flex-shrink: 0;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: var(--bg-deep);
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+        }
+        .nql-ac-badge.t-ip      { color: #38bdf8; border-color: rgba(56,189,248,.35); }
+        .nql-ac-badge.t-port,
+        .nql-ac-badge.t-number,
+        .nql-ac-badge.t-bytes,
+        .nql-ac-badge.t-duration{ color: #a78bfa; border-color: rgba(167,139,250,.35); }
+        .nql-ac-badge.t-enum    { color: #fbbf24; border-color: rgba(251,191,36,.35); }
+        .nql-ac-badge.t-text    { color: #f472b6; border-color: rgba(244,114,182,.35); }
+        .nql-ac-badge.t-value   { color: var(--accent-green); border-color: rgba(34,197,94,.35); }
+        .nql-ac-badge.t-operator,
+        .nql-ac-badge.t-keyword { color: #fb923c; border-color: rgba(251,146,60,.35); }
+        .nql-ac-badge.t-command,
+        .nql-ac-badge.t-function{ color: var(--accent-cyan); border-color: rgba(56,189,248,.35); }
+        .nql-ac-count {
+            flex-shrink: 0;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        .nql-ac-empty {
+            padding: 10px 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .nql-ac-footer {
+            position: sticky;
+            bottom: 0;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 4px 12px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border-subtle);
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .nql-ac-footer kbd {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            padding: 0 4px;
+            border: 1px solid var(--border-default);
+            border-radius: 3px;
+            background: var(--bg-deep);
+            color: var(--text-secondary);
+        }
+        .nql-ac-loading {
+            position: absolute;
+            right: 8px;
+            z-index: 3;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 11px; height: 11px;
+            border: 2px solid var(--border-default);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: nqlspin .7s linear infinite;
+            display: none;
+            pointer-events: none;
+        }
+        .nql-ac-loading.on { display: block; }
+        @keyframes nqlspin { to { transform: translateY(-50%) rotate(360deg); } }
+        .nql-help-btn {
+            height: 30px;
+            padding: 0 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .nql-help-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan); }
+        /* NQL syntax-error banner (under the search bar) */
+        .nql-error-banner {
+            display: flex; align-items: flex-start; gap: 8px;
+            padding: 6px 16px 6px 14px;
+            background: rgba(239, 68, 68, 0.08);
+            border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fca5a5; font-size: 11.5px; flex-shrink: 0;
+        }
+        .nql-error-banner svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+        .nql-error-banner code { font-family: var(--font-mono); color: var(--text-secondary); }
+        .nql-error-banner .nql-error-eff { margin-left: auto; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+
+        /* NQL aggregate (| stats) result table — replaces the log table in place */
+        .nql-agg-strip {
+            display: flex; align-items: center; gap: 10px;
+            height: 36px; box-sizing: border-box; padding: 0 14px;
+            font-size: 11px; color: var(--text-secondary);
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle);
+            position: sticky; top: 0; z-index: 11;
+        }
+        .nql-agg-strip strong { color: var(--text-bright); font-family: var(--font-mono); font-weight: 600; }
+        .nql-agg-strip-title {
+            font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+            color: var(--accent-cyan); padding: 2px 7px; background: var(--accent-cyan-dim);
+            border-radius: var(--radius-sm);
+        }
+        .nql-agg-strip-spacer { flex: 1; }
+        .nql-strip-btn {
+            height: 24px; padding: 0 10px; font-size: 11px;
+            background: var(--bg-deep); border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .nql-strip-btn svg { width: 11px; height: 11px; }
+        .nql-strip-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan); }
+        .nql-agg thead { top: 36px; }
+        .nql-agg th.num, .nql-agg td.num { text-align: right; }
+        .nql-agg .nql-rank { width: 44px; color: var(--text-ghost); font-family: var(--font-mono); font-size: 11px; text-align: right; }
+        .nql-agg td { font-family: var(--font-mono); font-size: 12px; }
+        .nql-drill { cursor: pointer; color: var(--text-primary); border-bottom: 1px dotted transparent; }
+        .nql-drill:hover { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+        .nql-bar-cell { position: relative; }
+        .nql-bar-fill {
+            position: absolute; right: 12px; top: 28%; height: 44%;
+            max-width: calc(100% - 24px);
+            background: var(--accent-cyan-dim); border-radius: 2px; pointer-events: none;
+        }
+        .nql-num { position: relative; color: var(--text-bright); font-weight: 600; }
+        .nql-row-actions { width: 40px; }
+        .nql-empty-error p { max-width: 560px; }
+        .nql-empty-hint code { font-family: var(--font-mono); color: var(--accent-cyan); }
 
         /* ===== SEARCH TOOLBAR ===== */
         .toolbar {
@@ -3025,27 +3198,41 @@
             <!-- NQL Query Bar + Stats -->
             <div class="nql-bar">
                 <span class="nql-label">NQL</span>
-                <div style="position:relative;flex:1;display:flex;align-items:center;">
-                    <input type="text" id="nqlInput" class="nql-input"
-                        placeholder='srcip:10.0.0.0/8 AND action:deny | stats count by srcip | sort -count | limit 20'
-                        autocomplete="off" spellcheck="false">
-                    <div id="nqlAutocomplete" class="nql-autocomplete"></div>
+                <div class="nql-input-wrap">
+                    <svg class="nql-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <div id="nqlHl" class="nql-hl" aria-hidden="true"></div>
+                    <input type="text" id="nqlInput" name="q" class="nql-input{% if nql_error %} nql-error{% endif %}"
+                        value="{{ current_q or '' }}"
+                        placeholder='Search logs — e.g. srcip:10.0.0.0/8 action:deny | stats count by dstip'
+                        autocomplete="off" spellcheck="false" autocapitalize="off" role="combobox"
+                        aria-autocomplete="list" aria-expanded="false" aria-controls="nqlAutocomplete">
+                    <button type="button" class="nql-clear-btn" id="nqlClearBtn" title="Clear query" onclick="clearNQL()" {% if not current_q %}hidden{% endif %}>&times;</button>
+                    <div id="nqlAcLoading" class="nql-ac-loading"></div>
+                    <div id="nqlAutocomplete" class="nql-autocomplete" role="listbox"></div>
                 </div>
-                <button type="button" class="nql-run-btn" onclick="runNQL()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Run
+                <button type="button" class="nql-run-btn" onclick="runNQL()" title="Run search (Enter)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Search
                 </button>
-                <span id="nqlStatus" class="nql-status"></span>
+                <button type="button" class="nql-help-btn" onclick="toggleNQLHelp()" title="Searchable fields &amp; syntax reference">? Fields</button>
+                <span id="nqlStatus" class="nql-status{% if nql_error %} error{% elif current_q %} success{% endif %}">{% if nql_error %}Syntax error{% elif current_q %}{{ nql_elapsed_ms }} ms{% endif %}</span>
                 <div class="nql-divider"></div>
                 <div class="nql-stats" role="status" aria-live="polite">
-                    <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate %}groups{% else %}logs{% endif %}</span>
+                    <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate or nql_mode == 'aggregate' %}groups{% else %}logs{% endif %}</span>
                     <span class="nql-stat-sep"></span>
                     <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
                 </div>
             </div>
 
-            <!-- NQL Results Panel (for aggregate queries) -->
-            <div id="nqlResults" class="nql-results-panel"></div>
+            {% if nql_error %}
+            <div class="nql-error-banner" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                <span>{{ nql_error }}</span>
+                {% if nql_effective_query and nql_effective_query != current_q %}
+                <span class="nql-error-eff" title="{{ nql_effective_query }}">effective query: <code>{{ nql_effective_query }}</code></span>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <!-- Search Toolbar -->
             <div class="toolbar">
@@ -3317,7 +3504,7 @@
                 {% endif %}
                 {% if current_q %}
                 <span class="filter-chip">
-                    Search: "{{ current_q }}"
+                    Query: <code style="font-family:var(--font-mono);">{{ current_q }}</code>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('q')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -3375,7 +3562,70 @@
                         </div>
 
                         {% if not is_aggregate %}
-                        {% if logs %}
+                        {% if nql_error %}
+                        <div class="empty-state nql-empty-error">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                            <h3>The query could not be run</h3>
+                            <p>{{ nql_error }}</p>
+                            <p class="nql-empty-hint">Example: <code>srcip:10.0.0.0/8 action:deny | stats count by dstip</code> &middot; <a href="#" onclick="toggleNQLHelp();return false;">Field &amp; syntax reference</a></p>
+                        </div>
+                        {% elif nql_mode == 'aggregate' %}
+                        {% if nql_table and nql_table.rows %}
+                        <div class="nql-agg-strip">
+                            <span class="nql-agg-strip-title">Aggregate</span>
+                            <span>grouped by <strong>{{ nql_group_fields | join(', ') if nql_group_fields else '(all)' }}</strong></span>
+                            <span class="nql-stat-sep"></span>
+                            <span><strong>{{ nql_table.rows | length }}</strong> group{{ '' if nql_table.rows | length == 1 else 's' }}</span>
+                            <span class="nql-stat-sep"></span>
+                            <span><strong>{{ nql_elapsed_ms }}</strong> ms</span>
+                            <span class="nql-agg-strip-spacer"></span>
+                            <button type="button" class="nql-strip-btn" onclick="nqlShowLogs()" title="Drop the | stats stage and show the matching log lines">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                                View matching logs
+                            </button>
+                            <button type="button" class="nql-strip-btn" onclick="exportCurrent()" title="Export this aggregate as CSV">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                                Export CSV
+                            </button>
+                        </div>
+                        <table class="agg-table nql-agg">
+                            <thead>
+                                <tr>
+                                    <th class="nql-rank">#</th>
+                                    {% for c in nql_table.columns %}<th class="{{ 'num' if c.numeric else '' }}">{{ c.name }}</th>{% endfor %}
+                                    <th class="nql-row-actions"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in nql_table.rows %}
+                                <tr class="agg-row">
+                                    <td class="nql-rank">{{ loop.index }}</td>
+                                    {% for cell in row %}{% set c = nql_table.columns[loop.index0] %}
+                                    {% if c.is_group %}
+                                    <td><span class="nql-drill" data-field="{{ c.name }}" data-value="{{ cell.raw }}" onclick="nqlDrill(this)" title="Show logs where {{ c.name }} = {{ cell.raw or '(empty)' }}">{{ cell.text or '(empty)' }}</span></td>
+                                    {% elif c.numeric %}
+                                    <td class="num nql-bar-cell"><span class="nql-bar-fill" style="width:{{ cell.pct }}%"></span><span class="nql-num">{{ cell.text }}</span></td>
+                                    {% else %}
+                                    <td>{{ cell.text }}</td>
+                                    {% endif %}
+                                    {% endfor %}
+                                    <td class="nql-row-actions">
+                                        <button type="button" class="drill-btn" title="Show the logs behind this row" onclick="nqlDrillRow(this)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            <h3>No groups matched</h3>
+                            <p>Nothing in this time range matches the filter before <code>|</code>. Widen the range or loosen the filter.</p>
+                        </div>
+                        {% endif %}
+                        {% elif logs %}
                         <table class="log-table">
                             <thead>
                                 <tr>
@@ -4317,6 +4567,9 @@
                 if (excludeHidden) excludeHidden.value = '';
                 syncExcludeUI(name);
             });
+            // Clear the NQL bar
+            const nq = document.getElementById('nqlInput');
+            if (nq) nq.value = '';
             // Clear hidden inputs
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
@@ -4878,132 +5131,242 @@
     // ============================
     // NQL Query Language
     // ============================
-    const NQL_FIELDS = [
-        { name: 'srcip', type: 'ip', desc: 'Source IP' },
-        { name: 'dstip', type: 'ip', desc: 'Destination IP' },
-        { name: 'srcport', type: 'number', desc: 'Source port' },
-        { name: 'dstport', type: 'number', desc: 'Destination port' },
-        { name: 'proto', type: 'string', desc: 'Protocol number' },
-        { name: 'action', type: 'string', desc: 'Firewall action' },
-        { name: 'severity', type: 'number', desc: 'Severity (0-7)' },
-        { name: 'device', type: 'ip', desc: 'Device IP' },
-        { name: 'policyname', type: 'string', desc: 'Policy name' },
-        { name: 'log_type', type: 'string', desc: 'Log type' },
-        { name: 'application', type: 'string', desc: 'Application' },
-        { name: 'src_zone', type: 'string', desc: 'Source zone' },
-        { name: 'dst_zone', type: 'string', desc: 'Destination zone' },
-        { name: 'session_end_reason', type: 'string', desc: 'Session end reason' },
-        { name: 'threat_id', type: 'string', desc: 'Threat ID' },
-        { name: 'message', type: 'text', desc: 'Log message' },
-    ];
-
+    // Generic, context-aware search. The server decides what the cursor is
+    // sitting on (field name / value / operator / pipeline stage) and returns
+    // the matching completions — including live values counted from ClickHouse —
+    // so every field any parser emits is searchable without a frontend change.
     const nqlInput = document.getElementById('nqlInput');
     const nqlStatus = document.getElementById('nqlStatus');
     const nqlAutocomplete = document.getElementById('nqlAutocomplete');
+    const nqlAcLoading = document.getElementById('nqlAcLoading');
     let nqlValidateTimer = null;
+    let nqlSuggestTimer = null;
     let nqlSelectedAC = -1;
+    let nqlSuggestSeq = 0;          // drop responses that arrive out of order
+    let nqlItems = [];              // flat list matching the rendered rows
+    let nqlRange = { start: 0, end: 0 };
+    const nqlSuggestCache = new Map();
 
-    // Validate on typing (debounced)
+    function nqlTimeRange() {
+        const activePill = document.querySelector('.time-pill.active');
+        return activePill ? activePill.dataset.range : '1h';
+    }
+
     nqlInput.addEventListener('input', () => {
+        renderHighlight();
         clearTimeout(nqlValidateTimer);
         nqlValidateTimer = setTimeout(() => validateNQL(), 500);
-        showAutocomplete();
+        scheduleAutocomplete();
     });
+    // Keep the coloured mirror aligned with the input as it scrolls.
+    ['scroll', 'keyup', 'click', 'focus', 'blur', 'select'].forEach(ev =>
+        nqlInput.addEventListener(ev, () => { nqlHl.scrollLeft = nqlInput.scrollLeft; }));
 
-    // Run on Enter
+    // Moving the caret changes what we should be completing, even with no edit.
+    nqlInput.addEventListener('click', () => scheduleAutocomplete());
+    nqlInput.addEventListener('focus', () => scheduleAutocomplete());
+
     nqlInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            const ac = nqlAutocomplete;
-            if (ac.classList.contains('visible')) {
-                const selected = ac.querySelector('.selected');
-                if (selected) {
-                    e.preventDefault();
-                    selected.click();
-                    return;
-                }
-            }
+        const open = nqlAutocomplete.classList.contains('visible');
+        if (e.key === 'Enter') {
+            // Enter runs the search. It only picks a suggestion when the user
+            // has explicitly moved onto one (arrow keys / hover).
             e.preventDefault();
+            if (open && nqlSelectedAC >= 0) { applySuggestion(nqlSelectedAC); return; }
             runNQL();
-        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            return;
+        }
+        if (e.key === 'Tab') {
+            if (open && nqlItems.length) {
+                e.preventDefault();
+                applySuggestion(nqlSelectedAC >= 0 ? nqlSelectedAC : 0);
+            }
+            return;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!open) { scheduleAutocomplete(0); return; }
             e.preventDefault();
             navigateAutocomplete(e.key === 'ArrowDown' ? 1 : -1);
-        } else if (e.key === 'Escape') {
+            return;
+        }
+        if (e.key === 'Escape') {
+            if (open) { e.preventDefault(); e.stopPropagation(); hideAutocomplete(); }
+            return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+            scheduleAutocomplete();
+        }
+    });
+
+    nqlInput.addEventListener('blur', () => { setTimeout(hideAutocomplete, 180); });
+
+    function scheduleAutocomplete(delay) {
+        clearTimeout(nqlSuggestTimer);
+        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 130 : delay);
+    }
+
+    async function fetchAutocomplete() {
+        const q = nqlInput.value;
+        const cursor = nqlInput.selectionStart ?? q.length;
+        const range = nqlTimeRange();
+        const key = `${range} ${cursor} ${q}`;
+
+        if (nqlSuggestCache.has(key)) { renderAutocomplete(nqlSuggestCache.get(key)); return; }
+
+        const seq = ++nqlSuggestSeq;
+        nqlAcLoading.classList.add('on');
+        try {
+            const res = await fetch(`/api/nql/suggest?q=${encodeURIComponent(q)}` +
+                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`);
+            if (seq !== nqlSuggestSeq) return;        // a newer keystroke won
+            if (!res.ok) { hideAutocomplete(); return; }
+            const data = await res.json();
+            if (seq !== nqlSuggestSeq) return;
+            nqlSuggestCache.set(key, data);
+            if (nqlSuggestCache.size > 200) nqlSuggestCache.delete(nqlSuggestCache.keys().next().value);
+            renderAutocomplete(data);
+        } catch (e) {
             hideAutocomplete();
-        } else if (e.key === 'Tab') {
-            const ac = nqlAutocomplete;
-            if (ac.classList.contains('visible')) {
-                const selected = ac.querySelector('.selected') || ac.querySelector('.nql-autocomplete-item');
-                if (selected) {
-                    e.preventDefault();
-                    selected.click();
-                }
+        } finally {
+            if (seq === nqlSuggestSeq) nqlAcLoading.classList.remove('on');
+        }
+    }
+
+    function nqlEsc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // Bold the part of the label the user has already typed.
+    function nqlHighlight(label, token) {
+        const safe = nqlEsc(label);
+        if (!token) return safe;
+        const i = label.toLowerCase().indexOf(token.toLowerCase());
+        if (i < 0) return safe;
+        return nqlEsc(label.slice(0, i)) +
+               '<span class="nql-ac-hit">' + nqlEsc(label.slice(i, i + token.length)) + '</span>' +
+               nqlEsc(label.slice(i + token.length));
+    }
+
+    function renderAutocomplete(data) {
+        let list = data.suggestions || [];
+        // Empty bar: offer this browser's recent searches first, like a
+        // firewall's log search history.
+        if (!nqlInput.value.trim() && data.context === 'field') {
+            const rec = nqlRecent().map(q => ({ insert: q, label: q, detail: 'recent search',
+                                                meta: 'recent', group: 'Recent', whole: true }));
+            list = rec.concat(list);
+        }
+        nqlItems = list;
+        nqlRange = { start: data.replace_start, end: data.replace_end };
+
+        if (!list.length) { hideAutocomplete(); return; }
+
+        const token = (data.context === 'value' || data.context === 'field') ? (data.token || '') : '';
+        let html = '';
+        let group = null;
+        list.forEach((s, i) => {
+            if (s.group !== group) {
+                group = s.group;
+                html += `<div class="nql-ac-group">${nqlEsc(group)}</div>`;
             }
-        }
-    });
+            const badge = s.meta ? `<span class="nql-ac-badge t-${nqlEsc(s.meta)}">${nqlEsc(s.meta)}</span>` : '';
+            html += `<div class="nql-autocomplete-item" role="option" data-idx="${i}">` +
+                    `<span class="nql-ac-label">${nqlHighlight(s.label, token)}</span>` +
+                    `<span class="nql-ac-detail">${nqlEsc(s.detail || s.example || '')}</span>` +
+                    badge +
+                    `</div>`;
+        });
+        html += `<div class="nql-ac-footer">` +
+                `<span><kbd>Tab</kbd> complete</span>` +
+                `<span><kbd>&uarr;</kbd><kbd>&darr;</kbd> choose</span>` +
+                `<span><kbd>Enter</kbd> search</span>` +
+                `<span><kbd>Esc</kbd> close</span>` +
+                `</div>`;
+        nqlAutocomplete.innerHTML = html;
 
-    nqlInput.addEventListener('blur', () => {
-        setTimeout(hideAutocomplete, 200);
-    });
+        nqlAutocomplete.querySelectorAll('.nql-autocomplete-item').forEach(el => {
+            // mousedown fires before the input's blur, so the click isn't lost.
+            el.addEventListener('mousedown', (ev) => {
+                ev.preventDefault();
+                applySuggestion(parseInt(el.dataset.idx, 10));
+            });
+            // mousemove, not mouseenter: re-rendering the list under a stationary
+            // pointer fires mouseenter and would silently steal the keyboard
+            // selection mid-typing.
+            el.addEventListener('mousemove', () => setSelected(parseInt(el.dataset.idx, 10), false));
+        });
 
-    function showAutocomplete() {
-        const val = nqlInput.value;
-        const cursorPos = nqlInput.selectionStart;
-        const textBefore = val.substring(0, cursorPos);
-
-        // Get the current "word" being typed
-        const wordMatch = textBefore.match(/(\S+)$/);
-        if (!wordMatch) { hideAutocomplete(); return; }
-        const currentWord = wordMatch[1].toLowerCase();
-
-        // If typing a field name (no colon yet)
-        if (!currentWord.includes(':')) {
-            const matches = NQL_FIELDS.filter(f => f.name.startsWith(currentWord));
-            if (matches.length === 0 || currentWord.length < 1) { hideAutocomplete(); return; }
-
-            nqlAutocomplete.innerHTML = matches.map((f, i) =>
-                `<div class="nql-autocomplete-item${i === 0 ? ' selected' : ''}" onclick="insertAutocomplete('${f.name}:')">
-                    <span>${f.name}:</span>
-                    <span class="nql-ac-type">${f.desc}</span>
-                </div>`
-            ).join('');
-            nqlAutocomplete.classList.add('visible');
-            nqlSelectedAC = 0;
-        } else {
-            hideAutocomplete();
-        }
+        nqlAutocomplete.classList.add('visible');
+        nqlInput.setAttribute('aria-expanded', 'true');
+        nqlSelectedAC = -1;           // nothing chosen until the user moves onto one
     }
 
     function hideAutocomplete() {
         nqlAutocomplete.classList.remove('visible');
+        nqlInput.setAttribute('aria-expanded', 'false');
         nqlSelectedAC = -1;
+        nqlItems = [];
+    }
+
+    function setSelected(idx, scroll = true) {
+        const items = nqlAutocomplete.querySelectorAll('.nql-autocomplete-item');
+        if (!items.length) return;
+        items.forEach(i => i.classList.remove('selected'));
+        if (idx < 0) { nqlSelectedAC = -1; return; }      // back to "nothing chosen"
+        idx = Math.min(items.length - 1, idx);
+        items[idx].classList.add('selected');
+        nqlSelectedAC = idx;
+        if (scroll) items[idx].scrollIntoView({ block: 'nearest' });
     }
 
     function navigateAutocomplete(dir) {
-        const items = nqlAutocomplete.querySelectorAll('.nql-autocomplete-item');
-        if (items.length === 0) return;
-        items.forEach(i => i.classList.remove('selected'));
-        nqlSelectedAC = Math.max(0, Math.min(items.length - 1, nqlSelectedAC + dir));
-        items[nqlSelectedAC].classList.add('selected');
-        items[nqlSelectedAC].scrollIntoView({ block: 'nearest' });
+        setSelected(nqlSelectedAC + dir);
     }
 
-    function insertAutocomplete(text) {
+    function applySuggestion(idx) {
+        const s = nqlItems[idx];
+        if (!s) return;
+        if (s.whole) {                 // a recent search: replace everything and run
+            nqlInput.value = s.insert;
+            renderHighlight();
+            runNQL();
+            return;
+        }
         const val = nqlInput.value;
-        const cursorPos = nqlInput.selectionStart;
-        const textBefore = val.substring(0, cursorPos);
-        const textAfter = val.substring(cursorPos);
-        const wordMatch = textBefore.match(/(\S+)$/);
-        const wordStart = wordMatch ? cursorPos - wordMatch[1].length : cursorPos;
+        const start = Math.max(0, Math.min(val.length, nqlRange.start));
+        const end = Math.max(start, Math.min(val.length, nqlRange.end));
+        const next = val.slice(0, start) + s.insert + val.slice(end);
+        const caret = start + s.insert.length;
 
-        nqlInput.value = val.substring(0, wordStart) + text + textAfter;
+        nqlInput.value = next;
         nqlInput.focus();
-        nqlInput.selectionStart = nqlInput.selectionEnd = wordStart + text.length;
+        nqlInput.setSelectionRange(caret, caret);
+        renderHighlight();
         hideAutocomplete();
+
+        clearTimeout(nqlValidateTimer);
+        nqlValidateTimer = setTimeout(() => validateNQL(), 300);
+        // Completing a field name lands the caret right after the colon —
+        // immediately offer that field's values, the way FortiAnalyzer does.
+        scheduleAutocomplete(0);
+    }
+
+    // A query that ends mid-token (`srcip:`, `dstport:>=`, `... AND`, `(`, `|`)
+    // is being typed, not finished — showing "missing value" there is noise.
+    function nqlLooksUnfinished(q) {
+        return /(?::|:[!<>=~]+|\bAND|\bOR|\bNOT|\(|\||\bby|,)\s*$/i.test(q);
     }
 
     async function validateNQL() {
         const query = nqlInput.value.trim();
         if (!query) {
+            nqlInput.classList.remove('nql-error', 'nql-valid');
+            nqlStatus.textContent = '';
+            nqlStatus.className = 'nql-status';
+            return;
+        }
+        if (nqlLooksUnfinished(query)) {
             nqlInput.classList.remove('nql-error', 'nql-valid');
             nqlStatus.textContent = '';
             nqlStatus.className = 'nql-status';
@@ -5025,6 +5388,7 @@
                 nqlInput.classList.remove('nql-valid');
                 nqlInput.classList.add('nql-error');
                 nqlStatus.textContent = data.error || 'Invalid';
+                nqlStatus.title = data.error || '';
                 nqlStatus.className = 'nql-status error';
             }
         } catch (e) {
@@ -5032,141 +5396,248 @@
         }
     }
 
-    async function runNQL() {
-        const query = nqlInput.value.trim();
-        if (!query) return;
+    // ── Run / navigate ───────────────────────────────────────
+    // The NQL bar IS the search: running it submits the page form, so the real
+    // table below (and the facets, count, export, saved searches) all render
+    // from the same query and time range. `| stats` queries come back as an
+    // aggregate table in the same place.
+    const NQL_RECENT_KEY = 'zentryc_nql_recent';
+    const NQL_HAS_QUERY = {{ 'true' if current_q else 'false' }};
 
-        nqlStatus.textContent = 'Running...';
-        nqlStatus.className = 'nql-status';
-
-        // Get current time range from the time pills
-        const activePill = document.querySelector('.time-pill.active');
-        const timeRange = activePill ? activePill.dataset.range : '1h';
-
+    function nqlRecent() {
+        try { return JSON.parse(localStorage.getItem(NQL_RECENT_KEY) || '[]'); } catch (e) { return []; }
+    }
+    function rememberRecent(q) {
+        if (!q) return;
         try {
-            const res = await fetch('/api/nql/query', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, time_range: timeRange, per_page: 200 }),
-            });
-            const data = await res.json();
+            const list = nqlRecent().filter(x => x !== q);
+            list.unshift(q);
+            localStorage.setItem(NQL_RECENT_KEY, JSON.stringify(list.slice(0, 12)));
+        } catch (e) {}
+    }
 
-            if (!res.ok) {
-                nqlStatus.textContent = data.detail || 'Error';
-                nqlStatus.className = 'nql-status error';
-                nqlInput.classList.add('nql-error');
-                return;
+    // GET forms put every field in the URL. Empty ones (and the CSRF token,
+    // meaningless on a GET) only make links long, so they are dropped at
+    // submit time — the server treats a missing and an empty parameter alike.
+    (function () {
+        const form = document.getElementById('filterForm');
+        const prune = () => form.querySelectorAll('input, select').forEach(el => {
+            if (el.name === 'csrf_token' || (el.name && el.value === '')) el.disabled = true;
+        });
+        form.addEventListener('submit', prune);                 // Search / Apply buttons
+        const nativeSubmit = form.submit.bind(form);            // every script path
+        form.submit = () => { prune(); nativeSubmit(); };
+    })();
+
+    function runNQL() {
+        const query = nqlInput.value.trim();
+        nqlInput.value = query;
+        hideAutocomplete();
+        rememberRecent(query);
+        nqlStatus.textContent = query ? 'Searching…' : '';
+        nqlStatus.className = 'nql-status';
+        document.getElementById('hiddenPageInput').value = 1;
+        showLoading();
+        document.getElementById('filterForm').submit();
+    }
+
+    function clearNQL() {
+        nqlInput.value = '';
+        renderHighlight();
+        hideAutocomplete();
+        if (NQL_HAS_QUERY) { runNQL(); return; }
+        nqlInput.focus();
+    }
+
+    // Split "filter | pipeline" the same way the server does: a pipe preceded
+    // by whitespace (outside quotes) starts a pipeline stage.
+    function nqlSplit(q) {
+        let inQ = false;
+        for (let i = 0; i < q.length; i++) {
+            const ch = q[i];
+            if (ch === '"') inQ = !inQ;
+            else if (ch === '|' && !inQ && (i === 0 || /\s/.test(q[i - 1]))) {
+                return { filter: q.slice(0, i).trim(), pipeline: q.slice(i + 1).trim() };
             }
+        }
+        return { filter: q.trim(), pipeline: '' };
+    }
+    function nqlTerm(field, value) {
+        if (value === '' || value == null) return field + ':""';
+        return field + ':' + (/[\s()"|]/.test(value) ? '"' + value.replace(/"/g, '\\"') + '"' : value);
+    }
+    function nqlAddTerms(filter, terms) {
+        // Parenthesise an OR expression so the new AND-ed terms bind correctly.
+        const base = filter && /\bOR\b/i.test(filter) ? '(' + filter + ')' : filter;
+        return [base].concat(terms).filter(Boolean).join(' ');
+    }
+    // Aggregate drill-down: click a group value -> logs filtered to it.
+    function nqlDrill(el) {
+        const { filter } = nqlSplit(nqlInput.value);
+        nqlInput.value = nqlAddTerms(filter, [nqlTerm(el.dataset.field, el.dataset.value)]);
+        runNQL();
+    }
+    function nqlDrillRow(btn) {
+        const { filter } = nqlSplit(nqlInput.value);
+        const terms = Array.from(btn.closest('tr').querySelectorAll('.nql-drill'))
+            .map(el => nqlTerm(el.dataset.field, el.dataset.value));
+        nqlInput.value = nqlAddTerms(filter, terms);
+        runNQL();
+    }
+    function nqlShowLogs() {
+        nqlInput.value = nqlSplit(nqlInput.value).filter;
+        runNQL();
+    }
+    function exportCurrent() {
+        const p = new URLSearchParams(window.location.search);
+        p.set('format', 'csv');
+        window.location.href = '/logs/export?' + p.toString();
+    }
 
-            nqlInput.classList.remove('nql-error');
-            nqlInput.classList.add('nql-valid');
+    // ── Syntax highlighting ──────────────────────────────────
+    // A coloured mirror of the input sits underneath it; the input's own text
+    // is transparent so only the caret and selection show.
+    const nqlHl = document.getElementById('nqlHl');
+    const nqlClearBtn = document.getElementById('nqlClearBtn');
 
-            if (data.type === 'aggregate') {
-                // Show aggregate results in the NQL results panel
-                showNQLResults(data);
-                nqlStatus.textContent = `${data.rows.length} rows`;
-                nqlStatus.className = 'nql-status success';
-            } else {
-                // Regular log query - show total then reload page with NQL as q param
-                nqlStatus.textContent = `${data.total.toLocaleString()} results`;
-                nqlStatus.className = 'nql-status success';
-                showNQLLogResults(data);
+    function renderHighlight() {
+        nqlHl.innerHTML = nqlColorize(nqlInput.value);
+        nqlHl.scrollLeft = nqlInput.scrollLeft;
+        nqlClearBtn.hidden = !nqlInput.value;
+    }
+
+    function nqlColorize(q) {
+        const span = (cls, t) => '<span class="' + cls + '">' + nqlEsc(t) + '</span>';
+        const STR = /^"(?:[^"\\]|\\.)*(?:"|$)/;
+        let out = '', i = 0, inPipeline = false, m;
+        while (i < q.length) {
+            const rest = q.slice(i);
+            if ((m = /^\s+/.exec(rest)))              { out += nqlEsc(m[0]); i += m[0].length; continue; }
+            if ((m = STR.exec(rest)))                  { out += span('t-str', m[0]); i += m[0].length; continue; }
+            if (rest[0] === '|' && (i === 0 || /\s/.test(q[i - 1]))) {
+                out += span('t-pipe', '|'); i += 1; inPipeline = true; continue;
             }
+            if (rest[0] === '(' || rest[0] === ')') { out += span('t-paren', rest[0]); i += 1; continue; }
+            if (!inPipeline && (m = /^(AND|OR|NOT)(?![\w:])/i.exec(rest))) {
+                out += span('t-kw', m[0]); i += m[0].length; continue;
+            }
+            if (inPipeline && (m = /^(stats|where|sort|limit|by|as|count|sum|avg|min|max|uniqExact|uniq)(?![\w:])/i.exec(rest))) {
+                out += span('t-cmd', m[0]); i += m[0].length; continue;
+            }
+            if (!inPipeline && (m = /^(-?)(\w+)(:)(!=|>=|<=|>|<|=|~)?/.exec(rest))) {
+                out += (m[1] ? span('t-neg', '-') : '') + span('t-field', m[2]) + span('t-op', m[3] + (m[4] || ''));
+                i += m[0].length;
+                const vrest = q.slice(i);
+                const vm = STR.exec(vrest) || /^[^\s()]*/.exec(vrest);
+                if (vm && vm[0]) { out += span(vm[0][0] === '"' ? 't-str' : 't-val', vm[0]); i += vm[0].length; }
+                continue;
+            }
+            if ((m = /^[^\s()"]+/.exec(rest))) { out += span(inPipeline ? 't-val' : 't-text', m[0]); i += m[0].length; continue; }
+            out += nqlEsc(rest[0]); i += 1;
+        }
+        return out;
+    }
+    renderHighlight();
+
+    // "/" anywhere on the page jumps to the search bar (unless typing elsewhere).
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+        const t = e.target, tag = (t.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+        e.preventDefault();
+        nqlInput.focus();
+        nqlInput.setSelectionRange(nqlInput.value.length, nqlInput.value.length);
+    });
+
+
+    // ── Searchable-field reference ───────────────────────────
+    let nqlSchemaCache = null;
+
+    async function toggleNQLHelp() {
+        const modal = document.getElementById('nqlHelpModal');
+        if (modal.style.display === 'flex') { modal.style.display = 'none'; return; }
+        modal.style.display = 'flex';
+        if (nqlSchemaCache) { renderNQLHelp(nqlSchemaCache); return; }
+        const body = document.getElementById('nqlHelpBody');
+        body.innerHTML = '<div style="padding:20px;color:var(--text-muted);">Loading field reference…</div>';
+        try {
+            const res = await fetch('/api/nql/schema');
+            nqlSchemaCache = await res.json();
+            renderNQLHelp(nqlSchemaCache);
         } catch (e) {
-            nqlStatus.textContent = 'Request failed';
-            nqlStatus.className = 'nql-status error';
+            body.innerHTML = '<div style="padding:20px;color:var(--accent-red);">Could not load the field reference.</div>';
         }
     }
 
-    function showNQLResults(data) {
-        const panel = document.getElementById('nqlResults');
-        if (!data.rows || data.rows.length === 0) {
-            panel.innerHTML = `
-                <div class="nql-results-header">
-                    <span class="nql-results-info">No results</span>
-                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+    function closeNQLHelp() { document.getElementById('nqlHelpModal').style.display = 'none'; }
+
+    function renderNQLHelp(schema) {
+        const cell = (v) => `<td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);">${nqlEsc(v)}</td>`;
+        const mono = (v) => `<td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono);color:var(--accent-cyan);white-space:nowrap;">${nqlEsc(v)}</td>`;
+        let html = '';
+
+        html += `<div style="padding:10px 16px;border-bottom:1px solid var(--border-default);">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">SYNTAX</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;font-size:11px;">
+            ${(schema.operators || []).map(o =>
+                `<div><code style="color:var(--accent-cyan);font-family:var(--font-mono);">${nqlEsc(o.example)}</code>
+                 <span style="color:var(--text-muted);"> — ${nqlEsc(o.description)}</span></div>`).join('')}
+            ${(schema.keywords || []).concat(schema.pipeline || []).map(k =>
+                `<div><code style="color:var(--accent-cyan);font-family:var(--font-mono);">${nqlEsc(k.example)}</code>
+                 <span style="color:var(--text-muted);"> — ${nqlEsc(k.description)}</span></div>`).join('')}
+            </div></div>`;
+
+        Object.keys(schema.groups || {}).forEach(cat => {
+            html += `<div style="padding:10px 16px 0;font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">${nqlEsc(cat)}</div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;margin:4px 0 8px;">`;
+            schema.groups[cat].forEach(f => {
+                const aliases = f.aliases && f.aliases.length ? f.aliases.join(', ') : '';
+                html += `<tr onclick="useNQLField('${nqlEsc(f.name)}')" style="cursor:pointer;">
+                    ${mono(f.name)}${cell(f.type)}${cell(f.description)}
+                    <td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);color:var(--text-ghost);font-family:var(--font-mono);">${nqlEsc(aliases)}</td>
+                </tr>`;
+            });
+            html += `</table>`;
+        });
+
+        const dyn = schema.dynamic || [];
+        if (dyn.length) {
+            html += `<div style="padding:10px 16px;font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">
+                    Other parsed fields seen in your logs (${dyn.length})</div>
+                <div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:5px;">
+                ${dyn.map(k => `<span onclick="useNQLField('${nqlEsc(k)}')"
+                    style="cursor:pointer;font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:10px;
+                           background:var(--bg-deep);border:1px solid var(--border-subtle);color:var(--text-secondary);"
+                    >${nqlEsc(k)}</span>`).join('')}
                 </div>`;
-            panel.classList.add('visible');
-            return;
         }
-
-        const cols = data.columns || Object.keys(data.rows[0]);
-        let html = `
-            <div class="nql-results-header">
-                <span class="nql-results-info">Aggregate: ${data.rows.length} rows</span>
-                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-            </div>
-            <div class="nql-results-body">
-            <table>
-                <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-                <tbody>`;
-
-        for (const row of data.rows) {
-            html += '<tr>';
-            for (const col of cols) {
-                let val = row[col];
-                if (typeof val === 'number') val = val.toLocaleString();
-                html += `<td>${val ?? ''}</td>`;
-            }
-            html += '</tr>';
-        }
-
-        html += '</tbody></table></div>';
-        panel.innerHTML = html;
-        panel.classList.add('visible');
+        document.getElementById('nqlHelpBody').innerHTML = html;
     }
 
-    function showNQLLogResults(data) {
-        // For non-aggregate queries, show results in the NQL panel
-        const panel = document.getElementById('nqlResults');
-        if (!data.rows || data.rows.length === 0) {
-            panel.innerHTML = `
-                <div class="nql-results-header">
-                    <span class="nql-results-info">No matching logs (total: ${(data.total || 0).toLocaleString()})</span>
-                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-                </div>`;
-            panel.classList.add('visible');
-            return;
-        }
-
-        const displayCols = ['timestamp', 'device_ip', 'severity', 'srcip', 'dstip', 'dstport', 'action', 'message'];
-        const sevNames = {0:'Emergency',1:'Alert',2:'Critical',3:'Error',4:'Warning',5:'Notice',6:'Info',7:'Debug'};
-
-        let html = `
-            <div class="nql-results-header">
-                <span class="nql-results-info">${data.total.toLocaleString()} total matches (showing ${data.rows.length})</span>
-                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-            </div>
-            <div class="nql-results-body">
-            <table>
-                <thead><tr>${displayCols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-                <tbody>`;
-
-        for (const row of data.rows) {
-            html += '<tr>';
-            for (const col of displayCols) {
-                let val = row[col] ?? '';
-                if (col === 'timestamp' && val) {
-                    val = window.fmtTime(val);
-                } else if (col === 'severity') {
-                    val = sevNames[val] || val;
-                } else if (col === 'message' && typeof val === 'string' && val.length > 120) {
-                    val = val.substring(0, 120) + '...';
-                }
-                html += `<td>${val}</td>`;
-            }
-            html += '</tr>';
-        }
-
-        html += '</tbody></table></div>';
-        panel.innerHTML = html;
-        panel.classList.add('visible');
-    }
-
-    function closeNQLResults() {
-        document.getElementById('nqlResults').classList.remove('visible');
+    function useNQLField(name) {
+        closeNQLHelp();
+        const sep = nqlInput.value && !/\s$/.test(nqlInput.value) ? ' ' : '';
+        nqlInput.value = nqlInput.value + sep + name + ':';
+        nqlInput.focus();
+        nqlInput.setSelectionRange(nqlInput.value.length, nqlInput.value.length);
+        scheduleAutocomplete(0);
     }
     </script>
+
+    <!-- Searchable-field reference -->
+    <div id="nqlHelpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;
+         align-items:center;justify-content:center;" onclick="if(event.target===this)closeNQLHelp()">
+        <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-sm);
+                    width:min(920px,92vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+                        border-bottom:1px solid var(--border-default);">
+                <strong style="font-size:13px;">Searchable fields &amp; query syntax</strong>
+                <button onclick="closeNQLHelp()" style="background:none;border:none;color:var(--text-muted);
+                        font-size:20px;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <div id="nqlHelpBody" style="overflow:auto;"></div>
+        </div>
+    </div>
 
     {% if is_aggregate %}
     <!-- FortiGate Export Modal -->
