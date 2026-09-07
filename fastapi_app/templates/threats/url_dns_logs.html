@@ -1,1964 +1,616 @@
 {% extends "base.html" %}
+{% block title %}Zentryc - Web Activity{% endblock %}
 
 {% block extra_css %}
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-    /* Break out of base .container */
-    .container:has(.udl-page) {
-        max-width: 100%;
-        padding: 0 1.25rem;
-        margin: 1rem auto;
-    }
+    /* ================================================================
+       Web Activity — report-style web filtering analytics.
+       Layout: header (search · range · Site Clean · export) → active
+       filter chips → left report navigator + content.
+       ================================================================ */
+    .container:has(.wa) { max-width: 100% !important; }
+    .wa { --wa-prod:#22c55e; --wa-neut:#60a5fa; --wa-unprod:#f59e0b; --wa-risk:#ef4444; --wa-bw:#a78bfa;
+          --wa-surface: var(--card-bg); --wa-border: var(--border); --wa-muted: var(--text-muted);
+          color: var(--text-color); font-size: 13px; }
+    .wa a { color: inherit; text-decoration: none; }
 
-    .udl-page {
-        /* design tokens — same family as URL Analytics */
-        --udl-bg:        #0a0f1c;
-        --udl-card:      #111a2e;
-        --udl-card-hover:#162038;
-        --udl-surface-2: #162038;
-        --udl-text:      #e7ecf7;
-        --udl-text-2:    #c2cce0;
-        --udl-muted:     #8c9ab5;
-        --udl-dim:       #5a6783;
-        --udl-border:    #243154;
-        --udl-border-soft:#1c2747;
-        --udl-hairline:  rgba(124,152,210,.08);
-        --udl-input:     #0c1426;
-        --udl-primary:   #3b82f6;
-        --udl-primary-soft:rgba(59,130,246,.14);
-        --udl-success:   #22c55e;
-        --udl-danger:    #ef4444;
-        --udl-warning:   #f59e0b;
-        --udl-purple:    #a78bfa;
-        --udl-cyan:      #22d3ee;
-        --udl-pink:      #ec4899;
-        font-family: 'Outfit', system-ui, sans-serif;
-        color: var(--udl-text);
-        width: 100%;
-    }
+    /* Header */
+    .wa-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
+    .wa-title h1 { margin:0; font-size:22px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:10px; }
+    .wa-title h1 svg { width:22px; height:22px; stroke:var(--primary); fill:none; stroke-width:2; }
+    .wa-sub { color:var(--wa-muted); font-size:12px; margin-top:3px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .wa-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .wa-search { position:relative; }
+    .wa-search input { width:280px; height:32px; padding:0 10px 0 30px; background:var(--input-bg); border:1px solid var(--wa-border);
+        border-radius:7px; color:var(--text-color); font-size:12.5px; }
+    .wa-search input:focus { outline:none; border-color:var(--primary); }
+    .wa-search svg { position:absolute; left:9px; top:9px; width:14px; height:14px; stroke:var(--wa-muted); fill:none; stroke-width:2.2; }
+    .wa-seg { display:inline-flex; background:var(--input-bg); border:1px solid var(--wa-border); border-radius:7px; padding:2px; }
+    .wa-seg button { height:26px; padding:0 9px; border:0; background:transparent; color:var(--wa-muted); font-size:11.5px; font-weight:600;
+        border-radius:5px; cursor:pointer; }
+    .wa-seg button:hover { color:var(--text-color); }
+    .wa-seg button.active { background:var(--primary); color:#fff; }
+    .wa-custom { display:none; align-items:center; gap:6px; }
+    .wa-custom.open { display:inline-flex; }
+    .wa-custom input { height:30px; background:var(--input-bg); border:1px solid var(--wa-border); border-radius:6px; color:var(--text-color);
+        font-size:12px; padding:0 6px; }
+    .wa-btn { height:32px; padding:0 12px; border-radius:7px; border:1px solid var(--wa-border); background:var(--wa-surface); color:var(--text-color);
+        font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .wa-btn:hover { border-color:var(--primary); }
+    .wa-btn svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
+    .wa-btn.primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .wa-btn.sm { height:26px; padding:0 9px; font-size:11px; }
+    .wa-btn.danger { color:#fca5a5; }
+    .wa-toggle { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 10px; border:1px solid var(--wa-border); border-radius:7px;
+        background:var(--wa-surface); cursor:pointer; font-size:12px; font-weight:600; user-select:none; }
+    .wa-toggle input { accent-color:var(--success); }
+    .wa-toggle .n { color:var(--wa-muted); font-weight:500; font-size:11px; }
+    .wa-live { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--wa-muted); }
+    .wa-live .dot { width:7px; height:7px; border-radius:50%; background:#334155; }
+    .wa-live.on .dot { background:var(--success); box-shadow:0 0 0 3px rgba(34,197,94,.2); }
 
-    /* ---- ANIMATIONS ---- */
-    @keyframes udl-fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes udl-pulse  {
-        0%   { box-shadow:0 0 0 0 rgba(34,197,94,.55) }
-        70%  { box-shadow:0 0 0 9px rgba(34,197,94,0) }
-        100% { box-shadow:0 0 0 0 rgba(34,197,94,0) }
-    }
-    @keyframes udl-spin   { to { transform:rotate(360deg); } }
+    /* Filter chips */
+    .wa-chips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-height:24px; margin-bottom:12px; }
+    .wa-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 8px 3px 10px; border-radius:999px; font-size:11.5px;
+        background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#bfdbfe; }
+    .wa-chip b { font-weight:700; color:#fff; }
+    .wa-chip button { border:0; background:transparent; color:inherit; cursor:pointer; padding:0; line-height:1; font-size:14px; opacity:.7; }
+    .wa-chip button:hover { opacity:1; }
+    .wa-chip.clear { background:transparent; border-color:var(--wa-border); color:var(--wa-muted); cursor:pointer; }
+    .wa-chips-hint { color:var(--wa-muted); font-size:11.5px; }
 
-    /* ---- HEADER (gradient card) ---- */
-    .udl-header {
-        display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; align-items:center;
-        padding:1.05rem 1.2rem 1.1rem;
-        background:linear-gradient(135deg,rgba(59,130,246,.06) 0%, rgba(34,211,238,.03) 50%, transparent 100%);
-        border:1px solid var(--udl-border-soft);
-        border-radius:14px;
-        margin-bottom:1rem;
-        animation:udl-fadeIn .35s ease-out both;
-        position:relative;
-        overflow:hidden;
-    }
-    .udl-header::before {
-        content:''; position:absolute; inset:0; pointer-events:none;
-        background:radial-gradient(900px 200px at 0% 0%, rgba(59,130,246,.07), transparent 55%);
-    }
-    .udl-header > div:first-child { display:flex; align-items:center; gap:.85rem; position:relative; z-index:1; }
-    .udl-header h1 {
-        font-size: 1.4rem; font-weight: 700; color: #fff; margin: 0;
-        display: flex; align-items: center; gap: .65rem; letter-spacing:-.01em;
-    }
-    .udl-header h1::before {
-        content:''; width:42px; height:42px; border-radius:12px; flex-shrink:0;
-        background:linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%);
-        box-shadow:0 8px 24px -8px rgba(59,130,246,.45);
-        background-image:
-            linear-gradient(135deg,#3b82f6 0%,#22d3ee 100%),
-            url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>");
-        background-blend-mode:normal;
-        background-size:cover, 22px 22px;
-        background-position:center, center;
-        background-repeat:no-repeat;
-    }
-    .udl-header h1 svg { display:none; }
-    .udl-header-sub {
-        color: var(--udl-muted); font-size: .78rem; margin-top: 3px;
-        display:flex; align-items:center; gap:.45rem; flex-wrap:wrap;
-    }
-    .udl-header-sub::after { content:''; }
-    .udl-header-right { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; position:relative; z-index:1; }
+    /* Body: navigator + content */
+    .wa-body { display:grid; grid-template-columns:184px 1fr; gap:14px; align-items:start; }
+    .wa-nav { position:sticky; top:8px; background:var(--wa-surface); border:1px solid var(--wa-border); border-radius:10px; padding:6px; }
+    .wa-nav button { display:flex; align-items:center; gap:9px; width:100%; padding:8px 10px; border:0; background:transparent; color:var(--wa-muted);
+        border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; text-align:left; }
+    .wa-nav button svg { width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0; }
+    .wa-nav button:hover { background:rgba(255,255,255,.04); color:var(--text-color); }
+    .wa-nav button.active { background:rgba(59,130,246,.14); color:#fff; }
+    .wa-nav button .cnt { margin-left:auto; font-size:10.5px; font-weight:600; color:var(--wa-muted); font-family:'JetBrains Mono',monospace; }
+    .wa-nav .sep { height:1px; background:var(--wa-border); margin:6px 4px; }
+    .wa-main { min-width:0; }
 
-    /* Live indicator pill */
-    .udl-live {
-        display:inline-flex; align-items:center; gap:.45rem;
-        padding:.42rem .7rem; border-radius:9px;
-        background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.22);
-        font-size:.72rem; color:#86efac; font-weight:600;
-    }
-    .udl-live-dot {
-        width:7px; height:7px; border-radius:50%; background:var(--udl-success);
-        animation:udl-pulse 1.8s infinite;
-    }
+    /* Cards / KPIs */
+    .wa-card { background:var(--wa-surface); border:1px solid var(--wa-border); border-radius:10px; padding:14px 16px; }
+    .wa-card + .wa-card, .wa-row + .wa-row, .wa-row + .wa-card, .wa-card + .wa-row { margin-top:12px; }
+    .wa-card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .wa-card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--wa-muted); display:flex; align-items:center; gap:7px; }
+    .wa-card-title svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2; }
+    .wa-link { color:var(--primary); font-size:11.5px; font-weight:600; cursor:pointer; }
+    .wa-kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(138px, 1fr)); gap:10px; }
+    .wa-kpi { background:var(--wa-surface); border:1px solid var(--wa-border); border-radius:10px; padding:12px 14px; cursor:default; position:relative; overflow:hidden; }
+    .wa-kpi.click { cursor:pointer; }
+    .wa-kpi.click:hover { border-color:var(--primary); }
+    .wa-kpi .v { font-size:22px; font-weight:800; letter-spacing:-.02em; font-family:'JetBrains Mono',monospace; line-height:1.1; }
+    .wa-kpi .l { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--wa-muted); margin-top:5px; }
+    .wa-kpi .s { font-size:11px; color:var(--wa-muted); margin-top:3px; }
+    .wa-kpi::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--k, var(--primary)); }
+    .wa-row { display:grid; gap:12px; }
+    .wa-row.c2 { grid-template-columns:1fr 1fr; }
+    .wa-row.c3 { grid-template-columns:1fr 1fr 1fr; }
+    .wa-row.c21 { grid-template-columns:2fr 1fr; }
+    @media (max-width:1200px) { .wa-row.c3 { grid-template-columns:1fr 1fr; } }
+    @media (max-width:900px) { .wa-body { grid-template-columns:1fr; } .wa-nav { position:static; display:flex; flex-wrap:wrap; }
+        .wa-row.c2, .wa-row.c3, .wa-row.c21 { grid-template-columns:1fr; } }
+    .wa-chart { height:190px; width:100%; }
+    .wa-chart.tall { height:240px; }
+    .wa-chart.short { height:120px; }
 
-    /* Segmented time control */
-    .udl-seg {
-        display:inline-flex; align-items:center; gap:2px;
-        background:var(--udl-card); border:1px solid var(--udl-border);
-        padding:3px; border-radius:10px;
-    }
-    .udl-seg-btn {
-        padding:.38rem .7rem; border:none; background:transparent;
-        color:var(--udl-muted); font-size:.72rem; font-weight:600; letter-spacing:.02em;
-        cursor:pointer; border-radius:7px; font-family:inherit;
-        transition:all .15s; min-width:40px;
-    }
-    .udl-seg-btn:hover { color:var(--udl-text); background:rgba(59,130,246,.08); }
-    .udl-seg-btn.active {
-        background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff;
-        box-shadow:0 4px 14px -4px rgba(59,130,246,.5);
-    }
+    /* Rank lists */
+    .wa-list { display:flex; flex-direction:column; gap:2px; }
+    .wa-li { display:grid; grid-template-columns:18px minmax(0,1fr) auto; align-items:center; gap:8px; padding:5px 6px; border-radius:6px; cursor:pointer; position:relative; }
+    .wa-li:hover { background:rgba(255,255,255,.04); }
+    .wa-li .rk { color:var(--wa-muted); font-size:10.5px; font-family:'JetBrains Mono',monospace; text-align:right; }
+    .wa-li .nm { min-width:0; display:flex; flex-direction:column; }
+    .wa-li .nm .t { font-weight:600; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .wa-li .nm .u { color:var(--wa-muted); font-size:10.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; }
+    .wa-li .nm .bar { height:3px; border-radius:2px; background:var(--k, var(--primary)); margin-top:4px; opacity:.8; }
+    .wa-li .vl { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; text-align:right; white-space:nowrap; }
+    .wa-li .vl small { display:block; font-size:10px; color:var(--wa-muted); font-weight:500; }
+    .wa-empty { color:var(--wa-muted); font-size:12px; padding:18px; text-align:center; }
 
-    /* Hide the underlying select; keep value bound via JS */
-    #udl-time-range { position:absolute; opacity:0; pointer-events:none; width:0; height:0; }
+    /* Tables */
+    .wa-table-wrap { overflow-x:auto; }
+    table.wa-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .wa-table th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--wa-muted); font-weight:700;
+        padding:8px 10px; border-bottom:1px solid var(--wa-border); white-space:nowrap; cursor:pointer; user-select:none; }
+    .wa-table th.r, .wa-table td.r { text-align:right; }
+    .wa-table th.sorted { color:#fff; }
+    .wa-table td { padding:8px 10px; border-bottom:1px solid rgba(51,65,85,.5); vertical-align:middle; }
+    .wa-table tbody tr { cursor:pointer; }
+    .wa-table tbody tr:hover { background:rgba(255,255,255,.035); }
+    .wa-table .mono { font-family:'JetBrains Mono',monospace; font-size:11.5px; }
+    .wa-table .muted { color:var(--wa-muted); }
+    .wa-table .ell { max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .wa-table .name { font-weight:600; }
+    .wa-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .wa-toolbar select, .wa-toolbar input[type=text] { height:28px; width:auto; background:var(--input-bg); border:1px solid var(--wa-border); border-radius:6px;
+        color:var(--text-color); font-size:12px; padding:0 8px; margin:0; }
+    .wa-toolbar label { white-space:nowrap; margin:0; }
+    .wa-toolbar .spacer { flex:1; }
+    .wa-toolbar label { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--wa-muted); cursor:pointer; }
+    .wa-pager { display:flex; align-items:center; justify-content:space-between; margin-top:10px; font-size:12px; color:var(--wa-muted); }
 
-    /* ---- STAT CARDS ---- */
-    .udl-stats {
-        display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
-        gap:.65rem; margin-bottom:.85rem;
-        animation:udl-fadeIn .4s ease-out .07s both;
-    }
-    .udl-stat {
-        position:relative; overflow:hidden;
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px; padding:.7rem .9rem;
-        transition:border-color .15s, transform .15s, box-shadow .2s;
-    }
-    .udl-stat::before {
-        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-        background:var(--udl-primary); opacity:.55;
-    }
-    .udl-stat:hover {
-        transform:translateY(-2px); border-color:rgba(124,152,210,.22);
-        box-shadow:0 14px 30px -16px rgba(0,0,0,.5);
-    }
-    .udl-stat-val {
-        font-size:1.4rem; font-weight:800; color:#fff; line-height:1.05;
-        font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;
-    }
-    .udl-stat-val.danger  { color:#fca5a5; }
-    .udl-stat-val.success { color:#86efac; }
-    .udl-stat-val.warning { color:#fcd34d; }
-    .udl-stat-val.purple  { color:#c4b5fd; }
-    .udl-stat-val.cyan    { color:#67e8f9; }
-    .udl-stat-val.primary { color:#93c5fd; }
-    /* Colored left rail to match value tone */
-    .udl-stat:has(.udl-stat-val.danger)::before  { background:var(--udl-danger); }
-    .udl-stat:has(.udl-stat-val.success)::before { background:var(--udl-success); }
-    .udl-stat:has(.udl-stat-val.warning)::before { background:var(--udl-warning); }
-    .udl-stat:has(.udl-stat-val.purple)::before  { background:var(--udl-purple); }
-    .udl-stat:has(.udl-stat-val.cyan)::before    { background:var(--udl-cyan); }
-    .udl-stat-label {
-        font-size:.62rem; color:var(--udl-muted); text-transform:uppercase;
-        letter-spacing:.07em; margin-top:4px; font-weight:600;
-    }
+    /* Badges */
+    .wa-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:5px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .wa-badge.productive { background:rgba(34,197,94,.14); color:#86efac; }
+    .wa-badge.neutral { background:rgba(96,165,250,.14); color:#93c5fd; }
+    .wa-badge.unproductive { background:rgba(245,158,11,.16); color:#fcd34d; }
+    .wa-badge.risky { background:rgba(239,68,68,.16); color:#fca5a5; }
+    .wa-badge.blocked { background:rgba(239,68,68,.16); color:#fca5a5; }
+    .wa-badge.allowed { background:rgba(34,197,94,.14); color:#86efac; }
+    .wa-badge.cat { background:rgba(148,163,184,.12); color:#cbd5e1; font-weight:600; cursor:pointer; }
+    .wa-badge.cat:hover { background:rgba(148,163,184,.22); }
+    .wa-mini { display:flex; height:6px; border-radius:3px; overflow:hidden; background:rgba(148,163,184,.15); min-width:80px; }
+    .wa-mini i { display:block; height:100%; }
+    .wa-stack { display:flex; height:14px; border-radius:7px; overflow:hidden; background:rgba(148,163,184,.12); }
+    .wa-stack i { display:block; height:100%; transition:width .3s; }
+    .wa-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--wa-muted); margin-top:8px; }
+    .wa-legend span { display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+    .wa-legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
+    .wa-legend b { color:var(--text-color); font-family:'JetBrains Mono',monospace; font-weight:600; }
+    .wa-chips-inline { display:flex; gap:4px; flex-wrap:wrap; }
+    .wa-chips-inline span { font-size:10.5px; padding:1px 6px; border-radius:4px; background:rgba(148,163,184,.12); color:#cbd5e1; cursor:pointer; }
+    .wa-chips-inline span:hover { background:rgba(59,130,246,.25); }
 
-    /* ---- TABS ---- */
-    .udl-tabs {
-        display:flex; gap:2px;
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:11px; padding:4px;
-        margin-bottom:.85rem; width:fit-content; max-width:100%;
-        animation:udl-fadeIn .4s ease-out .1s both;
-        overflow:auto;
-    }
-    .udl-tab {
-        padding:.5rem 1.1rem; border-radius:8px; font-size:.78rem; font-weight:600;
-        color:var(--udl-muted); background:transparent; border:none; cursor:pointer;
-        transition:all .15s; display:inline-flex; align-items:center; gap:.45rem;
-        white-space:nowrap; font-family:inherit;
-    }
-    .udl-tab:hover { color:var(--udl-text); background:rgba(59,130,246,.07); }
-    .udl-tab.active {
-        color:#fff;
-        background:linear-gradient(135deg,#3b82f6,#2563eb);
-        box-shadow:0 4px 14px -4px rgba(59,130,246,.55);
-    }
-    .udl-tab svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2.1; }
-    .udl-tab-count {
-        font-size:.65rem; padding:1px 7px; border-radius:9px;
-        background:rgba(255,255,255,.12); font-family:'JetBrains Mono',monospace;
-        font-weight:700;
-    }
-    .udl-tab:not(.active) .udl-tab-count {
-        background:rgba(124,152,210,.12); color:var(--udl-text-2);
-    }
-
-    /* ---- FILTER BAR ---- */
-    .udl-filters {
-        display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
-        padding:.6rem .65rem; margin-bottom:.85rem;
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px;
-        animation:udl-fadeIn .4s ease-out .15s both;
-    }
-    .udl-filters select, .udl-filters input[type="text"] {
-        background:var(--udl-input); color:var(--udl-text); border:1px solid var(--udl-border);
-        padding:.42rem .65rem; border-radius:8px; font-size:.78rem; font-family:inherit;
-        min-width:0; transition:border-color .15s, background .15s;
-    }
-    .udl-filters select { max-width:200px; cursor:pointer; }
-    .udl-filters select:hover, .udl-filters input:hover { background:var(--udl-surface-2); }
-    .udl-filters select:focus, .udl-filters input:focus { outline:none; border-color:var(--udl-primary); }
-    .udl-filters input[type="text"] { flex:1; min-width:120px; }
-    .udl-search-wrap {
-        display:flex; flex:1; min-width:180px; position:relative;
-    }
-    .udl-search-wrap input { width:100%; padding-left:32px; }
-    .udl-search-wrap svg {
-        position:absolute; left:10px; top:50%; transform:translateY(-50%);
-        width:14px; height:14px; stroke:var(--udl-dim); fill:none; stroke-width:2;
-    }
-    .udl-btn {
-        padding:.45rem .85rem; border-radius:8px; font-size:.78rem; font-weight:600;
-        font-family:inherit; cursor:pointer; border:1px solid var(--udl-border);
-        background:var(--udl-card); color:var(--udl-text); transition:all .15s;
-        display:inline-flex; align-items:center; gap:.4rem;
-    }
-    .udl-btn:hover { border-color:#3a4d7c; background:var(--udl-surface-2); }
-    .udl-btn-primary {
-        background:linear-gradient(135deg,#3b82f6,#2563eb); border-color:transparent; color:#fff;
-        box-shadow:0 4px 14px -4px rgba(59,130,246,.55);
-    }
-    .udl-btn-primary:hover { filter:brightness(1.08); }
-    .udl-btn-ghost { background:transparent; color:var(--udl-muted); }
-    .udl-btn-ghost:hover { color:#fff; border-color:var(--udl-dim); background:var(--udl-card); }
-    .udl-btn svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2; }
-
-    /* ---- SITECLEAN TOGGLE ---- */
-    .udl-clean-toggle {
-        display:flex; align-items:center; gap:.45rem; cursor:pointer;
-        font-size:.76rem; color:var(--udl-muted); padding:.4rem .65rem;
-        border-radius:8px; border:1px solid var(--udl-border);
-        background:var(--udl-input); transition:all .15s; white-space:nowrap;
-        margin-left:.15rem;
-    }
-    .udl-clean-toggle:hover { border-color:var(--udl-primary); }
-    .udl-clean-toggle input { display:none; }
-    .udl-clean-slider {
-        width:30px; height:16px; border-radius:9px;
-        background:var(--udl-border); position:relative; transition:background .2s; flex-shrink:0;
-    }
-    .udl-clean-slider::after {
-        content:''; position:absolute; left:2px; top:2px;
-        width:12px; height:12px; border-radius:50%;
-        background:#fff; transition:transform .2s; box-shadow:0 1px 2px rgba(0,0,0,.3);
-    }
-    .udl-clean-toggle input:checked ~ .udl-clean-slider {
-        background:linear-gradient(135deg,#22c55e,#10b981);
-    }
-    .udl-clean-toggle input:checked ~ .udl-clean-slider::after { transform:translateX(14px); }
-    .udl-clean-toggle input:checked ~ .udl-clean-label { color:#86efac; font-weight:700; }
-    .udl-clean-badge {
-        padding:1px 7px; border-radius:8px; font-size:.65rem; font-weight:700;
-        background:rgba(239,68,68,.12); color:#fca5a5; font-family:'JetBrains Mono',monospace;
-    }
-
-    /* ---- LOG TABLE ---- */
-    .udl-table-wrap {
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:14px; overflow:hidden;
-        animation:udl-fadeIn .4s ease-out .2s both;
-        flex:1; display:flex; flex-direction:column;
-        transition:border-color .15s;
-    }
-    .udl-table-wrap:hover { border-color:rgba(124,152,210,.18); }
-    .udl-table-header {
-        display:flex; justify-content:space-between; align-items:center; gap:.5rem;
-        padding:.82rem 1rem .8rem;
-        border-bottom:1px solid var(--udl-border-soft);
-        background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
-    }
-    .udl-table-title {
-        font-size:.78rem; font-weight:700; color:#fff;
-        text-transform:uppercase; letter-spacing:.06em;
-        display:inline-flex; align-items:center; gap:.5rem;
-    }
-    .udl-table-title svg {
-        width:14px; height:14px; stroke:#93c5fd; fill:none; stroke-width:2.2;
-        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
-    }
-    .udl-table-count { font-size:.7rem; color:var(--udl-muted); font-family:'JetBrains Mono',monospace; }
-    .udl-table-count strong { color:#fff; }
-
-    .udl-table { width:100%; border-collapse:collapse; font-size:.78rem; }
-    .udl-table thead { background:transparent; }
-    .udl-table th {
-        padding:.55rem .8rem; text-align:left; font-weight:700;
-        color:var(--udl-muted); font-size:.62rem; text-transform:uppercase;
-        letter-spacing:.06em; white-space:nowrap;
-        border-bottom:1px solid var(--udl-border-soft);
-        background:linear-gradient(180deg,rgba(0,0,0,.18),rgba(0,0,0,.08));
-        position:sticky; top:0; z-index:2; backdrop-filter:blur(4px);
-    }
-    .udl-table td {
-        padding:.5rem .8rem; border-bottom:1px solid var(--udl-hairline);
-        color:var(--udl-text); white-space:nowrap; max-width:320px;
-        overflow:hidden; text-overflow:ellipsis; vertical-align:middle;
-    }
-    .udl-table tbody tr { transition:background .12s; cursor:pointer; }
-    .udl-table tbody tr:hover { background:rgba(59,130,246,.06); }
-    .udl-table tbody tr.udl-expanded { background:rgba(59,130,246,.1); }
-
-    .udl-table .udl-ts { font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--udl-dim); }
-    .udl-table .udl-ip { font-family:'JetBrains Mono',monospace; font-size:.74rem; color:var(--udl-cyan); }
-    .udl-table .udl-url-cell { color:#93c5fd; max-width:400px; overflow:hidden; text-overflow:ellipsis; }
-    .udl-table .udl-domain-cell { color:#fcd34d; font-weight:500; }
-    .udl-table .udl-user-cell { color:var(--udl-purple); }
-
-    /* Action / severity badges */
-    .udl-badge {
-        display:inline-block; padding:2px 8px; border-radius:9999px;
-        font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
-    }
-    .udl-badge-allow   { background:rgba(34,197,94,.14);  color:#86efac; }
-    .udl-badge-alert   { background:rgba(245,158,11,.14); color:#fcd34d; }
-    .udl-badge-block   { background:rgba(239,68,68,.14);  color:#fca5a5; }
-    .udl-badge-sinkhole{ background:rgba(168,85,247,.14); color:#c4b5fd; }
-    .udl-badge-other   { background:rgba(148,163,184,.12); color:#cbd5e1; }
-    .udl-sev-critical  { background:rgba(239,68,68,.18);  color:#fca5a5; }
-    .udl-sev-high      { background:rgba(249,115,22,.16); color:#fdba74; }
-    .udl-sev-medium    { background:rgba(245,158,11,.16); color:#fcd34d; }
-    .udl-sev-low       { background:rgba(34,197,94,.14);  color:#86efac; }
-    .udl-sev-informational { background:rgba(59,130,246,.14); color:#93c5fd; }
-    .udl-method {
-        font-family:'JetBrains Mono',monospace; font-size:.68rem; font-weight:700;
-        color:#86efac; padding:2px 6px; border-radius:5px;
-        background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.15);
-    }
-    .udl-vendor {
-        display:inline-block; padding:2px 7px; border-radius:5px;
-        font-size:.6rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
-    }
-    /* New cell styles for cleaner URL/DNS log rows */
-    .udl-cell-user { line-height: 1.18; min-width: 0; }
-    .udl-cell-user b { display: block; color: var(--udl-purple); font-weight: 600; font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
-    .udl-cell-user span { display: block; color: var(--udl-dim); font-size: .7rem; font-family: 'JetBrains Mono', monospace; }
-    .udl-cell-dom { max-width: 480px; }
-    .udl-cell-host { font-family: 'JetBrains Mono', monospace; font-size: .79rem; font-weight: 600; color: #93c5fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .udl-cell-path { font-family: 'JetBrains Mono', monospace; font-size: .7rem; color: var(--udl-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-    .udl-cell-cat { display: inline-block; padding: 1px 8px; border-radius: 9999px; background: rgba(148,163,184,.07); color: var(--udl-text); font-size: .72rem; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-    .udl-cell-bytes { font-family: 'JetBrains Mono', monospace; font-size: .73rem; color: #c4b5fd; }
-    .udl-table .mono { font-family: 'JetBrains Mono', monospace; font-size: .73rem; }
-    .udl-table .r { text-align: right; }
-    /* zebra striping for readability */
-    .udl-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
-    .udl-table tbody tr.udl-expanded td { background: rgba(59,130,246,.08); }
-    .udl-vendor-pa { background:rgba(59,130,246,.18); color:#93c5fd; }
-    .udl-vendor-fg { background:rgba(34,197,94,.16); color:#86efac; }
-    .udl-hostname-sub { display:block; font-size:.66rem; color:#fcd34d; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; }
-
-    /* ---- EXPANDED ROW DETAIL ---- */
-    .udl-detail-row td { padding:0 !important; border-bottom:1px solid var(--udl-border-soft); }
-    .udl-detail-content {
-        padding:1rem 1.25rem;
-        background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.1));
-        display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:.85rem;
-    }
-    .udl-detail-group h4 {
-        font-size:.66rem; text-transform:uppercase; color:#93c5fd;
-        letter-spacing:.07em; margin-bottom:.45rem; font-weight:700;
-        padding-bottom:.35rem; border-bottom:1px solid var(--udl-border-soft);
-    }
-    .udl-detail-field {
-        display:flex; gap:.6rem; font-size:.76rem; padding:3px 0;
-    }
-    .udl-detail-field .lbl { color:var(--udl-dim); min-width:90px; flex-shrink:0; font-size:.72rem; }
-    .udl-detail-field .val { color:var(--udl-text); word-break:break-all; font-family:'JetBrains Mono',monospace; font-size:.74rem; }
-    .udl-detail-field .val a { color:#93c5fd; text-decoration:none; }
-    .udl-detail-field .val a:hover { text-decoration:underline; }
-
-    /* ---- PAGINATION ---- */
-    .udl-pagination {
-        display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem;
-        padding:.7rem 1rem; border-top:1px solid var(--udl-border-soft);
-        background:linear-gradient(180deg,transparent,rgba(0,0,0,.12));
-    }
-    .udl-pagination-info { font-size:.74rem; color:var(--udl-muted); font-family:'JetBrains Mono',monospace; }
-    .udl-pagination-info strong { color:#fff; }
-    .udl-pagination-btns { display:flex; gap:.3rem; }
-    .udl-page-btn {
-        padding:.32rem .65rem; border-radius:7px; font-size:.72rem; font-weight:600;
-        background:transparent; border:1px solid var(--udl-border); color:var(--udl-muted);
-        cursor:pointer; transition:all .15s; font-family:inherit;
-    }
-    .udl-page-btn:hover:not(:disabled) {
-        border-color:var(--udl-primary); color:#fff; background:rgba(59,130,246,.08);
-    }
-    .udl-page-btn.active {
-        background:linear-gradient(135deg,#3b82f6,#2563eb); border-color:transparent; color:#fff;
-        box-shadow:0 3px 10px -3px rgba(59,130,246,.55);
-    }
-    .udl-page-btn:disabled { opacity:.3; cursor:default; }
-
-    /* ---- LOADING / EMPTY ---- */
-    .udl-loading {
-        text-align:center; padding:3rem; color:var(--udl-muted); font-size:.82rem;
-        display:flex; flex-direction:column; align-items:center; gap:.5rem;
-    }
-    .udl-loading svg { width:24px; height:24px; animation:udl-spin .8s linear infinite;
-        stroke:var(--udl-primary); fill:none; stroke-width:2; }
-    .udl-empty { text-align:center; padding:3rem; color:var(--udl-dim); }
-    .udl-empty svg { width:38px; height:38px; stroke:var(--udl-dim); fill:none; stroke-width:1.4; margin-bottom:.75rem; opacity:.6; }
-
-    /* Scrollable table body */
-    .udl-table-scroll { flex:1; overflow-y:auto; }
-    .udl-table-scroll::-webkit-scrollbar { width:8px; height:8px; }
-    .udl-table-scroll::-webkit-scrollbar-thumb { background:#2a3553; border-radius:4px; }
-    .udl-table-scroll::-webkit-scrollbar-track { background:transparent; }
-
-    /* ---- SIDE PANEL ---- */
-    .udl-layout { display:grid; grid-template-columns:1fr 300px; gap:.85rem; min-height:calc(100vh - 380px); }
-    .udl-main { min-width:0; display:flex; flex-direction:column; overflow:hidden; contain:size; }
-    .udl-sidebar { display:flex; flex-direction:column; gap:.7rem; animation:udl-fadeIn .4s ease-out .25s both; }
-    .udl-sidebar-card {
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px; padding:.85rem .9rem; overflow:hidden;
-        transition:border-color .15s;
-    }
-    .udl-sidebar-card:hover { border-color:rgba(124,152,210,.18); }
-    .udl-sidebar-card h3 {
-        font-size:.7rem; text-transform:uppercase; letter-spacing:.07em;
-        color:#fff; margin:0 0 .65rem 0; font-weight:700;
-        display:flex; align-items:center; gap:.45rem;
-        padding-bottom:.45rem; border-bottom:1px solid var(--udl-border-soft);
-    }
-    .udl-sidebar-card h3 svg {
-        width:13px; height:13px; stroke:#93c5fd; fill:none; stroke-width:2.2;
-        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
-    }
-    .udl-sidebar-list { list-style:none; padding:0; margin:0; }
-    .udl-sidebar-list li {
-        display:flex; justify-content:space-between; align-items:center;
-        padding:5px 0; font-size:.76rem; border-bottom:1px solid var(--udl-hairline);
-    }
-    .udl-sidebar-list li:last-child { border-bottom:none; }
-    .udl-sidebar-list .item-name { color:var(--udl-text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
-    .udl-sidebar-list .item-count {
-        font-weight:700; color:#fff; font-family:'JetBrains Mono',monospace; font-size:.7rem;
-        padding:1px 7px; border-radius:9999px; background:rgba(124,152,210,.1);
-    }
-    .udl-action-bar { display:flex; gap:5px; flex-wrap:wrap; }
-    .udl-action-chip {
-        padding:3px 9px; border-radius:9999px; font-size:.64rem; font-weight:700;
-        display:inline-flex; align-items:center; gap:5px; letter-spacing:.04em;
-        text-transform:uppercase;
-    }
-    .udl-action-chip strong { font-family:'JetBrains Mono',monospace; font-weight:700; }
-
-    /* ---- SIDEBAR CLICKABLE ITEMS ---- */
-    .udl-sidebar-list li.udl-clickable {
-        cursor:pointer; border-radius:7px; padding:5px 7px; margin:0 -7px;
-        transition:background .15s, transform .1s, border-color .15s;
-        border-left:3px solid transparent; border-bottom:none;
-    }
-    .udl-sidebar-list li.udl-clickable + li.udl-clickable { border-top:1px solid var(--udl-hairline); margin-top:0; }
-    .udl-sidebar-list li.udl-clickable:hover {
-        background:rgba(59,130,246,.08); transform:translateX(2px);
-    }
-    .udl-sidebar-list li.udl-clickable.udl-sb-active {
-        background:rgba(59,130,246,.13); border-left-color:var(--udl-primary);
-    }
-    .udl-sidebar-list li.udl-clickable.udl-sb-active .item-name { color:#fff; font-weight:600; }
-    .udl-sidebar-list li.udl-clickable .item-name { color:#93c5fd; }
-
-    /* ---- INLINE DRILLDOWN VIEW ---- */
-    .udl-dd-view { display:none; animation:udl-fadeIn .3s ease-out both; }
-    .udl-dd-view.active { display:block; }
-
-    .udl-dd-back {
-        display:inline-flex; align-items:center; gap:.42rem;
-        color:#93c5fd; font-size:.78rem; font-weight:600;
-        cursor:pointer; padding:.45rem .75rem; border-radius:9px;
-        background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.18);
-        transition:all .15s; margin-bottom:1rem;
-    }
-    .udl-dd-back:hover { background:rgba(59,130,246,.15); border-color:rgba(59,130,246,.36); }
-    .udl-dd-back svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
-
-    .udl-dd-header {
-        display:flex; align-items:center; gap:.85rem; margin-bottom:1rem;
-        padding:.9rem 1.1rem; border:1px solid var(--udl-border-soft); border-radius:14px;
-        background:linear-gradient(135deg,rgba(59,130,246,.06) 0%, rgba(34,211,238,.03) 50%, transparent 100%);
-        position:relative; overflow:hidden;
-    }
-    .udl-dd-header::before {
-        content:''; position:absolute; inset:0; pointer-events:none;
-        background:radial-gradient(700px 180px at 0% 0%, rgba(59,130,246,.06), transparent 55%);
-    }
-    .udl-dd-icon {
-        width:46px; height:46px; border-radius:12px; flex-shrink:0;
-        display:flex; align-items:center; justify-content:center;
-        position:relative; z-index:1; box-shadow:0 8px 24px -8px rgba(59,130,246,.35);
-    }
-    .udl-dd-icon svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; }
-    .udl-dd-title { font-size:1.15rem; font-weight:700; color:#fff; margin:0; position:relative; z-index:1; letter-spacing:-.01em; }
-    .udl-dd-sub { font-size:.72rem; color:var(--udl-muted); margin-top:3px; position:relative; z-index:1; }
-
-    .udl-dd-stats {
-        display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
-        gap:.6rem; margin-bottom:1rem;
-    }
-    .udl-dd-stat {
-        position:relative; overflow:hidden;
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px; padding:.7rem .9rem;
-        transition:border-color .15s, transform .15s;
-    }
-    .udl-dd-stat::before {
-        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-        background:var(--udl-primary); opacity:.55;
-    }
-    .udl-dd-stat:hover { transform:translateY(-2px); border-color:rgba(124,152,210,.22); }
-    .udl-dd-stat .val {
-        font-size:1.35rem; font-weight:800; color:#fff;
-        font-family:'JetBrains Mono',monospace; letter-spacing:-.02em;
-    }
-    .udl-dd-stat .val.danger  { color:#fca5a5; }
-    .udl-dd-stat .val.success { color:#86efac; }
-    .udl-dd-stat .val.warning { color:#fcd34d; }
-    .udl-dd-stat .val.primary { color:#93c5fd; }
-    .udl-dd-stat:has(.val.danger)::before  { background:var(--udl-danger); }
-    .udl-dd-stat:has(.val.success)::before { background:var(--udl-success); }
-    .udl-dd-stat:has(.val.warning)::before { background:var(--udl-warning); }
-    .udl-dd-stat .lbl {
-        font-size:.62rem; color:var(--udl-muted); text-transform:uppercase;
-        letter-spacing:.07em; margin-top:4px; font-weight:600;
-    }
-
-    /* Drill-down body: main logs + right sidebar */
-    .udl-dd-body { display:flex; gap:.85rem; }
-    .udl-dd-main { flex:1; min-width:0; }
-    .udl-dd-right { width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:.7rem; }
-    @media (max-width:1100px) {
-        .udl-dd-body { flex-direction:column; }
-        .udl-dd-right { width:100%; }
-    }
-
-    .udl-dd-card {
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px; padding:.85rem .9rem; overflow:hidden;
-        transition:border-color .15s;
-    }
-    .udl-dd-card:hover { border-color:rgba(124,152,210,.18); }
-    .udl-dd-card h4 {
-        font-size:.7rem; text-transform:uppercase; letter-spacing:.07em;
-        color:#fff; margin:0 0 .55rem 0; font-weight:700;
-        display:flex; align-items:center; gap:.42rem;
-        padding-bottom:.42rem; border-bottom:1px solid var(--udl-border-soft);
-    }
-    .udl-dd-card h4 svg {
-        width:13px; height:13px; stroke:#93c5fd; fill:none; stroke-width:2.2;
-        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
-    }
-    .udl-dd-card-list { list-style:none; padding:0; margin:0; }
-    .udl-dd-card-list li {
-        display:flex; justify-content:space-between; align-items:center;
-        padding:5px 0; font-size:.74rem; border-bottom:1px solid var(--udl-hairline);
-    }
-    .udl-dd-card-list li:last-child { border-bottom:none; }
-    .udl-dd-card-list li.udl-dd-clickable {
-        cursor:pointer; border-radius:6px; padding:4px 6px; margin:0 -6px;
-        transition:background .15s, transform .1s; border-bottom:none;
-    }
-    .udl-dd-card-list li.udl-dd-clickable + li.udl-dd-clickable { border-top:1px solid var(--udl-hairline); }
-    .udl-dd-card-list li.udl-dd-clickable:hover { background:rgba(59,130,246,.08); transform:translateX(2px); }
-    .udl-dd-card-list li.udl-dd-active { background:rgba(59,130,246,.14); }
-    .udl-dd-card-list li.udl-dd-clickable .dd-name { color:#93c5fd; }
-    .udl-dd-card-list .dd-name {
-        color:var(--udl-text-2); white-space:nowrap; overflow:hidden;
-        text-overflow:ellipsis; max-width:190px;
-    }
-    .udl-dd-card-list .dd-count {
-        font-weight:700; color:#fff; font-family:'JetBrains Mono',monospace; font-size:.68rem;
-        padding:1px 7px; border-radius:9999px; background:rgba(124,152,210,.1);
-    }
-    .udl-dd-actions { display:flex; gap:5px; flex-wrap:wrap; }
-
-    .udl-dd-logs-section {
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:14px; overflow:hidden;
-        transition:border-color .15s;
-    }
-    .udl-dd-logs-section:hover { border-color:rgba(124,152,210,.18); }
-    .udl-dd-logs-header {
-        display:flex; justify-content:space-between; align-items:center; gap:.5rem;
-        padding:.82rem 1rem .8rem;
-        border-bottom:1px solid var(--udl-border-soft);
-        background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
-    }
-    .udl-dd-logs-title {
-        font-size:.78rem; font-weight:700; color:#fff;
-        text-transform:uppercase; letter-spacing:.06em;
-        display:inline-flex; align-items:center; gap:.5rem;
-    }
-    .udl-dd-logs-title svg {
-        width:13px; height:13px; stroke:#93c5fd; fill:none; stroke-width:2.2;
-        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
-    }
-    .udl-dd-logs-count { font-size:.7rem; color:var(--udl-muted); font-family:'JetBrains Mono',monospace; }
-    .udl-dd-logs-count strong { color:#fff; }
-    .udl-dd-filter-tag {
-        display:inline-flex; align-items:center; gap:5px; font-size:.66rem;
-        padding:3px 9px; border-radius:9999px; background:rgba(59,130,246,.13);
-        color:#93c5fd; margin-left:.55rem; font-weight:600;
-    }
-    .udl-dd-filter-tag .dd-clear {
-        cursor:pointer; font-size:.8rem; opacity:.7; transition:opacity .15s;
-    }
-    .udl-dd-filter-tag .dd-clear:hover { opacity:1; }
-
-    .udl-dd-loading {
-        display:flex; align-items:center; justify-content:center; gap:.55rem;
-        padding:3rem 1rem; color:var(--udl-muted); font-size:.82rem;
-    }
-    .udl-dd-loading svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; animation:udl-spin .8s linear infinite; }
-
-    @media (max-width: 1200px) {
-        .udl-layout { grid-template-columns: 1fr; }
-        .udl-sidebar { display: none; }
-        .udl-dd-right { display: none; }
-    }
-
-    /* ---- TIMELINE STRIP ---- */
-    .udl-tl-strip {
-        background:var(--udl-card); border:1px solid var(--udl-border-soft);
-        border-radius:12px; margin-bottom:.85rem; overflow:hidden;
-        animation:udl-fadeIn .4s ease-out .18s both;
-        transition:border-color .15s;
-    }
-    .udl-tl-strip:hover { border-color:rgba(124,152,210,.18); }
-    .udl-tl-hdr {
-        display:flex; justify-content:space-between; align-items:center; gap:.5rem;
-        padding:.7rem .95rem;
-        border-bottom:1px solid var(--udl-border-soft);
-        background:linear-gradient(180deg,rgba(255,255,255,.012),transparent);
-    }
-    .udl-tl-title {
-        font-size:.74rem; font-weight:700; color:#fff;
-        text-transform:uppercase; letter-spacing:.06em;
-        display:inline-flex; align-items:center; gap:.5rem;
-    }
-    .udl-tl-title svg {
-        width:13px; height:13px; stroke:#93c5fd; fill:none; stroke-width:2.2;
-        padding:5px; border-radius:7px; background:rgba(59,130,246,.13); box-sizing:content-box;
-    }
-    .udl-tl-legend { display:flex; gap:.85rem; font-size:.66rem; color:var(--udl-muted); }
-    .udl-tl-legend span { display:inline-flex; align-items:center; gap:.35rem; font-weight:600; }
-    .udl-tl-dot { width:8px; height:8px; border-radius:3px; display:inline-block; }
-    .udl-tl-chart { height:120px; padding:.3rem; }
-
-    /* ---- CHIPS for filter context ---- */
-    .udl-chip {
-        display:inline-flex; align-items:center; gap:.32rem;
-        padding:2px 9px; border-radius:9999px;
-        background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.22);
-        color:#93c5fd; font-size:.66rem; font-weight:600; letter-spacing:.02em;
-    }
-    .udl-chip svg { width:10px; height:10px; stroke:currentColor; fill:none; stroke-width:2.2; }
+    /* Profile header */
+    .wa-crumb { display:flex; align-items:center; gap:8px; color:var(--wa-muted); font-size:12px; margin-bottom:8px; }
+    .wa-crumb a { color:var(--primary); cursor:pointer; font-weight:600; }
+    .wa-profile { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .wa-avatar { width:44px; height:44px; border-radius:11px; background:linear-gradient(135deg,#1d4ed8,#7c3aed); display:flex; align-items:center; justify-content:center;
+        font-weight:800; font-size:16px; color:#fff; flex-shrink:0; }
+    .wa-avatar.site { background:linear-gradient(135deg,#0891b2,#2563eb); }
+    .wa-profile h2 { margin:0; font-size:19px; font-weight:800; letter-spacing:-.01em; }
+    .wa-profile .meta { display:flex; gap:12px; flex-wrap:wrap; color:var(--wa-muted); font-size:11.5px; margin-top:3px; }
+    .wa-profile .meta b { color:var(--text-color); font-weight:600; }
+    .wa-profile .actions { margin-left:auto; display:flex; gap:8px; }
+    .wa-hours { display:grid; grid-template-columns:repeat(24, 1fr); gap:3px; align-items:end; height:64px; }
+    .wa-hours i { display:block; background:var(--primary); border-radius:2px 2px 0 0; min-height:2px; opacity:.85; position:relative; }
+    .wa-hours i:hover { opacity:1; }
+    .wa-hours-lbl { display:grid; grid-template-columns:repeat(24, 1fr); gap:3px; font-size:9px; color:var(--wa-muted); text-align:center; margin-top:3px; font-family:'JetBrains Mono',monospace; }
+    .wa-loading { color:var(--wa-muted); font-size:12px; padding:30px; text-align:center; }
+    .wa-err { color:#fca5a5; font-size:12px; padding:14px; }
+    .wa-url { font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#93c5fd; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:520px; display:block; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="udl-page">
-
-    <!-- HEADER -->
-    <div class="udl-header">
-        <div>
-            <h1>
-                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                URL &amp; DNS Logs
-            </h1>
-            <div class="udl-header-sub">
-                <span>Fortinet + Palo Alto</span>
-                <span style="width:3px;height:3px;border-radius:50%;background:var(--udl-dim)"></span>
-                <span>URL Filtering &amp; DNS Traffic Analysis</span>
-                <span class="udl-chip" id="udl-active-range" style="margin-left:.4rem">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span id="udl-active-range-text">Last 24 hours</span>
-                </span>
-            </div>
+<div class="wa" id="wa">
+    <div class="wa-head">
+        <div class="wa-title">
+            <h1><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Web Activity</h1>
+            <div class="wa-sub"><span>Web filtering &amp; DNS · users, sites, categories, searches, bandwidth</span>
+                <span class="wa-live" id="wa-live" title="Auto-refresh the current view every 60 s"><span class="dot"></span><span id="wa-live-txt">live off</span></span></div>
         </div>
-        <div class="udl-header-right">
-            <div class="udl-live" title="Auto-refresh">
-                <span class="udl-live-dot"></span>
-                <span id="udl-refresh-status" style="color:var(--udl-muted);font-family:'JetBrains Mono',monospace;font-weight:500">live</span>
+        <div class="wa-controls">
+            <div class="wa-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input id="wa-q" type="text" placeholder="Search user, site, IP, keyword… (Enter)" autocomplete="off"></div>
+            <div class="wa-seg" id="wa-range">
+                <button data-h="1">1H</button><button data-h="6">6H</button><button data-h="24" class="active">24H</button>
+                <button data-h="72">3D</button><button data-h="168">7D</button><button data-h="720">30D</button><button data-h="custom">Custom</button>
             </div>
-
-            <div class="udl-seg" id="udl-range-seg" role="tablist" aria-label="Time range">
-                <button class="udl-seg-btn" data-h="1">1H</button>
-                <button class="udl-seg-btn" data-h="6">6H</button>
-                <button class="udl-seg-btn active" data-h="24">24H</button>
-                <button class="udl-seg-btn" data-h="72">3D</button>
-                <button class="udl-seg-btn" data-h="168">7D</button>
-                <button class="udl-seg-btn" data-h="720">30D</button>
+            <div class="wa-custom" id="wa-custom">
+                <input type="datetime-local" id="wa-start"> <span style="color:var(--wa-muted)">→</span> <input type="datetime-local" id="wa-end">
+                <button class="wa-btn sm primary" onclick="ZWA.applyCustom()">Apply</button>
             </div>
-            <select id="udl-time-range" aria-hidden="true" tabindex="-1">
-                <option value="1">Last 1 hour</option>
-                <option value="6">Last 6 hours</option>
-                <option value="24" selected>Last 24 hours</option>
-                <option value="72">Last 3 days</option>
-                <option value="168">Last 7 days</option>
-                <option value="720">Last 30 days</option>
-            </select>
-
-            <button class="udl-btn udl-btn-primary" onclick="refreshAll()">
-                <svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                Refresh
-            </button>
+            <label class="wa-toggle" title="Hide background noise (OCSP, telemetry, CDN, update checks…) using the SiteClean rules">
+                <input type="checkbox" id="wa-clean" checked> Site Clean <span class="n" id="wa-noise"></span></label>
+            <button class="wa-btn" onclick="ZWA.exportCsv()" title="Download the current filtered log rows as CSV"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button>
+            <button class="wa-btn primary" onclick="ZWA.refresh()"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button>
         </div>
     </div>
 
-    <!-- MAIN CONTENT (hidden during drilldown) -->
-    <div id="udl-main-view">
+    <div class="wa-chips" id="wa-chips"></div>
 
-    <!-- STAT CARDS -->
-    <div class="udl-stats" id="udl-stats-row"></div>
-
-    <!-- TABS -->
-    <div class="udl-tabs">
-        <button class="udl-tab active" onclick="switchTab('url')" id="tab-url">
-            <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            URL Logs
-            <span class="udl-tab-count" id="tab-url-count">-</span>
-        </button>
-        <button class="udl-tab" onclick="switchTab('dns')" id="tab-dns">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            DNS Traffic
-            <span class="udl-tab-count" id="tab-dns-count">-</span>
-        </button>
+    <div class="wa-body">
+        <nav class="wa-nav" id="wa-nav">
+            <button data-view="overview"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Overview</button>
+            <button data-view="users"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>Users<span class="cnt" id="nav-users"></span></button>
+            <button data-view="sites"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Sites<span class="cnt" id="nav-sites"></span></button>
+            <button data-view="categories"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Categories<span class="cnt" id="nav-categories"></span></button>
+            <button data-view="searches"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Searches</button>
+            <button data-view="blocked"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Blocked<span class="cnt" id="nav-blocked"></span></button>
+            <button data-view="bandwidth"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>Bandwidth</button>
+            <div class="sep"></div>
+            <button data-view="dns"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4z"/><path d="M4 14h16v6H4z"/><circle cx="8" cy="7" r="1"/><circle cx="8" cy="17" r="1"/></svg>DNS</button>
+            <button data-view="logs"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>URL Logs</button>
+            {% if current_user and current_user.role == 'ADMIN' %}
+            <div class="sep"></div>
+            <a href="/system/url-clean/"><button type="button"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>SiteClean rules</button></a>
+            {% endif %}
+        </nav>
+        <main class="wa-main" id="wa-main"><div class="wa-loading">Loading…</div></main>
     </div>
-
-    <!-- FILTER BAR -->
-    <div class="udl-filters">
-        <!-- Vendor filter (URL tab) -->
-        <select id="filter-vendor" style="display:block;" title="Vendor">
-            <option value="">All Vendors</option>
-            <option value="fortinet">Fortinet</option>
-            <option value="paloalto">Palo Alto</option>
-        </select>
-        <!-- URL-specific filters -->
-        <select id="filter-category" style="display:block;" title="URL Category">
-            <option value="">All Categories</option>
-        </select>
-        <!-- DNS-specific filters -->
-        <select id="filter-severity" style="display:none;" title="Severity">
-            <option value="">All Severity</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-            <option value="informational">Informational</option>
-        </select>
-        <select id="filter-action" title="Action">
-            <option value="">All Actions</option>
-        </select>
-        <div class="udl-search-wrap">
-            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="filter-search" placeholder="Username, IP, subnet (10.0.0.0/8), URL...">
-        </div>
-        <button class="udl-btn udl-btn-primary" onclick="applyFilters()">
-            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Search
-        </button>
-        <button class="udl-btn udl-btn-ghost" onclick="resetFilters()">Reset</button>
-        <label class="udl-clean-toggle" title="Filter machine-generated noise (OCSP, CRL, telemetry, updates, CDN, etc.)">
-            <input type="checkbox" id="filter-clean" onchange="applyFilters()">
-            <span class="udl-clean-slider"></span>
-            <span class="udl-clean-label">SiteClean</span>
-            <span class="udl-clean-badge" id="clean-badge" style="display:none"></span>
-        </label>
-    </div>
-
-    <!-- TIMELINE STRIP -->
-    <div class="udl-tl-strip">
-        <div class="udl-tl-hdr">
-            <div class="udl-tl-title">
-                <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
-                <span id="udl-tl-title-text">URL Activity Timeline</span>
-            </div>
-            <div class="udl-tl-legend">
-                <span><span class="udl-tl-dot" style="background:#22c55e"></span>Allowed</span>
-                <span id="udl-tl-leg-alert"><span class="udl-tl-dot" style="background:#f59e0b"></span>Alerted</span>
-                <span><span class="udl-tl-dot" style="background:#ef4444"></span>Blocked</span>
-                <span id="udl-tl-leg-sink" style="display:none"><span class="udl-tl-dot" style="background:#a78bfa"></span>Sinkholed</span>
-            </div>
-        </div>
-        <div id="udl-tl-chart" class="udl-tl-chart"></div>
-    </div>
-
-    <!-- LAYOUT: TABLE + SIDEBAR -->
-    <div class="udl-layout">
-        <div class="udl-main">
-            <!-- URL LOG TABLE -->
-            <div id="url-panel" class="udl-table-wrap">
-                <div class="udl-table-header">
-                    <div class="udl-table-title">
-                        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                        URL Filtering Logs
-                    </div>
-                    <div class="udl-table-count" id="url-table-count"></div>
-                </div>
-                <div class="udl-table-scroll" id="url-table-scroll">
-                    <table class="udl-table">
-                        <thead>
-                            <tr>
-                                <th style="width:118px">Time</th>
-                                <th style="width:38px"></th>
-                                <th style="width:170px">User</th>
-                                <th>Domain &amp; Path</th>
-                                <th style="width:160px">Category</th>
-                                <th style="width:90px">Action</th>
-                                <th style="width:60px">Method</th>
-                                <th style="width:90px" class="r">Bytes</th>
-                            </tr>
-                        </thead>
-                        <tbody id="url-table-body">
-                            <tr><td colspan="8"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading URL logs...</div></div></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="udl-pagination" id="url-pagination"></div>
-            </div>
-
-            <!-- DNS LOG TABLE -->
-            <div id="dns-panel" class="udl-table-wrap" style="display:none;">
-                <div class="udl-table-header">
-                    <div class="udl-table-title">
-                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                        DNS Traffic Logs
-                    </div>
-                    <div class="udl-table-count" id="dns-table-count"></div>
-                </div>
-                <div class="udl-table-scroll" id="dns-table-scroll">
-                    <table class="udl-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Vendor</th>
-                                <th>Source</th>
-                                <th>User</th>
-                                <th>Domain</th>
-                                <th>Type</th>
-                                <th>Category</th>
-                                <th>Action</th>
-                                <th>Resolver</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dns-table-body">
-                            <tr><td colspan="9"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading DNS logs...</div></div></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="udl-pagination" id="dns-pagination"></div>
-            </div>
-        </div>
-
-        <!-- SIDEBAR -->
-        <div class="udl-sidebar" id="udl-sidebar"></div>
-    </div>
-
-    </div><!-- /udl-main-view -->
-
-    <!-- INLINE DRILLDOWN VIEW (hidden by default, inside udl-page) -->
-    <div class="udl-dd-view" id="udl-dd-view">
-        <div class="udl-dd-back" onclick="closeDrilldown()">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back to logs
-        </div>
-        <div class="udl-dd-header">
-            <div class="udl-dd-icon" id="udl-dd-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/></svg></div>
-            <div>
-                <h2 class="udl-dd-title" id="udl-dd-title">Drill-down</h2>
-                <div class="udl-dd-sub" id="udl-dd-sub">Loading...</div>
-            </div>
-        </div>
-        <div id="udl-dd-stats"></div>
-        <div class="udl-dd-body">
-            <div class="udl-dd-main" id="udl-dd-logs">
-                <div class="udl-dd-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading...</div>
-            </div>
-            <div class="udl-dd-right" id="udl-dd-right"></div>
-        </div>
-    </div>
-
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ vite_asset('static/src/echarts.js') }}"></script>
 <script>
-(function() {
-    // ============ STATE ============
-    let currentTab = 'url';
-    let urlPage = 0, dnsPage = 0;
-    const perPage = 100;
-    let urlTotal = 0, dnsTotal = 0;
-    let expandedRow = null;
-    let urlStats = null, dnsStats = null;
-    let tlChart = null;
+(function () {
+    'use strict';
+    const IS_ADMIN = {{ 'true' if current_user and current_user.role == 'ADMIN' else 'false' }};
 
-    // ============ TIMELINE CHART ============
-    function tlBucketLabel(b) {
-        return window.fmtTime(b, {second:undefined});
+    // ── State (mirrored into the URL hash so views are shareable) ──────────
+    const S = { view: 'overview', hours: 24, start: '', end: '', clean: true, user: '', site: '', category: '',
+                action: '', productivity: '', q: '', profile: '', sort: '', named: false, page: 0 };
+    const CLS_COLOR = { productive: '#22c55e', neutral: '#60a5fa', unproductive: '#f59e0b', risky: '#ef4444' };
+    const CLS_LABEL = { productive: 'Productive', neutral: 'Neutral', unproductive: 'Unproductive', risky: 'Risky' };
+    let liveTimer = null, charts = {}, lastSummary = null;
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const esc = s => (s === null || s === undefined) ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const attr = s => encodeURIComponent(s === null || s === undefined ? '' : String(s));
+    const fmtNum = n => (n === null || n === undefined) ? '–' : Number(n).toLocaleString();
+    const fmtBytes = b => { b = Number(b) || 0; if (b < 1024) return b + ' B'; const u = ['KB','MB','GB','TB']; let i = -1; do { b /= 1024; i++; } while (b >= 1024 && i < u.length - 1); return b.toFixed(b >= 100 ? 0 : 1) + ' ' + u[i]; };
+    const fmtMin = m => { m = Number(m) || 0; if (m < 60) return m + 'm'; const h = Math.floor(m / 60), r = m % 60; return h >= 100 ? h + 'h' : h + 'h ' + r + 'm'; };
+    const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+    const fmtTime = iso => { if (!iso) return '–'; const d = new Date(iso.indexOf('Z') === -1 && iso.indexOf('+') === -1 ? iso + 'Z' : iso); return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); };
+    const fmtTick = (iso, step) => { const d = new Date(iso.indexOf('Z') === -1 && iso.indexOf('+') === -1 ? iso + 'Z' : iso); return step >= 86400 ? d.toLocaleDateString(undefined, { month:'short', day:'numeric' }) : (windowSeconds() > 172800 ? d.toLocaleDateString(undefined, { month:'short', day:'numeric' }) + ' ' : '') + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }); };
+    const windowSeconds = () => S.start ? Math.max(60, (new Date(S.end || Date.now()) - new Date(S.start)) / 1000) : S.hours * 3600;
+    const initials = s => (s || '?').replace(/[^A-Za-z0-9]/g, ' ').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+    const isIp = s => /^\d+\.\d+\.\d+\.\d+$/.test(s || '');
+    const badge = cls => `<span class="wa-badge ${cls || 'neutral'}">${CLS_LABEL[cls] || 'Neutral'}</span>`;
+    const catBadge = c => c ? `<span class="wa-badge cat" onclick="event.stopPropagation();ZWA.filter('category', '${attr(c)}', 'sites')" title="Filter by this category">${esc(c)}</span>` : '<span class="muted">–</span>';
+    const miniProd = u => { const t = (u.productive||0)+(u.neutral||0)+(u.unproductive||0)+(u.risky||0) || (u.requests||0); if (!t) return ''; const n = u.neutral !== undefined ? u.neutral : Math.max(0, (u.requests||0) - (u.productive||0) - (u.unproductive||0) - (u.risky||0));
+        return `<div class="wa-mini" title="Productive ${pct(u.productive,t)}% · Neutral ${pct(n,t)}% · Unproductive ${pct(u.unproductive,t)}% · Risky ${pct(u.risky,t)}%"><i style="width:${pct(u.productive,t)}%;background:${CLS_COLOR.productive}"></i><i style="width:${pct(n,t)}%;background:${CLS_COLOR.neutral}"></i><i style="width:${pct(u.unproductive,t)}%;background:${CLS_COLOR.unproductive}"></i><i style="width:${pct(u.risky,t)}%;background:${CLS_COLOR.risky}"></i></div>`; };
+
+    function params(extra) {
+        const p = new URLSearchParams();
+        if (S.start) { p.set('start', S.start); if (S.end) p.set('end', S.end); } else p.set('hours', S.hours);
+        p.set('clean', S.clean ? 'true' : 'false');
+        ['user','site','category','action','productivity','q'].forEach(k => { if (S[k]) p.set(k, S[k]); });
+        if (S.named) p.set('named', 'true');
+        Object.entries(extra || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, v); });
+        return p;
     }
-    function ensureTlChart() {
-        if (tlChart) return tlChart;
-        const el = document.getElementById('udl-tl-chart');
-        if (!el || typeof echarts === 'undefined') return null;
-        tlChart = echarts.init(el, 'zentryc', {renderer:'canvas'});
-        window.addEventListener('resize', () => tlChart && tlChart.resize());
-        return tlChart;
+    async function api(path, extra) {
+        const r = await fetch('/api/web-activity/' + path + '?' + params(extra), { headers: { 'Accept': 'application/json' } });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'request failed');
+        return d;
     }
-    async function loadTimeline() {
-        const c = ensureTlChart();
-        if (!c) return;
-        const params = new URLSearchParams({ hours: getHours() });
-        if (currentTab === 'url') {
-            const f = getCurrentFilters();
-            if (f.vendor) params.set('vendor', f.vendor);
-            if (f.category) params.set('category', f.category);
-            if (f.action) params.set('action', f.action);
-            if (f.search) params.set('search', f.search);
-            if (document.getElementById('filter-clean').checked) params.set('clean', 'true');
+    function chart(id) {
+        const el = $(id); if (!el || typeof echarts === 'undefined') return null;
+        if (charts[id] && charts[id].getDom() !== el) { charts[id].dispose(); delete charts[id]; }
+        if (!charts[id]) charts[id] = echarts.init(el, null, { renderer: 'canvas' });
+        return charts[id];
+    }
+    window.addEventListener('resize', () => Object.values(charts).forEach(c => c.resize()));
+    const AXIS = { axisLabel: { color: '#64748b', fontSize: 10, hideOverlap: true }, axisLine: { lineStyle: { color: '#334155' } }, axisTick: { show: false } };
+    const YAXIS = fmt => ({ type: 'value', axisLabel: { color: '#64748b', fontSize: 10, formatter: fmt || (v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v) }, splitLine: { lineStyle: { color: 'rgba(51,65,85,.5)' } } });
+    const TIP = { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: '#0f172a', borderColor: '#334155', textStyle: { color: '#e2e8f0', fontSize: 11 } };
+
+    function timelineChart(id, points, step, series) {
+        const c = chart(id); if (!c) return;
+        c.setOption({ animation: false, grid: { left: 46, right: 12, top: 10, bottom: 22 }, tooltip: TIP,
+            xAxis: Object.assign({ type: 'category', data: points.map(p => fmtTick(p.t, step)) }, AXIS), yAxis: YAXIS(),
+            legend: { show: series.length > 1, top: 0, right: 0, textStyle: { color: '#94a3b8', fontSize: 10 }, itemWidth: 10, itemHeight: 8 },
+            series: series.map(s => Object.assign({ type: s.type || 'line', name: s.name, data: points.map(p => p[s.key] || 0), symbol: 'none', smooth: false,
+                lineStyle: { color: s.color, width: s.width || 1.6 }, itemStyle: { color: s.color }, barMaxWidth: 16,
+                areaStyle: s.area ? { color: s.color, opacity: 0.12 } : undefined, stack: s.stack }, {})) }, true);
+    }
+
+    // ── URL hash sync ────────────────────────────────────────────────────────
+    function writeHash() {
+        const p = new URLSearchParams();
+        Object.entries(S).forEach(([k, v]) => { if (v !== '' && v !== 0 && v !== false && !(k === 'hours' && v === 24) && !(k === 'clean' && v === true) && !(k === 'view' && v === 'overview')) p.set(k, v); });
+        if (!S.clean) p.set('clean', '0');
+        history.replaceState(null, '', '#' + p.toString());
+    }
+    function readHash() {
+        const p = new URLSearchParams(location.hash.slice(1));
+        // Keys absent from the hash revert to their defaults, so navigating
+        // back to a list view drops the profile that was open before.
+        S.profile = ''; S.page = 0; S.sort = '';
+        p.forEach((v, k) => { if (k in S) { if (k === 'hours' || k === 'page') S[k] = parseInt(v) || S[k]; else if (k === 'clean') S[k] = v !== '0' && v !== 'false'; else if (k === 'named') S[k] = v === 'true' || v === '1'; else S[k] = v; } });
+        $('wa-clean').checked = S.clean; $('wa-q').value = S.q;
+        if (S.start) { $('wa-custom').classList.add('open'); $('wa-start').value = S.start.slice(0, 16); $('wa-end').value = (S.end || '').slice(0, 16); }
+        syncRange();
+    }
+    function syncRange() { $('wa-range').querySelectorAll('button').forEach(b => b.classList.toggle('active', S.start ? b.dataset.h === 'custom' : parseInt(b.dataset.h) === S.hours)); }
+
+    // ── Filter chips ─────────────────────────────────────────────────────────
+    function renderChips() {
+        const defs = [['user','User'],['site','Site'],['category','Category'],['action','Action'],['productivity','Rating'],['q','Search']];
+        const chips = defs.filter(([k]) => S[k]).map(([k, l]) => `<span class="wa-chip">${l}: <b>${esc(S[k])}</b><button title="Remove" onclick="ZWA.filter('${k}', '')">×</button></span>`);
+        if (S.start) chips.unshift(`<span class="wa-chip">Range: <b>${esc(S.start.replace('T',' ').slice(0,16))} → ${esc((S.end || 'now').replace('T',' ').slice(0,16))}</b><button onclick="ZWA.setHours(24)">×</button></span>`);
+        if (chips.length) chips.push(`<span class="wa-chip clear" onclick="ZWA.clearFilters()">Clear all</span>`);
+        else chips.push(`<span class="wa-chips-hint">Click any user, site, category or number to filter everything on this page.</span>`);
+        $('wa-chips').innerHTML = chips.join('');
+    }
+
+    // ── Views ────────────────────────────────────────────────────────────────
+    const main = () => $('wa-main');
+    const loading = () => { main().innerHTML = '<div class="wa-loading">Loading…</div>'; };
+    const fail = e => { main().innerHTML = `<div class="wa-card wa-err">Could not load this view: ${esc(e.message || e)}</div>`; };
+    const topList = (rows, opt) => rows.length ? `<div class="wa-list">${rows.map((r, i) => {
+        const v = opt.value(r), max = opt.value(rows[0]) || 1;
+        return `<div class="wa-li" style="--k:${opt.color || 'var(--primary)'}" onclick="${opt.click(r)}"><span class="rk">${i + 1}</span><span class="nm"><span class="t">${esc(opt.label(r))}</span>${opt.sub ? `<span class="u">${opt.sub(r)}</span>` : ''}<span class="bar" style="width:${Math.max(3, pct(v, max))}%"></span></span><span class="vl">${opt.fmt ? opt.fmt(v) : fmtNum(v)}${opt.small ? `<small>${opt.small(r)}</small>` : ''}</span></div>`; }).join('')}</div>` : '<div class="wa-empty">Nothing in this range</div>';
+    const card = (title, body, link) => `<div class="wa-card"><div class="wa-card-head"><span class="wa-card-title">${title}</span>${link ? `<span class="wa-link" onclick="${link.click}">${link.label} →</span>` : ''}</div>${body}</div>`;
+    const kpi = (v, l, s, color, click) => `<div class="wa-kpi ${click ? 'click' : ''}" style="--k:${color || 'var(--primary)'}" ${click ? `onclick="${click}"` : ''}><div class="v">${v}</div><div class="l">${l}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
+    const userClick = u => `ZWA.open('user', '${attr(u)}')`;
+    const siteClick = s => `ZWA.open('site', '${attr(s)}')`;
+
+    async function viewOverview() {
+        loading();
+        const [sum, tl, prod, users, sites, cats, blocked, searches, bw] = await Promise.all([
+            api('summary'), api('timeline'), api('productivity'), api('users', { limit: 8 }), api('sites', { limit: 8 }),
+            api('categories', { limit: 8 }), api('sites', { limit: 8, action: 'blocked', sort: 'blocked' }), api('searches', { limit: 8 }), api('bandwidth')]);
+        const s = sum.summary; lastSummary = s; updateNoise(s); updateNavCounts(s);
+        const total = prod.classes.reduce((a, c) => a + c.requests, 0) || 1;
+        main().innerHTML = `
+            <div class="wa-kpis">
+                ${kpi(fmtNum(s.requests), 'Requests', `${fmtNum(s.hosts)} hostnames`)}
+                ${kpi(fmtNum(s.users), 'Users', 'people & devices', '#a78bfa', `ZWA.go('users')`)}
+                ${kpi(fmtNum(s.sites), 'Sites', 'registrable domains', '#22d3ee', `ZWA.go('sites')`)}
+                ${kpi(fmtMin(s.active_minutes), 'Browsing time', 'active minutes, org-wide', '#22c55e')}
+                ${kpi(fmtBytes(s.bandwidth), 'Bandwidth', `↓ ${fmtBytes(s.recv)} · ↑ ${fmtBytes(s.sent)}`, '#a78bfa', `ZWA.go('bandwidth')`)}
+                ${kpi(fmtNum(s.blocked), 'Blocked', `${pct(s.blocked, s.requests)}% of requests`, '#ef4444', `ZWA.filter('action', 'blocked', 'blocked')`)}
+            </div>
+            <div class="wa-row c21">
+                ${card('Activity', `<div id="ch-overview" class="wa-chart"></div>`)}
+                ${card('Productivity', `<div class="wa-stack" style="margin-top:6px">${prod.classes.map(c => `<i title="${CLS_LABEL[c.cls]} ${pct(c.requests, total)}%" style="width:${pct(c.requests, total)}%;background:${CLS_COLOR[c.cls]}" onclick="ZWA.filter('productivity','${c.cls}')"></i>`).join('')}</div>
+                    <div class="wa-legend" style="flex-direction:column;gap:8px;margin-top:14px">${prod.classes.map(c => `<span onclick="ZWA.filter('productivity','${c.cls}','sites')" title="Filter by ${CLS_LABEL[c.cls]} sites"><i style="background:${CLS_COLOR[c.cls]}"></i>${CLS_LABEL[c.cls]} <b style="margin-left:auto">${pct(c.requests, total)}%</b><span style="color:var(--wa-muted);font-size:10.5px">· ${fmtNum(c.users)} users · ${fmtMin(c.minutes)}</span></span>`).join('')}</div>
+                    <div style="color:var(--wa-muted);font-size:10.5px;margin-top:12px">Ratings come from the FortiGuard category of each request. Neutral covers IT, search, CDN and other work-adjacent categories.</div>`)}
+            </div>
+            <div class="wa-row c3">
+                ${card('Top users', topList(users.users, { label: u => u.user, sub: u => u.user !== u.ips[0] ? esc(u.ips.join(', ')) : fmtMin(u.minutes) + ' browsing', value: u => u.requests, click: u => userClick(u.user), small: u => fmtMin(u.minutes) }), { label: 'All users', click: `ZWA.go('users')` })}
+                ${card('Top sites', topList(sites.sites, { label: r => r.site, sub: r => esc(r.category), value: r => r.requests, click: r => siteClick(r.site), color: '#22d3ee', small: r => fmtNum(r.users) + ' users' }), { label: 'All sites', click: `ZWA.go('sites')` })}
+                ${card('Top categories', topList(cats.categories, { label: r => r.category, sub: r => badge(r.cls), value: r => r.requests, click: r => `ZWA.filter('category','${attr(r.category)}','sites')`, color: '#f59e0b', small: r => fmtNum(r.users) + ' users' }), { label: 'All categories', click: `ZWA.go('categories')` })}
+            </div>
+            <div class="wa-row c3">
+                ${card('Most blocked sites', topList(blocked.sites, { label: r => r.site, sub: r => esc(r.category), value: r => r.blocked, click: r => `ZWA.open('site','${attr(r.site)}','blocked')`, color: '#ef4444', small: r => fmtNum(r.users) + ' users' }), { label: 'Blocked report', click: `ZWA.go('blocked')` })}
+                ${card('Recent searches', searches.searches.length ? `<div class="wa-list">${searches.searches.map(r => `<div class="wa-li" onclick="ZWA.filter('q','${attr(r.term)}','logs')"><span class="rk"><svg viewBox="0 0 24 24" style="width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span><span class="nm"><span class="t">${esc(r.term)}</span><span class="u">${esc(r.sample_users.join(', '))} · ${esc(r.engine)}</span></span><span class="vl" style="font-weight:500;color:var(--wa-muted);font-size:10.5px">${fmtTime(r.last_seen)}</span></div>`).join('')}</div>` : '<div class="wa-empty">No search terms captured</div>', { label: 'All searches', click: `ZWA.go('searches')` })}
+                ${card('Top bandwidth', topList(bw.users, { label: r => r.user, sub: r => `↓ ${fmtBytes(r.recv)} · ↑ ${fmtBytes(r.sent)}`, value: r => (r.sent || 0) + (r.recv || 0), fmt: fmtBytes, click: r => userClick(r.user), color: '#a78bfa' }), { label: 'Bandwidth report', click: `ZWA.go('bandwidth')` })}
+            </div>`;
+        timelineChart('ch-overview', tl.points, tl.step, [
+            { key: 'requests', name: 'Requests', type: 'bar', color: 'rgba(59,130,246,.65)' },
+            { key: 'blocked', name: 'Blocked', color: '#ef4444', width: 2 },
+            { key: 'unproductive', name: 'Unproductive', color: '#f59e0b' }]);
+    }
+
+    function sortableHead(cols, cur, onSort) {
+        return `<thead><tr>${cols.map(c => `<th class="${c.r ? 'r' : ''} ${c.key === cur ? 'sorted' : ''}" ${c.sortable !== false && c.key ? `onclick="${onSort}('${c.key}')"` : ''}>${c.label}${c.key === cur ? ' ↓' : ''}</th>`).join('')}</tr></thead>`;
+    }
+
+    async function viewUsers() {
+        loading();
+        const sort = S.sort || 'requests';
+        const d = await api('users', { limit: 100, sort });
+        const cols = [{ key: '', label: 'User' }, { key: '', label: 'Address' }, { key: 'requests', label: 'Requests', r: true }, { key: 'sites', label: 'Sites', r: true },
+            { key: 'minutes', label: 'Browsing', r: true }, { key: 'bandwidth', label: 'Bandwidth', r: true }, { key: 'blocked', label: 'Blocked', r: true }, { key: 'unproductive', label: 'Productivity' }, { key: '', label: 'Top sites' }];
+        main().innerHTML = `<div class="wa-card">
+            <div class="wa-toolbar"><span class="wa-card-title">Users · ${fmtNum(d.users.length)}${d.users.length === 100 ? '+' : ''}</span><span class="spacer"></span>
+                <label><input type="checkbox" ${S.named ? 'checked' : ''} onchange="ZWA.set('named', this.checked)"> Named users only</label>
+                <select onchange="ZWA.set('sort', this.value)">${['requests','minutes','bandwidth','blocked','sites','unproductive'].map(k => `<option value="${k}" ${k === sort ? 'selected' : ''}>Sort: ${k}</option>`).join('')}</select>
+                <button class="wa-btn sm" onclick="ZWA.tableCsv('users')">CSV</button></div>
+            <div class="wa-table-wrap"><table class="wa-table" id="tbl-users">${sortableHead(cols, sort, 'ZWA.sort')}<tbody>${d.users.map(u => `<tr onclick="${userClick(u.user)}">
+                <td class="name">${esc(u.user)}</td><td class="mono muted">${esc(isIp(u.user) ? '' : u.ips.slice(0, 2).join(', '))}</td>
+                <td class="r mono">${fmtNum(u.requests)}</td><td class="r mono">${fmtNum(u.sites)}</td><td class="r mono">${fmtMin(u.minutes)}</td>
+                <td class="r mono">${fmtBytes(u.bandwidth)}</td><td class="r mono" style="color:${u.blocked ? '#fca5a5' : 'inherit'}">${fmtNum(u.blocked)}</td>
+                <td>${miniProd(u)}</td><td><div class="wa-chips-inline">${u.top_sites.map(s => `<span onclick="event.stopPropagation();${siteClick(s)}">${esc(s)}</span>`).join('')}</div></td></tr>`).join('') || '<tr><td colspan="9" class="wa-empty">No users in this range</td></tr>'}</tbody></table></div></div>`;
+    }
+
+    async function viewSites() {
+        loading();
+        const sort = S.sort || 'requests';
+        const d = await api('sites', { limit: 100, sort });
+        const cols = [{ key: '', label: 'Site' }, { key: '', label: 'Category' }, { key: '', label: 'Rating' }, { key: 'requests', label: 'Requests', r: true }, { key: 'users', label: 'Users', r: true },
+            { key: '', label: 'Hosts', r: true }, { key: 'minutes', label: 'Browsing', r: true }, { key: 'bandwidth', label: 'Bandwidth', r: true }, { key: 'blocked', label: 'Blocked', r: true }];
+        main().innerHTML = `<div class="wa-card">
+            <div class="wa-toolbar"><span class="wa-card-title">Sites · ${fmtNum(d.sites.length)}${d.sites.length === 100 ? '+' : ''}</span><span class="spacer"></span>
+                <select onchange="ZWA.set('sort', this.value)">${['requests','users','minutes','bandwidth','blocked'].map(k => `<option value="${k}" ${k === sort ? 'selected' : ''}>Sort: ${k}</option>`).join('')}</select>
+                <button class="wa-btn sm" onclick="ZWA.tableCsv('sites')">CSV</button></div>
+            <div class="wa-table-wrap"><table class="wa-table" id="tbl-sites">${sortableHead(cols, sort, 'ZWA.sort')}<tbody>${d.sites.map(r => `<tr onclick="${siteClick(r.site)}">
+                <td class="name">${esc(r.site)}</td><td>${catBadge(r.category)}</td><td>${badge(r.cls)}</td>
+                <td class="r mono">${fmtNum(r.requests)}</td><td class="r mono">${fmtNum(r.users)}</td><td class="r mono muted">${fmtNum(r.hosts)}</td>
+                <td class="r mono">${fmtMin(r.minutes)}</td><td class="r mono">${fmtBytes(r.bandwidth)}</td><td class="r mono" style="color:${r.blocked ? '#fca5a5' : 'inherit'}">${fmtNum(r.blocked)}</td></tr>`).join('') || '<tr><td colspan="9" class="wa-empty">No sites in this range</td></tr>'}</tbody></table></div></div>`;
+    }
+
+    async function viewCategories() {
+        loading();
+        const d = await api('categories', { limit: 100 });
+        const max = d.categories[0] ? d.categories[0].requests : 1;
+        main().innerHTML = `<div class="wa-card"><div class="wa-toolbar"><span class="wa-card-title">Categories · ${d.categories.length}</span><span class="spacer"></span><button class="wa-btn sm" onclick="ZWA.tableCsv('categories')">CSV</button></div>
+            <div class="wa-table-wrap"><table class="wa-table" id="tbl-categories"><thead><tr><th>Category</th><th>Rating</th><th style="width:200px">Share</th><th class="r">Requests</th><th class="r">Users</th><th class="r">Sites</th><th class="r">Browsing</th><th class="r">Blocked</th></tr></thead>
+            <tbody>${d.categories.map(r => `<tr onclick="ZWA.filter('category','${attr(r.category)}','sites')">
+                <td class="name">${esc(r.category)}</td><td>${badge(r.cls)}</td>
+                <td><div class="wa-mini"><i style="width:${pct(r.requests, max)}%;background:${CLS_COLOR[r.cls]}"></i></div></td>
+                <td class="r mono">${fmtNum(r.requests)}</td><td class="r mono">${fmtNum(r.users)}</td><td class="r mono">${fmtNum(r.sites)}</td><td class="r mono">${fmtMin(r.minutes)}</td>
+                <td class="r mono" style="color:${r.blocked ? '#fca5a5' : 'inherit'}">${fmtNum(r.blocked)}</td></tr>`).join('') || '<tr><td colspan="8" class="wa-empty">Nothing in this range</td></tr>'}</tbody></table></div></div>`;
+    }
+
+    async function viewSearches() {
+        loading();
+        const d = await api('searches', { limit: 300 });
+        main().innerHTML = `<div class="wa-card"><div class="wa-toolbar"><span class="wa-card-title">Search terms · ${d.searches.length}</span>
+            <span style="color:var(--wa-muted);font-size:11.5px">Lifted from Google, Bing, Yahoo, DuckDuckGo, Yandex and YouTube query strings</span><span class="spacer"></span><button class="wa-btn sm" onclick="ZWA.tableCsv('searches')">CSV</button></div>
+            <div class="wa-table-wrap"><table class="wa-table" id="tbl-searches"><thead><tr><th>Search term</th><th>Engine</th><th>Users</th><th class="r">Hits</th><th class="r">Last seen</th></tr></thead>
+            <tbody>${d.searches.map(r => `<tr onclick="ZWA.filter('q','${attr(r.term)}','logs')">
+                <td class="name">${esc(r.term)}</td><td class="muted">${esc(r.engine)}</td>
+                <td><div class="wa-chips-inline">${r.sample_users.map(u => `<span onclick="event.stopPropagation();${userClick(u)}">${esc(u)}</span>`).join('')}${r.users > r.sample_users.length ? `<span>+${r.users - r.sample_users.length}</span>` : ''}</div></td>
+                <td class="r mono">${fmtNum(r.hits)}</td><td class="r mono muted">${fmtTime(r.last_seen)}</td></tr>`).join('') || '<tr><td colspan="5" class="wa-empty">No search terms captured in this range</td></tr>'}</tbody></table></div></div>`;
+    }
+
+    async function viewBlocked() {
+        loading();
+        const [d, tl] = await Promise.all([api('blocked'), api('timeline', { action: 'blocked' })]);
+        const s = d.summary;
+        main().innerHTML = `
+            <div class="wa-kpis">${kpi(fmtNum(s.blocked), 'Blocked requests', '', '#ef4444')}${kpi(fmtNum(s.users), 'Users affected', '', '#a78bfa')}${kpi(fmtNum(s.sites), 'Sites', '', '#22d3ee')}${kpi(fmtNum(s.categories), 'Categories', '', '#f59e0b')}</div>
+            <div class="wa-row c21">${card('Blocked over time', `<div id="ch-blocked" class="wa-chart"></div>`)}
+                ${card('Block reasons', topList(d.reasons, { label: r => r.reason, value: r => r.hits, click: () => '', color: '#ef4444' }))}</div>
+            <div class="wa-row c3">
+                ${card('Users with most blocks', topList(d.users, { label: r => r.user, sub: r => esc(r.top_sites.join(', ')), value: r => r.hits, click: r => `ZWA.open('user','${attr(r.user)}','blocked')`, color: '#ef4444' }))}
+                ${card('Most blocked sites', topList(d.sites, { label: r => r.site, sub: r => esc(r.category), value: r => r.hits, click: r => `ZWA.open('site','${attr(r.site)}','blocked')`, color: '#ef4444', small: r => fmtNum(r.users) + ' users' }))}
+                ${card('Blocked categories', topList(d.categories, { label: r => r.category, sub: r => badge(r.cls), value: r => r.hits, click: r => `ZWA.filter('category','${attr(r.category)}','logs','blocked')`, color: '#f59e0b', small: r => fmtNum(r.users) + ' users' }))}
+            </div>
+            ${card('Recent blocked requests', `<div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>Time</th><th>User</th><th>URL</th><th>Category</th><th>Profile</th></tr></thead><tbody>${d.recent.map(r => `<tr onclick="${userClick(r.user)}"><td class="mono muted">${fmtTime(r.timestamp)}</td><td class="name">${esc(r.user)}</td><td><span class="wa-url" title="${esc(r.url)}">${esc(r.url || r.hostname)}</span></td><td>${catBadge(r.category)}</td><td class="muted">${esc(r.profile)}</td></tr>`).join('') || '<tr><td colspan="5" class="wa-empty">No blocked requests</td></tr>'}</tbody></table></div>`, { label: 'All blocked logs', click: `ZWA.filter('action','blocked','logs')` })}`;
+        timelineChart('ch-blocked', tl.points, tl.step, [{ key: 'requests', name: 'Blocked', type: 'bar', color: 'rgba(239,68,68,.7)' }, { key: 'users', name: 'Users', color: '#a78bfa' }]);
+    }
+
+    async function viewBandwidth() {
+        loading();
+        const [d, sum] = await Promise.all([api('bandwidth'), lastSummary ? Promise.resolve({ summary: lastSummary }) : api('summary')]);
+        const s = sum.summary;
+        main().innerHTML = `
+            <div class="wa-kpis">${kpi(fmtBytes(s.bandwidth), 'Total', 'session-deduplicated', '#a78bfa')}${kpi(fmtBytes(s.recv), 'Downloaded', '', '#22d3ee')}${kpi(fmtBytes(s.sent), 'Uploaded', '', '#22c55e')}${kpi(fmtNum(s.users), 'Users', '', '#a78bfa')}</div>
+            ${card('Bandwidth over time', `<div id="ch-bw" class="wa-chart"></div><div style="color:var(--wa-muted);font-size:10.5px;margin-top:6px">FortiGate reports cumulative per-session counters; each session is counted once at its final value.</div>`)}
+            <div class="wa-row c3">
+                ${card('Top users', topList(d.users, { label: r => r.user, sub: r => `↓ ${fmtBytes(r.recv)} · ↑ ${fmtBytes(r.sent)} · ${fmtNum(r.sessions)} sessions`, value: r => (r.sent||0)+(r.recv||0), fmt: fmtBytes, click: r => userClick(r.user), color: '#a78bfa' }))}
+                ${card('Top sites', topList(d.sites, { label: r => r.site, sub: r => `↓ ${fmtBytes(r.recv)} · ↑ ${fmtBytes(r.sent)} · ${fmtNum(r.users)} users`, value: r => (r.sent||0)+(r.recv||0), fmt: fmtBytes, click: r => siteClick(r.site), color: '#22d3ee' }))}
+                ${card('By category', topList(d.categories, { label: r => r.category, value: r => r.bytes, fmt: fmtBytes, click: r => `ZWA.filter('category','${attr(r.category)}','sites')`, color: '#f59e0b' }))}
+            </div>`;
+        timelineChart('ch-bw', d.timeline, d.step, [{ key: 'recv', name: 'Download', type: 'bar', color: 'rgba(34,211,238,.7)', stack: 'bw' }, { key: 'sent', name: 'Upload', type: 'bar', color: 'rgba(34,197,94,.7)', stack: 'bw' }]);
+        const c = chart('ch-bw'); if (c) c.setOption({ yAxis: YAXIS(v => fmtBytes(v)), tooltip: Object.assign({}, TIP, { valueFormatter: v => fmtBytes(v) }) });
+    }
+
+    async function viewLogs() {
+        loading();
+        const PAGE = 100;
+        const d = await api('logs', { limit: PAGE, offset: S.page * PAGE });
+        const pages = Math.max(1, Math.ceil(d.total / PAGE));
+        main().innerHTML = `<div class="wa-card"><div class="wa-toolbar"><span class="wa-card-title">URL logs · ${fmtNum(d.total)} rows</span><span class="spacer"></span>
+                <select onchange="ZWA.filter('action', this.value)"><option value="">Any action</option><option value="allowed" ${S.action === 'allowed' ? 'selected' : ''}>Allowed</option><option value="blocked" ${S.action === 'blocked' ? 'selected' : ''}>Blocked</option></select>
+                <button class="wa-btn sm" onclick="ZWA.exportCsv()">Export CSV (up to 50k)</button></div>
+            <div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>Time</th><th>User</th><th>Address</th><th>URL</th><th>Category</th><th>Action</th><th>Method</th><th class="r">Bytes</th></tr></thead>
+            <tbody>${d.rows.map(r => `<tr onclick="${userClick(r.src_user || r.src_ip)}">
+                <td class="mono muted" style="white-space:nowrap">${fmtTime(r.timestamp)}</td><td class="name">${esc(r.src_user || '–')}</td><td class="mono muted">${esc(r.src_ip)}</td>
+                <td><span class="wa-url" title="${esc(r.url)}">${esc(r.url)}</span><span style="font-size:10.5px;color:var(--wa-muted)">${esc(r.hostname)}${r.request_type === 'referral' ? ' · referral' : ''}</span></td>
+                <td>${catBadge(r.url_category)}</td><td><span class="wa-badge ${['blocked','block-url','deny','drop','reset-client','reset-server'].includes(r.action) ? 'blocked' : 'allowed'}">${esc(r.action)}</span></td>
+                <td class="mono muted">${esc(r.http_method)}</td><td class="r mono">${fmtBytes(r.bytes)}</td></tr>`).join('') || '<tr><td colspan="8" class="wa-empty">No rows match</td></tr>'}</tbody></table></div>
+            <div class="wa-pager"><span>Page ${S.page + 1} of ${fmtNum(pages)}</span><span><button class="wa-btn sm" ${S.page === 0 ? 'disabled' : ''} onclick="ZWA.page(-1)">‹ Prev</button> <button class="wa-btn sm" ${S.page + 1 >= pages ? 'disabled' : ''} onclick="ZWA.page(1)">Next ›</button></span></div></div>`;
+    }
+
+    async function viewDns() {
+        loading();
+        const PAGE = 100;
+        const p = new URLSearchParams({ hours: S.hours, limit: PAGE, offset: S.page * PAGE });
+        if (S.q) p.set('search', S.q); if (S.user && isIp(S.user)) p.set('src_ip', S.user);
+        if (S.action) p.set('action', S.action === 'blocked' ? 'sinkhole' : S.action === 'allowed' ? 'pass' : S.action);
+        const [st, lg] = await Promise.all([fetch('/api/threats/dns-logs/stats?' + p).then(r => r.json()), fetch('/api/threats/dns-logs?' + p).then(r => r.json())]);
+        const s = st.summary || {}; const rows = lg.events || []; const pages = Math.max(1, Math.ceil((lg.total || 0) / PAGE));
+        main().innerHTML = `
+            <div class="wa-kpis">${kpi(fmtNum(s.total), 'DNS queries')}${kpi(fmtNum(s.unique_signatures), 'Domains', '', '#22d3ee')}${kpi(fmtNum(s.unique_sources), 'Sources', '', '#a78bfa')}${kpi(fmtNum(s.blocked), 'Sinkholed / blocked', '', '#ef4444')}${kpi(fmtNum(s.critical_high), 'Critical / High', '', '#f59e0b')}</div>
+            <div class="wa-row c3">
+                ${card('Top domains', topList((st.top_domains || []).slice(0, 10), { label: r => r.threat_name, sub: r => esc(r.category || ''), value: r => r.count, click: r => `ZWA.filter('q','${attr(r.threat_name)}','dns')`, color: '#22d3ee', small: r => esc(r.action || '') }))}
+                ${card('Top sources', topList((st.top_sources || []).slice(0, 10), { label: r => r.src_ip, sub: r => esc(r.src_user || ''), value: r => r.count, click: r => userClick(r.src_ip), color: '#a78bfa', small: r => fmtNum(r.unique_domains) + ' domains' }))}
+                ${card('Actions', topList((st.actions || []).slice(0, 10), { label: r => r.action || 'query (no verdict)', value: r => r.count, click: r => r.action ? `ZWA.filter('action','${attr(r.action)}','dns')` : '', color: '#f59e0b' }))}
+            </div>
+            <div class="wa-card"><div class="wa-toolbar"><span class="wa-card-title">DNS logs · ${fmtNum(lg.total)}</span><span class="spacer"></span><span style="color:var(--wa-muted);font-size:11px">Site Clean and productivity filters do not apply to DNS</span></div>
+            <div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>Time</th><th>Source</th><th>User</th><th>Query</th><th>Type</th><th>Category</th><th>Action</th><th>Resolved</th></tr></thead>
+            <tbody>${rows.map(r => `<tr onclick="${userClick(r.src_user || r.src_ip)}"><td class="mono muted" style="white-space:nowrap">${fmtTime(r.timestamp)}</td><td class="mono">${esc(r.src_ip)}</td><td>${esc(r.src_user || '–')}</td><td class="mono ell">${esc(r.qname || r.domain || r.threat_name)}</td><td class="muted">${esc(r.qtype || r.type || '')}</td><td>${esc(r.category || '')}</td><td><span class="wa-badge ${['sinkhole','block','redirect'].includes(r.action) ? 'blocked' : 'allowed'}">${esc(r.action || 'pass')}</span></td><td class="mono muted">${esc(r.resolved_ip || r.dest_ip || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="wa-empty">No DNS rows</td></tr>'}</tbody></table></div>
+            <div class="wa-pager"><span>Page ${S.page + 1} of ${fmtNum(pages)}</span><span><button class="wa-btn sm" ${S.page === 0 ? 'disabled' : ''} onclick="ZWA.page(-1)">‹ Prev</button> <button class="wa-btn sm" ${S.page + 1 >= pages ? 'disabled' : ''} onclick="ZWA.page(1)">Next ›</button></span></div></div>`;
+    }
+
+    async function viewUser() {
+        loading();
+        const d = await api('user', { user: S.profile, action: S.action });
+        const s = d.summary, total = s.productive + s.neutral + s.unproductive + s.risky || 1;
+        const maxH = Math.max(1, ...d.hours.map(h => h.requests)); const byH = {}; d.hours.forEach(h => byH[h.h] = h);
+        main().innerHTML = `
+            <div class="wa-crumb"><a onclick="ZWA.go('users')">Users</a><span>›</span><span>${esc(S.profile)}</span></div>
+            <div class="wa-card"><div class="wa-profile"><div class="wa-avatar">${esc(initials(S.profile))}</div>
+                <div><h2>${esc(S.profile)}</h2><div class="meta">
+                    ${s.names.length && !s.names.includes(S.profile) ? `<span>Also seen as <b>${esc(s.names.join(', '))}</b></span>` : ''}
+                    <span>Address <b>${esc(s.ips.join(', ') || '–')}</b></span><span>Profile <b>${esc(s.profiles.join(', ') || '–')}</b></span>
+                    <span>Firewall <b>${esc(s.devices.join(', ') || '–')}</b></span><span>Active <b>${fmtTime(s.first_seen)}</b> → <b>${fmtTime(s.last_seen)}</b></span></div></div>
+                <div class="actions"><button class="wa-btn sm" onclick="ZWA.filter('user','${attr(S.profile)}','overview')">Filter everything by this user</button>
+                    <a class="wa-btn sm" href="/reports/user-activity?user=${attr(S.profile)}&hours=${S.hours}" target="_blank">Printable report ↗</a></div></div></div>
+            <div class="wa-kpis">${kpi(fmtNum(s.requests), 'Requests')}${kpi(fmtNum(s.sites), 'Sites', '', '#22d3ee')}${kpi(fmtMin(s.minutes), 'Browsing time', 'active minutes', '#22c55e')}${kpi(fmtBytes(s.bandwidth), 'Bandwidth', `↓ ${fmtBytes(s.recv)} · ↑ ${fmtBytes(s.sent)}`, '#a78bfa')}${kpi(fmtNum(s.blocked), 'Blocked', `${pct(s.blocked, s.requests)}%`, '#ef4444', `ZWA.open('user','${attr(S.profile)}','blocked')`)}</div>
+            <div class="wa-row c21">
+                ${card('Activity', `<div id="ch-user" class="wa-chart"></div>`)}
+                ${card('Productivity', `<div class="wa-stack" style="margin-top:6px">${['productive','neutral','unproductive','risky'].map(c => `<i style="width:${pct(s[c], total)}%;background:${CLS_COLOR[c]}" title="${CLS_LABEL[c]} ${pct(s[c], total)}%"></i>`).join('')}</div>
+                    <div class="wa-legend" style="flex-direction:column;gap:6px;margin-top:12px">${['productive','neutral','unproductive','risky'].map(c => `<span><i style="background:${CLS_COLOR[c]}"></i>${CLS_LABEL[c]}<b style="margin-left:auto">${pct(s[c], total)}%</b></span>`).join('')}</div>
+                    <div class="wa-card-title" style="margin-top:16px">Time of day</div>
+                    <div class="wa-hours" style="margin-top:8px">${Array.from({ length: 24 }, (_, h) => `<i style="height:${Math.max(3, pct((byH[h] || {}).requests || 0, maxH))}%" title="${String(h).padStart(2,'0')}:00 · ${fmtNum((byH[h] || {}).requests || 0)} requests · ${fmtMin((byH[h] || {}).minutes || 0)}"></i>`).join('')}</div>
+                    <div class="wa-hours-lbl">${Array.from({ length: 24 }, (_, h) => `<span>${h % 3 === 0 ? h : ''}</span>`).join('')}</div>`)}
+            </div>
+            <div class="wa-row c3">
+                ${card('Sites visited', topList(d.sites, { label: r => r.site, sub: r => esc(r.category), value: r => r.requests, click: r => siteClick(r.site), color: '#22d3ee', small: r => `${fmtMin(r.minutes)} · ${fmtBytes(r.bandwidth)}` }))}
+                ${card('Categories', topList(d.categories, { label: r => r.category, sub: r => badge(r.cls), value: r => r.requests, click: r => `ZWA.filter('category','${attr(r.category)}','logs')`, color: '#f59e0b', small: r => fmtMin(r.minutes) }))}
+                ${card('Searches', d.searches.length ? `<div class="wa-list">${d.searches.map(r => `<div class="wa-li" onclick="ZWA.filter('q','${attr(r.term)}','logs')"><span class="rk">›</span><span class="nm"><span class="t">${esc(r.term)}</span><span class="u">${esc(r.engine)}</span></span><span class="vl" style="font-weight:500;color:var(--wa-muted);font-size:10.5px">${fmtTime(r.last_seen)}</span></div>`).join('')}</div>` : '<div class="wa-empty">No searches captured</div>')}
+            </div>
+            <div class="wa-row c2">
+                ${card('Blocked attempts', d.blocked.length ? `<div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>Site</th><th>Category</th><th class="r">Hits</th><th class="r">Last</th></tr></thead><tbody>${d.blocked.map(r => `<tr onclick="${siteClick(r.site)}"><td class="name">${esc(r.site)}</td><td>${catBadge(r.category)}</td><td class="r mono">${fmtNum(r.hits)}</td><td class="r mono muted">${fmtTime(r.last_seen)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="wa-empty">Nothing blocked</div>')}
+                ${card('Recent activity', `<div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>Time</th><th>URL</th><th>Category</th><th>Action</th></tr></thead><tbody>${d.recent.map(r => `<tr onclick="${siteClick(r.hostname)}"><td class="mono muted" style="white-space:nowrap">${fmtTime(r.timestamp)}</td><td><span class="wa-url" style="max-width:320px" title="${esc(r.url)}">${esc(r.url)}</span></td><td>${catBadge(r.category)}</td><td><span class="wa-badge ${['blocked','block-url','deny','drop'].includes(r.action) ? 'blocked' : 'allowed'}">${esc(r.action)}</span></td></tr>`).join('')}</tbody></table></div>`, { label: 'All logs for this user', click: `ZWA.filter('user','${attr(S.profile)}','logs')` })}
+            </div>`;
+        timelineChart('ch-user', d.timeline, d.step, [{ key: 'requests', name: 'Requests', type: 'bar', color: 'rgba(59,130,246,.65)' }, { key: 'blocked', name: 'Blocked', color: '#ef4444', width: 2 }]);
+    }
+
+    async function viewSite() {
+        loading();
+        const d = await api('site', { site: S.profile, action: S.action });
+        const s = d.summary;
+        main().innerHTML = `
+            <div class="wa-crumb"><a onclick="ZWA.go('sites')">Sites</a><span>›</span><span>${esc(S.profile)}</span></div>
+            <div class="wa-card"><div class="wa-profile"><div class="wa-avatar site">${esc(initials(S.profile))}</div>
+                <div><h2>${esc(S.profile)}</h2><div class="meta"><span>${badge(s.cls)}</span><span>${s.categories.map(c => catBadge(c)).join(' ')}</span>
+                    <span><b>${fmtNum(s.hosts)}</b> hostnames</span><span>Seen <b>${fmtTime(s.first_seen)}</b> → <b>${fmtTime(s.last_seen)}</b></span></div></div>
+                <div class="actions"><button class="wa-btn sm" onclick="ZWA.filter('site','${attr(S.profile)}','overview')">Filter everything by this site</button>
+                    <a class="wa-btn sm" href="https://${attr(S.profile)}" target="_blank" rel="noopener">Open ↗</a>
+                    ${IS_ADMIN ? `<button class="wa-btn sm danger" onclick="ZWA.markNoise('${attr(S.profile)}')" title="Add a SiteClean rule so this site is hidden as background noise">Hide as noise</button>` : ''}</div></div></div>
+            <div class="wa-kpis">${kpi(fmtNum(s.requests), 'Requests')}${kpi(fmtNum(s.users), 'Users', '', '#a78bfa')}${kpi(fmtMin(s.minutes), 'Browsing time', 'user-minutes', '#22c55e')}${kpi(fmtBytes(s.bandwidth), 'Bandwidth', '', '#a78bfa')}${kpi(fmtNum(s.blocked), 'Blocked', `${pct(s.blocked, s.requests)}%`, '#ef4444')}</div>
+            <div class="wa-row c21">${card('Activity', `<div id="ch-site" class="wa-chart"></div>`)}
+                ${card('Actions', topList(d.actions, { label: r => r.action, value: r => r.count, click: () => '', color: '#22d3ee' }))}</div>
+            <div class="wa-row c3">
+                ${card('Who visited', `<div class="wa-table-wrap"><table class="wa-table"><thead><tr><th>User</th><th class="r">Req</th><th class="r">Time</th><th class="r">Data</th></tr></thead><tbody>${d.users.map(r => `<tr onclick="${userClick(r.user)}"><td class="name">${esc(r.user)}${r.blocked ? ` <span class="wa-badge blocked">${fmtNum(r.blocked)} blocked</span>` : ''}</td><td class="r mono">${fmtNum(r.requests)}</td><td class="r mono">${fmtMin(r.minutes)}</td><td class="r mono">${fmtBytes(r.bandwidth)}</td></tr>`).join('') || '<tr><td colspan="4" class="wa-empty">–</td></tr>'}</tbody></table></div>`)}
+                ${card('Hostnames', topList(d.hosts, { label: r => r.hostname, value: r => r.requests, click: r => `ZWA.filter('q','${attr(r.hostname)}','logs')`, color: '#22d3ee', small: r => fmtNum(r.users) + ' users' }))}
+                ${card('Top URLs', d.urls.length ? `<div class="wa-list">${d.urls.map(r => `<div class="wa-li" onclick="ZWA.filter('q','${attr(r.url)}','logs')"><span class="rk">›</span><span class="nm"><span class="t" style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:#93c5fd" title="${esc(r.url)}">${esc(r.url)}</span><span class="u">${fmtNum(r.users)} users · ${esc(r.action)}</span></span><span class="vl">${fmtNum(r.hits)}</span></div>`).join('')}</div>` : '<div class="wa-empty">–</div>')}
+            </div>`;
+        timelineChart('ch-site', d.timeline, d.step, [{ key: 'requests', name: 'Requests', type: 'bar', color: 'rgba(34,211,238,.6)' }, { key: 'users', name: 'Users', color: '#a78bfa' }, { key: 'blocked', name: 'Blocked', color: '#ef4444', width: 2 }]);
+    }
+
+    const VIEWS = { overview: viewOverview, users: viewUsers, sites: viewSites, categories: viewCategories, searches: viewSearches,
+                    blocked: viewBlocked, bandwidth: viewBandwidth, logs: viewLogs, dns: viewDns, user: viewUser, site: viewSite };
+
+    async function render() {
+        writeHash(); renderChips();
+        $('wa-nav').querySelectorAll('button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === (S.view === 'user' ? 'users' : S.view === 'site' ? 'sites' : S.view)));
+        try { await (VIEWS[S.view] || viewOverview)(); } catch (e) { fail(e); }
+        if (S.view !== 'overview' && !lastSummary) api('summary').then(d => { lastSummary = d.summary; updateNoise(d.summary); updateNavCounts(d.summary); }).catch(() => {});
+    }
+    function updateNoise(s) { $('wa-noise').textContent = S.clean && s.noise_hidden ? `· ${fmtNum(s.noise_hidden)} hidden (${pct(s.noise_hidden, s.noise_hidden + s.requests)}%)` : ''; }
+    function updateNavCounts(s) { $('nav-users').textContent = fmtNum(s.users); $('nav-sites').textContent = fmtNum(s.sites); $('nav-categories').textContent = fmtNum(s.categories); $('nav-blocked').textContent = fmtNum(s.blocked); }
+    function invalidate() { lastSummary = null; }
+
+    // ── Public actions ───────────────────────────────────────────────────────
+    window.ZWA = {
+        go(view) { S.view = view; S.profile = ''; S.page = 0; S.sort = ''; render(); },
+        open(kind, key, action) { S.view = kind; S.profile = key; S.page = 0; if (action !== undefined) S.action = action; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+        filter(key, value, view, action) { S[key] = value; if (action !== undefined) S.action = action; S.page = 0; invalidate(); if (key === 'q') $('wa-q').value = value; if (view) { S.view = view; S.profile = ''; } else if (S.view === 'user' || S.view === 'site') { S.view = S.view === 'user' ? 'users' : 'sites'; S.profile = ''; } render(); },
+        clearFilters() { ['user','site','category','action','productivity','q'].forEach(k => S[k] = ''); $('wa-q').value = ''; S.page = 0; invalidate(); render(); },
+        set(key, value) { S[key] = value; S.page = 0; render(); },
+        sort(key) { if (key) { S.sort = key; S.page = 0; render(); } },
+        page(delta) { S.page = Math.max(0, S.page + delta); render(); },
+        setHours(h) { S.hours = h; S.start = S.end = ''; $('wa-custom').classList.remove('open'); syncRange(); S.page = 0; invalidate(); render(); },
+        applyCustom() { const a = $('wa-start').value, b = $('wa-end').value; if (!a) return; S.start = new Date(a).toISOString(); S.end = b ? new Date(b).toISOString() : ''; syncRange(); S.page = 0; invalidate(); render(); },
+        refresh() { invalidate(); render(); },
+        exportCsv() { window.location.href = '/api/web-activity/logs?' + params({ format: 'csv' }); },
+        tableCsv(id) { const t = $('tbl-' + id); if (!t) return; const rows = [...t.querySelectorAll('tr')].map(tr => [...tr.children].map(td => '"' + td.innerText.replace(/"/g, '""').replace(/\n/g, ' ') + '"').join(',')); const blob = new Blob([rows.join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `web-activity-${id}.csv`; a.click(); },
+        async markNoise(site) {
+            if (!confirm(`Hide "${site}" (and its subdomains) from Web Activity as background noise?\n\nThis adds a SiteClean rule; raw logs are kept.`)) return;
             try {
-                const r = await fetch('/api/threats/url-logs/timeline?' + params);
-                const j = await r.json();
-                renderTl(j.timeline||[], false);
-            } catch(e) { c.clear(); }
-        } else {
-            const f = getCurrentFilters();
-            if (f.vendor) params.set('vendor', f.vendor);
-            const sev = document.getElementById('filter-severity').value;
-            if (sev) params.set('severity', sev);
-            if (f.action) params.set('action', f.action);
-            if (f.search) params.set('search', f.search);
-            try {
-                const r = await fetch('/api/threats/dns-logs/timeline?' + params);
-                const j = await r.json();
-                renderTl(j.timeline||[], true);
-            } catch(e) { c.clear(); }
-        }
-    }
-    function renderTl(rows, isDns) {
-        const c = ensureTlChart();
-        if (!c) return;
-        const x = rows.map(r => tlBucketLabel(r.bucket));
-        const allowed = rows.map(r => r.allowed||0);
-        const blocked = rows.map(r => r.blocked||0);
-        const series = [
-            { name:'Allowed', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
-              data:allowed, itemStyle:{color:'#22c55e'}, lineStyle:{width:1.2} }
-        ];
-        if (!isDns) {
-            const alerted = rows.map(r => r.alerted||0);
-            series.push({ name:'Alerted', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
-                data:alerted, itemStyle:{color:'#f59e0b'}, lineStyle:{width:1.2} });
-        } else {
-            const sinkholed = rows.map(r => r.sinkholed||0);
-            if (sinkholed.some(v=>v>0)) {
-                series.push({ name:'Sinkholed', type:'line', stack:'t', areaStyle:{opacity:.55}, symbol:'none', smooth:.25,
-                    data:sinkholed, itemStyle:{color:'#a78bfa'}, lineStyle:{width:1.2} });
-            }
-        }
-        series.push({ name:'Blocked', type:'line', stack:'t', areaStyle:{opacity:.65}, symbol:'none', smooth:.25,
-            data:blocked, itemStyle:{color:'#ef4444'}, lineStyle:{width:1.2} });
-        c.setOption({
-            tooltip:{ trigger:'axis', axisPointer:{type:'cross', label:{backgroundColor:'#1e293b'}},
-                formatter: p => {
-                    let html = `<b>${p[0].axisValue}</b><br/>`;
-                    p.forEach(s => html += `${s.marker} ${s.seriesName}: <b>${(s.value||0).toLocaleString()}</b><br/>`);
-                    return html;
+                for (const [type, pattern] of [['hostname_exact', site], ['hostname_glob', '*.' + site]]) {
+                    const r = await fetch('/api/url-clean/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rule_type: type, pattern, label: site + (type === 'hostname_glob' ? ' (subdomains)' : ''), group_name: 'Custom' }) });
+                    const d = await r.json(); if (!d.success) throw new Error(d.error || 'failed');
                 }
-            },
-            grid:{ left:40, right:8, top:6, bottom:18 },
-            xAxis:{ type:'category', data:x, boundaryGap:false,
-                axisLabel:{fontSize:9, color:'#94a3b8', interval:Math.max(0, Math.floor(x.length/8))} },
-            yAxis:{ type:'value', axisLabel:{fontSize:9, color:'#64748b', formatter:v=>v>=1000?(v/1000).toFixed(0)+'k':v},
-                splitLine:{lineStyle:{color:'#1a2238'}} },
-            series: series
-        }, true);
-        // toggle DNS legend
-        document.getElementById('udl-tl-leg-alert').style.display = isDns?'none':'';
-        document.getElementById('udl-tl-leg-sink').style.display = isDns?'':'none';
-        document.getElementById('udl-tl-title-text').textContent = isDns?'DNS Activity Timeline':'URL Activity Timeline';
-    }
-
-    function getHours() { return parseInt(document.getElementById('udl-time-range').value) || 24; }
-
-    function esc(s) {
-        if (!s) return '';
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
-    function fmtNum(n) { return (n||0).toLocaleString(); }
-
-    function fmtTime(iso) {
-        return window.fmtTime(iso);
-    }
-
-    function actionBadge(action) {
-        if (!action) return '';
-        const a = action.toLowerCase();
-        let cls = 'udl-badge-other';
-        if (a === 'allow' || a === 'passthrough') cls = 'udl-badge-allow';
-        else if (a === 'alert') cls = 'udl-badge-alert';
-        else if (a.includes('block') || a === 'blocked' || a === 'deny' || a === 'drop' || a.includes('reset')) cls = 'udl-badge-block';
-        else if (a === 'sinkhole') cls = 'udl-badge-sinkhole';
-        return `<span class="udl-badge ${cls}">${esc(action)}</span>`;
-    }
-
-    function vendorBadge(vendor) {
-        if (!vendor) return '';
-        const v = vendor.toLowerCase();
-        if (v === 'paloalto' || v === 'palo alto') return '<span class="udl-vendor udl-vendor-pa">PA</span>';
-        if (v === 'fortinet') return '<span class="udl-vendor udl-vendor-fg">FG</span>';
-        return `<span class="udl-vendor">${esc(vendor)}</span>`;
-    }
-
-    function fmtBytes(bytes) {
-        if (!bytes && bytes !== 0) return '-';
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / 1048576).toFixed(1) + ' MB';
-    }
-
-    function sevBadge(sev) {
-        if (!sev) return '';
-        const s = sev.toLowerCase();
-        return `<span class="udl-badge udl-sev-${s}">${esc(sev)}</span>`;
-    }
-
-    function truncUrl(url, max) {
-        if (!url) return '';
-        return url.length > max ? url.substring(0, max) + '...' : url;
-    }
-
-    // ============ TAB SWITCHING ============
-    window.switchTab = function(tab) {
-        currentTab = tab;
-        document.getElementById('tab-url').classList.toggle('active', tab === 'url');
-        document.getElementById('tab-dns').classList.toggle('active', tab === 'dns');
-        document.getElementById('url-panel').style.display = tab === 'url' ? '' : 'none';
-        document.getElementById('dns-panel').style.display = tab === 'dns' ? '' : 'none';
-
-        // Toggle filter visibility
-        document.getElementById('filter-vendor').style.display = tab === 'url' ? '' : 'none';
-        document.getElementById('filter-category').style.display = tab === 'url' ? '' : 'none';
-        document.getElementById('filter-severity').style.display = tab === 'dns' ? '' : 'none';
-
-        // Update action dropdown for context
-        populateActionFilter(tab);
-        renderStats();
-        renderSidebar();
-        loadTimeline();
-        // Reload the active tab's stats so hero/sidebar/timeline all honour current search
-        if (tab === 'url') loadUrlStats(); else loadDnsStats();
+                S.view = 'sites'; S.profile = ''; invalidate(); render();
+            } catch (e) { alert('Could not add rule: ' + e.message); }
+        },
     };
 
-    function populateActionFilter(tab) {
-        const sel = document.getElementById('filter-action');
-        const val = sel.value;
-        sel.innerHTML = '<option value="">All Actions</option>';
-        const acts = tab === 'url'
-            ? ['allow','passthrough','alert','block-url','blocked','deny','drop','reset-client','reset-server']
-            : ['sinkhole','alert','allow','deny','drop','reset-client'];
-        acts.forEach(a => {
-            const o = document.createElement('option');
-            o.value = a; o.textContent = a;
-            sel.appendChild(o);
-        });
-        sel.value = val;
-    }
-
-    // ============ STATS ============
-    function renderStats() {
-        const el = document.getElementById('udl-stats-row');
-        if (currentTab === 'url' && urlStats) {
-            const s = urlStats.summary || {};
-            el.innerHTML = `
-                <div class="udl-stat"><div class="udl-stat-val">${fmtNum(s.total)}</div><div class="udl-stat-label">Total Requests</div></div>
-                <div class="udl-stat"><div class="udl-stat-val cyan">${fmtNum(s.unique_urls)}</div><div class="udl-stat-label">Unique URLs</div></div>
-                <div class="udl-stat"><div class="udl-stat-val purple">${fmtNum(s.unique_users)}</div><div class="udl-stat-label">Users</div></div>
-                <div class="udl-stat"><div class="udl-stat-val">${fmtNum(s.unique_categories)}</div><div class="udl-stat-label">Categories</div></div>
-                <div class="udl-stat"><div class="udl-stat-val danger">${fmtNum(s.blocked)}</div><div class="udl-stat-label">Blocked</div></div>
-                <div class="udl-stat"><div class="udl-stat-val warning">${fmtNum(s.alerted)}</div><div class="udl-stat-label">Alerted</div></div>
-                <div class="udl-stat"><div class="udl-stat-val success">${fmtNum(s.allowed)}</div><div class="udl-stat-label">Allowed</div></div>
-                <div class="udl-stat"><div class="udl-stat-val" style="color:#4ade80">${fmtNum(s.fortinet_count)}</div><div class="udl-stat-label">Fortinet</div></div>
-                <div class="udl-stat"><div class="udl-stat-val" style="color:#60a5fa">${fmtNum(s.paloalto_count)}</div><div class="udl-stat-label">Palo Alto</div></div>
-            `;
-        } else if (currentTab === 'dns' && dnsStats) {
-            const s = dnsStats.summary || {};
-            el.innerHTML = `
-                <div class="udl-stat"><div class="udl-stat-val">${fmtNum(s.total)}</div><div class="udl-stat-label">Total Queries</div></div>
-                <div class="udl-stat"><div class="udl-stat-val cyan">${fmtNum(s.unique_signatures)}</div><div class="udl-stat-label">Unique Domains</div></div>
-                <div class="udl-stat"><div class="udl-stat-val purple">${fmtNum(s.unique_sources)}</div><div class="udl-stat-label">Sources</div></div>
-                <div class="udl-stat"><div class="udl-stat-val">${fmtNum(s.unique_resolvers)}</div><div class="udl-stat-label">Resolvers</div></div>
-                <div class="udl-stat"><div class="udl-stat-val danger">${fmtNum(s.blocked)}</div><div class="udl-stat-label">Sinkholed</div></div>
-                <div class="udl-stat"><div class="udl-stat-val warning">${fmtNum(s.critical_high)}</div><div class="udl-stat-label">Crit / High</div></div>
-                <div class="udl-stat"><div class="udl-stat-val success">${fmtNum(s.allowed)}</div><div class="udl-stat-label">Allowed</div></div>
-            `;
-        } else {
-            el.innerHTML = Array(7).fill('<div class="udl-stat"><div class="udl-stat-val">-</div><div class="udl-stat-label">Loading...</div></div>').join('');
-        }
-    }
-
-    // ============ SIDEBAR ============
-    // Helper: get current filter values
-    function getCurrentFilters() {
-        return {
-            vendor: document.getElementById('filter-vendor').value,
-            category: document.getElementById('filter-category').value,
-            action: document.getElementById('filter-action').value,
-            search: document.getElementById('filter-search').value.trim(),
-        };
-    }
-
-    // Click sidebar item → set filter → reload logs + stats
-    window.sidebarFilterBy = function(filterKey, value) {
-        const f = getCurrentFilters();
-        if (filterKey === 'category') {
-            const sel = document.getElementById('filter-category');
-            sel.value = (f.category === value) ? '' : value;
-        } else if (filterKey === 'action') {
-            const sel = document.getElementById('filter-action');
-            sel.value = (f.action === value) ? '' : value;
-        } else if (filterKey === 'src_ip') {
-            const inp = document.getElementById('filter-search');
-            inp.value = (f.search === value) ? '' : value;
-        } else if (filterKey === 'hostname') {
-            const inp = document.getElementById('filter-search');
-            inp.value = (f.search === value) ? '' : value;
-        }
-        urlPage = 0;
-        loadUrlLogs();
-        loadUrlStats();
-    };
-
-    function renderSidebar() {
-        const el = document.getElementById('udl-sidebar');
-        if (currentTab === 'url' && urlStats) {
-            const cats = urlStats.top_categories || [];
-            const users = urlStats.top_users || [];
-            const acts = urlStats.actions || [];
-            const hostnames = urlStats.top_hostnames || [];
-            const f = getCurrentFilters();
-
-            el.innerHTML = `
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Top Categories</h3>
-                    <ul class="udl-sidebar-list">${cats.map(c => {
-                        const active = f.category === c.category ? ' udl-sb-active' : '';
-                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('category','${esc(c.category).replace(/'/g,'&#39;')}')"><span class="item-name" title="${esc(c.category)}">${esc(c.category)}</span><span class="item-count">${fmtNum(c.count)}</span></li>`;
-                    }).join('')}${cats.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
-                </div>
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Top Hostnames</h3>
-                    <ul class="udl-sidebar-list">${hostnames.map(h => {
-                        const active = f.search === h.hostname ? ' udl-sb-active' : '';
-                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('hostname','${esc(h.hostname).replace(/'/g,'&#39;')}')"><span class="item-name" title="${esc(h.hostname)}">${esc(truncUrl(h.hostname, 25))}</span><span class="item-count">${fmtNum(h.count)}</span></li>`;
-                    }).join('')}${hostnames.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
-                </div>
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Top Users</h3>
-                    <ul class="udl-sidebar-list">${users.map(u => {
-                        const active = f.search === u.src_ip ? ' udl-sb-active' : '';
-                        return `<li class="udl-clickable${active}" onclick="sidebarFilterBy('src_ip','${esc(u.src_ip)}')"><span class="item-name" title="${esc(u.src_ip)}${u.src_user?' ('+esc(u.src_user)+')':''}">${esc(u.src_ip)}${u.src_user?'<br><small style="color:var(--udl-purple)">'+esc(u.src_user)+'</small>':''}</span><span class="item-count">${fmtNum(u.count)}</span></li>`;
-                    }).join('')}${users.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
-                </div>
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Actions</h3>
-                    <div class="udl-action-bar">${acts.map(a => {
-                        let bg = 'rgba(148,163,184,.1)', fg = '#94a3b8';
-                        const al = a.action.toLowerCase();
-                        if (al === 'allow' || al === 'passthrough') { bg='rgba(34,197,94,.12)'; fg='#4ade80'; }
-                        else if (al === 'alert') { bg='rgba(245,158,11,.12)'; fg='#fbbf24'; }
-                        else if (al.includes('block')||al==='blocked'||al==='deny'||al==='drop') { bg='rgba(239,68,68,.12)'; fg='#f87171'; }
-                        else if (al === 'sinkhole') { bg='rgba(168,85,247,.12)'; fg='#c084fc'; }
-                        const active = f.action === a.action ? 'outline:2px solid '+fg+';outline-offset:1px;' : '';
-                        return `<span class="udl-action-chip" style="background:${bg};color:${fg};cursor:pointer;${active}" onclick="sidebarFilterBy('action','${esc(a.action)}')">${esc(a.action)} <strong>${fmtNum(a.count)}</strong></span>`;
-                    }).join('')}</div>
-                </div>
-            `;
-        } else if (currentTab === 'dns' && dnsStats) {
-            const doms = dnsStats.top_domains || [];
-            const srcs = dnsStats.top_sources || [];
-            const sevs = dnsStats.severities || [];
-            el.innerHTML = `
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Top Domains</h3>
-                    <ul class="udl-sidebar-list">${doms.map(d => `<li class="udl-clickable" onclick="drillDomain('${esc(d.threat_name).replace(/'/g,'\\&#39;')}')"><span class="item-name" title="${esc(d.threat_name)}">${esc(truncUrl(d.threat_name,30))}</span><span class="item-count">${fmtNum(d.count)}</span></li>`).join('')}${doms.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
-                </div>
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Top Sources</h3>
-                    <ul class="udl-sidebar-list">${srcs.map(s => `<li class="udl-clickable" onclick="drillSource('${esc(s.src_ip)}')"><span class="item-name" title="${esc(s.src_ip)}">${esc(s.src_ip)}${s.src_user?'<br><small style="color:var(--udl-purple)">'+esc(s.src_user)+'</small>':''}</span><span class="item-count">${fmtNum(s.count)}</span></li>`).join('')}${srcs.length===0?'<li style="color:var(--udl-dim)">No data</li>':''}</ul>
-                </div>
-                <div class="udl-sidebar-card">
-                    <h3><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Severity</h3>
-                    <div class="udl-action-bar">${sevs.map(s => {
-                        let bg = 'rgba(148,163,184,.1)', fg = '#94a3b8';
-                        const sl = s.severity.toLowerCase();
-                        if (sl==='critical') { bg='rgba(239,68,68,.15)'; fg='#f87171'; }
-                        else if (sl==='high') { bg='rgba(249,115,22,.15)'; fg='#fb923c'; }
-                        else if (sl==='medium') { bg='rgba(245,158,11,.15)'; fg='#fbbf24'; }
-                        else if (sl==='low') { bg='rgba(34,197,94,.15)'; fg='#4ade80'; }
-                        else if (sl==='informational') { bg='rgba(59,130,246,.15)'; fg='#60a5fa'; }
-                        return `<span class="udl-action-chip" style="background:${bg};color:${fg}">${esc(s.severity)} <strong>${fmtNum(s.count)}</strong></span>`;
-                    }).join('')}</div>
-                </div>
-            `;
-        } else {
-            el.innerHTML = '<div class="udl-sidebar-card"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading...</div></div></div>';
-        }
-    }
-
-    // ============ URL LOG TABLE ============
-    async function loadUrlLogs() {
-        const body = document.getElementById('url-table-body');
-        body.innerHTML = '<tr><td colspan="9"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading URL logs...</div></div></td></tr>';
-
-        const params = new URLSearchParams({ hours: getHours(), limit: perPage, offset: urlPage * perPage });
-        const vendor = document.getElementById('filter-vendor').value;
-        const cat = document.getElementById('filter-category').value;
-        const act = document.getElementById('filter-action').value;
-        const q = document.getElementById('filter-search').value.trim();
-        const cleanOn = document.getElementById('filter-clean').checked;
-        if (vendor) params.set('vendor', vendor);
-        if (cat) params.set('category', cat);
-        if (act) params.set('action', act);
-        if (q) params.set('search', q);
-        if (cleanOn) params.set('clean', 'true');
-
-        try {
-            const resp = await fetch('/api/threats/url-logs?' + params);
-            const data = await resp.json();
-            urlTotal = data.total || 0;
-            document.getElementById('tab-url-count').textContent = fmtNum(urlTotal);
-            document.getElementById('url-table-count').innerHTML = `Showing <strong>${fmtNum(data.events.length)}</strong> of <strong>${fmtNum(urlTotal)}</strong>`;
-
-            if (!data.events.length) {
-                body.innerHTML = '<tr><td colspan="8"><div class="udl-empty"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><div>No URL logs found for the selected filters</div></div></td></tr>';
-                renderUrlPagination();
-                return;
-            }
-
-            body.innerHTML = '';
-            expandedRow = null;
-            data.events.forEach((e, i) => {
-                const tr = document.createElement('tr');
-                // Path = URL minus scheme + host (keep "/" if root)
-                let path = '';
-                try {
-                    if (e.url) {
-                        const u = new URL(e.url.startsWith('http')? e.url : 'http://x/'+e.url);
-                        path = (u.pathname || '/') + (u.search || '');
-                    }
-                } catch(_) { path = e.url || ''; }
-                if (path === '/' && !e.url.endsWith('/')) path = '';
-                const host = e.hostname || (function(){ try { return new URL(e.url).host; } catch(_) { return ''; } })();
-                const userBlock = e.src_user
-                    ? `<div class="udl-cell-user"><b>${esc(e.src_user)}</b><span>${esc(e.src_ip)}</span></div>`
-                    : `<div class="udl-cell-user"><b style="color:var(--udl-cyan)">${esc(e.src_ip)}</b><span>—</span></div>`;
-                const totalBytes = (e.sent_bytes||0)+(e.recv_bytes||0);
-                const bytesCell = totalBytes
-                    ? `<span class="udl-cell-bytes" title="↑ ${fmtBytes(e.sent_bytes)}  ↓ ${fmtBytes(e.recv_bytes)}">${fmtBytes(totalBytes)}</span>`
-                    : `<span style="color:var(--udl-dim)">—</span>`;
-                tr.innerHTML = `
-                    <td class="udl-ts">${fmtTime(e.timestamp)}</td>
-                    <td>${vendorBadge(e.vendor)}</td>
-                    <td>${userBlock}</td>
-                    <td class="udl-cell-dom" title="${esc(e.url)}">
-                        <div class="udl-cell-host">${esc(host)||'<span style="color:var(--udl-dim)">—</span>'}</div>
-                        ${path ? `<div class="udl-cell-path">${esc(truncUrl(path,90))}</div>` : ''}
-                    </td>
-                    <td><span class="udl-cell-cat">${esc(e.category||'—')}</span></td>
-                    <td>${actionBadge(e.action)}</td>
-                    <td><span class="udl-method">${esc(e.http_method||'—')}</span></td>
-                    <td class="r mono">${bytesCell}</td>
-                `;
-                tr.addEventListener('click', () => toggleUrlDetail(tr, e));
-                body.appendChild(tr);
-            });
-            renderUrlPagination();
-        } catch(err) {
-            body.innerHTML = '<tr><td colspan="8"><div class="udl-empty" style="color:var(--udl-danger)">Error loading URL logs</div></td></tr>';
-        }
-    }
-
-    function toggleUrlDetail(tr, e) {
-        // Close existing
-        if (expandedRow) {
-            expandedRow.classList.remove('udl-expanded');
-            const next = expandedRow.nextElementSibling;
-            if (next && next.classList.contains('udl-detail-row')) next.remove();
-            if (expandedRow === tr) { expandedRow = null; return; }
-        }
-        expandedRow = tr;
-        tr.classList.add('udl-expanded');
-        const detail = document.createElement('tr');
-        detail.className = 'udl-detail-row';
-        detail.innerHTML = `<td colspan="8"><div class="udl-detail-content">
-            <div class="udl-detail-group">
-                <h4>Request Details</h4>
-                <div class="udl-detail-field"><span class="lbl">Vendor</span><span class="val">${vendorBadge(e.vendor)} ${esc(e.vendor)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Full URL</span><span class="val"><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a></span></div>
-                ${e.hostname ? `<div class="udl-detail-field"><span class="lbl">Hostname</span><span class="val" style="color:var(--udl-warning);font-weight:600">${esc(e.hostname)}</span></div>` : ''}
-                <div class="udl-detail-field"><span class="lbl">Category</span><span class="val">${esc(e.category)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Method</span><span class="val">${esc(e.http_method)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Content-Type</span><span class="val">${esc(e.content_type)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">User-Agent</span><span class="val">${esc(e.user_agent)}</span></div>
-                ${e.referrer ? `<div class="udl-detail-field"><span class="lbl">Referrer</span><span class="val">${esc(e.referrer)}</span></div>` : ''}
-                ${e.reason ? `<div class="udl-detail-field"><span class="lbl">Reason</span><span class="val">${esc(e.reason)}</span></div>` : ''}
-                ${e.event_type ? `<div class="udl-detail-field"><span class="lbl">Event Type</span><span class="val">${esc(e.event_type)}</span></div>` : ''}
-                ${e.request_type ? `<div class="udl-detail-field"><span class="lbl">Request Type</span><span class="val">${esc(e.request_type)}</span></div>` : ''}
-            </div>
-            <div class="udl-detail-group">
-                <h4>Network</h4>
-                <div class="udl-detail-field"><span class="lbl">Source IP</span><span class="val">${esc(e.src_ip)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">User</span><span class="val">${esc(e.src_user)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Destination</span><span class="val">${esc(e.dest_ip)}:${e.dest_port}</span></div>
-                ${e.direction ? `<div class="udl-detail-field"><span class="lbl">Direction</span><span class="val">${esc(e.direction)}</span></div>` : ''}
-                <div class="udl-detail-field"><span class="lbl">Zones</span><span class="val">${esc(e.src_zone)} → ${esc(e.dest_zone)}</span></div>
-                ${e.sent_bytes != null ? `<div class="udl-detail-field"><span class="lbl">Sent</span><span class="val">${fmtBytes(e.sent_bytes)}</span></div>` : ''}
-                ${e.recv_bytes != null ? `<div class="udl-detail-field"><span class="lbl">Received</span><span class="val">${fmtBytes(e.recv_bytes)}</span></div>` : ''}
-                ${e.src_country ? `<div class="udl-detail-field"><span class="lbl">Src Country</span><span class="val">${esc(e.src_country)}</span></div>` : ''}
-                ${e.dest_country ? `<div class="udl-detail-field"><span class="lbl">Dest Country</span><span class="val">${esc(e.dest_country)}</span></div>` : ''}
-                ${e.xff_ip ? `<div class="udl-detail-field"><span class="lbl">XFF IP</span><span class="val">${esc(e.xff_ip)}</span></div>` : ''}
-            </div>
-            <div class="udl-detail-group">
-                <h4>Policy</h4>
-                <div class="udl-detail-field"><span class="lbl">Action</span><span class="val">${actionBadge(e.action)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Rule</span><span class="val">${esc(e.rule)}</span></div>
-                ${e.service ? `<div class="udl-detail-field"><span class="lbl">Service</span><span class="val">${esc(e.service)}</span></div>` : ''}
-                ${e.profile ? `<div class="udl-detail-field"><span class="lbl">Profile</span><span class="val">${esc(e.profile)}</span></div>` : ''}
-                <div class="udl-detail-field"><span class="lbl">Application</span><span class="val">${esc(e.application)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Device</span><span class="val">${esc(e.device_name)} (${esc(e.device_ip)})</span></div>
-                <div class="udl-detail-field"><span class="lbl">Session ID</span><span class="val">${e.session_id}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Severity</span><span class="val">${sevBadge(e.severity)}</span></div>
-            </div>
-        </div></td>`;
-        tr.after(detail);
-    }
-
-    // ============ DNS LOG TABLE ============
-    async function loadDnsLogs() {
-        const body = document.getElementById('dns-table-body');
-        body.innerHTML = '<tr><td colspan="9"><div class="udl-loading"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><div>Loading DNS logs...</div></div></td></tr>';
-
-        const params = new URLSearchParams({ hours: getHours(), limit: perPage, offset: dnsPage * perPage });
-        const sev = document.getElementById('filter-severity').value;
-        const act = document.getElementById('filter-action').value;
-        const q = document.getElementById('filter-search').value.trim();
-        if (sev) params.set('severity', sev);
-        if (act) params.set('action', act);
-        if (q) params.set('search', q);
-
-        try {
-            const resp = await fetch('/api/threats/dns-logs?' + params);
-            const data = await resp.json();
-            dnsTotal = data.total || 0;
-            document.getElementById('tab-dns-count').textContent = fmtNum(dnsTotal);
-            document.getElementById('dns-table-count').innerHTML = `Showing <strong>${fmtNum(data.events.length)}</strong> of <strong>${fmtNum(dnsTotal)}</strong>`;
-
-            if (!data.events.length) {
-                body.innerHTML = '<tr><td colspan="9"><div class="udl-empty"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><div>No DNS traffic found for the selected filters</div></div></td></tr>';
-                renderDnsPagination();
-                return;
-            }
-
-            body.innerHTML = '';
-            expandedRow = null;
-            data.events.forEach((e, i) => {
-                const tr = document.createElement('tr');
-                const displayName = e.qname || e.domain || e.threat_name;
-                tr.innerHTML = `
-                    <td class="udl-ts">${fmtTime(e.timestamp)}</td>
-                    <td>${vendorBadge(e.vendor)}</td>
-                    <td class="udl-ip">${esc(e.src_ip)}</td>
-                    <td class="udl-user-cell">${esc(e.src_user)}</td>
-                    <td class="udl-domain-cell" title="${esc(displayName)}">${esc(truncUrl(displayName, 45))}</td>
-                    <td><span class="udl-method">${esc(e.qtype || '')}</span></td>
-                    <td>${esc(e.category)}</td>
-                    <td>${actionBadge(e.action)}</td>
-                    <td class="udl-ip">${esc(e.dest_ip)}</td>
-                `;
-                tr.addEventListener('click', () => toggleDnsDetail(tr, e));
-                body.appendChild(tr);
-            });
-            renderDnsPagination();
-        } catch(err) {
-            body.innerHTML = '<tr><td colspan="9"><div class="udl-empty" style="color:var(--udl-danger)">Error loading DNS logs</div></td></tr>';
-        }
-    }
-
-    function toggleDnsDetail(tr, e) {
-        if (expandedRow) {
-            expandedRow.classList.remove('udl-expanded');
-            const next = expandedRow.nextElementSibling;
-            if (next && next.classList.contains('udl-detail-row')) next.remove();
-            if (expandedRow === tr) { expandedRow = null; return; }
-        }
-        expandedRow = tr;
-        tr.classList.add('udl-expanded');
-        const detail = document.createElement('tr');
-        detail.className = 'udl-detail-row';
-        detail.innerHTML = `<td colspan="9"><div class="udl-detail-content">
-            <div class="udl-detail-group">
-                <h4>DNS Query Details</h4>
-                <div class="udl-detail-field"><span class="lbl">Vendor</span><span class="val">${vendorBadge(e.vendor)} ${esc(e.vendor)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Domain (qname)</span><span class="val" style="color:var(--udl-warning);font-weight:600">${esc(e.qname || e.domain || e.threat_name)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Query Type</span><span class="val">${esc(e.qtype || '-')}</span></div>
-                ${e.resolved_ip ? `<div class="udl-detail-field"><span class="lbl">Resolved IP</span><span class="val" style="color:var(--udl-cyan)">${esc(e.resolved_ip)}</span></div>` : ''}
-                <div class="udl-detail-field"><span class="lbl">Category</span><span class="val">${esc(e.category)}</span></div>
-                ${e.msg ? `<div class="udl-detail-field"><span class="lbl">Message</span><span class="val">${esc(e.msg)}</span></div>` : ''}
-                ${e.threat_name && e.threat_name !== e.qname ? `<div class="udl-detail-field"><span class="lbl">Threat</span><span class="val">${esc(e.threat_name)}</span></div>` : ''}
-                ${e.profile ? `<div class="udl-detail-field"><span class="lbl">Profile</span><span class="val">${esc(e.profile)}</span></div>` : ''}
-            </div>
-            <div class="udl-detail-group">
-                <h4>Network</h4>
-                <div class="udl-detail-field"><span class="lbl">Source</span><span class="val">${esc(e.src_ip)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">User</span><span class="val">${esc(e.src_user)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Resolver</span><span class="val">${esc(e.dest_ip)}:${e.dest_port}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Transport</span><span class="val">${esc(e.transport)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Zones</span><span class="val">${esc(e.src_zone)} → ${esc(e.dest_zone)}</span></div>
-                ${e.src_country ? `<div class="udl-detail-field"><span class="lbl">Src Country</span><span class="val">${esc(e.src_country)}</span></div>` : ''}
-                ${e.dest_country ? `<div class="udl-detail-field"><span class="lbl">Dest Country</span><span class="val">${esc(e.dest_country)}</span></div>` : ''}
-            </div>
-            <div class="udl-detail-group">
-                <h4>Policy</h4>
-                <div class="udl-detail-field"><span class="lbl">Action</span><span class="val">${actionBadge(e.action)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Severity</span><span class="val">${sevBadge(e.severity)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Policy</span><span class="val">${esc(e.policy || e.rule)}</span></div>
-                <div class="udl-detail-field"><span class="lbl">Device</span><span class="val">${esc(e.device_name)} (${esc(e.device_ip)})</span></div>
-                <div class="udl-detail-field"><span class="lbl">Session ID</span><span class="val">${e.session_id}</span></div>
-                ${e.event_type ? `<div class="udl-detail-field"><span class="lbl">Event Type</span><span class="val">${esc(e.event_type)}</span></div>` : ''}
-            </div>
-        </div></td>`;
-        tr.after(detail);
-    }
-
-    // ============ PAGINATION ============
-    function renderUrlPagination() {
-        const el = document.getElementById('url-pagination');
-        const totalPages = Math.ceil(urlTotal / perPage) || 1;
-        const cur = urlPage + 1;
-        const start = urlPage * perPage + 1;
-        const end = Math.min(start + perPage - 1, urlTotal);
-
-        let btns = '';
-        btns += `<button class="udl-page-btn" onclick="urlGoPage(0)" ${cur===1?'disabled':''}>&#171;</button>`;
-        btns += `<button class="udl-page-btn" onclick="urlGoPage(${urlPage-1})" ${cur===1?'disabled':''}>&#8249; Prev</button>`;
-
-        // Show window of page numbers
-        let pstart = Math.max(1, cur - 2), pend = Math.min(totalPages, cur + 2);
-        for (let p = pstart; p <= pend; p++) {
-            btns += `<button class="udl-page-btn ${p===cur?'active':''}" onclick="urlGoPage(${p-1})">${p}</button>`;
-        }
-
-        btns += `<button class="udl-page-btn" onclick="urlGoPage(${urlPage+1})" ${cur>=totalPages?'disabled':''}>Next &#8250;</button>`;
-        btns += `<button class="udl-page-btn" onclick="urlGoPage(${totalPages-1})" ${cur>=totalPages?'disabled':''}>&#187;</button>`;
-
-        el.innerHTML = `
-            <div class="udl-pagination-info">${urlTotal > 0 ? `<strong>${fmtNum(start)}</strong> - <strong>${fmtNum(end)}</strong> of <strong>${fmtNum(urlTotal)}</strong> entries` : 'No entries'}</div>
-            <div class="udl-pagination-btns">${btns}</div>
-        `;
-    }
-
-    function renderDnsPagination() {
-        const el = document.getElementById('dns-pagination');
-        const totalPages = Math.ceil(dnsTotal / perPage) || 1;
-        const cur = dnsPage + 1;
-        const start = dnsPage * perPage + 1;
-        const end = Math.min(start + perPage - 1, dnsTotal);
-
-        let btns = '';
-        btns += `<button class="udl-page-btn" onclick="dnsGoPage(0)" ${cur===1?'disabled':''}>&#171;</button>`;
-        btns += `<button class="udl-page-btn" onclick="dnsGoPage(${dnsPage-1})" ${cur===1?'disabled':''}>&#8249; Prev</button>`;
-        let pstart = Math.max(1, cur - 2), pend = Math.min(totalPages, cur + 2);
-        for (let p = pstart; p <= pend; p++) {
-            btns += `<button class="udl-page-btn ${p===cur?'active':''}" onclick="dnsGoPage(${p-1})">${p}</button>`;
-        }
-        btns += `<button class="udl-page-btn" onclick="dnsGoPage(${dnsPage+1})" ${cur>=totalPages?'disabled':''}>Next &#8250;</button>`;
-        btns += `<button class="udl-page-btn" onclick="dnsGoPage(${totalPages-1})" ${cur>=totalPages?'disabled':''}>&#187;</button>`;
-
-        el.innerHTML = `
-            <div class="udl-pagination-info">${dnsTotal > 0 ? `<strong>${fmtNum(start)}</strong> - <strong>${fmtNum(end)}</strong> of <strong>${fmtNum(dnsTotal)}</strong> entries` : 'No entries'}</div>
-            <div class="udl-pagination-btns">${btns}</div>
-        `;
-    }
-
-    window.urlGoPage = function(p) { urlPage = Math.max(0, p); loadUrlLogs(); };
-    window.dnsGoPage = function(p) { dnsPage = Math.max(0, p); loadDnsLogs(); };
-
-    // ============ STATS LOADING ============
-    async function loadUrlStats() {
-        try {
-            const sp = new URLSearchParams({ hours: getHours() });
-            const vendor = document.getElementById('filter-vendor').value;
-            const cat = document.getElementById('filter-category').value;
-            const act = document.getElementById('filter-action').value;
-            const q = document.getElementById('filter-search').value.trim();
-            if (vendor) sp.set('vendor', vendor);
-            if (cat) sp.set('category', cat);
-            if (act) sp.set('action', act);
-            if (q) sp.set('search', q);
-            const cleanOn = document.getElementById('filter-clean').checked;
-            if (cleanOn) sp.set('clean', 'true');
-            const resp = await fetch('/api/threats/url-logs/stats?' + sp);
-            urlStats = await resp.json();
-            // Populate category dropdown
-            if (urlStats.filter_categories) {
-                const sel = document.getElementById('filter-category');
-                const cur = sel.value;
-                sel.innerHTML = '<option value="">All Categories</option>';
-                urlStats.filter_categories.forEach(c => {
-                    const o = document.createElement('option');
-                    o.value = c; o.textContent = c;
-                    sel.appendChild(o);
-                });
-                sel.value = cur;
-            }
-        } catch(e) { urlStats = { summary: {} }; }
-        if (currentTab === 'url') { renderStats(); renderSidebar(); }
-    }
-
-    async function loadDnsStats() {
-        try {
-            const sp = new URLSearchParams({ hours: getHours() });
-            const vendor = document.getElementById('filter-vendor').value;
-            const sev = document.getElementById('filter-severity').value;
-            const act = document.getElementById('filter-action').value;
-            const q = document.getElementById('filter-search').value.trim();
-            if (vendor) sp.set('vendor', vendor);
-            if (sev) sp.set('severity', sev);
-            if (act) sp.set('action', act);
-            if (q) sp.set('search', q);
-            const resp = await fetch('/api/threats/dns-logs/stats?' + sp);
-            dnsStats = await resp.json();
-        } catch(e) { dnsStats = { summary: {} }; }
-        if (currentTab === 'dns') { renderStats(); renderSidebar(); }
-    }
-
-    // ============ NOISE COUNT BADGE ============
-    async function loadNoiseCount() {
-        try {
-            const resp = await fetch('/api/threats/url-logs/noise-count?hours=' + getHours());
-            const data = await resp.json();
-            const badge = document.getElementById('clean-badge');
-            if (data.noise_count > 0) {
-                badge.textContent = fmtNum(data.noise_count) + ' noise (' + data.noise_pct + '%)';
-                badge.style.display = '';
-            } else {
-                badge.style.display = 'none';
-            }
-        } catch(e) {
-            document.getElementById('clean-badge').style.display = 'none';
-        }
-    }
-
-    // ============ ACTIONS ============
-    function _setRefreshStatus(text) {
-        const el = document.getElementById('udl-refresh-status');
-        if (el) el.textContent = text;
-    }
-    window.refreshAll = function() {
-        urlPage = 0; dnsPage = 0;
-        _setRefreshStatus('updating…');
-        renderStats(); renderSidebar();
-        Promise.allSettled([
-            loadUrlStats(), loadDnsStats(), loadNoiseCount(), loadTimeline(),
-            currentTab === 'url' ? loadUrlLogs() : loadDnsLogs()
-        ]).then(() => _setRefreshStatus('updated · ' + new Date().toLocaleTimeString()));
-    };
-
-    window.applyFilters = function() {
-        if (currentTab === 'url') {
-            urlPage = 0;
-            loadUrlLogs();
-            loadUrlStats();  // reload stats/sidebar with current vendor filter
-        } else {
-            dnsPage = 0;
-            loadDnsLogs();
-            loadDnsStats();  // reload stats/sidebar with current filter (was missing)
-        }
-        loadTimeline();
-    };
-
-    window.resetFilters = function() {
-        document.getElementById('filter-vendor').value = '';
-        document.getElementById('filter-category').value = '';
-        document.getElementById('filter-severity').value = '';
-        document.getElementById('filter-action').value = '';
-        document.getElementById('filter-search').value = '';
-        document.getElementById('filter-clean').checked = false;
-        applyFilters();
-    };
-
-    // Enter key in search
-    document.getElementById('filter-search').addEventListener('keydown', function(ev) {
-        if (ev.key === 'Enter') applyFilters();
-    });
-
-    // Time range change
-    document.getElementById('udl-time-range').addEventListener('change', refreshAll);
-
-    // Segmented range buttons → keep hidden select in sync
-    const _RANGE_LABELS = {
-        '1':'Last 1 hour','6':'Last 6 hours','24':'Last 24 hours',
-        '72':'Last 3 days','168':'Last 7 days','720':'Last 30 days'
-    };
-    function _applyRange(h, fromUI) {
-        const sel = document.getElementById('udl-time-range');
-        if (sel.value !== String(h)) sel.value = String(h);
-        document.querySelectorAll('#udl-range-seg .udl-seg-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.h === String(h));
-        });
-        const lbl = document.getElementById('udl-active-range-text');
-        if (lbl) lbl.textContent = _RANGE_LABELS[String(h)] || ('Last '+h+'h');
-        if (fromUI) sel.dispatchEvent(new Event('change'));
-    }
-    document.querySelectorAll('#udl-range-seg .udl-seg-btn').forEach(btn => {
-        btn.addEventListener('click', () => _applyRange(btn.dataset.h, true));
-    });
-    // Sync UI on init (in case ?hours= came in via URL)
-    _applyRange(document.getElementById('udl-time-range').value, false);
-
-    // ============ INLINE DRILLDOWN ============
-    const ddView = document.getElementById('udl-dd-view');
-    const ddMainView = document.getElementById('udl-main-view');
-    const ddTitle = document.getElementById('udl-dd-title');
-    const ddSub = document.getElementById('udl-dd-sub');
-    const ddIcon = document.getElementById('udl-dd-icon');
-    const ddStatsEl = document.getElementById('udl-dd-stats');
-    const ddRightEl = document.getElementById('udl-dd-right');
-    const ddLogsEl = document.getElementById('udl-dd-logs');
-    let ddLogsPage = 0, ddLogsTotal = 0, ddLogsFetcher = null;
-    let ddExtraFilters = {}; // extra filters applied from sidebar clicks
-
-    function openDrilldown(title, sub, iconBg, iconColor, iconSvg) {
-        ddTitle.textContent = title;
-        ddSub.textContent = sub;
-        ddIcon.style.background = iconBg;
-        ddIcon.style.color = iconColor;
-        ddIcon.style.border = '1px solid ' + iconColor.replace(')', ',.3)').replace('rgb','rgba');
-        ddIcon.innerHTML = iconSvg;
-        ddStatsEl.innerHTML = '';
-        ddRightEl.innerHTML = '';
-        ddLogsEl.innerHTML = '<div class="udl-dd-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading logs...</div>';
-        ddLogsPage = 0; ddLogsTotal = 0; ddExtraFilters = {};
-        ddMainView.style.display = 'none';
-        ddView.classList.add('active');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    window.closeDrilldown = function() {
-        ddView.classList.remove('active');
-        ddMainView.style.display = '';
-        ddLogsFetcher = null;
-    };
-
-    function ddStatHtml(val, label, cls) {
-        return `<div class="udl-dd-stat"><div class="val ${cls||''}">${fmtNum(val)}</div><div class="lbl">${esc(label)}</div></div>`;
-    }
-
-    function actionChip(a) {
-        let bg='rgba(148,163,184,.1)',fg='#94a3b8';
-        const al=(a.action||'').toLowerCase();
-        if(al==='allow'){bg='rgba(34,197,94,.12)';fg='#4ade80';}
-        else if(al==='alert'){bg='rgba(245,158,11,.12)';fg='#fbbf24';}
-        else if(al.includes('block')||al==='deny'||al==='drop'||al==='sinkhole'){bg='rgba(239,68,68,.12)';fg='#f87171';}
-        return `<span class="udl-action-chip" style="background:${bg};color:${fg}">${esc(a.action)} <strong>${fmtNum(a.count)}</strong></span>`;
-    }
-
-    function sevChip(s) {
-        let bg='rgba(148,163,184,.1)',fg='#94a3b8';
-        const sl=(s.severity||'').toLowerCase();
-        if(sl==='critical'){bg='rgba(239,68,68,.15)';fg='#f87171';}
-        else if(sl==='high'){bg='rgba(249,115,22,.15)';fg='#fb923c';}
-        else if(sl==='medium'){bg='rgba(245,158,11,.15)';fg='#fbbf24';}
-        else if(sl==='low'){bg='rgba(34,197,94,.15)';fg='#4ade80';}
-        else if(sl==='informational'){bg='rgba(59,130,246,.15)';fg='#60a5fa';}
-        return `<span class="udl-action-chip" style="background:${bg};color:${fg}">${esc(s.severity)} <strong>${fmtNum(s.count)}</strong></span>`;
-    }
-
-    const svgLink = '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
-    const svgUser = '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-    const svgServer = '<svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>';
-    const svgBolt = '<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
-    const svgWarn = '<svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>';
-    const svgFile = '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-
-    // Build a sidebar card with clickable list items
-    function ddSidebarCard(title, iconSvg, items, paramKey) {
-        if (!items || !items.length) return '';
-        let html = `<div class="udl-dd-card"><h4>${iconSvg}${title}</h4><ul class="udl-dd-card-list">`;
-        items.slice(0, 10).forEach(it => {
-            const val = it._val || '';
-            const active = ddExtraFilters[paramKey] === val ? ' udl-dd-active' : '';
-            html += `<li class="udl-dd-clickable${active}" onclick="ddFilterBy('${paramKey}','${esc(val).replace(/'/g,'&#39;')}',this)"><span class="dd-name" title="${esc(it._label)}">${esc(truncUrl(it._label,28))}</span><span class="dd-count">${fmtNum(it._count)}</span></li>`;
-        });
-        html += '</ul></div>';
-        return html;
-    }
-
-    function ddSidebarChips(title, iconSvg, chips) {
-        if (!chips || !chips.length) return '';
-        return `<div class="udl-dd-card"><h4>${iconSvg}${title}</h4><div class="udl-dd-actions">${chips.join('')}</div></div>`;
-    }
-
-    // Click a sidebar item to filter logs
-    window.ddFilterBy = function(key, val, el) {
-        if (ddExtraFilters[key] === val) {
-            delete ddExtraFilters[key]; // toggle off
-        } else {
-            ddExtraFilters[key] = val;
-        }
-        ddLogsPage = 0;
-        // Update active states in sidebar
-        ddRightEl.querySelectorAll('.udl-dd-clickable').forEach(li => li.classList.remove('udl-dd-active'));
-        ddRightEl.querySelectorAll('.udl-dd-clickable').forEach(li => {
-            const liKey = li.getAttribute('onclick').match(/ddFilterBy\('(\w+)'/)?.[1];
-            const liVal = li.getAttribute('onclick').match(/ddFilterBy\('\w+','([^']*)'/)?.[1]?.replace(/&#39;/g,"'");
-            if (liKey && ddExtraFilters[liKey] === liVal) li.classList.add('udl-dd-active');
-        });
-        ddLogsFetcher && ddLogsFetcher();
-    };
-
-    // Render logs table
-    function renderDDLogs(events, total, page, loaderFn) {
-        ddLogsTotal = total;
-        const totalPages = Math.ceil(total / perPage);
-        // Build filter tag display
-        let filterTags = '';
-        Object.entries(ddExtraFilters).forEach(([k,v]) => {
-            filterTags += `<span class="udl-dd-filter-tag">${esc(k)}: ${esc(truncUrl(v,20))} <span class="dd-clear" onclick="ddFilterBy('${k}','${esc(v).replace(/'/g,'&#39;')}');">\u2715</span></span>`;
-        });
-
-        let html = `<div class="udl-dd-logs-section">
-            <div class="udl-dd-logs-header">
-                <div class="udl-dd-logs-title"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Log Entries${filterTags}</div>
-                <div class="udl-dd-logs-count">Showing <strong>${fmtNum(events.length)}</strong> of <strong>${fmtNum(total)}</strong></div>
-            </div>
-            <div class="udl-table-scroll"><table class="udl-table"><thead><tr>`;
-
-        const isUrl = events.length ? events[0].hasOwnProperty('http_method') : (ddLogsFetcher && ddLogsFetcher._isUrl);
-        if (isUrl) {
-            html += '<th>Time</th><th>Source</th><th>User</th><th>URL</th><th>Category</th><th>Action</th><th>Method</th><th>Dest</th><th>App</th>';
-        } else {
-            html += '<th>Time</th><th>Source</th><th>User</th><th>Domain / Threat</th><th>Severity</th><th>Action</th><th>Dest</th><th>App</th><th>Rule</th>';
-        }
-        html += '</tr></thead><tbody>';
-
-        if (!events.length) {
-            html += '<tr><td colspan="9"><div class="udl-empty" style="padding:2rem;text-align:center;color:var(--udl-dim)">No log entries found</div></td></tr>';
-        } else {
-            events.forEach(e => {
-                if (isUrl) {
-                    html += `<tr><td class="udl-ts">${fmtTime(e.timestamp)}</td><td class="udl-ip">${esc(e.src_ip)}</td><td class="udl-user-cell">${esc(e.src_user)}</td><td class="udl-url-cell" title="${esc(e.url)}">${esc(truncUrl(e.url, 50))}</td><td>${esc(e.category)}</td><td>${actionBadge(e.action)}</td><td><span class="udl-method">${esc(e.http_method)}</span></td><td class="udl-ip">${esc(e.dest_ip)}</td><td>${esc(e.application)}</td></tr>`;
-                } else {
-                    html += `<tr><td class="udl-ts">${fmtTime(e.timestamp)}</td><td class="udl-ip">${esc(e.src_ip)}</td><td class="udl-user-cell">${esc(e.src_user)}</td><td title="${esc(e.threat_name)}">${esc(truncUrl(e.domain||e.threat_name,35))}</td><td>${sevBadge(e.severity)}</td><td>${actionBadge(e.action)}</td><td class="udl-ip">${esc(e.dest_ip)}</td><td>${esc(e.application)}</td><td>${esc(e.rule)}</td></tr>`;
-                }
-            });
-        }
-        html += '</tbody></table></div>';
-        if (totalPages > 1) {
-            html += '<div class="udl-pagination">';
-            html += `<button class="udl-pg-btn" ${page<=0?'disabled':''} onclick="ddLogsPrev()">\u2039 Prev</button>`;
-            html += `<span style="color:var(--udl-muted);font-size:.75rem">Page ${page+1} of ${fmtNum(totalPages)}</span>`;
-            html += `<button class="udl-pg-btn" ${page>=totalPages-1?'disabled':''} onclick="ddLogsNext()">Next \u203a</button>`;
-            html += '</div>';
-        }
-        html += '</div>';
-        ddLogsEl.innerHTML = html;
-        ddLogsFetcher = loaderFn;
-    }
-
-    window.ddLogsPrev = function() { if (ddLogsPage > 0) { ddLogsPage--; ddLogsFetcher && ddLogsFetcher(); } };
-    window.ddLogsNext = function() { const tp = Math.ceil(ddLogsTotal/perPage); if (ddLogsPage < tp-1) { ddLogsPage++; ddLogsFetcher && ddLogsFetcher(); } };
-
-    // ---- Category Drill-down (URL tab) ----
-    window.drillCategory = async function(category) {
-        openDrilldown(category, 'URL Category Detail \u00b7 Last ' + getHours() + 'h',
-            'rgba(59,130,246,.12)', '#60a5fa',
-            '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>');
-        try {
-            const resp = await fetch('/api/threats/url-category-detail?category=' + encodeURIComponent(category) + '&hours=' + getHours());
-            const d = await resp.json();
-            if (!d.success) { ddRightEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error</div>'; return; }
-            const s = d.summary || {};
-            ddStatsEl.innerHTML = '<div class="udl-dd-stats">' +
-                ddStatHtml(s.total, 'Total Events', 'primary') +
-                ddStatHtml(s.unique_users, 'Unique Users', '') +
-                ddStatHtml(s.unique_urls, 'Unique URLs', '') +
-                ddStatHtml(s.blocked, 'Blocked', 'danger') +
-                ddStatHtml(s.alerted, 'Alerted', 'warning') +
-                ddStatHtml(s.allowed, 'Allowed', 'success') + '</div>';
-
-            let sidebar = '';
-            sidebar += ddSidebarCard('Top URLs', svgLink, (d.top_urls||[]).map(u => ({_val:u.url, _label:u.url, _count:u.hits})), 'search');
-            sidebar += ddSidebarCard('Top Users', svgUser, (d.top_users||[]).map(u => ({_val:u.src_ip, _label:u.src_ip+(u.src_user?' ('+u.src_user+')':''), _count:u.hits})), 'src_ip');
-            sidebar += ddSidebarCard('Top Destinations', svgServer, (d.top_destinations||[]).map(t => ({_val:t.dest_ip, _label:t.dest_ip, _count:t.hits})), 'dest_ip');
-            sidebar += ddSidebarChips('Actions', svgBolt, (d.actions||[]).map(actionChip));
-            ddRightEl.innerHTML = sidebar;
-        } catch(e) { ddRightEl.innerHTML = ''; }
-
-        const loadCatLogs = async function() {
-            ddLogsEl.innerHTML = '<div class="udl-dd-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading logs...</div>';
-            try {
-                const p = new URLSearchParams({hours:getHours(), category:category, limit:perPage, offset:ddLogsPage*perPage});
-                Object.entries(ddExtraFilters).forEach(([k,v]) => p.set(k,v));
-                const r = await fetch('/api/threats/url-logs?'+p);
-                const data = await r.json();
-                renderDDLogs(data.events||[], data.total||0, ddLogsPage, loadCatLogs);
-            } catch(e) { ddLogsEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error loading logs</div>'; }
-        };
-        loadCatLogs._isUrl = true;
-        loadCatLogs();
-    };
-
-    // ---- Source / User Drill-down (both tabs) ----
-    window.drillSource = async function(srcIp) {
-        const fromTab = currentTab;
-        openDrilldown(srcIp, 'Source IP Detail \u00b7 Last ' + getHours() + 'h',
-            'rgba(168,85,247,.12)', '#c084fc', svgUser);
-        try {
-            const resp = await fetch('/api/threats/source-detail?src_ip=' + encodeURIComponent(srcIp) + '&hours=' + getHours());
-            const d = await resp.json();
-            if (!d.success) { ddRightEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error</div>'; return; }
-            const s = d.summary || {};
-            let statsHtml = '<div class="udl-dd-stats">' +
-                ddStatHtml(s.total, 'Total Events', 'primary') +
-                ddStatHtml(s.unique_threats, 'Unique Threats', '') +
-                ddStatHtml(s.unique_targets, 'Targets', '') +
-                ddStatHtml(s.critical_high, 'Critical/High', 'danger') +
-                ddStatHtml(s.blocked, 'Blocked', 'warning');
-            if (s.src_user) statsHtml += `<div class="udl-dd-stat"><div class="val" style="font-size:.85rem;color:var(--udl-purple)">${esc(s.src_user)}</div><div class="lbl">User</div></div>`;
-            statsHtml += '</div>';
-            ddStatsEl.innerHTML = statsHtml;
-
-            let sidebar = '';
-            sidebar += ddSidebarCard('Top Threats', svgWarn, (d.top_threats||[]).map(t => ({_val:t.threat_name, _label:t.threat_name, _count:t.count})), 'search');
-            sidebar += ddSidebarCard('Top Targets', svgServer, (d.top_targets||[]).map(t => ({_val:t.dest_ip, _label:t.dest_ip, _count:t.count})), 'dest_ip');
-            sidebar += ddSidebarChips('Event Types', svgBolt, (d.subtypes||[]).map(t => `<span class="udl-action-chip" style="background:rgba(59,130,246,.1);color:#60a5fa">${esc(t.subtype)} <strong>${fmtNum(t.count)}</strong></span>`));
-            sidebar += ddSidebarChips('Severity', svgWarn, (d.severities||[]).map(sevChip));
-            ddRightEl.innerHTML = sidebar;
-        } catch(e) { ddRightEl.innerHTML = ''; }
-
-        const loadSrcLogs = async function() {
-            ddLogsEl.innerHTML = '<div class="udl-dd-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading logs...</div>';
-            try {
-                const endpoint = fromTab === 'url' ? '/api/threats/url-logs' : '/api/threats/dns-logs';
-                const p = new URLSearchParams({hours:getHours(), src_ip:srcIp, limit:perPage, offset:ddLogsPage*perPage});
-                Object.entries(ddExtraFilters).forEach(([k,v]) => p.set(k,v));
-                const r = await fetch(endpoint+'?'+p);
-                const data = await r.json();
-                renderDDLogs(data.events||[], data.total||0, ddLogsPage, loadSrcLogs);
-            } catch(e) { ddLogsEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error loading logs</div>'; }
-        };
-        loadSrcLogs._isUrl = (fromTab === 'url');
-        loadSrcLogs();
-    };
-
-    // ---- Domain Drill-down (DNS tab) ----
-    window.drillDomain = async function(threatName) {
-        openDrilldown(threatName, 'DNS Domain Detail \u00b7 Last ' + getHours() + 'h',
-            'rgba(34,211,238,.12)', '#22d3ee',
-            '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>');
-        try {
-            const resp = await fetch('/api/threats/threat-sig-detail?threat_name=' + encodeURIComponent(threatName) + '&hours=' + getHours());
-            const d = await resp.json();
-            if (!d.success) { ddRightEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error</div>'; return; }
-            const s = d.summary || {};
-            let statsHtml = '<div class="udl-dd-stats">' +
-                ddStatHtml(s.total, 'Total Events', 'primary') +
-                ddStatHtml(s.unique_sources, 'Sources', '') +
-                ddStatHtml(s.unique_targets, 'Targets', '') +
-                ddStatHtml(s.blocked, 'Blocked', 'danger') +
-                ddStatHtml(s.alerted, 'Alerted', 'warning') +
-                ddStatHtml(s.allowed, 'Allowed', 'success') + '</div>';
-            if (s.severity) {
-                statsHtml += '<div style="margin-bottom:.75rem">' + sevBadge(s.severity) + ' <span style="color:var(--udl-muted);font-size:.75rem;margin-left:.25rem">' + esc(s.category||'') + (s.subtype?' \u00b7 '+esc(s.subtype):'') + '</span></div>';
-            }
-            ddStatsEl.innerHTML = statsHtml;
-
-            let sidebar = '';
-            sidebar += ddSidebarCard('Top Sources', svgUser, (d.top_sources||[]).map(s => ({_val:s.src_ip, _label:s.src_ip+(s.src_user?' ('+s.src_user+')':''), _count:s.count})), 'src_ip');
-            sidebar += ddSidebarCard('Top Targets', svgServer, (d.top_targets||[]).map(t => ({_val:t.dest_ip, _label:t.dest_ip, _count:t.count})), 'dest_ip');
-            sidebar += ddSidebarChips('Actions', svgBolt, (d.actions||[]).map(actionChip));
-            sidebar += ddSidebarCard('Rules', svgFile, (d.top_rules||[]).map(r => ({_val:r.rule, _label:r.rule, _count:r.count})), 'search');
-            ddRightEl.innerHTML = sidebar;
-        } catch(e) { ddRightEl.innerHTML = ''; }
-
-        const loadDomLogs = async function() {
-            ddLogsEl.innerHTML = '<div class="udl-dd-loading"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading logs...</div>';
-            try {
-                const p = new URLSearchParams({hours:getHours(), threat_name:threatName, limit:perPage, offset:ddLogsPage*perPage});
-                Object.entries(ddExtraFilters).forEach(([k,v]) => p.set(k,v));
-                const r = await fetch('/api/threats/dns-logs?'+p);
-                const data = await r.json();
-                renderDDLogs(data.events||[], data.total||0, ddLogsPage, loadDomLogs);
-            } catch(e) { ddLogsEl.innerHTML = '<div class="udl-dd-loading" style="color:var(--udl-danger)">Error loading logs</div>'; }
-        };
-        loadDomLogs._isUrl = false;
-        loadDomLogs();
-    };
-
-    // ============ INIT ============
-    // Read URL query params for drill-down from analytics dashboard
-    const _initParams = new URLSearchParams(window.location.search);
-    // Apply non-dropdown params immediately
-    if (_initParams.get('vendor')) document.getElementById('filter-vendor').value = _initParams.get('vendor');
-    if (_initParams.get('search')) document.getElementById('filter-search').value = _initParams.get('search');
-    if (_initParams.get('clean') === 'true') document.getElementById('filter-clean').checked = true;
-    if (_initParams.get('hours')) document.getElementById('udl-time-range').value = _initParams.get('hours');
-    if (_initParams.get('action')) document.getElementById('filter-action').value = _initParams.get('action');
-    if (_initParams.get('tab') === 'dns') { currentTab = 'dns'; switchTab('dns'); }
-
-    // For category: need to wait for stats to populate dropdown, then set value
-    const _pendingCategory = _initParams.get('category') || '';
-
-    // Patch loadUrlStats to apply pending category after dropdown is populated
-    const _origLoadUrlStats = loadUrlStats;
-    loadUrlStats = async function() {
-        await _origLoadUrlStats();
-        if (_pendingCategory) {
-            const sel = document.getElementById('filter-category');
-            // Add option if not present (edge case: category not in top 100)
-            if (!sel.querySelector('option[value="'+_pendingCategory+'"]')) {
-                const o = document.createElement('option');
-                o.value = _pendingCategory; o.textContent = _pendingCategory;
-                sel.appendChild(o);
-            }
-            sel.value = _pendingCategory;
-            // Reload logs with the category applied (only on first load)
-            if (loadUrlStats._first !== false) {
-                loadUrlStats._first = false;
-                urlPage = 0;
-                loadUrlLogs();
-            }
-        }
-    };
-
-    populateActionFilter('url');
-    renderStats();
-    renderSidebar();
-    loadUrlStats();
-    loadDnsStats();
-    loadNoiseCount();
-    loadUrlLogs();
-    loadDnsLogs(); // Pre-load DNS count for tab badge
-    loadTimeline();
-
+    // ── Wiring ───────────────────────────────────────────────────────────────
+    $('wa-range').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.h === 'custom') { $('wa-custom').classList.toggle('open'); if (!$('wa-start').value) { const d = new Date(Date.now() - 86400000); d.setMinutes(0, 0, 0); $('wa-start').value = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); } return; } ZWA.setHours(parseInt(b.dataset.h)); });
+    $('wa-clean').addEventListener('change', e => { S.clean = e.target.checked; invalidate(); render(); });
+    $('wa-q').addEventListener('keydown', e => { if (e.key === 'Enter') ZWA.filter('q', e.target.value.trim(), (S.view === 'user' || S.view === 'site') ? 'logs' : undefined); if (e.key === 'Escape') { e.target.value = ''; ZWA.filter('q', ''); } });
+    $('wa-nav').addEventListener('click', e => { const b = e.target.closest('button[data-view]'); if (b) ZWA.go(b.dataset.view); });
+    $('wa-live').addEventListener('click', () => { const el = $('wa-live'); if (liveTimer) { clearInterval(liveTimer); liveTimer = null; el.classList.remove('on'); $('wa-live-txt').textContent = 'live off'; } else { liveTimer = setInterval(() => ZWA.refresh(), 60000); el.classList.add('on'); $('wa-live-txt').textContent = 'live · 60s'; } });
+    window.addEventListener('hashchange', () => { readHash(); render(); });
+    readHash(); render();
 })();
 </script>
 {% endblock %}

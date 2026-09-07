@@ -377,6 +377,8 @@ app.include_router(url_clean_router)
 # Include URL Analytics dashboard routes
 from .api.url_dashboard import router as url_dashboard_router
 app.include_router(url_dashboard_router)
+from .api.web_activity import router as web_activity_router
+app.include_router(web_activity_router)
 
 # Include user activity timeline routes
 app.include_router(user_activity_router)

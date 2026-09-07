@@ -920,6 +920,25 @@
         transition: width 0.4s ease;
     }
 
+    /* Hourly activity chart */
+    .td-timeline-card {
+        background: var(--td-surface, #1e293b);
+        border: 1px solid var(--td-border, #334155);
+        border-radius: 10px;
+        padding: 10px 14px 6px;
+        margin-bottom: 14px;
+    }
+    .td-timeline-head { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+    .td-timeline-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--td-muted, #94a3b8); }
+    .td-timeline-legend { font-size: 11px; color: var(--td-muted, #94a3b8); display: flex; align-items: center; gap: 6px; }
+    .td-timeline-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 8px; }
+    .td-timeline-legend i:first-child { margin-left: 0; }
+    .td-tl-all { background: rgba(59,130,246,0.55); }
+    .td-tl-crit { background: #ef4444; }
+    .td-tl-url { background: #a78bfa; }
+    .td-timeline-meta { margin-left: auto; font-size: 11px; color: var(--td-muted, #94a3b8); }
+    .td-timeline-chart { height: 120px; width: 100%; }
+
     /* Timeline mini chart */
     .td-cat-timeline {
         display: flex;
@@ -1099,7 +1118,7 @@
     <div class="td-page-header">
         <div class="td-page-header-left">
             <h1 class="td-page-title">Threat Intelligence</h1>
-            <span class="td-page-subtitle">Palo Alto NGFW &mdash; Threat & URL Filtering Analytics</span>
+            <span class="td-page-subtitle">Palo Alto &amp; FortiGate &mdash; Threat & URL Filtering Analytics</span>
         </div>
         <div class="td-header-actions">
             <select class="td-time-select" id="time-range" onchange="refreshAll()">
@@ -1151,6 +1170,16 @@
             <div class="td-metric-count" id="m-url">-</div>
             <div class="td-metric-label">URL Filter</div>
         </div>
+    </div>
+
+    <!-- Hourly timeline -->
+    <div class="td-timeline-card">
+        <div class="td-timeline-head">
+            <span class="td-timeline-title">Activity</span>
+            <span class="td-timeline-legend"><i class="td-tl-all"></i>All events <i class="td-tl-crit"></i>Critical / High <i class="td-tl-url"></i>URL filter</span>
+            <span class="td-timeline-meta" id="timeline-meta"></span>
+        </div>
+        <div id="timeline-chart" class="td-timeline-chart"></div>
     </div>
 
     <!-- Tabs + Filter (combined row) -->
@@ -1400,6 +1429,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ vite_asset('static/src/echarts.js') }}"></script>
 <script>
 (function() {
     const PAGE_SIZE = 100;
@@ -1973,7 +2003,7 @@
             '<tr><th>Session ID</th><td class="td-mono">' + (evt.session_id || '-') + '</td></tr>' +
             '</table></div>';
         document.getElementById('modal-body').innerHTML = html;
-        document.getElementById('modal-drilldown').href = '/logs/?query=srcip:' + encodeURIComponent(evt.src_ip || '') + '+dstip:' + encodeURIComponent(evt.dest_ip || '');
+        document.getElementById('modal-drilldown').href = '/logs/?q=' + encodeURIComponent('srcip:' + (evt.src_ip || '') + ' dstip:' + (evt.dest_ip || '')) + '&time_range=' + getHours() + 'h';
         document.getElementById('detail-modal').classList.add('active');
     };
     window.closeModal = function() { document.getElementById('detail-modal').classList.remove('active'); };
@@ -1990,12 +2020,59 @@
     };
     document.getElementById('f-search').addEventListener('keydown', function(e) { if (e.key === 'Enter') loadEvents(0); });
 
+    // ── Hourly timeline ──
+    var timelineChart = null;
+    async function loadTimeline() {
+        var el = document.getElementById('timeline-chart');
+        if (!el || typeof echarts === 'undefined') return;
+        try {
+            const res = await fetch('/api/threats/timeline?hours=' + getHours());
+            const data = await res.json();
+            var rows = data.timeline || [];
+            if (!timelineChart) {
+                timelineChart = echarts.init(el, null, { renderer: 'canvas' });
+                window.addEventListener('resize', function() { timelineChart.resize(); });
+            }
+            var hours = rows.map(function(r) { return r.hour; });
+            var fmtHour = function(iso) {
+                var d = new Date(iso.indexOf('Z') === -1 && iso.indexOf('+') === -1 ? iso + 'Z' : iso);
+                return getHours() > 48
+                    ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                    : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            };
+            var peak = rows.reduce(function(m, r) { return r.total > m ? r.total : m; }, 0);
+            document.getElementById('timeline-meta').textContent = rows.length
+                ? 'peak ' + fmtNum(peak) + ' / hour' : 'no events in range';
+            timelineChart.setOption({
+                animation: false,
+                grid: { left: 44, right: 8, top: 6, bottom: 20 },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+                    backgroundColor: '#0f172a', borderColor: '#334155', textStyle: { color: '#e2e8f0', fontSize: 11 },
+                    formatter: function(ps) {
+                        var i = ps[0].dataIndex, r = rows[i];
+                        return fmtHour(r.hour) + '<br>Total: <b>' + fmtNum(r.total) + '</b><br>Critical/High: <b>' + fmtNum(r.critical_high) + '</b><br>URL filter: <b>' + fmtNum(r.url_events) + '</b>';
+                    } },
+                xAxis: { type: 'category', data: hours.map(fmtHour),
+                    axisLabel: { color: '#64748b', fontSize: 10, hideOverlap: true }, axisLine: { lineStyle: { color: '#334155' } }, axisTick: { show: false } },
+                yAxis: { type: 'value', axisLabel: { color: '#64748b', fontSize: 10,
+                    formatter: function(v) { return v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? (v/1e3).toFixed(0) + 'k' : v; } },
+                    splitLine: { lineStyle: { color: 'rgba(51,65,85,0.5)' } } },
+                series: [
+                    { name: 'All events', type: 'bar', data: rows.map(function(r) { return r.total; }), itemStyle: { color: 'rgba(59,130,246,0.55)' }, barMaxWidth: 18 },
+                    { name: 'URL filter', type: 'line', data: rows.map(function(r) { return r.url_events; }), symbol: 'none', lineStyle: { color: '#a78bfa', width: 1.5 } },
+                    { name: 'Critical / High', type: 'line', data: rows.map(function(r) { return r.critical_high; }), symbol: 'none', lineStyle: { color: '#ef4444', width: 2 } }
+                ]
+            }, true);
+        } catch (e) { /* chart is decorative; never block the page */ }
+    }
+
     // ── Refresh ──
     window.refreshAll = function() {
         var btn = document.getElementById('btn-refresh');
         btn.classList.add('td-spinning');
         setTimeout(function() { btn.classList.remove('td-spinning'); }, 800);
         loadSummary();
+        loadTimeline();
         if (currentTab === 'events') loadEvents(currentOffset);
         else if (currentTab === 'sources') loadSources();
         else if (currentTab === 'signatures') loadThreats();
@@ -2005,6 +2082,7 @@
     // ── Init ──
     document.addEventListener('DOMContentLoaded', function() {
         loadSummary();
+        loadTimeline();
         loadEvents(0);
     });
 })();
