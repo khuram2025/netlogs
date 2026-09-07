@@ -146,6 +146,7 @@ VALID_FIELDS = {
     "facility", "timestamp", "vdom", "service", "src_intf", "dst_intf",
     "src_country", "dst_country", "src_user", "session_id", "duration",
     "sent_bytes", "recv_bytes", "log_time", "ingest_time",
+    "scope",
 }
 
 # Fields that accept numeric comparisons

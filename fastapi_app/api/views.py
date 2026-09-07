@@ -1075,6 +1075,7 @@ async def log_list(
     # Traffic analysis filters
     application: Optional[str] = Query(None),
     session_end_reason: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
     # Infrastructure filters
     src_zone: Optional[str] = Query(None),
     dst_zone: Optional[str] = Query(None),
@@ -1122,23 +1123,13 @@ async def log_list(
         default_time_range = '1h'
         effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
 
-        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d)
-        if effective_time_range.endswith('m'):
+        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d). The start is
+        # rounded (see _round_window) so repeated loads share cached scans.
+        _unit = {'m': 'minutes', 'h': 'hours', 'd': 'days'}.get(effective_time_range[-1:])
+        if _unit:
             try:
-                minutes = int(effective_time_range[:-1])
-                start_time = now - timedelta(minutes=minutes)
-            except ValueError:
-                pass
-        elif effective_time_range.endswith('h'):
-            try:
-                hours = int(effective_time_range[:-1])
-                start_time = now - timedelta(hours=hours)
-            except ValueError:
-                pass
-        elif effective_time_range.endswith('d'):
-            try:
-                days = int(effective_time_range[:-1])
-                start_time = now - timedelta(days=days)
+                delta = timedelta(**{_unit: int(effective_time_range[:-1])})
+                start_time = _round_window(now - delta, delta)
             except ValueError:
                 pass
 
@@ -1215,6 +1206,13 @@ async def log_list(
         session_end_reason_clean = session_end_reason.strip() if session_end_reason and session_end_reason.strip() else None
         if session_end_reason_clean:
             search_parts.append(_fmt("session_end_reason", session_end_reason_clean))
+
+        # Traffic scope (sidebar "Internet" etc.) — just another AND-ed NQL
+        # term, so it narrows whatever Src/Dst/action filters are already set
+        # and on its own simply shows internet-bound traffic.
+        scope_clean = _clean_scope(scope)
+        if scope_clean:
+            search_parts.append(_fmt("scope", scope_clean))
 
         # Handle src_zone parameter
         src_zone_clean = src_zone.strip() if src_zone and src_zone.strip() else None
@@ -1377,6 +1375,8 @@ async def log_list(
             )
 
         if not nql_error and nql_mode != 'aggregate':
+            # skip_total: the count future above already scans this exact
+            # filter set — running it twice doubled the CPU cost of every load.
             stats_future = loop.run_in_executor(
                 _executor,
                 lambda: ClickHouseClient.get_log_stats_summary(
@@ -1384,6 +1384,7 @@ async def log_list(
                     start_time=start_time,
                     end_time=end_time,
                     query_text=search_query if search_query else None,
+                    skip_total=True,
                 )
             )
 
@@ -1409,6 +1410,12 @@ async def log_list(
 
             if nql_limit and total >= 0:
                 total = min(total, nql_limit)
+            # A count that hit its time budget (-1) is still exact when the
+            # first page came back short: every match is already on screen.
+            if total < 0 and page_num == 1 and len(logs_or_agg) < per_page_num:
+                total = len(logs_or_agg)
+            if stats and stats.get('total_logs') is None:
+                stats['total_logs'] = total
 
         nql_elapsed_ms = int((time.perf_counter() - query_started) * 1000)
 
@@ -1466,6 +1473,7 @@ async def log_list(
             # Traffic analysis filter values
             "current_application": application_clean,
             "current_session_end_reason": session_end_reason_clean,
+            "current_scope": scope_clean,
             # Infrastructure filter values
             "current_src_zone": src_zone_clean,
             "current_dst_zone": dst_zone_clean,
@@ -1678,6 +1686,7 @@ async def log_list(
             # Traffic analysis filter values
             "current_application": application if application else None,
             "current_session_end_reason": session_end_reason if session_end_reason else None,
+            "current_scope": _clean_scope(scope),
             # Infrastructure filter values
             "current_src_zone": src_zone if src_zone else None,
             "current_dst_zone": dst_zone if dst_zone else None,
@@ -4933,6 +4942,17 @@ def _serialize_value(v):
 # (shared filter helpers so all three honor the same filters as the log list)
 # ============================================================
 
+def _round_window(start_time, delta):
+    """Round a relative window's start down so the generated SQL is stable for
+    a while: whole minutes for windows of an hour or more, 10 s below that.
+    Repeated page loads, pagination and facet fetches within that period then
+    hit the ClickHouse query cache instead of rescanning the window."""
+    if start_time is None:
+        return None
+    step = 60 if delta >= timedelta(hours=1) else 10
+    return start_time.replace(second=(start_time.second // step) * step, microsecond=0)
+
+
 def _explorer_time_window(time_range, start, end):
     """Resolve (start_time, end_time) from a relative range (e.g. '1h','24h','7d')
     or explicit ISO start/end. Returns (None, None) to let the query layer apply
@@ -4949,8 +4969,9 @@ def _explorer_time_window(time_range, start, end):
         m = re.match(r'^(\d+)([mhd])$', time_range.strip().lower())
         if m:
             n, u = int(m.group(1)), m.group(2)
-            start_time = now - {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
-                                'd': timedelta(days=n)}[u]
+            delta = {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
+                     'd': timedelta(days=n)}[u]
+            start_time = _round_window(now - delta, delta)
     return start_time, end_time
 
 
@@ -4969,6 +4990,13 @@ def _is_not_flag(val: Optional[str]) -> bool:
     return bool(val and val.strip().lower() in ('1', 'true', 'on', 'yes'))
 
 
+def _clean_scope(scope) -> Optional[str]:
+    """Normalise the `scope` query param; anything not a known scope is ignored."""
+    from ..services.nql_schema import SCOPE_VALUES
+    v = (scope or "").strip().lower()
+    return v if v in SCOPE_VALUES else None
+
+
 def _nql_term(field: str, val: str, negated: bool = False) -> str:
     inner = f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
     return f'-{inner}' if negated else inner
@@ -4978,7 +5006,8 @@ def _explorer_search_query(q=None, action=None, log_type=None, application=None,
                            srcip=None, dstip=None, policyname=None, src_zone=None,
                            dst_zone=None, session_end_reason=None, dstport=None,
                            srcport=None, src_country=None, dst_country=None, service=None,
-                           srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None):
+                           srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None,
+                           scope=None):
     """Compose an NQL query string (user query + toolbar field:value terms)
     parsed by ClickHouseClient._build_where_clause, so facets, exports and
     analytics honor exactly the filters the log table shows."""
@@ -4999,6 +5028,7 @@ def _explorer_search_query(q=None, action=None, log_type=None, application=None,
         ("src_country", src_country, False),
         ("dst_country", dst_country, False),
         ("service", service, False),
+        ("scope", _clean_scope(scope), False),
     ):
         if val is not None and str(val).strip():
             parts.append(_nql_term(field, str(val).strip(), negated))
@@ -5013,13 +5043,15 @@ async def logs_facets(
     device: Optional[str] = Query(None), severity: Optional[str] = Query(None),
     q: Optional[str] = Query(None), action: Optional[str] = Query(None),
     log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
     limit: int = Query(10),
 ):
     """Top-N values (+counts) for a facetable field — the left-rail click-to-filter."""
     st, et = _explorer_time_window(time_range, start, end)
     device_ips = [device] if device and device.strip() else None
     sev = _explorer_severities(severity)
-    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application)
+    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+                                scope=scope)
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_field_facets(
         field=field, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
@@ -5038,7 +5070,8 @@ async def logs_export(
     srcport: Optional[str] = Query(None), dstport: Optional[str] = Query(None),
     srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
     srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
-    policyname: Optional[str] = Query(None), limit: int = Query(100000),
+    policyname: Optional[str] = Query(None), scope: Optional[str] = Query(None),
+    limit: int = Query(100000),
 ):
     """Stream the current filtered logs as CSV or JSON (capped at `limit` rows)."""
     st, et = _explorer_time_window(time_range, start, end)
@@ -5048,7 +5081,7 @@ async def logs_export(
                                 srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
                                 srcip_not=srcip_not, dstip_not=dstip_not,
                                 srcport_not=srcport_not, dstport_not=dstport_not,
-                                policyname=policyname)
+                                policyname=policyname, scope=scope)
     cap = min(max(int(limit), 1), 500000)
     cols = ["timestamp", "device_ip", "vdom", "severity", "srcip", "dstip", "srcport",
             "dstport", "proto", "action", "policyname", "log_type", "application",

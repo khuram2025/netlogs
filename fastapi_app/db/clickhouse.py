@@ -1162,6 +1162,36 @@ class ClickHouseClient:
         'vdom': 'vdom', 'vd': 'vdom', 'vsys': 'vdom',
     }
 
+    # ClickHouse query cache for the Log Explorer's repeated scans (count,
+    # facets, aggregate rows). A page load fires several of these over the same
+    # window; pagination and view toggles re-run them again. With the time
+    # bounds rounded by the caller (see views._round_window) the SQL text is
+    # identical for a minute, so repeats are served from memory. 'save' lets
+    # queries that mention now() be cached too.
+    EXPLORER_CACHE_SETTINGS = (
+        "use_query_cache = 1, query_cache_ttl = 60, "
+        "query_cache_nondeterministic_function_handling = 'save'"
+    )
+
+    # Vendor/legacy aliases for the two IP columns. Without this, a term such
+    # as `source_ip:10.1.1.1` falls through to the parsed_data Map and forces a
+    # full scan of every row in the window (observed: 188 s over 12 h).
+    _IP_FIELD_ALIASES = {
+        'src_ip': 'srcip', 'source_ip': 'srcip', 'src': 'srcip', 'source': 'srcip',
+        'dst_ip': 'dstip', 'destination_ip': 'dstip', 'dst': 'dstip', 'destination': 'dstip',
+    }
+
+    @classmethod
+    def _v4_prefix_range(cls, col: str, ip_part: str, mask_int: int, negated: bool) -> str:
+        """CIDR match on the IPv4-typed companion column (4 bytes/row, minmax
+        skip index) instead of a string prefix test on the wide String column.
+        Reads about half the bytes for the same answer."""
+        safe_ip = ip_part.replace("'", "''")
+        rng = f"IPv4CIDRToRange(toIPv4OrDefault('{safe_ip}'), {mask_int})"
+        cond = (f"({col}_v4 >= tupleElement({rng}, 1) AND {col}_v4 <= tupleElement({rng}, 2)"
+                f" AND {col}_v4 != toIPv4('0.0.0.0'))")
+        return f"NOT {cond}" if negated else cond
+
     @classmethod
     def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
         """
@@ -1269,6 +1299,20 @@ class ClickHouseClient:
         safe_value = value.replace("'", "''")
         not_prefix = "NOT " if negated else ""
 
+        # Resolve aliases onto the native, indexed columns before anything else.
+        field = cls._IP_FIELD_ALIASES.get(field.lower(), field)
+
+        # Virtual `scope` field — classifies a flow by where its endpoints sit
+        # (RFC1918/reserved vs public). Evaluated on the IPv4-typed companion
+        # columns so it is cheap and never throws on IPv6/empty values.
+        if field == 'scope' and operator == '=':
+            from ..services.nql_schema import scope_condition_sql, SCOPE_VALUES
+            cond = scope_condition_sql(value)
+            if cond is None:
+                raise ValueError(
+                    f"Unknown scope '{value}' — use one of: {', '.join(SCOPE_VALUES)}")
+            return f"NOT {cond}" if negated else cond
+
         # OPTIMIZATION: Use indexed srcip/dstip columns directly for ALL IP operations
         # These columns have bloom filter indexes for fast filtering
         ip_fields_indexed = ('srcip', 'dstip')
@@ -1283,33 +1327,14 @@ class ClickHouseClient:
                 mask_int = int(mask)
                 octets = ip_part.split('.')
 
-                # For /8, /16, /24 use fast LIKE prefix matching
-                if mask_int == 8 and len(octets) >= 1:
-                    prefix = f"{octets[0]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                elif mask_int == 16 and len(octets) >= 2:
-                    prefix = f"{octets[0]}.{octets[1]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                elif mask_int == 24 and len(octets) >= 3:
-                    prefix = f"{octets[0]}.{octets[1]}.{octets[2]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                else:
-                    # For other masks (/12, /23, ...) use the IPv4-typed companion
-                    # column with a numeric range. toIPv4OrDefault makes this
-                    # crash-proof on the empty/non-IPv4 values present in the data
-                    # (isIPAddressInRange on the String column throws on those),
-                    # and the minmax skip-index on {col}_v4 prunes granules.
-                    safe_ip = ip_part.replace("'", "''")
-                    col_v4 = f"{col}_v4"
-                    rng = f"IPv4CIDRToRange(toIPv4OrDefault('{safe_ip}'), {mask_int})"
-                    cond = f"({col_v4} >= tupleElement({rng}, 1) AND {col_v4} <= tupleElement({rng}, 2))"
-                    return f"NOT {cond}" if negated else cond
+                # Any mask: numeric range on the IPv4-typed companion column.
+                # toIPv4OrDefault makes this crash-proof on the empty/IPv6
+                # values present in the data (isIPAddressInRange on the String
+                # column throws on those), the minmax skip-index on {col}_v4
+                # prunes granules, and it reads ~half the bytes of a
+                # startsWith() on the String column.
+                if 0 <= mask_int <= 32 and len(octets) == 4:
+                    return cls._v4_prefix_range(col, ip_part, mask_int, negated)
 
             # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
             if cls._is_ip_range(value):
@@ -1336,16 +1361,7 @@ class ClickHouseClient:
                     safe_part = part.replace("'", "''")
                     if cls._is_cidr(part):
                         ip_part, mask = part.rsplit('/', 1)
-                        mask_int = int(mask)
-                        octets = ip_part.split('.')
-                        if mask_int == 8:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.')")
-                        elif mask_int == 16:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.')")
-                        elif mask_int == 24:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.{octets[2]}.')")
-                        else:
-                            conditions.append(f"({col} != '' AND isIPAddressInRange({col}, '{safe_part}'))")
+                        conditions.append(cls._v4_prefix_range(col, ip_part, int(mask), False))
                     elif cls._is_ip_range(part):
                         start_ip, end_ip = part.split('-')
                         conditions.append(f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{start_ip}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{end_ip}'))")
@@ -1981,8 +1997,16 @@ class ClickHouseClient:
                 prewhere_parts = [combined] + list(indexed_prewhere)
                 prewhere_clause = " AND ".join(prewhere_parts)
 
-                count_q = f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}"
-                cnt = list(client.query(count_q).result_rows)
+                count_q = (f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql} "
+                           f"SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}")
+                try:
+                    cnt = list(client.query(count_q).result_rows)
+                except Exception as e:
+                    # A probe that can't finish in 10 s (e.g. a parsed_data Map
+                    # filter) won't finish faster on a wider window — give up on
+                    # narrowing and run the bounded full-range query instead.
+                    logger.warning(f"search_logs narrowing probe aborted ({secs}s window): {e}")
+                    break
                 cnt_val = cnt[0][0] if cnt else 0
 
                 if cnt_val >= required_rows:
@@ -1994,7 +2018,9 @@ class ClickHouseClient:
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         order_sql = order_by.strip() if custom_order else "timestamp DESC"
-        settings = " SETTINGS max_execution_time = 30" if custom_order else ""
+        # Always bounded: an unbounded page query is what lets one runaway
+        # filter monopolise the CPUs for every other user.
+        settings = " SETTINGS max_execution_time = 30"
         query = f"""
         SELECT {columns}
         FROM syslogs
@@ -2101,17 +2127,46 @@ class ClickHouseClient:
         # full-scan for 60-77s — bound that with max_execution_time and, on
         # timeout, return -1 so the caller renders an "approximate" indicator
         # instead of hanging the page.
-        query = f"""
-        SELECT count() as total
-        FROM syslogs
-        PREWHERE {prewhere_clause}
-        WHERE {where_sql}
-        SETTINGS max_execution_time = 5
-        """
+        #
+        # Over a multi-day window a filtered exact count means scanning hundreds
+        # of millions of rows and would only ever hit that timeout — so once the
+        # window exceeds a day we stop reading as soon as `max_count` matches
+        # are found: the page shows "100,000+" in ~50 ms instead of after 5 s.
+        # A filter on message/raw/parsed_data has no usable index either, so
+        # its exact count is a full scan at any window size. An unfiltered
+        # count stays exact: ClickHouse answers it from part metadata.
+        window_hours = default_hours
+        if start_time is not None:
+            window_hours = ((end_time or datetime.now(timezone.utc)) - start_time).total_seconds() / 3600
+        has_filter = bool(prewhere_parts[1:]) or where_sql.strip() != "1=1"
+        heavy_filter = bool(re.search(r"parsed_data|\bmessage\b|\braw\b", where_sql))
+        early_stop = max_count > 0 and has_filter and (window_hours > 25 or heavy_filter)
+
+        if early_stop:
+            query = f"""
+            SELECT count() as total FROM (
+                SELECT 1 FROM syslogs
+                PREWHERE {prewhere_clause}
+                WHERE {where_sql}
+                LIMIT {int(max_count)}
+            )
+            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            """
+        else:
+            query = f"""
+            SELECT count() as total
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            """
 
         try:
             result = client.query(query).result_rows
-            return result[0][0] if result else 0
+            total = result[0][0] if result else 0
+            if early_stop and total >= max_count:
+                return -1
+            return total
         except Exception as e:
             logger.warning(f"count_logs exceeded time budget, returning approximate: {e}")
             return -1
@@ -2163,7 +2218,7 @@ class ClickHouseClient:
             SELECT {col} AS v, count() AS c
             FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}{extra}
             GROUP BY v ORDER BY c DESC LIMIT {int(limit)}
-            SETTINGS max_execution_time = 10
+            SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
         """
         try:
             rows = client.query(query).result_rows
@@ -2357,6 +2412,7 @@ class ClickHouseClient:
         GROUP BY {group_cols}
         ORDER BY event_count DESC
         LIMIT {limit} OFFSET {offset}
+        SETTINGS max_execution_time = 30, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
         result = client.query(query).named_results()
@@ -2419,9 +2475,14 @@ class ClickHouseClient:
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
+        SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
-        result = client.query(query).result_rows
+        try:
+            result = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"count_aggregate_groups exceeded time budget: {e}")
+            return -1
         count = result[0][0] if result else 0
         if count > max_count:
             return -1
@@ -2511,13 +2572,18 @@ class ClickHouseClient:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         query_text: Optional[str] = None,
-        default_hours: int = 1
+        default_hours: int = 1,
+        skip_total: bool = False,
     ) -> Dict[str, Any]:
         """Get summary statistics for logs matching the current filters.
 
         For large time ranges (>24h), uses a fast count-only query to avoid
         scanning hundreds of millions of severity values. The device count
         comes from the cached device list instead.
+
+        `skip_total=True` returns `total_logs=None` on that fast path instead
+        of running the count — for callers that already count the same
+        filter set (the Log Explorer), which otherwise scans the window twice.
         """
         client = cls.get_client()
 
@@ -2555,15 +2621,19 @@ class ClickHouseClient:
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         if large_range:
-            # Fast path: just count() for large ranges (0.2-0.9s vs 13-60s+)
-            query = f"""
-            SELECT count() as total_logs
-            FROM syslogs
-            PREWHERE {prewhere_clause}
-            WHERE {where_sql}
-            """
-            result = list(client.query(query).named_results())
-            total = result[0]['total_logs'] if result else 0
+            if skip_total:
+                total = None
+            else:
+                # Fast path: just count() for large ranges (0.2-0.9s vs 13-60s+)
+                query = f"""
+                SELECT count() as total_logs
+                FROM syslogs
+                PREWHERE {prewhere_clause}
+                WHERE {where_sql}
+                SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
+                """
+                result = list(client.query(query).named_results())
+                total = result[0]['total_logs'] if result else 0
             # Use cached device count instead of expensive uniq()
             devices = cls.get_distinct_devices()
             return {

@@ -40,6 +40,58 @@ _DEVICE_EXPR = "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(
 # Curated field catalog
 # ============================================================
 
+# ============================================================
+# Address-space classification (the virtual `scope` field)
+# ============================================================
+
+# Non-public IPv4 space: RFC1918 + "this network", CGNAT, loopback, link-local,
+# multicast and reserved/broadcast. Anything else counts as "internet".
+NON_PUBLIC_V4_RANGES: Tuple[Tuple[str, str], ...] = (
+    ('0.0.0.0', '0.255.255.255'),
+    ('10.0.0.0', '10.255.255.255'),
+    ('100.64.0.0', '100.127.255.255'),
+    ('127.0.0.0', '127.255.255.255'),
+    ('169.254.0.0', '169.254.255.255'),
+    ('172.16.0.0', '172.31.255.255'),
+    ('192.168.0.0', '192.168.255.255'),
+    ('224.0.0.0', '255.255.255.255'),
+)
+SCOPE_VALUES: Tuple[str, ...] = ('internet', 'internal', 'inbound')
+
+
+def v4_non_public_sql(col: str) -> str:
+    """`col` (an IPv4-typed column) is private/reserved — or unset (0.0.0.0)."""
+    parts = [f"({col} >= toIPv4('{lo}') AND {col} <= toIPv4('{hi}'))"
+             for lo, hi in NON_PUBLIC_V4_RANGES]
+    return "(" + " OR ".join(parts) + ")"
+
+
+def scope_condition_sql(value: str) -> Optional[str]:
+    """WHERE fragment for `scope:<value>`, evaluated on srcip_v4/dstip_v4 so it
+    is index-friendly and never throws on IPv6 or empty addresses.
+
+    internet  — destination is a public IPv4 (traffic leaving to the Internet)
+    internal  — both endpoints private (east-west)
+    inbound   — public source talking to a private destination
+    """
+    v = (value or '').strip().lower()
+    src_priv = v4_non_public_sql('srcip_v4')
+    dst_priv = v4_non_public_sql('dstip_v4')
+    if v == 'internet':
+        return f"NOT {dst_priv}"
+    if v == 'internal':
+        return f"({src_priv} AND {dst_priv} AND srcip != '' AND dstip != '')"
+    if v == 'inbound':
+        return f"(NOT {src_priv} AND {dst_priv} AND dstip != '')"
+    return None
+
+
+def scope_value_sql() -> str:
+    """String-valued expression for the scope of a row (for `stats ... by scope`)."""
+    return ("multiIf(" + ", ".join(
+        f"{scope_condition_sql(v)}, '{v}'" for v in SCOPE_VALUES) + ", '')")
+
+
 @dataclass
 class NQLField:
     name: str
@@ -88,6 +140,12 @@ CURATED_FIELDS: List[NQLField] = [
     _f("nat_dstip", "ip", "NAT'd destination IP", "Network",
        expr="if(parsed_data['nat_dstip'] != '', parsed_data['nat_dstip'], parsed_data['nat_dst_ip'])",
        aliases=("nat_dst_ip",), example="nat_dstip:10.1.1.10"),
+    _f("scope", "enum", "Flow direction by address space: internet (public destination), "
+       "internal (private to private), inbound (public source to private destination)",
+       "Network",
+       expr=scope_value_sql(),
+       values=("internet", "internal", "inbound"), example="scope:internet",
+       suggest_values=False),
 
     # ── Geo ──────────────────────────────────────────────────
     _f("src_country", "string", "Source country", "Geo", expr="src_country",
@@ -271,10 +329,15 @@ STATS_FUNCS = [
 # Dynamic field discovery (parsed_data keys)
 # ============================================================
 
-_dynamic_cache: Dict[str, Any] = {"keys": [], "ts": 0.0}
+_dynamic_cache: Dict[str, Any] = {"keys": [], "ts": 0.0, "attempt_ts": 0.0}
 _dynamic_lock = threading.Lock()
 _dynamic_refreshing = threading.Event()
 DYNAMIC_TTL = 900          # 15 minutes
+DYNAMIC_RETRY_AFTER = 120  # min. seconds between attempts when a refresh comes back empty
+# Rows sampled per discovery pass. Every active parser shows up within a few
+# thousand recent rows, so reading 100k Map values (~100 ms) finds the same
+# key set as a full-window GROUP BY that read gigabytes of parsed_data.
+DISCOVERY_SAMPLE_ROWS = 100_000
 
 
 def discover_dynamic_keys(force: bool = False) -> List[str]:
@@ -286,9 +349,12 @@ def discover_dynamic_keys(force: bool = False) -> List[str]:
     discovered keys join it as soon as the refresh lands."""
     now = time.time()
     fresh = _dynamic_cache["keys"] and now - _dynamic_cache["ts"] < DYNAMIC_TTL
+    # An empty result must not re-trigger a scan on every request: that is a
+    # feedback loop under load (contention -> timeout -> empty -> rescan).
+    recently_tried = now - _dynamic_cache["attempt_ts"] < DYNAMIC_RETRY_AFTER
     if force:
         _refresh_dynamic_keys()
-    elif not fresh and not _dynamic_refreshing.is_set():
+    elif not fresh and not recently_tried and not _dynamic_refreshing.is_set():
         _dynamic_refreshing.set()
         threading.Thread(target=_refresh_dynamic_keys, name="nql-field-discovery",
                          daemon=True).start()
@@ -298,23 +364,28 @@ def discover_dynamic_keys(force: bool = False) -> List[str]:
 def _refresh_dynamic_keys() -> List[str]:
     """Re-read the parsed_data key list from ClickHouse into the cache."""
     with _dynamic_lock:
+        _dynamic_cache["attempt_ts"] = time.time()
         keys: List[str] = []
         try:
             from ..db.clickhouse import ClickHouseClient
             client = ClickHouseClient.get_client()
-            # A short recent window is enough to see every key every active
-            # parser emits, and keeps the scan cheap. If ingestion has been quiet
-            # widen the window rather than come back empty. `break` overflow modes
-            # return partial results instead of throwing on a busy cluster.
+            # Sample the newest rows of a short window instead of aggregating
+            # the whole window: the full GROUP BY read 1.7-27 GiB of Map data
+            # per pass and, with one pass per uvicorn worker, starved every
+            # other query on a 4-core box. If ingestion has been quiet, widen
+            # the window rather than come back empty. The query cache keeps
+            # the other workers from repeating the same scan.
             for window in ("30 MINUTE", "6 HOUR", "2 DAY"):
                 rows = client.query(
                     f"SELECT k FROM ("
                     f"  SELECT arrayJoin(mapKeys(parsed_data)) AS k, count() AS c"
-                    f"  FROM syslogs"
-                    f"  PREWHERE timestamp > now() - INTERVAL {window}"
+                    f"  FROM (SELECT parsed_data FROM syslogs"
+                    f"        PREWHERE timestamp > now() - INTERVAL {window}"
+                    f"        LIMIT {DISCOVERY_SAMPLE_ROWS})"
                     f"  GROUP BY k ORDER BY c DESC LIMIT 400"
-                    f") SETTINGS max_execution_time = 8, timeout_overflow_mode = 'break',"
-                    f"          max_rows_to_read = 50000000, read_overflow_mode = 'break'"
+                    f") SETTINGS max_execution_time = 8,"
+                    f"          use_query_cache = 1, query_cache_ttl = {DYNAMIC_TTL},"
+                    f"          query_cache_nondeterministic_function_handling = 'save'"
                 ).result_rows
                 keys = [str(r[0]) for r in rows if IDENT_RE.match(str(r[0]))]
                 if len(keys) >= 20:

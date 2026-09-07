@@ -721,6 +721,34 @@
             max-width: 88px;
         }
 
+        .search-field.scope { flex: 0 0 auto; }
+
+        .scope-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 28px;
+            padding: 0 10px 0 8px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .scope-check:hover { border-color: var(--border-emphasis); color: var(--text-primary); }
+        .scope-check input { accent-color: var(--accent-purple); margin: 0; cursor: pointer; }
+        .scope-check svg { width: 13px; height: 13px; flex-shrink: 0; }
+        .scope-check.active {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: var(--accent-purple);
+            color: var(--accent-purple);
+        }
+
         .search-label {
             font-size: 9px;
             font-weight: 600;
@@ -2512,6 +2540,7 @@
 
         .action-filter-btn svg { width: 9px; height: 9px; flex-shrink: 0; }
 
+
         .sidebar-filter-group { margin-bottom: 0; }
         .sidebar-filter-group.half { flex: 1; min-width: 0; }
 
@@ -3237,6 +3266,17 @@
             <!-- Search Toolbar -->
             <div class="toolbar">
                 <div class="toolbar-row toolbar-filters">
+                    <div class="search-field scope">
+                        <div class="search-label-row">
+                            <span class="search-label">Scope</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
+                        <label class="scope-check{% if current_scope == 'internet' %} active{% endif %}" title="Internet traffic only — destination is a public IP. Combines with any Src/Dst IP, port, action or policy filter; on its own it shows all internet-bound traffic.">
+                            <input type="checkbox" id="scopeInternet" {% if current_scope == 'internet' %}checked{% endif %} onchange="setFilter('scope', this.checked ? 'internet' : '')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Internet
+                        </label>
+                    </div>
                     <div class="search-field ip">
                         <div class="search-label-row">
                             <span class="search-label">Src IP</span>
@@ -3376,7 +3416,7 @@
             <!-- Stats bar removed — merged into NQL bar above -->
 
             <!-- Active Filters -->
-            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
+            {% if current_device or current_severity is not none or current_action or current_scope or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
             <div class="active-filters">
                 {% if current_srcip %}
                 <span class="filter-chip{% if current_srcip_not|default(false) %} exclude{% endif %}">
@@ -3498,6 +3538,14 @@
                 <span class="filter-chip">
                     Action: {{ current_action }}
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('action')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
+                {% if current_scope %}
+                <span class="filter-chip scope" title="{% if current_scope == 'internet' %}Destination is a public IP{% elif current_scope == 'internal' %}Private source and destination{% else %}Public source to private destination{% endif %}">
+                    Scope: {{ current_scope | capitalize }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('scope')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
@@ -3934,7 +3982,7 @@
                                     </td>
                                     <td>
                                         {% set drill_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
-                                        <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
+                                        <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_scope %}&scope={{ current_scope }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                                         </a>
                                     </td>
@@ -4162,6 +4210,7 @@
     <input type="hidden" name="device" id="hiddenDevice" value="{{ current_device or '' }}">
     <input type="hidden" name="severity" id="hiddenSeverity" value="{{ current_severity or '' }}">
     <input type="hidden" name="action" id="hiddenAction" value="{{ current_action or '' }}">
+    <input type="hidden" name="scope" id="hiddenScope" value="{{ current_scope or '' }}">
     <input type="hidden" name="time_range" id="hiddenTimeRange" value="{{ current_time_range or '1h' }}">
     <input type="hidden" name="per_page" value="{{ per_page }}">
     <input type="hidden" name="view" id="hiddenView" value="{{ current_view or '' }}">
@@ -4574,6 +4623,9 @@
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
             document.getElementById('hiddenAction').value = '';
+            document.getElementById('hiddenScope').value = '';
+            const scopeBox = document.getElementById('scopeInternet');
+            if (scopeBox) scopeBox.checked = false;
             document.getElementById('hiddenPageInput').value = 1;
             document.getElementById('hiddenView').value = '';
             document.getElementById('hiddenGroupBy').value = 'srcip,dstip,dstport';
@@ -6268,7 +6320,7 @@
 
     function _facetParams(field){
         const u = new URLSearchParams(window.location.search);
-        const keep = ['time_range','start','end','device','severity','q','action','log_type','application',
+        const keep = ['time_range','start','end','device','severity','q','action','scope','log_type','application',
                         'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone'];
         const p = new URLSearchParams();
         keep.forEach(k => { const v = u.get(k); if (v) p.set(k, v); });
