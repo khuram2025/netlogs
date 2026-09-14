@@ -83,7 +83,7 @@ def download(url,path,expected):
                 if not response.url.startswith('https://zentryc.com/'):raise RuntimeError('Unapproved release redirect')
                 while block:=response.read(1024*1024):
                     size+=len(block)
-                    if size>500*1024**2:raise RuntimeError('Package download exceeds release size limit')
+                    if size>2*1024**3:raise RuntimeError('Package download exceeds the 2 GiB release size limit')
                     h.update(block);target.write(block)
             if h.hexdigest()!=expected:raise RuntimeError('Release SHA256 mismatch')
             temp.replace(path)

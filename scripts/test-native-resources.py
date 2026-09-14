@@ -237,4 +237,22 @@ class DownloadRecoveryTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):self.download()
         self.assertEqual(self.path.read_bytes(),b'existing file')
 
+    def test_full_analytics_release_above_old_500_mib_limit(self):
+        block=b'x'*(1024**2)
+        response=self.response();response.read=Mock(side_effect=[block]*537+[b''])
+        self.urlopen.return_value=response
+        digest=hashlib.sha256()
+        for _ in range(537):digest.update(block)
+        installer.download('https://zentryc.com/release.zup',self.path,digest.hexdigest())
+        self.assertEqual(self.path.stat().st_size,537*1024**2)
+
+    def test_oversized_release_is_rejected_and_partial_removed(self):
+        # Simulate an oversized chunk without allocating a multi-GiB fixture.
+        class Oversized(bytes):
+            def __len__(self):return 2*1024**3+1
+        response=self.response();response.read=Mock(return_value=Oversized(b'x'))
+        self.urlopen.return_value=response
+        with self.assertRaisesRegex(RuntimeError,'2 GiB'):self.download()
+        self.assertFalse(self.path.exists());self.assertFalse(self.path.with_suffix('.part').exists())
+
 if __name__=='__main__':unittest.main(verbosity=2)

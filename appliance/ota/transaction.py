@@ -49,6 +49,24 @@ asyncio.run(main())
 
 def metrics():return json.loads(compose('exec','-T','web','python','-c',METRICS).splitlines()[-1])
 
+def live_data_size(path):
+    """Estimate a changing datastore; only vanished child entries may be skipped.
+
+    ClickHouse removes merge files during traversal. A cold, strict size check
+    follows after writers stop; missing roots and all access errors still fail.
+    """
+    root=Path(path)
+    if not root.is_dir():raise ValueError('Appliance data directory is missing')
+    size=root.stat().st_size
+    def onerror(error):
+        if not isinstance(error,FileNotFoundError):raise error
+    for directory,dirs,files in os.walk(root,followlinks=False,onerror=onerror):
+        for name in dirs+files:
+            try:size+=os.stat(os.path.join(directory,name),follow_symlinks=False).st_size
+            except FileNotFoundError:continue
+    if not root.is_dir():raise ValueError('Appliance data directory disappeared')
+    return size
+
 def targets():
     result={}
     for name,(service,destination) in DATA.items():
@@ -118,7 +136,7 @@ def apply(stage,manifest,offer,timeout):
     backup=Path(tx['backup'])
     if backup.exists():raise ValueError('A transaction with this update ID already exists')
     data=targets();before=metrics()
-    size=sum(int(run('du','-sb',p).split()[0]) for p in data.values())
+    size=sum(live_data_size(p) for p in data.values())
     if shutil.disk_usage(STATE).free<size*1.25+(stage/'images/application.tar').stat().st_size*2+1024**3:raise ValueError('Insufficient space for complete backup and image staging')
     if Path('/var/lib/zenshield/network-pending.json').exists():raise ValueError('Confirm or revert pending networking before updating')
     import tarfile
@@ -136,6 +154,8 @@ def apply(stage,manifest,offer,timeout):
     tx['phase']='quiescing';save_tx(tx)
     try:
         phase('backing_up',release_id=offer['release_id']);maintenance(True);stop()
+        size=sum(int(run('du','-sb',p).split()[0]) for p in data.values())
+        if shutil.disk_usage(STATE).free<size*1.25+1024**3:raise ValueError('Insufficient space for complete cold backup')
         backup.mkdir(parents=True,mode=0o700)
         for name,path in data.items():
             destination=backup/'data'/name;destination.mkdir(parents=True)

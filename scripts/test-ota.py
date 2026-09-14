@@ -102,4 +102,35 @@ class Packages(unittest.TestCase):
             with self.assertRaises(ValueError):transport.download(c,{'package_url':'https://api.example/package'},self.root/'download')
             self.assertEqual(factory.return_value.open.call_count,1)
 
+class BackupSizing(unittest.TestCase):
+    def test_live_merge_file_disappears_without_aborting(self):
+        from ota.transaction import live_data_size
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'retained').write_bytes(b'x'*100)
+            (root/'merge-tmp').write_bytes(b'temporary')
+            original=os.stat
+            def changed(path,*args,**kwargs):
+                if str(path).endswith('merge-tmp'):raise FileNotFoundError(path)
+                return original(path,*args,**kwargs)
+            with patch('ota.transaction.os.stat',side_effect=changed):
+                self.assertGreaterEqual(live_data_size(root),100)
+
+    def test_missing_root_rejected(self):
+        from ota.transaction import live_data_size
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):live_data_size(Path(tmp)/'missing')
+
+    def test_permission_failure_not_ignored(self):
+        from ota.transaction import live_data_size
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'protected').write_bytes(b'data')
+            original=os.stat
+            def denied(path,*args,**kwargs):
+                if str(path).endswith('protected'):raise PermissionError(path)
+                return original(path,*args,**kwargs)
+            with patch('ota.transaction.os.stat',side_effect=denied):
+                with self.assertRaises(PermissionError):live_data_size(root)
+
 if __name__=='__main__':unittest.main(verbosity=2)
