@@ -109,6 +109,7 @@ class ClickHouseClient:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS syslogs (
             timestamp DateTime64(3) CODEC(DoubleDelta, LZ4),
+            ingest_time DateTime64(3) DEFAULT timestamp CODEC(DoubleDelta, LZ4),
             device_ip IPv4 CODEC(ZSTD(1)),
             facility UInt8 CODEC(T64, LZ4),
             severity UInt8 CODEC(T64, LZ4),
@@ -181,6 +182,8 @@ class ClickHouseClient:
         client = cls.get_client()
         migrations = [
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_time String DEFAULT '' CODEC(ZSTD(1))",
+            # Add ingest_time alongside the event-time `timestamp`
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS ingest_time DateTime64(3) DEFAULT timestamp CODEC(DoubleDelta, LZ4)",
             # Add dedicated columns for key parsed fields
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS srcip String DEFAULT '' CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstip String DEFAULT '' CODEC(ZSTD(1))",
@@ -906,7 +909,7 @@ class ClickHouseClient:
 
         Args:
             logs: List of tuples matching the schema columns
-                  (timestamp, device_ip, facility, severity, message, raw,
+                  (timestamp, ingest_time, device_ip, facility, severity, message, raw,
                    srcip, dstip, srcport, dstport, proto, action, policyname,
                    log_type, application, src_zone, dst_zone, session_end_reason,
                    threat_id, vdom, parsed_data)
@@ -916,7 +919,7 @@ class ClickHouseClient:
         client = cls.get_client()
 
         client.insert('syslogs', logs, column_names=[
-            'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+            'timestamp', 'ingest_time', 'device_ip', 'facility', 'severity', 'message', 'raw',
             'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
             'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
             'threat_id', 'vdom', 'parsed_data'
@@ -954,20 +957,20 @@ class ClickHouseClient:
         cls,
         timestamp: str,
         device_ip: str,
-        include_raw: bool = True
+        include_raw: bool = True,
+        srcip: Optional[str] = None,
+        dstip: Optional[str] = None,
+        srcport: Optional[Any] = None,
+        dstport: Optional[Any] = None,
+        proto: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Get a single log entry by timestamp and device IP.
 
         Used for fetching full log details including raw message on demand.
-
-        Args:
-            timestamp: ISO format timestamp of the log
-            device_ip: Device IP that logged the entry
-            include_raw: If True (default), includes raw and parsed_data
-
-        Returns:
-            Log entry dict or None if not found
+        When multiple logs share the same timestamp window on the same device,
+        the optional flow tuple (srcip, dstip, srcport, dstport, proto) is used
+        to disambiguate and return the exact matching record.
         """
         client = cls.get_client()
         device_where = cls._device_where(device_ip)
@@ -981,14 +984,41 @@ class ClickHouseClient:
 
         columns = cls.FULL_COLUMNS if include_raw else cls.LIGHT_COLUMNS
 
+        def _esc(v: str) -> str:
+            return str(v).replace("\\", "\\\\").replace("'", "\\'")
+
+        flow_filters = ""
+        if srcip:
+            flow_filters += f" AND srcip = '{_esc(srcip)}'"
+        if dstip:
+            flow_filters += f" AND dstip = '{_esc(dstip)}'"
+        if srcport not in (None, "", 0, "0"):
+            try:
+                flow_filters += f" AND srcport = {int(srcport)}"
+            except (TypeError, ValueError):
+                pass
+        if dstport not in (None, "", 0, "0"):
+            try:
+                flow_filters += f" AND dstport = {int(dstport)}"
+            except (TypeError, ValueError):
+                pass
+        if proto not in (None, ""):
+            proto_str = str(proto).strip()
+            if proto_str:
+                try:
+                    flow_filters += f" AND proto = {int(proto_str)}"
+                except (TypeError, ValueError):
+                    flow_filters += f" AND proto = '{_esc(proto_str)}'"
+
         # Use a small window to handle timestamp precision issues
         query = f"""
         SELECT {columns}
         FROM syslogs
         WHERE {device_where}
-          AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 1 SECOND
-          AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 1 SECOND
-        ORDER BY timestamp ASC
+          AND timestamp >= toDateTime64('{clean_timestamp}', 3) - INTERVAL 500 MILLISECOND
+          AND timestamp <= toDateTime64('{clean_timestamp}', 3) + INTERVAL 500 MILLISECOND
+          {flow_filters}
+        ORDER BY abs(toUnixTimestamp64Milli(timestamp) - toUnixTimestamp64Milli(toDateTime64('{clean_timestamp}', 3))) ASC
         LIMIT 1
         """
 
@@ -1113,6 +1143,58 @@ class ClickHouseClient:
         'dst_port': 'dstport',
     }
 
+    # Typed native columns the collector promotes out of the parsed_data Map.
+    # Filtering them directly is far cheaper than a Map lookup, and both vendors
+    # feed them through FIELD_NORMALIZATION so the vendor aliases are equivalent.
+    _NATIVE_NUMERIC_COLUMNS = {
+        'sent_bytes': 'sent_bytes', 'sentbyte': 'sent_bytes', 'bytes_sent': 'sent_bytes',
+        'recv_bytes': 'recv_bytes', 'rcvdbyte': 'recv_bytes', 'bytes_recv': 'recv_bytes',
+        'session_id': 'session_id', 'sessionid': 'session_id',
+        'duration': 'duration', 'elapsed_time': 'duration',
+        'proto': 'proto', 'protocol': 'proto',
+        'facility': 'facility',
+    }
+
+    _NATIVE_STRING_COLUMNS = {
+        'src_country': 'src_country', 'srccountry': 'src_country', 'src_location': 'src_country',
+        'dst_country': 'dst_country', 'dstcountry': 'dst_country', 'dst_location': 'dst_country',
+        'src_intf': 'src_intf', 'srcintf': 'src_intf', 'inbound_if': 'src_intf',
+        'dst_intf': 'dst_intf', 'dstintf': 'dst_intf', 'outbound_if': 'dst_intf',
+        'service': 'service',
+        'src_user': 'src_user', 'srcuser': 'src_user',
+        'vdom': 'vdom', 'vd': 'vdom', 'vsys': 'vdom',
+    }
+
+    # ClickHouse query cache for the Log Explorer's repeated scans (count,
+    # facets, aggregate rows). A page load fires several of these over the same
+    # window; pagination and view toggles re-run them again. With the time
+    # bounds rounded by the caller (see views._round_window) the SQL text is
+    # identical for a minute, so repeats are served from memory. 'save' lets
+    # queries that mention now() be cached too.
+    EXPLORER_CACHE_SETTINGS = (
+        "use_query_cache = 1, query_cache_ttl = 60, "
+        "query_cache_nondeterministic_function_handling = 'save'"
+    )
+
+    # Vendor/legacy aliases for the two IP columns. Without this, a term such
+    # as `source_ip:10.1.1.1` falls through to the parsed_data Map and forces a
+    # full scan of every row in the window (observed: 188 s over 12 h).
+    _IP_FIELD_ALIASES = {
+        'src_ip': 'srcip', 'source_ip': 'srcip', 'src': 'srcip', 'source': 'srcip',
+        'dst_ip': 'dstip', 'destination_ip': 'dstip', 'dst': 'dstip', 'destination': 'dstip',
+    }
+
+    @classmethod
+    def _v4_prefix_range(cls, col: str, ip_part: str, mask_int: int, negated: bool) -> str:
+        """CIDR match on the IPv4-typed companion column (4 bytes/row, minmax
+        skip index) instead of a string prefix test on the wide String column.
+        Reads about half the bytes for the same answer."""
+        safe_ip = ip_part.replace("'", "''")
+        rng = f"IPv4CIDRToRange(toIPv4OrDefault('{safe_ip}'), {mask_int})"
+        cond = (f"({col}_v4 >= tupleElement({rng}, 1) AND {col}_v4 <= tupleElement({rng}, 2)"
+                f" AND {col}_v4 != toIPv4('0.0.0.0'))")
+        return f"NOT {cond}" if negated else cond
+
     @classmethod
     def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
         """
@@ -1122,6 +1204,19 @@ class ClickHouseClient:
         """
         if not query_text:
             return []
+
+        # NQL first: pushes every top-level AND-ed condition that touches only
+        # native columns (so it can prune granules through the skip indexes
+        # before wide columns are read). Falls back to the legacy flat parser
+        # only when the text is not valid NQL.
+        try:
+            from ..services.nql_parser import compile_filter, NQLSyntaxError
+            _, prewhere = compile_filter(query_text)
+            return list(prewhere)
+        except NQLSyntaxError:
+            pass
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"NQL prewhere compile failed, using legacy parser: {e}")
 
         terms = cls._parse_advanced_query(query_text)
         conditions = []
@@ -1207,6 +1302,20 @@ class ClickHouseClient:
         safe_value = value.replace("'", "''")
         not_prefix = "NOT " if negated else ""
 
+        # Resolve aliases onto the native, indexed columns before anything else.
+        field = cls._IP_FIELD_ALIASES.get(field.lower(), field)
+
+        # Virtual `scope` field — classifies a flow by where its endpoints sit
+        # (RFC1918/reserved vs public). Evaluated on the IPv4-typed companion
+        # columns so it is cheap and never throws on IPv6/empty values.
+        if field == 'scope' and operator == '=':
+            from ..services.nql_schema import scope_condition_sql, SCOPE_VALUES
+            cond = scope_condition_sql(value)
+            if cond is None:
+                raise ValueError(
+                    f"Unknown scope '{value}' — use one of: {', '.join(SCOPE_VALUES)}")
+            return f"NOT {cond}" if negated else cond
+
         # OPTIMIZATION: Use indexed srcip/dstip columns directly for ALL IP operations
         # These columns have bloom filter indexes for fast filtering
         ip_fields_indexed = ('srcip', 'dstip')
@@ -1221,27 +1330,14 @@ class ClickHouseClient:
                 mask_int = int(mask)
                 octets = ip_part.split('.')
 
-                # For /8, /16, /24 use fast LIKE prefix matching
-                if mask_int == 8 and len(octets) >= 1:
-                    prefix = f"{octets[0]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                elif mask_int == 16 and len(octets) >= 2:
-                    prefix = f"{octets[0]}.{octets[1]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                elif mask_int == 24 and len(octets) >= 3:
-                    prefix = f"{octets[0]}.{octets[1]}.{octets[2]}."
-                    if negated:
-                        return f"NOT startsWith({col}, '{prefix}')"
-                    return f"startsWith({col}, '{prefix}')"
-                else:
-                    # For other masks, use IPv4 range comparison
-                    if negated:
-                        return f"({col} = '' OR NOT isIPAddressInRange({col}, '{safe_value}'))"
-                    return f"({col} != '' AND isIPAddressInRange({col}, '{safe_value}'))"
+                # Any mask: numeric range on the IPv4-typed companion column.
+                # toIPv4OrDefault makes this crash-proof on the empty/IPv6
+                # values present in the data (isIPAddressInRange on the String
+                # column throws on those), the minmax skip-index on {col}_v4
+                # prunes granules, and it reads ~half the bytes of a
+                # startsWith() on the String column.
+                if 0 <= mask_int <= 32 and len(octets) == 4:
+                    return cls._v4_prefix_range(col, ip_part, mask_int, negated)
 
             # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
             if cls._is_ip_range(value):
@@ -1268,16 +1364,7 @@ class ClickHouseClient:
                     safe_part = part.replace("'", "''")
                     if cls._is_cidr(part):
                         ip_part, mask = part.rsplit('/', 1)
-                        mask_int = int(mask)
-                        octets = ip_part.split('.')
-                        if mask_int == 8:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.')")
-                        elif mask_int == 16:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.')")
-                        elif mask_int == 24:
-                            conditions.append(f"startsWith({col}, '{octets[0]}.{octets[1]}.{octets[2]}.')")
-                        else:
-                            conditions.append(f"({col} != '' AND isIPAddressInRange({col}, '{safe_part}'))")
+                        conditions.append(cls._v4_prefix_range(col, ip_part, int(mask), False))
                     elif cls._is_ip_range(part):
                         start_ip, end_ip = part.split('-')
                         conditions.append(f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{start_ip}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{end_ip}'))")
@@ -1353,6 +1440,54 @@ class ClickHouseClient:
                 return f"{col} = {num_val}"
             except ValueError:
                 pass  # Fall through to field_mapping for non-numeric values
+
+        # ── Native string columns (bytes/geo/interface/user/vdom) ──
+        if field in cls._NATIVE_STRING_COLUMNS:
+            col = cls._NATIVE_STRING_COLUMNS[field]
+
+            if '|' in value and operator == '=':
+                or_values = [v.strip().replace("'", "''") for v in value.split('|')]
+                combined = "(" + " OR ".join(f"lower({col}) = lower('{v}')" for v in or_values) + ")"
+                return f"NOT {combined}" if negated else combined
+
+            if operator == '~':
+                like_value = safe_value.replace('*', '%')
+                if '%' not in like_value:
+                    like_value = f"%{like_value}%"
+                return f"{col} NOT ILIKE '{like_value}'" if negated else f"{col} ILIKE '{like_value}'"
+
+            if operator in ('>', '>=', '<', '<='):
+                return f"{col} {operator} '{safe_value}'"
+
+            if negated:
+                return f"lower({col}) != lower('{safe_value}')"
+            return f"lower({col}) = lower('{safe_value}')"
+
+        # ── Native numeric columns (UInt8/16/32/64) ──
+        if field in cls._NATIVE_NUMERIC_COLUMNS:
+            col = cls._NATIVE_NUMERIC_COLUMNS[field]
+
+            # Range: sent_bytes:1000-5000
+            if operator == '=' and re.match(r'^\d+-\d+$', value):
+                lo, hi = value.split('-')
+                cond = f"({col} >= {lo} AND {col} <= {hi})"
+                return f"NOT {cond}" if negated else cond
+
+            # OR list: proto:6|17
+            if operator == '=' and '|' in value:
+                nums = [v.strip() for v in value.split('|') if v.strip().isdigit()]
+                if nums:
+                    cond = "(" + " OR ".join(f"{col} = {n}" for n in nums) + ")"
+                    return f"NOT {cond}" if negated else cond
+
+            try:
+                num_val = int(value)
+            except ValueError:
+                pass
+            else:
+                if operator in ('>', '>=', '<', '<='):
+                    return f"{col} {operator} {num_val}"
+                return f"{col} != {num_val}" if negated else f"{col} = {num_val}"
 
         # Field mapping for normalized and vendor-specific fields
         # Uses indexed columns where available, with fallback to parsed_data
@@ -1669,6 +1804,24 @@ class ClickHouseClient:
             where_clauses.append(f"timestamp <= '{end_str}'")
 
         if query_text:
+            # Full NQL: boolean AND/OR/NOT, parentheses, quoted values, any
+            # parsed_data field. Pipeline stages (| stats ...) are ignored here —
+            # only the filter expression contributes to WHERE.
+            nql_where = None
+            try:
+                from ..services.nql_parser import compile_filter, NQLSyntaxError
+                nql_where, _ = compile_filter(query_text)
+            except NQLSyntaxError:
+                nql_where = None
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"NQL where compile failed, using legacy parser: {e}")
+                nql_where = None
+
+            if nql_where is not None:
+                if nql_where != "1=1":
+                    where_clauses.append(nql_where)
+                return " AND ".join(where_clauses)
+
             terms = cls._parse_advanced_query(query_text)
 
             if terms:
@@ -1701,8 +1854,8 @@ class ClickHouseClient:
     LIST_COLUMNS = "timestamp, device_ip, vdom, facility, severity, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, log_time"
     # Light columns (includes message, excludes raw and parsed_data)
     LIGHT_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
-    # Full columns including raw message
-    FULL_COLUMNS = "timestamp, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
+    # Full columns including raw message (and ingest_time for pipeline-lag visibility)
+    FULL_COLUMNS = "timestamp, ingest_time, device_ip, vdom, facility, severity, message, raw, srcip, dstip, srcport, dstport, proto, action, policyname, log_type, application, src_zone, dst_zone, session_end_reason, threat_id, parsed_data"
 
     # Expression to compose device display name: IP_VDOM or just IP
     _DEVICE_DISPLAY_EXPR = "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(device_ip))"
@@ -1719,10 +1872,15 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
         default_hours: int = 1,
-        include_raw: bool = False
+        include_raw: bool = False,
+        order_by: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search logs with advanced filtering. Defaults to last 1 hour for performance.
+
+        `order_by` (already-validated SQL such as "dstport DESC") replaces the
+        default newest-first ordering. It disables progressive time narrowing,
+        which assumes the newest rows are wanted, so the full window is sorted.
 
         Uses progressive time narrowing: tries a narrow recent window first to avoid
         scanning hundreds of millions of rows when only the most recent N are needed.
@@ -1740,9 +1898,17 @@ class ClickHouseClient:
         # Use list columns by default (fast — excludes message/raw/parsed_data)
         columns = cls.FULL_COLUMNS if include_raw else cls.LIST_COLUMNS
 
-        # Determine the user's requested time bounds
+        # Determine the user's requested time bounds.
+        # Normalise to tz-aware UTC: an explicit start/end may arrive naive
+        # (an ISO string with no offset), and the progressive-narrowing logic
+        # below compares user_end against an aware now() — mixing naive and
+        # aware datetimes raises TypeError and silently empties the result.
         user_start = start_time
         user_end = end_time
+        if user_start is not None and user_start.tzinfo is None:
+            user_start = user_start.replace(tzinfo=timezone.utc)
+        if user_end is not None and user_end.tzinfo is None:
+            user_end = user_end.replace(tzinfo=timezone.utc)
         if user_start is None and user_end is None:
             # Default: restrict to default_hours
             user_time_filter = f"timestamp > now() - INTERVAL {default_hours} HOUR"
@@ -1777,15 +1943,16 @@ class ClickHouseClient:
 
         chosen_time_filter = user_time_filter  # fallback to full range
 
+        custom_order = bool(order_by) and order_by.strip().lower() not in ("timestamp desc",)
+
         # For very deep offsets (>1M rows), narrow windows are too small.
         # Cursor pagination is the proper fix; for now, fall through.
-        if required_rows < 1_000_000:
+        if required_rows < 1_000_000 and not custom_order:
             # Determine the anchor for narrow windows.
             # - If end_time is None or in the future, use now() (no probe needed).
             # - If end_time is in the past (custom historical range), probe for
             #   max(timestamp) so we land on actual data even if there's a gap
             #   right before end_time.
-            from datetime import datetime, timezone
             now_utc = datetime.now(timezone.utc)
             need_probe = (
                 user_end is not None and user_end < now_utc - timedelta(minutes=5)
@@ -1810,8 +1977,20 @@ class ClickHouseClient:
                         f"'{max_ts.strftime('%Y-%m-%d %H:%M:%S.%f')}', 3)"
                     )
 
+            # A narrow window wider than the requested range can't prune
+            # anything — every probe past that point re-scans the full range,
+            # which for a filter with few matches multiplies the cost ~7x.
+            range_seconds = None
+            if user_start is not None:
+                range_end = user_end if user_end is not None else now_utc
+                range_seconds = max(0, (range_end - user_start).total_seconds())
+            elif user_end is None:
+                range_seconds = default_hours * 3600
+
             # Progressive narrowing
             for secs in narrow_window_seconds:
+                if range_seconds is not None and secs >= range_seconds:
+                    break                      # fall back to the full range
                 narrow_filter = (
                     f"timestamp > {anchor_sql} - INTERVAL {secs} SECOND "
                     f"AND timestamp <= {anchor_sql}"
@@ -1821,8 +2000,16 @@ class ClickHouseClient:
                 prewhere_parts = [combined] + list(indexed_prewhere)
                 prewhere_clause = " AND ".join(prewhere_parts)
 
-                count_q = f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}"
-                cnt = list(client.query(count_q).result_rows)
+                count_q = (f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql} "
+                           f"SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}")
+                try:
+                    cnt = list(client.query(count_q).result_rows)
+                except Exception as e:
+                    # A probe that can't finish in 10 s (e.g. a parsed_data Map
+                    # filter) won't finish faster on a wider window — give up on
+                    # narrowing and run the bounded full-range query instead.
+                    logger.warning(f"search_logs narrowing probe aborted ({secs}s window): {e}")
+                    break
                 cnt_val = cnt[0][0] if cnt else 0
 
                 if cnt_val >= required_rows:
@@ -1833,17 +2020,69 @@ class ClickHouseClient:
         prewhere_parts = [chosen_time_filter] + list(indexed_prewhere)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
+        order_sql = order_by.strip() if custom_order else "timestamp DESC"
+        # Always bounded: an unbounded page query is what lets one runaway
+        # filter monopolise the CPUs for every other user.
+        settings = " SETTINGS max_execution_time = 30"
         query = f"""
         SELECT {columns}
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
-        ORDER BY timestamp DESC
-        LIMIT {limit} OFFSET {offset}
+        ORDER BY {order_sql}
+        LIMIT {limit} OFFSET {offset}{settings}
         """
 
         result = client.query(query).named_results()
         return list(result)
+
+    # Upper bound on aggregate rows returned to the UI (the pipeline `limit`
+    # may ask for more, but a page can't usefully render more than this).
+    NQL_AGG_MAX_ROWS = 2000
+
+    @classmethod
+    def run_nql_aggregate(
+        cls,
+        compiled: Dict[str, Any],
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        query_text: Optional[str] = None,
+        default_hours: int = 1,
+        default_limit: int = 100,
+        max_execution_time: int = 30,
+    ) -> Dict[str, Any]:
+        """Execute a compiled `| stats ...` pipeline over the same filter set the
+        log table uses (time window, device, severity, NQL filter).
+
+        Returns {"columns": [...], "rows": [{col: value}], "sql": str}.
+        With no explicit `sort`, rows come back largest-aggregate first, which
+        is what a "top N" question wants."""
+        select_clause = compiled.get("select") or "count() as count"
+        group_by = f"GROUP BY {compiled['group_by']}" if compiled.get("group_by") else ""
+        having = f"HAVING {compiled['having']}" if compiled.get("having") else ""
+        order_by = compiled.get("order_by")
+        if not order_by:
+            # Last SELECT item is the aggregate alias ("... as count").
+            m = re.search(r'\bas\s+(\w+)\s*$', select_clause.strip(), re.IGNORECASE)
+            order_by = f"{m.group(1)} DESC" if m else None
+        order_sql = f"ORDER BY {order_by}" if order_by else ""
+        limit_val = min(int(compiled.get("limit") or default_limit), cls.NQL_AGG_MAX_ROWS)
+
+        prewhere_clause, where_sql = cls._count_prewhere_where(
+            device_ips, severities, start_time, end_time, query_text, None, default_hours)
+
+        sql = (
+            f"SELECT {select_clause} FROM syslogs "
+            f"PREWHERE {prewhere_clause} WHERE {where_sql} "
+            f"{group_by} {having} {order_sql} LIMIT {limit_val} "
+            f"SETTINGS max_execution_time = {int(max_execution_time)}"
+        )
+        result = cls.get_client().query(sql)
+        columns = list(result.column_names)
+        rows = [dict(zip(columns, r)) for r in result.result_rows]
+        return {"columns": columns, "rows": rows, "sql": sql}
 
     @classmethod
     def count_logs(
@@ -1885,15 +2124,203 @@ class ClickHouseClient:
         # Use PREWHERE for time + indexed fields
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
-        query = f"""
-        SELECT count() as total
-        FROM syslogs
-        PREWHERE {prewhere_clause}
-        WHERE {where_sql}
-        """
+        # For time/indexed filters count() is served from granule metadata and is
+        # near-instant even on 100M rows, so we keep the EXACT count for the common
+        # case. Only a filter that touches a parsed_data Map column (no index) can
+        # full-scan for 60-77s — bound that with max_execution_time and, on
+        # timeout, return -1 so the caller renders an "approximate" indicator
+        # instead of hanging the page.
+        #
+        # Over a multi-day window a filtered exact count means scanning hundreds
+        # of millions of rows and would only ever hit that timeout — so once the
+        # window exceeds a day we stop reading as soon as `max_count` matches
+        # are found: the page shows "100,000+" in ~50 ms instead of after 5 s.
+        # A filter on message/raw/parsed_data has no usable index either, so
+        # its exact count is a full scan at any window size. An unfiltered
+        # count stays exact: ClickHouse answers it from part metadata.
+        window_hours = default_hours
+        if start_time is not None:
+            window_hours = ((end_time or datetime.now(timezone.utc)) - start_time).total_seconds() / 3600
+        has_filter = bool(prewhere_parts[1:]) or where_sql.strip() != "1=1"
+        heavy_filter = bool(re.search(r"parsed_data|\bmessage\b|\braw\b", where_sql))
+        early_stop = max_count > 0 and has_filter and (window_hours > 25 or heavy_filter)
 
-        result = client.query(query).result_rows
-        return result[0][0] if result else 0
+        if early_stop:
+            query = f"""
+            SELECT count() as total FROM (
+                SELECT 1 FROM syslogs
+                PREWHERE {prewhere_clause}
+                WHERE {where_sql}
+                LIMIT {int(max_count)}
+            )
+            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            """
+        else:
+            query = f"""
+            SELECT count() as total
+            FROM syslogs
+            PREWHERE {prewhere_clause}
+            WHERE {where_sql}
+            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            """
+
+        try:
+            result = client.query(query).result_rows
+            total = result[0][0] if result else 0
+            if early_stop and total >= max_count:
+                return -1
+            return total
+        except Exception as e:
+            logger.warning(f"count_logs exceeded time budget, returning approximate: {e}")
+            return -1
+
+    @classmethod
+    def _count_prewhere_where(cls, device_ips, severities, start_time, end_time,
+                              query_text, facilities, default_hours=1):
+        """Shared PREWHERE (time + indexed) and WHERE builder — same semantics as
+        count_logs/search_logs so facets honor the active filters."""
+        prewhere_parts = []
+        if start_time is None and end_time is None:
+            prewhere_parts.append(f"timestamp > now() - INTERVAL {default_hours} HOUR")
+        else:
+            if start_time:
+                prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+            if end_time:
+                prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+        return prewhere_clause, where_sql
+
+    # Facetable fields → SQL column expression (allowlist; blocks arbitrary input)
+    _FACET_FIELDS = {
+        "action": "action", "log_type": "log_type", "application": "application",
+        "policyname": "policyname", "src_zone": "src_zone", "dst_zone": "dst_zone",
+        "srcip": "srcip", "dstip": "dstip", "dstport": "toString(dstport)",
+        "proto": "toString(proto)", "severity": "toString(severity)", "vdom": "vdom",
+        "src_country": "src_country", "dst_country": "dst_country", "service": "service",
+        "src_intf": "src_intf", "dst_intf": "dst_intf", "src_user": "src_user",
+        "session_end_reason": "session_end_reason",
+        "device": "if(vdom != '', concat(toString(device_ip), '_', vdom), toString(device_ip))",
+    }
+
+    @classmethod
+    def get_field_facets(cls, field: str, device_ips=None, severities=None, start_time=None,
+                         end_time=None, query_text=None, facilities=None,
+                         limit: int = 10, default_hours: int = 1) -> Dict[str, Any]:
+        """Top-N values (+counts) for a facetable field, honoring active filters."""
+        col = cls._FACET_FIELDS.get(field)
+        if not col:
+            return {"field": field, "values": [], "error": "not facetable"}
+        client = cls.get_client()
+        prewhere_clause, where_sql = cls._count_prewhere_where(
+            device_ips, severities, start_time, end_time, query_text, facilities, default_hours)
+        # skip empty string values for text columns
+        extra = "" if col.startswith("toString(") or field in ("dstport", "proto", "severity") else f" AND {col} != ''"
+        query = f"""
+            SELECT {col} AS v, count() AS c
+            FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql}{extra}
+            GROUP BY v ORDER BY c DESC LIMIT {int(limit)}
+            SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
+        """
+        try:
+            rows = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"get_field_facets({field}) failed: {e}")
+            return {"field": field, "values": []}
+        return {"field": field, "values": [{"value": str(v), "count": int(c)} for v, c in rows]}
+
+    # src/dst_country values that are NOT real countries (FortiGate puts these
+    # for private/reserved space) — excluded from the geo breakdown.
+    _NON_COUNTRY = "(src_country='' OR src_country='Reserved' OR match(src_country,'[0-9]'))"
+    _NON_COUNTRY_DST = "(dst_country='' OR dst_country='Reserved' OR match(dst_country,'[0-9]'))"
+
+    @classmethod
+    def get_traffic_analytics(cls, start_time=None, end_time=None, device_ips=None,
+                              query_text=None, default_hours: int = 24, top_n: int = 12) -> Dict[str, Any]:
+        """FortiView-style traffic analytics. Bytes are DEDUPED per session
+        (FortiGate/PA emit CUMULATIVE per-session byte counters; summing the raw
+        rows over-counts ~37x for multi-log sessions) by taking max(sent+recv)
+        per (device_ip, session_id). Done ONCE into a scratch table, then cheap
+        aggregations run over it (avoids 8 separate high-cardinality dedup passes)."""
+        pw, where = cls._count_prewhere_where(device_ips, None, start_time, end_time,
+                                              query_text, None, default_hours)
+        if start_time and end_time:
+            window_s = max(60, int((end_time - start_time).total_seconds()))
+        else:
+            window_s = default_hours * 3600
+        bucket_s = max(60, window_s // 60)
+
+        import uuid as _uuid
+        client = cls.get_client()
+        # ── One expensive pass: dedup to one row per (device, session) in a scratch
+        # table, then run cheap aggregations over it (instead of 8 dedup passes). ──
+        scratch = "default._ta_" + _uuid.uuid4().hex[:16]
+        results = {}
+        try:
+            client.command(
+                f"CREATE TABLE {scratch} (device_ip IPv4, session_id UInt64, srcip String, dstip String, "
+                f"app LowCardinality(String), service LowCardinality(String), "
+                f"src_country LowCardinality(String), dst_country LowCardinality(String), "
+                f"ts DateTime64(3), bytes UInt64) ENGINE = MergeTree ORDER BY tuple()")
+            client.command(
+                f"INSERT INTO {scratch} SELECT device_ip, session_id, any(srcip), any(dstip), "
+                f"any(application), any(service), any(src_country), any(dst_country), "
+                f"max(timestamp), max(sent_bytes + recv_bytes) "
+                f"FROM syslogs PREWHERE {pw} WHERE {where} AND session_id != 0 "
+                f"GROUP BY device_ip, session_id SETTINGS max_execution_time=90, max_threads=4")
+
+            def q(sql):
+                try:
+                    return client.query(sql).result_rows
+                except Exception as e:
+                    logger.warning(f"traffic_analytics agg failed: {e}")
+                    return []
+
+            def top_by(dim, extra=""):
+                return ("top:" + dim, q(
+                    f"SELECT {dim} AS k, sum(bytes) AS b, count() AS sessions FROM {scratch} "
+                    f"WHERE {dim} != ''{extra} GROUP BY k ORDER BY b DESC LIMIT {top_n}"))
+
+            results["totals"] = q(f"SELECT sum(bytes), count(), uniqExact(srcip) FROM {scratch}")
+            # Timeline = SESSIONS per bucket (reliable). Byte-rate over time is
+            # unreliable here: cumulative counters + only ~17% delta coverage make
+            # any per-bucket byte sum either spike (session totals land in one
+            # bucket) or over-count. Session activity is exact and meaningful.
+            results["timeline"] = q(
+                f"SELECT toStartOfInterval(ts, INTERVAL {bucket_s} SECOND) AS bkt, count() "
+                f"FROM {scratch} GROUP BY bkt ORDER BY bkt")
+            for d in ("srcip", "dstip", "app", "service"):
+                k, rows = top_by(d); results[k] = rows
+            k, rows = top_by("src_country", extra=" AND src_country!='Reserved' AND NOT match(src_country,'[0-9]')"); results[k] = rows
+            k, rows = top_by("dst_country", extra=" AND dst_country!='Reserved' AND NOT match(dst_country,'[0-9]')"); results[k] = rows
+        finally:
+            try:
+                client.command(f"DROP TABLE IF EXISTS {scratch}")
+            except Exception as e:
+                logger.warning(f"traffic_analytics scratch drop failed: {e}")
+
+        def rows_to_items(rows):
+            return [{"key": str(r[0]), "bytes": int(r[1] or 0), "sessions": int(r[2] or 0)} for r in rows]
+
+        tot = results.get("totals") or []
+        timeline = [{"ts": r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0]), "sessions": int(r[1] or 0)}
+                    for r in (results.get("timeline") or [])]
+        return {
+            "totals": {
+                "bytes": int(tot[0][0]) if tot and tot[0][0] is not None else 0,
+                "sessions": int(tot[0][1]) if tot else 0,
+                "talkers": int(tot[0][2]) if tot else 0,
+            },
+            "bucket_seconds": bucket_s,
+            "timeline": timeline,
+            "top_sources": rows_to_items(results.get("top:srcip") or []),
+            "top_destinations": rows_to_items(results.get("top:dstip") or []),
+            "top_apps": rows_to_items(results.get("top:app") or []),
+            "top_services": rows_to_items(results.get("top:service") or []),
+            "top_src_countries": rows_to_items(results.get("top:src_country") or []),
+            "top_dst_countries": rows_to_items(results.get("top:dst_country") or []),
+        }
 
     # SQL expression to compute /24 subnet from srcip column
     _SUBNET24_EXPR = "if(srcip = '', '', concat(IPv4NumToString(toUInt32(bitAnd(IPv4StringToNumOrDefault(srcip), 4294967040))), '/24'))"
@@ -1988,6 +2415,7 @@ class ClickHouseClient:
         GROUP BY {group_cols}
         ORDER BY event_count DESC
         LIMIT {limit} OFFSET {offset}
+        SETTINGS max_execution_time = 30, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
         result = client.query(query).named_results()
@@ -2050,13 +2478,95 @@ class ClickHouseClient:
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
+        SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
-        result = client.query(query).result_rows
+        try:
+            result = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"count_aggregate_groups exceeded time budget: {e}")
+            return -1
         count = result[0][0] if result else 0
         if count > max_count:
             return -1
         return count
+
+    @classmethod
+    def aggregate_prior_window(
+        cls,
+        group_by_fields: List[str],
+        start_time: datetime,
+        end_time: datetime,
+        device_ips: Optional[List[str]] = None,
+        severities: Optional[List[int]] = None,
+        query_text: Optional[str] = None,
+        facilities: Optional[List[int]] = None,
+        subnet_rollup: bool = False,
+        limit: int = 10000,
+    ) -> Dict[Tuple, int]:
+        """Aggregate the immediately preceding window of equal length and
+        return a {group_key_tuple: event_count} map.
+
+        Used by the log-list aggregate view to compute anomaly badges
+        (NEW / SPIKE) and the optional Compare-Windows column. The query
+        shape mirrors aggregate_logs() so the same indexes are hit; it
+        differs only in the time filter.
+
+        ``group_key_tuple`` ordering matches ``group_by_fields`` and
+        substitutes the /24 subnet expression for ``srcip`` when
+        ``subnet_rollup`` is True. Tuples are normalised to plain str/int
+        so the caller can match them against current-window rows.
+        """
+        allowed = {'srcip', 'dstip', 'dstport'}
+        group_by_fields = [f for f in group_by_fields if f in allowed]
+        if not group_by_fields:
+            group_by_fields = ['srcip', 'dstip', 'dstport']
+        if start_time is None or end_time is None:
+            return {}
+
+        client = cls.get_client()
+        # Shift left by the same window length.
+        delta = end_time - start_time
+        if delta.total_seconds() <= 0:
+            return {}
+        prior_start = start_time - delta
+        prior_end = start_time
+
+        prewhere_parts = [
+            f"timestamp >= '{prior_start.strftime('%Y-%m-%d %H:%M:%S')}'",
+            f"timestamp < '{prior_end.strftime('%Y-%m-%d %H:%M:%S')}'",
+        ]
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        where_sql = cls._build_where_clause(
+            device_ips, severities, None, None, query_text, facilities,
+        )
+        prewhere_clause = " AND ".join(prewhere_parts)
+        select_cols, group_cols, _ = cls._build_agg_columns(group_by_fields, subnet_rollup)
+
+        query = f"""
+        SELECT {select_cols}, count() AS event_count
+        FROM syslogs
+        PREWHERE {prewhere_clause}
+        WHERE {where_sql}
+        GROUP BY {group_cols}
+        ORDER BY event_count DESC
+        LIMIT {int(limit)}
+        """
+        try:
+            rows = client.query(query).result_rows
+        except Exception as e:
+            logger.warning(f"aggregate_prior_window failed: {e}")
+            return {}
+
+        # Normalise the key columns to (srcKey, dstKey, dstport) shape that
+        # callers can compare against the current window's rows.
+        out: Dict[Tuple, int] = {}
+        n = len(group_by_fields)
+        for r in rows:
+            key = tuple(r[i] if r[i] is not None else "" for i in range(n))
+            count = int(r[n] or 0)
+            out[key] = count
+        return out
 
     @classmethod
     def get_log_stats_summary(
@@ -2065,13 +2575,18 @@ class ClickHouseClient:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         query_text: Optional[str] = None,
-        default_hours: int = 1
+        default_hours: int = 1,
+        skip_total: bool = False,
     ) -> Dict[str, Any]:
         """Get summary statistics for logs matching the current filters.
 
         For large time ranges (>24h), uses a fast count-only query to avoid
         scanning hundreds of millions of severity values. The device count
         comes from the cached device list instead.
+
+        `skip_total=True` returns `total_logs=None` on that fast path instead
+        of running the count — for callers that already count the same
+        filter set (the Log Explorer), which otherwise scans the window twice.
         """
         client = cls.get_client()
 
@@ -2109,15 +2624,19 @@ class ClickHouseClient:
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
 
         if large_range:
-            # Fast path: just count() for large ranges (0.2-0.9s vs 13-60s+)
-            query = f"""
-            SELECT count() as total_logs
-            FROM syslogs
-            PREWHERE {prewhere_clause}
-            WHERE {where_sql}
-            """
-            result = list(client.query(query).named_results())
-            total = result[0]['total_logs'] if result else 0
+            if skip_total:
+                total = None
+            else:
+                # Fast path: just count() for large ranges (0.2-0.9s vs 13-60s+)
+                query = f"""
+                SELECT count() as total_logs
+                FROM syslogs
+                PREWHERE {prewhere_clause}
+                WHERE {where_sql}
+                SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
+                """
+                result = list(client.query(query).named_results())
+                total = result[0]['total_logs'] if result else 0
             # Use cached device count instead of expensive uniq()
             devices = cls.get_distinct_devices()
             return {
@@ -3296,6 +3815,79 @@ class ClickHouseClient:
         else:
             return ("any", 5)
 
+    @staticmethod
+    def _compute_ip_specificity(distinct_count: int) -> str:
+        """Map IP-set diversity per policy to a label.
+        IPs span a much larger value space than ports, so the thresholds are
+        intentionally generous before flagging a policy as overly broad."""
+        if distinct_count <= 1:
+            return "specific"
+        elif distinct_count <= 10:
+            return "narrow"
+        elif distinct_count <= 100:
+            return "broad"
+        else:
+            return "any"
+
+    @classmethod
+    def _collapse_action_rows(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Merge rows that share (device, vdom, policy, src_zone, dst_zone)
+        and differ only by action. The merged row carries an `actions` list
+        of (name, event_count) tuples used to render chips in the UI."""
+        merged: Dict[tuple, Dict[str, Any]] = {}
+        for r in rows:
+            key = (r['device_ip_str'], r['vdom'], r['policyname'],
+                   r['src_zone'], r['dst_zone'])
+            existing = merged.get(key)
+            if existing is None:
+                r['actions'] = [(r['action'], int(r['event_count']))]
+                merged[key] = r
+                continue
+            existing['actions'].append((r['action'], int(r['event_count'])))
+            existing['event_count'] = int(existing['event_count']) + int(r['event_count'])
+            existing['unique_src_count'] = max(
+                int(existing['unique_src_count']), int(r['unique_src_count']))
+            # Union sample sources (cap at 10).
+            seen = set(existing['sample_sources'])
+            for s in r['sample_sources']:
+                if s not in seen and len(existing['sample_sources']) < 10:
+                    existing['sample_sources'].append(s)
+                    seen.add(s)
+            # Sum byte counters.
+            existing['sent_bytes'] = int(existing.get('sent_bytes') or 0) + int(r.get('sent_bytes') or 0)
+            existing['recv_bytes'] = int(existing.get('recv_bytes') or 0) + int(r.get('recv_bytes') or 0)
+            # Earliest first_seen, latest last_seen (string compare works for ISO dates).
+            if r['first_seen'] and (not existing['first_seen'] or r['first_seen'] < existing['first_seen']):
+                existing['first_seen'] = r['first_seen']
+            if r['last_seen'] and (not existing['last_seen'] or r['last_seen'] > existing['last_seen']):
+                existing['last_seen'] = r['last_seen']
+            # Prefer non-empty application/category/NAT values from any contributing row.
+            for col in ('application', 'category',
+                        'nat_srcip', 'nat_dstip', 'nat_srcport', 'nat_dstport'):
+                if not existing.get(col) and r.get(col):
+                    existing[col] = r[col]
+        # Re-sort by total events desc.
+        out = list(merged.values())
+        out.sort(key=lambda r: r['event_count'], reverse=True)
+        return out
+
+    # Action classes used for diff comparison and CLI generation.
+    _ALLOW_ACTIONS = ('accept','allow','pass','close','client-rst','server-rst')
+    _DENY_ACTIONS  = ('deny','drop','block','reject','blocked','reset-both')
+
+    @classmethod
+    def _action_class(cls, actions: List[Tuple[str, int]]) -> str:
+        """Reduce a (action, count) list to a single class label."""
+        has_allow = any((a or '').lower() in cls._ALLOW_ACTIONS for a, _ in actions)
+        has_deny  = any((a or '').lower() in cls._DENY_ACTIONS  for a, _ in actions)
+        if has_allow and has_deny: return 'mixed'
+        if has_allow: return 'allow'
+        if has_deny:  return 'deny'
+        return 'unknown'
+
+    # IANA protocol numbers for the proto column (UInt8).
+    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1}
+
     @classmethod
     def policy_lookup(
         cls,
@@ -3305,17 +3897,39 @@ class ClickHouseClient:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         default_hours: int = 24,
+        compute_diff: bool = True,
+        proto: Optional[str] = None,
+        dstips: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Look up existing firewall policies for a destination IP:port.
 
         Runs 4 sequential queries against indexed columns (PREWHERE) for
         sub-second performance even on 250M+ row tables.
+
+        Args:
+            dstip: Destination IPv4. Used when ``dstips`` is None.
+            dstips: Multiple destination IPs (e.g. the A-record results for
+                an FQDN). When provided, ``dstip`` is ignored.
+            proto: ``tcp`` | ``udp`` | ``icmp`` | ``any`` | None. When None
+                or ``any`` the proto column is not constrained (preserves
+                prior behavior — the dstport alone was previously enough
+                to disambiguate in practice).
         """
         # --- Input validation ---
         ip_re = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
-        if not ip_re.match(dstip):
-            raise ValueError(f"Invalid destination IP: {dstip}")
+        # Accept either a single IP or a list of IPs (from FQDN resolution).
+        if dstips:
+            for ip in dstips:
+                if not ip_re.match(ip):
+                    raise ValueError(f"Invalid destination IP: {ip}")
+            dstips_safe = [ip.replace("'", "") for ip in dstips]
+            dstip_safe = dstips_safe[0]  # used by NAT-display code paths
+        else:
+            if not ip_re.match(dstip):
+                raise ValueError(f"Invalid destination IP: {dstip}")
+            dstips_safe = [dstip.replace("'", "")]
+            dstip_safe = dstips_safe[0]
         dstport = int(dstport)
         if not (0 <= dstport <= 65535):
             raise ValueError(f"Invalid port: {dstport}")
@@ -3323,37 +3937,100 @@ class ClickHouseClient:
             raise ValueError(f"Invalid source IP: {srcip}")
 
         # Escape single quotes for SQL safety
-        dstip_safe = dstip.replace("'", "")
         srcip_safe = srcip.replace("'", "") if srcip else None
+
+        # dstip membership — single equality for one IP, IN-list for many.
+        # Keeps the PREWHERE plan cheap; ClickHouse short-circuits IN(1) to =.
+        if len(dstips_safe) == 1:
+            dstip_clause = f"dstip = '{dstips_safe[0]}'"
+            srcip_is_dst_clause = f"srcip = '{dstips_safe[0]}'"  # for reverse-flow
+        else:
+            dst_list = ", ".join(f"'{ip}'" for ip in dstips_safe)
+            dstip_clause = f"dstip IN ({dst_list})"
+            srcip_is_dst_clause = f"srcip IN ({dst_list})"
+
+        # Optional protocol filter. The proto column is UInt8 (IANA numbers).
+        proto_norm = (proto or '').strip().lower()
+        proto_num = cls._PROTO_NUMBERS.get(proto_norm)
+        proto_clause = f"AND proto = {proto_num}" if proto_num else ""
 
         client = cls.get_client()
         time_clause = cls._build_time_prewhere(start_time, end_time, default_hours)
         device_expr = cls._DEVICE_DISPLAY_EXPR
 
+        # Volume / NAT / category come from parsed_data (Map). Different vendors
+        # use different keys, so we coalesce the common ones.
+        #
+        # NOTE: Fortinet emits multiple "session update" rows per session with
+        # *cumulative* byte counters. Summing them directly over-counts bandwidth
+        # by 100×–1000×. We compute byte totals by first deduplicating per
+        # parsed_data['sessionid'] (taking max — cumulative is monotonic, so
+        # max == final), then summing across sessions in the outer query. Rows
+        # with no sessionid fall back to (timestamp, srcip, srcport) which is
+        # unique per row so they are treated as singletons.
+
+        # Per-session inner aggregation — produces ONE row per
+        # (group_key, session_key) with max bytes for that session.
+        inner_select = """
+            {device_expr} as device_display,
+            toString(device_ip) as device_ip_str,
+            vdom, policyname, action, application, src_zone, dst_zone,
+            coalesce(nullIf(parsed_data['sessionid'], ''),
+                concat(toString(toUnixTimestamp64Milli(timestamp)), '_',
+                       toString(srcip), '_', toString(srcport))) as sid_key,
+            count() as inner_events,
+            uniq(srcip) as inner_uniq_src,
+            groupUniqArray(10)(toString(srcip)) as inner_sample_srcs,
+            min(timestamp) as inner_first_seen,
+            max(timestamp) as inner_last_seen,
+            max(toUInt64OrZero(parsed_data['sent_bytes'])
+              + toUInt64OrZero(parsed_data['sentbyte'])
+              + toUInt64OrZero(parsed_data['bytes_sent']))     as inner_sent_max,
+            max(toUInt64OrZero(parsed_data['recv_bytes'])
+              + toUInt64OrZero(parsed_data['rcvdbyte'])
+              + toUInt64OrZero(parsed_data['bytes_received'])) as inner_recv_max,
+            anyIf(parsed_data['srcnat'],     parsed_data['srcnat']     != '') as inner_nat_srcip,
+            anyIf(parsed_data['dstnat'],     parsed_data['dstnat']     != '') as inner_nat_dstip,
+            anyIf(parsed_data['srcnatport'], parsed_data['srcnatport'] != '') as inner_nat_srcport,
+            anyIf(parsed_data['dstnatport'], parsed_data['dstnatport'] != '') as inner_nat_dstport,
+            anyIf(parsed_data['category'],   parsed_data['category']   != '') as inner_category
+        """.format(device_expr=device_expr)
+
+        # Outer aggregation — combines per-session rows into per-policy totals.
+        outer_select = """
+            any(device_display) as device_display,
+            device_ip_str,
+            vdom, policyname, action, application, src_zone, dst_zone,
+            sum(inner_events)              as event_count,
+            sum(inner_uniq_src)            as unique_src_count,
+            arrayDistinct(arrayFlatten(groupArray(inner_sample_srcs))) as sample_sources,
+            min(inner_first_seen)          as first_seen,
+            max(inner_last_seen)           as last_seen,
+            sum(inner_sent_max)            as sent_bytes,
+            sum(inner_recv_max)            as recv_bytes,
+            anyIf(inner_nat_srcip,   inner_nat_srcip   != '') as nat_srcip,
+            anyIf(inner_nat_dstip,   inner_nat_dstip   != '') as nat_dstip,
+            anyIf(inner_nat_srcport, inner_nat_srcport != '') as nat_srcport,
+            anyIf(inner_nat_dstport, inner_nat_dstport != '') as nat_dstport,
+            anyIf(inner_category,    inner_category    != '') as category
+        """
+
         # ── Query 1: Allowed traffic ──
         srcip_where = f"AND srcip = '{srcip_safe}'" if srcip_safe else ""
         q_allowed = f"""
-        SELECT
-            {device_expr} as device_display,
-            toString(device_ip) as device_ip_str,
-            vdom,
-            policyname,
-            action,
-            application,
-            src_zone,
-            dst_zone,
-            count()               as event_count,
-            uniq(srcip)           as unique_src_count,
-            groupUniqArray(10)(toString(srcip)) as sample_sources,
-            min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen
-        FROM syslogs
-        PREWHERE {time_clause}
-            AND dstip = '{dstip_safe}'
-            AND dstport = {dstport}
-            AND action IN ('accept','allow','pass','close','client-rst','server-rst')
-        WHERE 1=1 {srcip_where}
-        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        SELECT {outer_select}
+        FROM (
+            SELECT {inner_select}
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND {dstip_clause}
+                AND dstport = {dstport}
+                {proto_clause}
+                AND action IN ('accept','allow','pass','close','client-rst','server-rst')
+            WHERE 1=1 {srcip_where}
+            GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone, sid_key
+        )
+        GROUP BY device_ip_str, vdom, policyname, action, application, src_zone, dst_zone
         ORDER BY event_count DESC
         LIMIT 200
         """
@@ -3361,26 +4038,18 @@ class ClickHouseClient:
 
         # ── Query 2: Denied traffic (never filtered by srcip — show ALL denies) ──
         q_denied = f"""
-        SELECT
-            {device_expr} as device_display,
-            toString(device_ip) as device_ip_str,
-            vdom,
-            policyname,
-            action,
-            application,
-            src_zone,
-            dst_zone,
-            count()               as event_count,
-            uniq(srcip)           as unique_src_count,
-            groupUniqArray(5)(toString(srcip)) as sample_sources,
-            min(timestamp)        as first_seen,
-            max(timestamp)        as last_seen
-        FROM syslogs
-        PREWHERE {time_clause}
-            AND dstip = '{dstip_safe}'
-            AND dstport = {dstport}
-            AND action IN ('deny','drop','block','reject','blocked','reset-both')
-        GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone
+        SELECT {outer_select}
+        FROM (
+            SELECT {inner_select}
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND {dstip_clause}
+                AND dstport = {dstport}
+                {proto_clause}
+                AND action IN ('deny','drop','block','reject','blocked','reset-both')
+            GROUP BY device_ip, vdom, policyname, action, application, src_zone, dst_zone, sid_key
+        )
+        GROUP BY device_ip_str, vdom, policyname, action, application, src_zone, dst_zone
         ORDER BY event_count DESC
         LIMIT 100
         """
@@ -3393,21 +4062,30 @@ class ClickHouseClient:
             policy_keys.add((r['device_ip_str'], r['vdom'], r['policyname']))
 
         specificity_map: Dict[tuple, Tuple[str, int]] = {}
+        # Per policy, the diversity of src and dst IPs the rule has matched.
+        # Lets the UI flag overly-permissive any/any rules (FireMon-style).
+        src_specificity_map: Dict[tuple, str] = {}
+        dst_specificity_map: Dict[tuple, str] = {}
         if policy_keys:
             # Build an IN clause for the (device_ip, vdom, policyname) tuples
             in_values = ", ".join(
                 f"(toIPv4('{k[0]}'), '{k[1].replace(chr(39), '')}', '{k[2].replace(chr(39), '')}')"
                 for k in policy_keys
             )
+            # Pull port + src + dst diversity in a single scan. Note: this
+            # query is NOT scoped to dstip — that's intentional, because we
+            # want to know the rule's full footprint, not just its hits on
+            # the IP we're looking up.
             q_specificity = f"""
             SELECT
                 toString(device_ip) as device_ip_str,
                 vdom,
                 policyname,
-                uniq(dstport) as distinct_ports
+                uniq(dstport) as distinct_ports,
+                uniq(srcip)   as distinct_srcs,
+                uniq(dstip)   as distinct_dsts
             FROM syslogs
             PREWHERE {time_clause}
-                AND dstip = '{dstip_safe}'
                 AND action IN ('accept','allow','pass','close','client-rst','server-rst')
             WHERE (device_ip, vdom, policyname) IN ({in_values})
             GROUP BY device_ip, vdom, policyname
@@ -3415,6 +4093,8 @@ class ClickHouseClient:
             for row in client.query(q_specificity).named_results():
                 key = (row['device_ip_str'], row['vdom'], row['policyname'])
                 specificity_map[key] = cls._compute_specificity(row['distinct_ports'])
+                src_specificity_map[key] = cls._compute_ip_specificity(row['distinct_srcs'])
+                dst_specificity_map[key] = cls._compute_ip_specificity(row['distinct_dsts'])
 
         # ── Query 4: Source coverage (only when srcip provided) ──
         source_coverage: Dict[tuple, bool] = {}
@@ -3427,7 +4107,8 @@ class ClickHouseClient:
                 count() as src_events
             FROM syslogs
             PREWHERE {time_clause}
-                AND dstip = '{dstip_safe}'
+                AND {dstip_clause}
+                {proto_clause}
                 AND action IN ('accept','allow','pass','close','client-rst','server-rst')
             WHERE srcip = '{srcip_safe}'
                 AND (device_ip, vdom, policyname) IN ({in_values})
@@ -3436,6 +4117,29 @@ class ClickHouseClient:
             for row in client.query(q_source).named_results():
                 key = (row['device_ip_str'], row['vdom'], row['policyname'])
                 source_coverage[key] = row['src_events'] > 0
+
+        # ── Query 5: Reverse-flow / asymmetric detection ──
+        # Look for events where the original src/dst are swapped, on the same
+        # device. If a device sees the forward flow but never the reverse,
+        # that's a clue the return path goes through a different firewall —
+        # i.e. the path is asymmetric.
+        bidirectional_devices: set = set()
+        if srcip_safe:
+            q_reverse = f"""
+            SELECT DISTINCT
+                {device_expr} as device_display
+            FROM syslogs
+            PREWHERE {time_clause}
+                AND {srcip_is_dst_clause}
+                AND dstip = '{srcip_safe}'
+                {proto_clause}
+                AND action IN (
+                    'accept','allow','pass','close','client-rst','server-rst',
+                    'deny','drop','block','reject','blocked','reset-both'
+                )
+            """
+            for row in client.query(q_reverse).named_results():
+                bidirectional_devices.add(row['device_display'])
 
         # ── Post-processing ──
         allowed_devices = set()
@@ -3446,7 +4150,11 @@ class ClickHouseClient:
             label, score = specificity_map.get(key, ("unknown", 0))
             r['specificity_label'] = label
             r['specificity_score'] = score
+            r['src_specificity'] = src_specificity_map.get(key)
+            r['dst_specificity'] = dst_specificity_map.get(key)
             r['source_covered'] = source_coverage.get(key, None)
+            # Bidirectional only meaningful when srcip was provided.
+            r['bidirectional'] = (r['device_display'] in bidirectional_devices) if srcip_safe else None
             # Convert datetime objects to strings for template
             r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
             r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
@@ -3454,10 +4162,98 @@ class ClickHouseClient:
             allowed_devices.add(r['device_display'])
 
         for r in denied_rows:
+            r['bidirectional'] = (r['device_display'] in bidirectional_devices) if srcip_safe else None
             r['first_seen'] = str(r['first_seen']) if r['first_seen'] else ''
             r['last_seen'] = str(r['last_seen']) if r['last_seen'] else ''
             r['sample_sources'] = list(r.get('sample_sources', []))
             denied_devices.add(r['device_display'])
+
+        # Collapse rows that share the same (device, vdom, policy, src_zone,
+        # dst_zone) but differ only by action — present them as a single row
+        # with an `actions` list of (name, count) chips. This deduplicates the
+        # close/client-rst/server-rst pairs that ClickHouse emits separately.
+        allowed_rows = cls._collapse_action_rows(allowed_rows)
+        denied_rows = cls._collapse_action_rows(denied_rows)
+
+        # Hop ordering: the device that first observed the flow is closest to
+        # the source. Sort by first_seen ASC and tag each row with its
+        # position in the inferred path. This isn't perfect with log-buffering
+        # jitter, but for most multi-firewall paths it gives a usable picture.
+        path: List[Dict[str, Any]] = []
+        seen_devices: set = set()
+        for hop_idx, r in enumerate(sorted(
+            allowed_rows, key=lambda x: x.get('first_seen') or '',
+        ), start=1):
+            r['hop_index'] = hop_idx
+            if r['device_display'] not in seen_devices:
+                path.append({
+                    'device': r['device_display'],
+                    'src_zone': r.get('src_zone') or '',
+                    'dst_zone': r.get('dst_zone') or '',
+                    'first_seen': r.get('first_seen') or '',
+                })
+                seen_devices.add(r['device_display'])
+        # Restore the original (event-count desc) ordering of the table itself —
+        # path breadcrumb is independent of table sort.
+        allowed_rows.sort(key=lambda r: r['event_count'], reverse=True)
+
+        # ── Optional: snapshot diff over the prior window of equal length ──
+        # Lets the UI flag "this used to be denied / used to be allowed".
+        prior_class: Dict[Tuple[str, str, str], str] = {}
+        if compute_diff:
+            duration = end_time - start_time if (start_time and end_time) else (
+                datetime.now(timezone.utc) - start_time if start_time else timedelta(hours=default_hours)
+            )
+            prior_end = start_time if start_time else (datetime.now(timezone.utc) - duration)
+            prior_start = prior_end - duration
+            prior_clause = cls._build_time_prewhere(prior_start, prior_end, default_hours)
+            q_prior = f"""
+            SELECT
+                toString(device_ip) as device_ip_str,
+                vdom,
+                policyname,
+                groupArray(action) as actions
+            FROM (
+                SELECT device_ip, vdom, policyname, action
+                FROM syslogs
+                PREWHERE {prior_clause}
+                    AND {dstip_clause}
+                    AND dstport = {dstport}
+                    {proto_clause}
+                    AND action IN (
+                        'accept','allow','pass','close','client-rst','server-rst',
+                        'deny','drop','block','reject','blocked','reset-both'
+                    )
+                GROUP BY device_ip, vdom, policyname, action
+            )
+            GROUP BY device_ip, vdom, policyname
+            """
+            for row in client.query(q_prior).named_results():
+                key = (row['device_ip_str'], row['vdom'], row['policyname'])
+                prior_class[key] = cls._action_class([(a, 1) for a in row['actions']])
+
+        def _tag(rows: List[Dict[str, Any]]):
+            for r in rows:
+                key = (r['device_ip_str'], r['vdom'], r['policyname'])
+                cur = cls._action_class(r['actions'])
+                prior = prior_class.get(key)
+                r['prior_class'] = prior  # may be None (= unseen in prior window)
+                if not compute_diff:
+                    r['change'] = None
+                elif prior is None:
+                    r['change'] = 'new_allow' if cur == 'allow' else (
+                                  'new_deny'  if cur == 'deny'  else 'new')
+                elif prior == cur:
+                    r['change'] = 'unchanged'
+                elif prior == 'allow' and cur == 'deny':
+                    r['change'] = 'became_denied'
+                elif prior == 'deny' and cur == 'allow':
+                    r['change'] = 'became_allowed'
+                else:
+                    r['change'] = 'changed'
+
+        _tag(allowed_rows)
+        _tag(denied_rows)
 
         gap_devices = sorted(denied_devices - allowed_devices)
 
@@ -3475,6 +4271,7 @@ class ClickHouseClient:
             "allowed": allowed_rows,
             "denied": denied_rows,
             "gap_devices": gap_devices,
+            "path": path,
             "summary": {
                 "total_devices_checked": len(allowed_devices | denied_devices),
                 "devices_with_allow": len(allowed_devices),

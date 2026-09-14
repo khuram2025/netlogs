@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Zentryc DNS Agent MSI Installer
+
+  Silent install:
+    msiexec /i ZentrycDnsAgent.msi /qn ZENTRYC_HOST=10.0.0.1 ZENTRYC_PORT=514
+
+  GPO deployment:
+    Use Group Policy Software Installation with .mst transform file
+    for pre-configured ZENTRYC_HOST/PORT values.
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <!-- Upgrade code must remain constant across versions for MSI upgrades -->
+  <Package Name="Zentryc DNS Agent"
+           Manufacturer="Zentryc Security"
+           Version="1.0.0.0"
+           UpgradeCode="F47AC10B-58CC-4372-A567-0E02B2C3D479"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="Zentryc DNS Agent - Windows DNS Server log collector for Zentryc SIEM"
+                        Manufacturer="Zentryc Security" />
+
+    <!-- Major upgrade: removes previous version before installing new -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Zentryc DNS Agent is already installed."
+                  Schedule="afterInstallInitialize" />
+
+    <!-- Embed all files into the MSI -->
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- MSI properties settable via command line for silent install -->
+    <Property Id="ZENTRYC_HOST" Value="10.12.50.77" />
+    <Property Id="ZENTRYC_PORT" Value="514" />
+    <Property Id="ZENTRYC_APIKEY" Value="" />
+    <Property Id="ZENTRYC_PROTOCOL" Value="udp" />
+
+    <!-- Launch conditions -->
+    <Launch Condition="VersionNT64 &gt;= 1000"
+            Message="Zentryc DNS Agent requires Windows Server 2016 or later (64-bit)." />
+
+    <!-- Check DNS Server role is installed (optional - warn but don't block) -->
+    <Property Id="DNSSERVER_INSTALLED">
+      <RegistrySearch Id="DnsServerCheck"
+                      Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Services\DNS"
+                      Name="Start"
+                      Type="raw" />
+    </Property>
+
+    <!-- Use WiX standard UI with custom dialogs -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+    <!-- License agreement -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!-- ======================== Directory Structure ======================== -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="COMPANYDIR" Name="Zentryc">
+        <Directory Id="INSTALLFOLDER" Name="DNS Agent" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAROOTDIR" Name="Zentryc">
+        <Directory Id="LOGDIR" Name="Logs" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ======================== Components ======================== -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+
+      <!-- Main executable -->
+      <Component Id="MainExe" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560001">
+        <File Id="ZentrycDnsAgent.exe"
+              Source="$(var.ZentrycDnsAgent.TargetDir)\ZentrycDnsAgent.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Configuration file (never overwrite on upgrade if user modified) -->
+      <Component Id="ConfigFile" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560002"
+                 Directory="DATAROOTDIR" NeverOverwrite="yes">
+        <File Id="appsettings.json"
+              Source="$(var.ZentrycDnsAgent.TargetDir)\appsettings.json"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Create Logs directory -->
+      <Component Id="LogsDir" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560003"
+                 Directory="LOGDIR">
+        <CreateFolder />
+        <RemoveFolder Id="RemoveLogsDir" On="uninstall" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ======================== Features ======================== -->
+    <Feature Id="Complete" Title="Zentryc DNS Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ServiceComponent" />
+      <ComponentRef Id="FirewallRule" />
+      <ComponentRef Id="ConfigWriter" />
+    </Feature>
+
+    <!-- ======================== Custom Actions ======================== -->
+
+    <!-- Write user-provided config values to appsettings.json after install -->
+    <Component Id="ConfigWriter" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560010"
+               Directory="DATAROOTDIR">
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="ServerHost"
+                     Type="string"
+                     Value="[ZENTRYC_HOST]" />
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="ServerPort"
+                     Type="string"
+                     Value="[ZENTRYC_PORT]" />
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="ApiKey"
+                     Type="string"
+                     Value="[ZENTRYC_APIKEY]" />
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="Protocol"
+                     Type="string"
+                     Value="[ZENTRYC_PROTOCOL]" />
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="Version"
+                     Type="string"
+                     Value="1.0.0" />
+      <RegistryValue Root="HKLM"
+                     Key="SOFTWARE\Zentryc\DnsAgent"
+                     Name="InstallPath"
+                     Type="string"
+                     Value="[INSTALLFOLDER]"
+                     KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>

@@ -98,10 +98,10 @@
                     <span class="perm-badge perm-{{ p }}">{{ p }}</span>
                     {% endfor %}
                 </span>
-                <span>Created: {{ item.key.created_at.strftime('%Y-%m-%d') if item.key.created_at else 'N/A' }}</span>
-                <span>Last used: {{ item.key.last_used_at.strftime('%Y-%m-%d %H:%M') if item.key.last_used_at else 'Never' }}</span>
+                <span>Created: {{ (item.key.created_at | localdt('%Y-%m-%d')) if item.key.created_at else 'N/A' }}</span>
+                <span>Last used: {{ (item.key.last_used_at | localdt('%Y-%m-%d %H:%M')) if item.key.last_used_at else 'Never' }}</span>
                 {% if item.key.expires_at %}
-                <span>Expires: {{ item.key.expires_at.strftime('%Y-%m-%d') }}</span>
+                <span>Expires: {{ item.key.expires_at | localdt('%Y-%m-%d') }}</span>
                 {% else %}
                 <span>No expiration</span>
                 {% endif %}

@@ -1,0 +1,30 @@
+[Unit]
+Description=ZenAI OTA update agent
+Documentation=https://zentryc.com/ota/zenai/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zenai-updater
+Group=zenai-updater
+Environment=ZENTRYC_API=https://zentryc.com/api/v1
+# Set ZENAI_REG_TOKEN once before first start:
+#   sudo systemctl set-environment ZENAI_REG_TOKEN=<48-char token>
+# or drop it in /etc/zenai-updater.env (below) with EnvironmentFile=-.
+EnvironmentFile=-/etc/zenai-updater.env
+ExecStart=/opt/zenai/updater/agent loop
+Restart=on-failure
+RestartSec=30s
+StandardOutput=append:/opt/zenai/updater/logs/updater.log
+StandardError=append:/opt/zenai/updater/logs/updater.log
+
+# Runs with limited privileges except where it must touch protected paths.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/zenai /var/lib/zenai /home/net/net-logs
+# The agent calls systemctl and rsync, so these need to remain accessible.
+
+[Install]
+WantedBy=multi-user.target

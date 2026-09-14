@@ -34,6 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
+from ..core.app_settings import get_default_source_timezone
+from ..core.event_time import parse_event_time
 from ..db.database import get_database_url
 from ..db.clickhouse import ClickHouseClient
 from ..models.device import Device, DeviceStatus
@@ -77,6 +79,7 @@ class CachedDevice:
     status: str
     parser: str
     cached_at: float
+    timezone: Optional[str] = None  # IANA name; None = use default_source_tz
 
     def is_expired(self, ttl: int) -> bool:
         return (time.time() - self.cached_at) > ttl
@@ -100,8 +103,10 @@ class DeviceCache:
         self._misses += 1
         return None
 
-    def set(self, ip: str, status: str, parser: str):
-        self._cache[ip] = CachedDevice(status=status, parser=parser, cached_at=time.time())
+    def set(self, ip: str, status: str, parser: str, tz: Optional[str] = None):
+        self._cache[ip] = CachedDevice(
+            status=status, parser=parser, cached_at=time.time(), timezone=tz
+        )
 
     def get_stats(self) -> dict:
         total = self._hits + self._misses
@@ -164,6 +169,14 @@ class MetricsCollector:
 
 PRI_REGEX = re.compile(r'^<(\d{1,3})>(.*)', re.DOTALL)
 
+# Palo Alto emits the L4 protocol as a NAME (tcp/udp/...); FortiGate sends the
+# numeric IANA value. Map names → IANA protocol numbers so the dedicated `proto`
+# column is consistent across vendors (PA rows were 100% proto=0 before this).
+_PROTO_NAME_TO_NUM = {
+    'icmp': 1, 'igmp': 2, 'tcp': 6, 'udp': 17, 'gre': 47, 'esp': 50,
+    'ah': 51, 'icmpv6': 58, 'ipv6-icmp': 58, 'ospf': 89, 'sctp': 132,
+}
+
 # Regex to decompose PA threat_id: "HTTP Trojan.Gen(30001)" → name + numeric id
 _THREAT_ID_RE = re.compile(r'^(.*?)\((\d+)\)\s*$')
 
@@ -210,7 +223,8 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
         try:
             proto = int(proto_str) if proto_str else 0
         except (ValueError, TypeError):
-            proto = 0
+            # Palo Alto sends protocol as a name (tcp/udp/icmp) — map to IANA number.
+            proto = _PROTO_NAME_TO_NUM.get(str(proto_str).strip().lower(), 0)
 
         log_type = parsed_data.get('log_type', '')
         if not log_type:
@@ -219,12 +233,20 @@ def parse_syslog_message(data: bytes, device_parser: str) -> Optional[tuple]:
             if fgt_type:
                 log_type = f"{fgt_type}/{fgt_subtype}" if fgt_subtype else fgt_type
 
-        application = parsed_data.get('app') or parsed_data.get('application', '')
+        # L7 application: prefer the identified app, then the application-control
+        # category. FortiGate traffic logs rarely carry `app` (88%+ empty) but
+        # almost always carry `appcat` — fall back to it (the url_logs builder
+        # already does). L4 `service` is intentionally NOT folded in here so the
+        # column stays semantically "application", not "service".
+        application = (parsed_data.get('app') or parsed_data.get('application')
+                       or parsed_data.get('appcat', ''))
         src_zone = parsed_data.get('src_zone') or parsed_data.get('srczone') or parsed_data.get('srcintf', '')
         dst_zone = parsed_data.get('dst_zone') or parsed_data.get('dstzone') or parsed_data.get('dstintf', '')
         session_end_reason = parsed_data.get('session_end_reason', '')
         threat_id = parsed_data.get('threat_id', '')
-        vdom = parsed_data.get('vd', '') if parsed_data else ''
+        # FortiGate uses `vd` (vdom); Palo Alto uses `vsys`/`vsys_name`.
+        vdom = (parsed_data.get('vd') or parsed_data.get('vsys')
+                or parsed_data.get('vsys_name', '')) if parsed_data else ''
 
         return (facility, severity, message, decoded, srcip, dstip, srcport, dstport, proto,
                 action, policyname, log_type, application, src_zone, dst_zone,
@@ -815,15 +837,17 @@ def detect_parser(raw_data: bytes) -> str:
     return 'GENERIC'
 
 
-async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple[str, str]]:
+async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple[str, str, Optional[str]]]:
     """
-    Get device (status, parser) from PostgreSQL.
+    Get device ``(status, parser, timezone)`` from PostgreSQL.
     Auto-creates new devices as APPROVED. Detects parser from log format.
+    ``timezone`` is the IANA name configured for this device, or ``None``
+    to fall back to the global default source timezone.
     """
     try:
         async with _syslog_session_maker() as session:
             result = await session.execute(
-                text("SELECT status, parser FROM devices_device WHERE ip_address = :ip"),
+                text("SELECT status, parser, timezone FROM devices_device WHERE ip_address = :ip"),
                 {"ip": ip}
             )
             row = result.first()
@@ -844,9 +868,9 @@ async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple
                 })
                 await session.commit()
                 logger.info(f"New device awaiting approval: {ip} (parser: {detected_parser})")
-                return (DeviceStatus.PENDING, detected_parser)
+                return (DeviceStatus.PENDING, detected_parser, None)
 
-            return (row.status, row.parser)
+            return (row.status, row.parser, row.timezone)
     except Exception as e:
         logger.error(f"DB error for device {ip}: {e}")
         # On DB error, still detect parser for this batch
@@ -897,10 +921,12 @@ def flush_to_clickhouse(
     for attempt in range(retries):
         try:
             client.insert('syslogs', logs, column_names=[
-                'timestamp', 'device_ip', 'facility', 'severity', 'message', 'raw',
+                'timestamp', 'ingest_time', 'device_ip', 'facility', 'severity', 'message', 'raw',
                 'srcip', 'dstip', 'srcport', 'dstport', 'proto', 'action', 'policyname',
                 'log_type', 'application', 'src_zone', 'dst_zone', 'session_end_reason',
                 'threat_id', 'vdom', 'parsed_data', 'log_time',
+                'sent_bytes', 'recv_bytes', 'src_country', 'dst_country',
+                'src_intf', 'dst_intf', 'service', 'session_id', 'duration', 'src_user',
             ])
             return True, attempt
         except Exception as e:
@@ -1027,6 +1053,7 @@ class SyslogCollector:
 
         # Group by device IP for efficient cache lookup
         now = datetime.now(timezone.utc)
+        default_src_tz = get_default_source_timezone()
         logs = []
 
         for client_ip, data in batch_raw:
@@ -1037,10 +1064,10 @@ class SyslogCollector:
                 if result is None:
                     self.metrics.logs_dropped_device += 1
                     continue
-                status, parser = result
-                self.device_cache.set(client_ip, status, parser)
+                status, parser, dev_tz = result
+                self.device_cache.set(client_ip, status, parser, dev_tz)
             else:
-                status, parser = cached.status, cached.parser
+                status, parser, dev_tz = cached.status, cached.parser, cached.timezone
 
             if status != DeviceStatus.APPROVED:
                 self.metrics.logs_dropped_device += 1
@@ -1063,10 +1090,32 @@ class SyslogCollector:
                 if not log_time and parsed_data.get('date') and parsed_data.get('time'):
                     log_time = f"{parsed_data['date']} {parsed_data['time']}"
 
-            logs.append((now, client_ip, facility, severity, message, raw,
+            # Event time = device-reported event time (UTC); falls back to
+            # ingest time when parsing fails or the result is implausible.
+            event_time, _src = parse_event_time(parsed_data, dev_tz, default_src_tz, now)
+
+            # Promote high-value fields from the parsed_data Map to dedicated
+            # columns so bandwidth / geo / session analytics don't need a Map
+            # scan. Normalized names work for both vendors (PA bytes_sent→sentbyte,
+            # src_location→srccountry, inbound_if→srcintf etc. via FIELD_NORMALIZATION).
+            pd = parsed_data or {}
+            sent_bytes = _safe_uint(pd.get('sentbyte'), 0)
+            recv_bytes = _safe_uint(pd.get('rcvdbyte'), 0)
+            src_country = pd.get('srccountry', '')
+            dst_country = pd.get('dstcountry', '')
+            src_intf = pd.get('srcintf', '')
+            dst_intf = pd.get('dstintf', '')
+            service = pd.get('service', '')
+            session_id = _safe_uint(pd.get('sessionid'), 0)
+            duration = _safe_uint(pd.get('duration'), 0)
+            src_user = pd.get('srcuser') or pd.get('user') or pd.get('unauthuser', '')
+
+            logs.append((event_time, now, client_ip, facility, severity, message, raw,
                          srcip, dstip, srcport, dstport, proto, action, policyname,
                          log_type, application, src_zone, dst_zone, session_end_reason,
-                         threat_id, vdom, parsed_data, log_time))
+                         threat_id, vdom, parsed_data, log_time,
+                         sent_bytes, recv_bytes, src_country, dst_country,
+                         src_intf, dst_intf, service, session_id, duration, src_user))
 
             # Accumulate device stats
             if client_ip not in self._device_stats:
@@ -1082,15 +1131,16 @@ class SyslogCollector:
         try:
             from .ioc_matcher import check_and_record_matches
             for log in logs:
-                # log tuple: (now, ip, fac, sev, msg, raw, srcip, dstip, srcport, dstport, ...)
+                # log tuple: (event_time, ingest_time, ip, fac, sev, msg, raw,
+                #             srcip, dstip, srcport, dstport, proto, action, ...)
                 check_and_record_matches(
-                    srcip=log[6] or "",
-                    dstip=log[7] or "",
+                    srcip=log[7] or "",
+                    dstip=log[8] or "",
                     log_timestamp=log[0],
-                    device_ip=log[1],
-                    srcport=log[8] or 0,
-                    dstport=log[9] or 0,
-                    action=log[11] or "",
+                    device_ip=log[2],
+                    srcport=log[9] or 0,
+                    dstport=log[10] or 0,
+                    action=log[12] or "",
                 )
         except Exception:
             pass  # Never block the pipeline
@@ -1115,34 +1165,40 @@ class SyslogCollector:
                 logger.info(f"Flushed {len(logs):,} logs (queue: {len(self._raw_queue):,})")
 
             # ── Dual-write: specialized tables ──
-            # log tuple index 13 = log_type, index 20 = parsed_data
+            # log tuple layout (see logs.append above):
+            #   [0]=event_time [1]=ingest_time [2]=device_ip(client_ip) ...
+            #   [13]=policyname [14]=log_type ... [20]=vdom [21]=parsed_data
+            # build_*_row(timestamp, device_ip, parsed_data) — pass event_time,
+            # client_ip and the parsed_data dict (NOT vdom).
             threat_rows = []
             url_rows = []
             dns_rows = []
             for log in logs:
-                log_type_val = (log[13] or '').lower()
+                log_type_val = (log[14] or '').lower()
+                pd = log[21]
                 try:
                     if log_type_val == 'threat':
-                        row = build_threat_row(log[0], log[1], log[20])
+                        row = build_threat_row(log[0], log[2], pd)
                         threat_rows.append(row)
                         # PA URL subtype → url_logs, spyware subtype → dns_logs
-                        subtype = (log[20].get('subtype') or '').lower()
+                        subtype = (pd.get('subtype') or '').lower()
                         if subtype == 'url':
-                            url_row = build_paloalto_url_row(log[0], log[1], log[20])
+                            url_row = build_paloalto_url_row(log[0], log[2], pd)
                             url_rows.append(url_row)
                         elif subtype == 'spyware':
-                            dns_row = build_paloalto_dns_row(log[0], log[1], log[20])
+                            dns_row = build_paloalto_dns_row(log[0], log[2], pd)
                             dns_rows.append(dns_row)
                     elif log_type_val == 'utm/webfilter':
-                        url_row = build_fortinet_url_row(log[0], log[1], log[20])
+                        url_row = build_fortinet_url_row(log[0], log[2], pd)
                         url_rows.append(url_row)
                     elif log_type_val == 'utm/dns':
-                        dns_row = build_fortinet_dns_row(log[0], log[1], log[20])
+                        dns_row = build_fortinet_dns_row(log[0], log[2], pd)
                         dns_rows.append(dns_row)
                     elif log_type_val == 'windows-dns':
-                        dns_row = build_windows_dns_row(log[0], log[1], log[20])
+                        dns_row = build_windows_dns_row(log[0], log[2], pd)
                         dns_rows.append(dns_row)
                 except Exception as e:
+                    self.metrics.fanout_errors = getattr(self.metrics, 'fanout_errors', 0) + 1
                     logger.debug(f"Row build error ({log_type_val}): {e}")
 
             if threat_rows:
@@ -1286,11 +1342,11 @@ class SyslogCollector:
         try:
             async with _syslog_session_maker() as session:
                 result = await session.execute(
-                    text("SELECT ip_address::text, status, parser FROM devices_device")
+                    text("SELECT ip_address::text, status, parser, timezone FROM devices_device")
                 )
                 rows = result.all()
                 for row in rows:
-                    self.device_cache.set(row.ip_address, row.status, row.parser)
+                    self.device_cache.set(row.ip_address, row.status, row.parser, row.timezone)
                 logger.info(f"Pre-loaded {len(rows)} devices into cache")
         except Exception as e:
             logger.warning(f"Device pre-load warning: {e}")

@@ -4,20 +4,23 @@ Correlation Rules management routes.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
-from ..models.correlation import CorrelationRule
+from ..models.correlation import CorrelationRule, CorrelationIncident
 from ..models.alert import AlertRule
 from ..core.permissions import require_min_role
 from ..core.mitre_attack import TACTICS, TECHNIQUES
+from ..schemas.correlation import CorrelationRuleCreate, CorrelationRuleUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,127 @@ def _render(template_name: str, request: Request, context: dict = None):
     return templates.TemplateResponse(request, template_name, ctx)
 
 
+def compute_coverage_stats(coverage: dict):
+    """Compute MITRE ATT&CK coverage statistics from a technique-id -> rules map.
+
+    ``covered`` counts only **detectable** techniques that have a rule, so the
+    coverage percentage is a true subset of ``detectable`` and can never exceed
+    100%. (The previous implementation counted *all* covered techniques over a
+    *detectable*-only denominator, which could inflate the percentage when a
+    non-detectable technique was mapped to a rule.)
+
+    Returns ``(tactic_stats, total_techniques, total_covered,
+    total_detectable, overall_pct)``.
+    """
+    tactic_stats = []
+    total_techniques = 0
+    total_covered = 0
+    total_detectable = 0
+    for tactic in TACTICS:
+        techniques = TECHNIQUES.get(tactic["name"], [])
+        detectable = [t for t in techniques if t.get("detectable")]
+        covered = [t for t in techniques
+                   if t.get("detectable") and t["id"].split(" ")[0] in coverage]
+        tactic_stats.append({
+            "id": tactic["id"],
+            "name": tactic["name"],
+            "description": tactic["description"],
+            "techniques": techniques,
+            "total": len(techniques),
+            "detectable": len(detectable),
+            "covered": len(covered),
+            "pct": round(len(covered) / len(detectable) * 100) if detectable else 0,
+        })
+        total_techniques += len(techniques)
+        total_covered += len(covered)
+        total_detectable += len(detectable)
+
+    overall_pct = round(total_covered / total_detectable * 100) if total_detectable else 0
+    return tactic_stats, total_techniques, total_covered, total_detectable, overall_pct
+
+
+# ── Rule-aware log drill-down ───────────────────────────────────────────
+# A correlation match's "Logs" link should open the *exact* events behind the
+# match — the matched stage's own filter, scoped to the matched entity and the
+# match's evidence window — not a generic "all traffic for this IP" search.
+
+# Correlation stage field -> log-viewer (/logs/) query parameter. Only fields
+# the firewall log viewer can filter on are mapped; anything else is dropped so
+# the drill-down narrows precisely instead of over-broadening.
+_LOG_PARAM_BY_FIELD = {
+    "action": "action", "srcip": "srcip", "dstip": "dstip",
+    "srcport": "srcport", "dstport": "dstport", "proto": "protocol",
+    "policyname": "policyname", "log_type": "log_type",
+    "application": "application", "session_end_reason": "session_end_reason",
+    "src_zone": "src_zone", "dst_zone": "dst_zone", "threat_id": "threat_id",
+    "device_ip": "device",
+}
+
+# Stage group-by field / canonical entity -> the log-viewer param the match's
+# entity value should bind to.
+_LOG_ENTITY_PARAM = {
+    "ip": "srcip", "srcip": "srcip", "src_ip": "srcip",
+    "dst_ip": "dstip", "dstip": "dstip", "dest_ip": "dstip",
+    "device": "device", "device_ip": "device",
+}
+
+
+def _to_dt(value):
+    """Best-effort parse of a ClickHouse timestamp (datetime or string)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    s = str(value).replace("T", " ").split("+")[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _log_drilldown_url(stage: dict, entity_value: str,
+                       first_seen=None, last_seen=None) -> str:
+    """Build a log-viewer URL showing the exact events behind a correlation
+    match: the stage's filter, scoped to the matched entity and the match's
+    evidence window. Unmapped fields are dropped; a missing window falls back
+    to a trailing 24h range."""
+    stage = stage or {}
+    fcfg = dict(stage.get("filter", {}) or {})
+    params = {}
+
+    # The matched entity, bound to the right column (srcip / dstip / device).
+    group_by = fcfg.get("group_by") or stage.get("group_by")
+    entity_param = _LOG_ENTITY_PARAM.get(group_by, "srcip")
+    ev = (entity_value or "").split("|")[0].strip()   # composite -> first key
+    if ev:
+        params[entity_param] = ev
+
+    # The stage's filter conditions — only those the log viewer supports;
+    # skip group-by, control keys, comparison-suffixed keys and $variables.
+    for key, val in fcfg.items():
+        if key in ("group_by", "threshold", "window"):
+            continue
+        if any(key.endswith(s) for s in ("_gt", "_lt", "_gte", "_lte", "_ne")):
+            continue
+        if isinstance(val, str) and val.startswith("$"):
+            continue
+        param = _LOG_PARAM_BY_FIELD.get(key)
+        if param and param not in params:
+            params[param] = val
+
+    # The match's evidence window, padded 60s each side; else a trailing 24h.
+    start, end = _to_dt(first_seen), _to_dt(last_seen)
+    if start and end and end >= start:
+        params["start"] = (start - timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+        params["end"] = (end + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+    else:
+        params["time_range"] = "24h"
+
+    return "/logs/?" + urlencode(params)
+
+
 # ============================================================
 # Correlation Rules UI
 # ============================================================
@@ -55,7 +179,8 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
 
     # Get recent matches from ClickHouse
     recent_matches = []
-    match_stats = {"total": 0, "today": 0, "critical": 0, "high": 0}
+    match_stats = {"total": 0, "today": 0,
+                   "critical": 0, "high": 0, "medium": 0, "low": 0}
     rule_match_counts = {}
     try:
         client = ClickHouseClient.get_client()
@@ -67,13 +192,12 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
         r = client.query("SELECT count() FROM correlation_matches WHERE toDate(timestamp) = today()")
         match_stats["today"] = r.result_rows[0][0] if r.result_rows else 0
 
-        # By severity
+        # By severity (critical / high / medium / low)
         r = client.query("SELECT severity, count() FROM correlation_matches GROUP BY severity")
         for row in r.result_rows:
-            if row[0] == "critical":
-                match_stats["critical"] = row[1]
-            elif row[0] == "high":
-                match_stats["high"] = row[1]
+            sev = row[0]
+            if sev in match_stats and sev not in ("total", "today"):
+                match_stats[sev] = row[1]
 
         # Per-rule 24h match counts
         r = client.query("""
@@ -85,15 +209,20 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
         for row in r.result_rows:
             rule_match_counts[row[0]] = row[1]
 
-        # Recent matches
+        # Recent matches — first_seen/last_seen + the rule's entry stage drive
+        # a rule-aware log link (exact filter + entity + evidence window).
+        rule_by_name = {r.name: r for r in rules}
         r = client.query("""
             SELECT timestamp, rule_name, severity, stages_matched, total_stages,
-                   key_value, total_events, mitre_tactic, mitre_technique
+                   key_value, total_events, mitre_tactic, mitre_technique,
+                   first_seen, last_seen
             FROM correlation_matches
             ORDER BY timestamp DESC
             LIMIT 20
         """)
         for row in r.result_rows:
+            _rule = rule_by_name.get(row[1])
+            _stage0 = (_rule.stages[0] if _rule and _rule.stages else {})
             recent_matches.append({
                 "timestamp": row[0],
                 "rule_name": row[1],
@@ -104,6 +233,7 @@ async def correlation_rules_page(request: Request, db: AsyncSession = Depends(ge
                 "total_events": row[6],
                 "mitre_tactic": row[7],
                 "mitre_technique": row[8],
+                "log_url": _log_drilldown_url(_stage0, row[5], row[9], row[10]),
             })
     except Exception as e:
         logger.error(f"Error fetching correlation matches: {e}")
@@ -134,6 +264,13 @@ async def api_list_rules(db: AsyncSession = Depends(get_db)):
         "stages": r.stages,
         "mitre_tactic": r.mitre_tactic,
         "mitre_technique": r.mitre_technique,
+        "version": getattr(r, "version", 1) or 1,
+        "match_mode": getattr(r, "match_mode", "discrete") or "discrete",
+        "suppress_window": getattr(r, "suppress_window", 3600) or 3600,
+        "ordering": getattr(r, "ordering", "sequence") or "sequence",
+        "join_keys": getattr(r, "join_keys", None),
+        "actions": getattr(r, "actions", None),
+        "schema_version": getattr(r, "schema_version", 2) or 2,
         "trigger_count": r.trigger_count or 0,
         "last_evaluated_at": str(r.last_evaluated_at) if r.last_evaluated_at else None,
         "last_triggered_at": str(r.last_triggered_at) if r.last_triggered_at else None,
@@ -141,26 +278,140 @@ async def api_list_rules(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/api/correlation/rules/", dependencies=[Depends(require_min_role("ADMIN"))])
-async def api_create_rule(request: Request, db: AsyncSession = Depends(get_db)):
-    """Create a new correlation rule."""
-    data = await request.json()
+async def api_create_rule(payload: CorrelationRuleCreate, db: AsyncSession = Depends(get_db)):
+    """Create a new correlation rule.
+
+    The request body is validated by ``CorrelationRuleCreate`` — a malformed
+    rule (bad severity, empty stages, unknown filter field, non-numeric value
+    for a numeric field, ...) is rejected with a 422 before it is ever stored.
+    """
     try:
         rule = CorrelationRule(
-            name=data["name"],
-            description=data.get("description", ""),
-            severity=data.get("severity", "high"),
-            stages=data["stages"],
-            mitre_tactic=data.get("mitre_tactic"),
-            mitre_technique=data.get("mitre_technique"),
-            is_enabled=data.get("is_enabled", True),
+            name=payload.name,
+            description=payload.description or "",
+            severity=payload.severity,
+            stages=[s.model_dump() for s in payload.stages],
+            mitre_tactic=payload.mitre_tactic,
+            mitre_technique=payload.mitre_technique,
+            is_enabled=payload.is_enabled,
+            match_mode=payload.match_mode,
+            suppress_window=payload.suppress_window,
+            ordering=payload.ordering,
+            join_keys=payload.join_keys,
+            actions=payload.actions,
         )
         db.add(rule)
         await db.commit()
         await db.refresh(rule)
         return {"status": "ok", "id": rule.id}
+    except IntegrityError:
+        await db.rollback()
+        return JSONResponse(status_code=400,
+                            content={"detail": f"A rule named '{payload.name}' already exists"})
     except Exception as e:
         await db.rollback()
         return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@router.put("/api/correlation/rules/{rule_id}", dependencies=[Depends(require_min_role("ADMIN"))])
+async def api_update_rule(rule_id: int, payload: CorrelationRuleUpdate,
+                          db: AsyncSession = Depends(get_db)):
+    """Update an existing correlation rule. Only the fields supplied in the
+    request body are changed; the rule's identity and history are preserved."""
+    result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        return JSONResponse(status_code=400, content={"detail": "No fields to update"})
+
+    try:
+        for field, value in data.items():
+            setattr(rule, field, value)
+        rule.updated_at = datetime.now(timezone.utc)
+        # Bump the version so matches can be tied to the exact rule definition
+        # that produced them; this also resets suppression after an edit.
+        rule.version = (rule.version or 1) + 1
+        await db.commit()
+        await db.refresh(rule)
+        return {"status": "ok", "id": rule.id, "version": rule.version}
+    except IntegrityError:
+        await db.rollback()
+        return JSONResponse(status_code=400,
+                            content={"detail": "A rule with that name already exists"})
+    except Exception as e:
+        await db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@router.post("/api/correlation/rules/{rule_id}/clone",
+             dependencies=[Depends(require_min_role("ADMIN"))])
+async def api_clone_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
+    """Duplicate a correlation rule. The copy is created **disabled** so it can
+    be reviewed and tuned before it starts firing."""
+    result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+
+    existing = await db.execute(select(CorrelationRule.name))
+    names = {r[0] for r in existing.all()}
+    base = f"{rule.name} (copy)"
+    new_name = base
+    suffix = 2
+    while new_name in names:
+        new_name = f"{base} {suffix}"
+        suffix += 1
+
+    try:
+        clone = CorrelationRule(
+            name=new_name,
+            description=rule.description,
+            severity=rule.severity,
+            stages=rule.stages,
+            mitre_tactic=rule.mitre_tactic,
+            mitre_technique=rule.mitre_technique,
+            is_enabled=False,
+        )
+        db.add(clone)
+        await db.commit()
+        await db.refresh(clone)
+        return {"status": "ok", "id": clone.id, "name": new_name}
+    except Exception as e:
+        await db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@router.post("/api/correlation/rules/test", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_test_rule(payload: CorrelationRuleCreate):
+    """Dry-run a draft correlation rule against recent history.
+
+    Builds a transient (un-persisted) rule and previews it — returns per-stage
+    diagnostics, sample matches and a rough fire-rate estimate. Records
+    nothing: no match row, no alert. Drives the builder's Test button.
+    """
+    from ..services.correlation_engine import preview_correlation_rule
+
+    rule = CorrelationRule(
+        name=payload.name or "Draft",
+        description=payload.description or "",
+        severity=payload.severity,
+        stages=[s.model_dump() for s in payload.stages],
+        mitre_tactic=payload.mitre_tactic,
+        mitre_technique=payload.mitre_technique,
+        is_enabled=True,
+        match_mode=payload.match_mode,
+        suppress_window=payload.suppress_window,
+        ordering=payload.ordering,
+        join_keys=payload.join_keys,
+        actions=payload.actions,
+    )
+    # Transient object — never added to a session, so nothing is persisted.
+    rule.id = 0
+    rule.version = 1
+    return preview_correlation_rule(rule)
 
 
 @router.post("/api/correlation/rules/{rule_id}/toggle", dependencies=[Depends(require_min_role("ADMIN"))])
@@ -185,6 +436,147 @@ async def api_delete_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(rule)
     await db.commit()
     return {"status": "ok"}
+
+
+@router.get("/api/correlation/schema", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_correlation_schema():
+    """Field / operator / source catalog that drives the visual rule builder."""
+    from ..core.correlation_fields import SOURCES, CANONICAL_ENTITIES, DEFAULT_SOURCE
+
+    sources = {
+        name: {
+            "label": src["label"],
+            "fields": [{"name": f, "type": t}
+                       for f, t in sorted(src["fields"].items())],
+            "entities": list(src["entities"].keys()),
+        }
+        for name, src in SOURCES.items()
+    }
+    return {
+        "sources": sources,
+        "default_source": DEFAULT_SOURCE,
+        "canonical_entities": CANONICAL_ENTITIES,
+        # operator -> field-name suffix the engine understands
+        "operators": {
+            "string": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+            ],
+            "ip": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+            ],
+            "numeric": [
+                {"op": "eq", "label": "equals", "suffix": ""},
+                {"op": "ne", "label": "not equals", "suffix": "_ne"},
+                {"op": "gt", "label": "greater than", "suffix": "_gt"},
+                {"op": "lt", "label": "less than", "suffix": "_lt"},
+                {"op": "gte", "label": "greater or equal", "suffix": "_gte"},
+                {"op": "lte", "label": "less or equal", "suffix": "_lte"},
+            ],
+        },
+        "severities": ["critical", "high", "medium", "low"],
+        "orderings": ["sequence", "any_order"],
+        "match_modes": ["discrete", "recurring"],
+    }
+
+
+@router.get("/api/correlation/templates", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_correlation_templates():
+    """Curated correlation rule templates. Each is flagged ``available`` when
+    every data source it needs is registered on this deployment — so the UI
+    can do data-aware template discovery."""
+    from ..core.correlation_templates import TEMPLATES
+    from ..core.correlation_fields import SOURCES
+
+    out = []
+    for t in TEMPLATES:
+        req = t.get("required_sources", [])
+        out.append({
+            "id": t["id"],
+            "name": t["name"],
+            "description": t["description"],
+            "category": t["category"],
+            "mitre_tactic": t.get("mitre_tactic"),
+            "mitre_technique": t.get("mitre_technique"),
+            "required_sources": req,
+            "available": all(s in SOURCES for s in req),
+            "rule": t["rule"],
+        })
+    return out
+
+
+@router.get("/api/correlation/rules/{rule_id}/backtest",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_backtest_rule(rule_id: int, days: int = Query(7, ge=1, le=30),
+                            db: AsyncSession = Depends(get_db)):
+    """Backtest a rule's first stage over the last N days — a per-day estimate
+    of how often it would have fired."""
+    rule = (await db.execute(
+        select(CorrelationRule).where(CorrelationRule.id == rule_id)
+    )).scalar_one_or_none()
+    if not rule:
+        return JSONResponse(status_code=404, content={"detail": "Rule not found"})
+    from ..services.correlation_engine import backtest_stage1
+    result = backtest_stage1(rule, days)
+    result["rule"] = rule.name
+    result["days"] = days
+    return result
+
+
+@router.get("/api/correlation/validate", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_validate_detections(db: AsyncSession = Depends(get_db)):
+    """Purple-team detection validation: dry-run every enabled rule against
+    live data and report which rules currently fire, with their MITRE tactic
+    coverage. A read-only posture check — persists nothing."""
+    from ..services.correlation_engine import preview_correlation_rule
+
+    rules = (await db.execute(
+        select(CorrelationRule).where(CorrelationRule.is_enabled == True)
+    )).scalars().all()
+
+    results = []
+    tactics_firing = set()
+    firing = 0
+    for rule in rules:
+        diag = preview_correlation_rule(rule)
+        fires = bool(diag.get("ok"))
+        if fires:
+            firing += 1
+            if rule.mitre_tactic:
+                tactics_firing.add(rule.mitre_tactic)
+        results.append({
+            "rule": rule.name,
+            "severity": rule.severity,
+            "fires": fires,
+            "matched_chains": diag.get("matched_chains", 0),
+            "mitre_tactic": rule.mitre_tactic or "",
+            "error": diag.get("error"),
+        })
+    results.sort(key=lambda r: (not r["fires"], r["rule"]))
+    return {
+        "total_rules": len(rules),
+        "firing": firing,
+        "tactics_covered": sorted(tactics_firing),
+        "results": results,
+    }
+
+
+@router.post("/api/correlation/sigma/import", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_sigma_import(request: Request):
+    """Convert a Sigma detection rule (YAML) into a correlation-rule draft for
+    the builder. Persists nothing — the analyst reviews and saves."""
+    data = await request.json()
+    text = (data.get("yaml") or "").strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"detail": "No Sigma YAML provided"})
+    from ..core.sigma_import import parse_sigma
+    try:
+        rule, warnings = parse_sigma(text)
+    except Exception as e:
+        return JSONResponse(status_code=400,
+                            content={"detail": f"Sigma import failed: {e}"})
+    return {"rule": rule, "warnings": warnings}
 
 
 @router.get("/correlation/mitre/", response_class=HTMLResponse, name="mitre_attack_map",
@@ -233,29 +625,8 @@ async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db))
             })
 
     # Calculate stats per tactic
-    tactic_stats = []
-    total_techniques = 0
-    total_covered = 0
-    total_detectable = 0
-    for tactic in TACTICS:
-        techniques = TECHNIQUES.get(tactic["name"], [])
-        detectable = [t for t in techniques if t.get("detectable")]
-        covered = [t for t in techniques if t["id"].split(" ")[0] in coverage]
-        tactic_stats.append({
-            "id": tactic["id"],
-            "name": tactic["name"],
-            "description": tactic["description"],
-            "techniques": techniques,
-            "total": len(techniques),
-            "detectable": len(detectable),
-            "covered": len(covered),
-            "pct": round(len(covered) / len(detectable) * 100) if detectable else 0,
-        })
-        total_techniques += len(techniques)
-        total_covered += len(covered)
-        total_detectable += len(detectable)
-
-    overall_pct = round(total_covered / total_detectable * 100) if total_detectable else 0
+    (tactic_stats, total_techniques, total_covered,
+     total_detectable, overall_pct) = compute_coverage_stats(coverage)
 
     return _render("correlation/mitre_map.html", request, {
         "tactics": TACTICS,
@@ -270,7 +641,9 @@ async def mitre_attack_map(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/api/correlation/rules/{rule_id}/matches", dependencies=[Depends(require_min_role("ANALYST"))])
-async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession = Depends(get_db)):
+async def api_rule_match_detail(rule_id: int,
+                                hours: int = Query(24, ge=1, le=720),
+                                db: AsyncSession = Depends(get_db)):
     """Get detailed match data for a specific correlation rule."""
     # Get rule from PostgreSQL
     result = await db.execute(select(CorrelationRule).where(CorrelationRule.id == rule_id))
@@ -287,6 +660,13 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
         "stages": rule.stages,
         "mitre_tactic": rule.mitre_tactic,
         "mitre_technique": rule.mitre_technique,
+        "version": getattr(rule, "version", 1) or 1,
+        "match_mode": getattr(rule, "match_mode", "discrete") or "discrete",
+        "suppress_window": getattr(rule, "suppress_window", 3600) or 3600,
+        "ordering": getattr(rule, "ordering", "sequence") or "sequence",
+        "join_keys": getattr(rule, "join_keys", None),
+        "actions": getattr(rule, "actions", None),
+        "schema_version": getattr(rule, "schema_version", 2) or 2,
         "trigger_count": rule.trigger_count or 0,
         "last_evaluated_at": str(rule.last_evaluated_at) if rule.last_evaluated_at else None,
         "last_triggered_at": str(rule.last_triggered_at) if rule.last_triggered_at else None,
@@ -322,12 +702,23 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
             ORDER BY cnt DESC
             LIMIT 15
         """)
+        _stage0 = (rule.stages[0] if rule.stages else {})
+        try:
+            _stage0_win = int(_stage0.get("window", 3600) or 3600)
+        except (TypeError, ValueError):
+            _stage0_win = 3600
         for row in r.result_rows:
+            # top_keys carries only last_seen — anchor the window back by the
+            # entry stage's own length so the drill-down covers the match.
+            _ls = row[3]
+            _fs = (_ls - timedelta(seconds=_stage0_win)
+                   if isinstance(_ls, datetime) else None)
             top_keys.append({
                 "key_value": row[0],
                 "match_count": row[1],
                 "total_events": row[2],
                 "last_seen": str(row[3]),
+                "log_url": _log_drilldown_url(_stage0, row[0], _fs, _ls),
             })
 
         # Hourly timeline
@@ -344,10 +735,12 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
                 "count": row[1],
             })
 
-        # Recent matches
+        # Recent matches — include match-identity & evidence columns
         r = client.query(f"""
             SELECT timestamp, key_value, stages_matched, total_stages,
-                   total_events, severity, stage_details
+                   total_events, severity, stage_details,
+                   entity_type, entity_value, match_fingerprint,
+                   first_seen, last_seen, status
             FROM correlation_matches
             WHERE rule_name = '{safe_name}' AND timestamp > now() - {interval}
             ORDER BY timestamp DESC
@@ -362,10 +755,56 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
                 "total_events": row[4],
                 "severity": row[5],
                 "stage_details": row[6],
+                "entity_type": row[7],
+                "entity_value": row[8],
+                "match_fingerprint": row[9],
+                "first_seen": str(row[10]) if row[10] else None,
+                "last_seen": str(row[11]) if row[11] else None,
+                "status": row[12],
+                "log_url": _log_drilldown_url(_stage0, row[1], row[10], row[11]),
             })
 
     except Exception as e:
         logger.error(f"Error fetching rule match details: {e}")
+
+    # Phase 6: rule health scorecard — fire frequency over 7/30 days, a
+    # 30-day daily timeline, and a dormant/healthy/noisy assessment.
+    health = {
+        "status": "unknown", "matches_7d": 0, "matches_30d": 0,
+        "daily": [], "version": rule_data["version"],
+        "last_modified": (str(rule.updated_at) if rule.updated_at else None),
+    }
+    try:
+        client = ClickHouseClient.get_client()
+        safe_name = rule.name.replace("'", "\\'")
+        r = client.query(f"""
+            SELECT countIf(timestamp > now() - INTERVAL 7 DAY) AS w,
+                   count() AS m
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - INTERVAL 30 DAY
+        """)
+        if r.result_rows:
+            health["matches_7d"] = r.result_rows[0][0] or 0
+            health["matches_30d"] = r.result_rows[0][1] or 0
+        r = client.query(f"""
+            SELECT toDate(timestamp) AS d, count() AS c
+            FROM correlation_matches
+            WHERE rule_name = '{safe_name}' AND timestamp > now() - INTERVAL 30 DAY
+            GROUP BY d ORDER BY d
+        """)
+        health["daily"] = [{"day": str(row[0]), "count": row[1]} for row in r.result_rows]
+
+        w7 = health["matches_7d"]
+        if w7 == 0:
+            health["status"] = "dormant"
+        elif w7 > 5000:
+            health["status"] = "very noisy"
+        elif w7 > 500:
+            health["status"] = "noisy"
+        else:
+            health["status"] = "healthy"
+    except Exception as e:
+        logger.error(f"Error computing rule health: {e}")
 
     return {
         "rule": rule_data,
@@ -374,11 +813,13 @@ async def api_rule_match_detail(rule_id: int, hours: int = 24, db: AsyncSession 
         "top_keys": top_keys,
         "timeline": timeline,
         "recent_matches": recent_matches,
+        "health": health,
     }
 
 
 @router.get("/api/correlation/matches/", dependencies=[Depends(require_min_role("ANALYST"))])
-async def api_list_matches(hours: int = 24, limit: int = 50):
+async def api_list_matches(hours: int = Query(24, ge=1, le=720),
+                           limit: int = Query(50, ge=1, le=500)):
     """List recent correlation matches."""
     try:
         client = ClickHouseClient.get_client()
@@ -407,3 +848,77 @@ async def api_list_matches(hours: int = 24, limit: int = 50):
         return matches
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+# ============================================================
+# Incidents (Phase 5)
+# ============================================================
+
+_INCIDENT_STATUSES = {"new", "investigating", "contained", "resolved", "suppressed"}
+
+
+def _incident_dict(inc: CorrelationIncident, include_matches: bool = False) -> dict:
+    d = {
+        "id": inc.id,
+        "entity_type": inc.entity_type,
+        "entity_value": inc.entity_value,
+        "status": inc.status,
+        "severity": inc.severity,
+        "risk_score": inc.risk_score,
+        "match_count": inc.match_count,
+        "rule_names": inc.rule_names or [],
+        "mitre_tactics": inc.mitre_tactics or [],
+        "first_seen": str(inc.first_seen) if inc.first_seen else None,
+        "last_seen": str(inc.last_seen) if inc.last_seen else None,
+    }
+    if include_matches:
+        d["matches"] = inc.matches or []
+    return d
+
+
+@router.get("/api/correlation/incidents", dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_list_incidents(status: str = Query(None),
+                             limit: int = Query(100, ge=1, le=500),
+                             db: AsyncSession = Depends(get_db)):
+    """List correlation incidents, most recently active first."""
+    q = select(CorrelationIncident).order_by(
+        desc(CorrelationIncident.last_seen))
+    if status and status in _INCIDENT_STATUSES:
+        q = q.where(CorrelationIncident.status == status)
+    q = q.limit(limit)
+    rows = (await db.execute(q)).scalars().all()
+    return [_incident_dict(i) for i in rows]
+
+
+@router.get("/api/correlation/incidents/{incident_id}",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_incident_detail(incident_id: int, db: AsyncSession = Depends(get_db)):
+    """Get one incident with its contributing-match evidence."""
+    inc = (await db.execute(
+        select(CorrelationIncident).where(CorrelationIncident.id == incident_id)
+    )).scalar_one_or_none()
+    if not inc:
+        return JSONResponse(status_code=404, content={"detail": "Incident not found"})
+    return _incident_dict(inc, include_matches=True)
+
+
+@router.post("/api/correlation/incidents/{incident_id}/status",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_incident_status(incident_id: int, request: Request,
+                              db: AsyncSession = Depends(get_db)):
+    """Move an incident through its lifecycle (new / investigating /
+    contained / resolved / suppressed)."""
+    data = await request.json()
+    new_status = data.get("status")
+    if new_status not in _INCIDENT_STATUSES:
+        return JSONResponse(status_code=400, content={
+            "detail": f"status must be one of {sorted(_INCIDENT_STATUSES)}"})
+    inc = (await db.execute(
+        select(CorrelationIncident).where(CorrelationIncident.id == incident_id)
+    )).scalar_one_or_none()
+    if not inc:
+        return JSONResponse(status_code=404, content={"detail": "Incident not found"})
+    inc.status = new_status
+    inc.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"status": "ok", "incident_status": new_status}

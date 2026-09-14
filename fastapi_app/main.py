@@ -34,12 +34,16 @@ from .api.correlation import router as correlation_router
 from .api.saved_searches import router as saved_searches_router
 from .api.dashboards import router as dashboards_router
 from .api.address_objects import router as address_objects_router
+from .api.compliance import router as compliance_router
 from .api.setup import router as setup_router
 from .api.health import router as health_router
 from .api.backup import router as backup_router
+from .api.updates import router as updates_router
 from .api.llm_config import router as llm_config_router
+from .api.policy_narrowing import router as policy_narrowing_router
 from .api.threat_dashboard import router as threat_dashboard_router
 from .api.user_activity import router as user_activity_router
+from .api.reports import router as reports_router
 from .services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -130,6 +134,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize PostgreSQL: {e}")
 
+    # Load the app-wide display timezone into the in-process cache
+    try:
+        from .core.app_settings import load_display_timezone, load_default_source_timezone
+        tz = await load_display_timezone()
+        logger.info(f"Display timezone: {tz}")
+        src_tz = await load_default_source_timezone()
+        logger.info(f"Default source timezone: {src_tz}")
+    except Exception as e:
+        logger.warning(f"Timezone settings load warning: {e}")
+
     # Initialize Redis connection
     try:
         await get_redis()
@@ -154,6 +168,16 @@ async def lifespan(app: FastAPI):
         logger.info("ClickHouse table verified")
     except Exception as e:
         logger.warning(f"ClickHouse setup warning: {e}")
+
+    # Warm the search-bar field catalog off the request path, so the first
+    # keystroke in the Log Explorer never waits on field discovery.
+    try:
+        import threading as _threading
+        from .services.nql_schema import warm_field_cache
+        _threading.Thread(target=warm_field_cache, name="nql-field-warmup",
+                          daemon=True).start()
+    except Exception as e:
+        logger.warning(f"NQL field cache warm-up skipped: {e}")
 
     # Initialize Palo Alto threat/URL dedicated table + materialized views
     try:
@@ -210,6 +234,22 @@ async def lifespan(app: FastAPI):
         logger.info("Built-in threat feeds seeded")
     except Exception as e:
         logger.warning(f"Threat feed seeding warning: {e}")
+
+    # Seed built-in warninglists (allowlist of known-benign infrastructure)
+    try:
+        from .services.ti_allowlist import seed_builtin_warninglists
+        await seed_builtin_warninglists()
+    except Exception as e:
+        logger.warning(f"Warninglist seeding warning: {e}")
+
+    # Apply IOC decay — backfill expiry dates and age out stale indicators
+    try:
+        from .services.ioc_decay import decay_iocs
+        d = await decay_iocs()
+        logger.info(f"IOC decay: backfilled {d.get('backfilled', 0)}, "
+                    f"aged out {d.get('expired', 0)}")
+    except Exception as e:
+        logger.warning(f"IOC decay warning: {e}")
 
     # Initialize correlation engine
     try:
@@ -315,6 +355,7 @@ app.include_router(correlation_router)
 app.include_router(saved_searches_router)
 app.include_router(dashboards_router)
 app.include_router(address_objects_router)
+app.include_router(compliance_router, prefix="/api")
 
 # Include health check routes (public, no auth)
 app.include_router(health_router)
@@ -322,8 +363,19 @@ app.include_router(health_router)
 # Include backup management routes
 app.include_router(backup_router)
 
+# Include OTA updates management routes (/system/updates/)
+import os as _os
+if _os.path.exists("/run/zenshield/agent.sock") or _os.environ.get("ZENSHIELD_APPLIANCE") == "1":
+    from .api.appliance import updates_compat_router
+    app.include_router(updates_compat_router)
+else:
+    app.include_router(updates_router)
+
 # Include LLM configuration routes
 app.include_router(llm_config_router)
+
+# Include Learning Mode (policy narrowing) routes — JSON + HTML page
+app.include_router(policy_narrowing_router)
 
 # Include Palo Alto threat/URL dashboard routes
 from .api.dns_service import router as dns_router
@@ -337,16 +389,25 @@ app.include_router(url_clean_router)
 # Include URL Analytics dashboard routes
 from .api.url_dashboard import router as url_dashboard_router
 app.include_router(url_dashboard_router)
+from .api.web_activity import router as web_activity_router
+app.include_router(web_activity_router)
 
 # Include user activity timeline routes
 app.include_router(user_activity_router)
+
+# Include Reports module
+app.include_router(reports_router)
 
 # Include HTMX partial endpoints
 from .api.partials import router as partials_router
 app.include_router(partials_router)
 
-# Register vite_asset helper in ALL Jinja2Templates instances
+# Register shared Jinja helpers in ALL Jinja2Templates instances:
+#   vite_asset()  — built-asset URL resolver
+#   app_tz()      — current display timezone (for JS / <script> injection)
+#   | localdt     — render a datetime/ISO string in the display timezone
 from .core.vite import vite_asset
+from .core.app_settings import get_display_timezone, format_datetime
 import fastapi_app.api as _api_pkg
 import importlib, pkgutil
 for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
@@ -354,6 +415,8 @@ for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
     _tmpl = getattr(_mod, "templates", None)
     if _tmpl and hasattr(_tmpl, "env"):
         _tmpl.env.globals["vite_asset"] = vite_asset
+        _tmpl.env.globals["app_tz"] = get_display_timezone
+        _tmpl.env.filters["localdt"] = format_datetime
 
 
 @app.get("/api/")

@@ -211,9 +211,17 @@ class FortinetParser(BaseParser):
         matches = self._KV_PATTERN.findall(message)
 
         for key, value in matches:
-            # Strip quotes from quoted values
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1]
+            # Strip quotes from properly-quoted values.
+            # If a value starts with `"` but doesn't end with `"`, the syslog
+            # datagram was truncated mid-field (UDP MTU). The captured value is
+            # incomplete (e.g. `"Inf`, `"Govern`) — drop the leading quote so it
+            # doesn't appear as `"Inf` in dashboards. The remaining text is still
+            # only a prefix of the real value, but at least it's clean.
+            if value.startswith('"'):
+                if value.endswith('"') and len(value) >= 2:
+                    value = value[1:-1]
+                else:
+                    value = value[1:]
 
             # Store all values as strings (ClickHouse Map requires String,String)
             data[key] = value

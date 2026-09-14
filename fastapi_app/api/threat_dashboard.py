@@ -37,6 +37,21 @@ def _render(template_name: str, request: Request, context: dict = None):
     return templates.TemplateResponse(request, template_name, ctx)
 
 
+# Every dashboard query is bounded and served from the ClickHouse query cache
+# when repeated within a minute (the page fires 4-6 of them per load and again
+# on every tab switch / refresh).
+_QUERY_SETTINGS = {
+    'max_execution_time': 30,
+    'use_query_cache': 1,
+    'query_cache_ttl': 60,
+    'query_cache_nondeterministic_function_handling': 'save',
+}
+
+
+def _run(client, sql: str, params: dict | None = None):
+    return client.query(sql, parameters=params or {}, settings=_QUERY_SETTINGS)
+
+
 def _safe(val, default=0):
     """Convert ClickHouse result to safe Python value."""
     if val is None:
@@ -115,106 +130,91 @@ def _build_url_search_clause(search: str, params: dict) -> str:
 # Fortinet UTM → UNION ALL helper
 # ============================================================
 
-# Columns selected from the Fortinet subquery, matching pa_threat_logs schema.
-# Used by all endpoints that query pa_threat_logs.
-_FORTI_LOG_TYPES = "('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')"
+# Fortinet UTM sources. The collector already normalises FortiGate webfilter
+# and DNS logs into the typed `url_logs` / `dns_logs` tables, and migration 006
+# adds `forti_utm_events` (AV / IPS, filled by a materialized view). The
+# dashboard reads those three instead of re-extracting every field from the
+# `parsed_data` Map in `syslogs` on each request — that path scanned tens of
+# GiB per call (18-128 s).
+
+# One row per output column: (name, url_logs expr, dns_logs expr, forti_utm_events expr).
+# Every branch of the UNION ALL emits the same column names in the same order,
+# and the types line up with pa_threat_logs (String / UInt16 / UInt64).
+_FORTI_COLUMNS = [
+    ("timestamp",       "timestamp",                 "timestamp",                 "timestamp"),
+    ("serial_number",   "''",                        "''",                        "''"),
+    ("device_name",     "device_name",               "device_name",               "''"),
+    ("vsys",            "vdom",                      "vdom",                      "vsys"),
+    ("vsys_name",       "''",                        "''",                        "''"),
+    ("device_ip",       "device_ip",                 "device_ip",                 "device_ip"),
+    ("log_subtype",     "'url'",                     "'spyware'",                 "log_subtype"),
+    ("severity",        "severity",                  "severity",                  "severity"),
+    ("direction",       "direction",                 "direction",                 "direction"),
+    ("action",          "action",                    "action",                    "action"),
+    ("src_ip",          "src_ip",                    "src_ip",                    "src_ip"),
+    ("dest_ip",         "dest_ip",                   "dest_ip",                   "dest_ip"),
+    ("src_port",        "src_port",                  "src_port",                  "src_port"),
+    ("dest_port",       "dest_port",                 "dest_port",                 "dest_port"),
+    ("transport",       "transport",                 "transport",                 "transport"),
+    ("src_zone",        "src_zone",                  "src_zone",                  "src_zone"),
+    ("dest_zone",       "dest_zone",                 "dest_zone",                 "dest_zone"),
+    ("src_interface",   "src_zone",                  "src_zone",                  "src_zone"),
+    ("dest_interface",  "dest_zone",                 "dest_zone",                 "dest_zone"),
+    ("src_user",        "src_user",                  "src_user",                  "src_user"),
+    ("dest_user",       "''",                        "''",                        "dest_user"),
+    ("application",     "application",               "''",                        "application"),
+    ("rule",            "policy",                    "policy",                    "rule"),
+    ("threat_id",       "url_category_id",           "threat_id",                 "threat_id"),
+    ("threat_name",     "if(msg != '', msg, url_category)", "qname",              "threat_name"),
+    ("threat_category", "'url'",                     "'dns-malware'",             "threat_category"),
+    ("category",        "url_category",              "if(category != '', category, 'dns')",
+        "if(log_subtype = 'virus', 'virus', 'vulnerability')"),
+    ("url",             "if(url != '', url, hostname)", "qname",                  "''"),
+    ("content_type",    "content_type",              "''",                        "content_type"),
+    ("user_agent",      "user_agent",                "''",                        "user_agent"),
+    ("http_method",     "http_method",               "''",                        "http_method"),
+    ("xff",             "''",                        "''",                        "''"),
+    ("xff_ip",          "''",                        "''",                        "''"),
+    ("referrer",        "referrer",                  "''",                        "referrer"),
+    ("reason",          "msg",                       "msg",                       "reason"),
+    ("justification",   "''",                        "''",                        "''"),
+    ("file_name",       "''",                        "''",                        "file_name"),
+    ("file_hash",       "''",                        "''",                        "file_hash"),
+    ("file_type",       "''",                        "''",                        "file_type"),
+    ("session_id",      "session_id",                "session_id",                "session_id"),
+    ("src_location",    "src_country",               "src_country",               "src_location"),
+    ("dest_location",   "dest_country",              "dest_country",              "dest_location"),
+]
+
+
+def _select_list(idx: int) -> str:
+    return ",\n        ".join(f"{expr} AS {name}" for name, *exprs in _FORTI_COLUMNS
+                             for expr in [exprs[idx]])
 
 
 def _fortinet_select(hours: int, extra_where: str = "") -> str:
-    """Return a SELECT … FROM syslogs that maps Fortinet UTM rows to
-    the pa_threat_logs column schema.
+    """UNION ALL of the FortiGate UTM sources mapped onto the pa_threat_logs
+    column names. ``extra_where`` — additional AND clauses (already prefixed
+    with AND) on the output column names; applied by the caller's wrapper.
 
-    ``extra_where`` — additional AND clauses (already prefixed with AND).
-    """
+    `vendor = 'fortinet'` matters: Palo Alto DNS-security rows are copied into
+    dns_logs too and are already counted from pa_threat_logs."""
+    window = f"timestamp > now() - INTERVAL {hours} HOUR"
     return f"""
     SELECT
-        timestamp,
-        '' as receive_time,
-        '' as generated_time,
-        '' as serial_number,
-        '' as device_name,
-        parsed_data['vd'] as vsys,
-        '' as vsys_name,
-        device_ip,
-        CASE log_type
-            WHEN 'utm/webfilter' THEN 'url'
-            WHEN 'utm/dns'       THEN 'spyware'
-            WHEN 'utm/virus'     THEN 'virus'
-            WHEN 'utm/ips'       THEN 'vulnerability'
-            ELSE log_type
-        END as log_subtype,
-        multiIf(
-            parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
-            parsed_data['level'] = 'error',   'high',
-            parsed_data['level'] = 'warning', 'medium',
-            parsed_data['level'] = 'notice',  'low',
-            'informational'
-        ) as severity,
-        parsed_data['direction'] as direction,
-        action,
-        srcip  as src_ip,
-        dstip  as dest_ip,
-        srcport  as src_port,
-        dstport  as dest_port,
-        CASE parsed_data['proto']
-            WHEN '6'  THEN 'tcp'
-            WHEN '17' THEN 'udp'
-            WHEN '1'  THEN 'icmp'
-            ELSE parsed_data['proto']
-        END as transport,
-        parsed_data['srcintf'] as src_zone,
-        parsed_data['dstintf'] as dest_zone,
-        parsed_data['srcintf'] as src_interface,
-        parsed_data['dstintf'] as dest_interface,
-        coalesce(nullIf(parsed_data['user'],''), parsed_data['srcuser'], '') as src_user,
-        parsed_data['dstuser'] as dest_user,
-        coalesce(nullIf(parsed_data['app'],''), parsed_data['appcat'], '') as application,
-        coalesce(nullIf(parsed_data['policyname'],''), parsed_data['policyid'], '') as rule,
-        coalesce(nullIf(parsed_data['threatid'],''), parsed_data['attackid'], '') as threat_id,
-        CASE log_type
-            WHEN 'utm/webfilter' THEN coalesce(nullIf(parsed_data['msg'],''), parsed_data['catdesc'], '')
-            WHEN 'utm/dns'       THEN coalesce(nullIf(parsed_data['qname'],''), parsed_data['hostname'], '')
-            WHEN 'utm/virus'     THEN coalesce(nullIf(parsed_data['virus'],''), parsed_data['msg'], '')
-            WHEN 'utm/ips'       THEN coalesce(nullIf(parsed_data['attack'],''), parsed_data['msg'], '')
-            ELSE ''
-        END as threat_name,
-        CASE log_type
-            WHEN 'utm/webfilter' THEN 'url'
-            WHEN 'utm/dns'       THEN 'dns-malware'
-            WHEN 'utm/virus'     THEN 'virus'
-            WHEN 'utm/ips'       THEN coalesce(nullIf(parsed_data['attackid'],''), 'ips')
-            ELSE ''
-        END as threat_category,
-        CASE log_type
-            WHEN 'utm/webfilter' THEN coalesce(nullIf(parsed_data['catdesc'],''), parsed_data['urlcat'], '')
-            WHEN 'utm/dns'       THEN coalesce(nullIf(parsed_data['catdesc'],''), 'dns')
-            WHEN 'utm/virus'     THEN 'virus'
-            WHEN 'utm/ips'       THEN 'vulnerability'
-            ELSE ''
-        END as category,
-        CASE log_type
-            WHEN 'utm/webfilter' THEN coalesce(nullIf(parsed_data['url'],''), parsed_data['hostname'], '')
-            WHEN 'utm/dns'       THEN coalesce(nullIf(parsed_data['qname'],''), parsed_data['hostname'], '')
-            ELSE ''
-        END as url,
-        parsed_data['contenttype'] as content_type,
-        parsed_data['agent']       as user_agent,
-        parsed_data['httpmethod']  as http_method,
-        ''                         as xff,
-        ''                         as xff_ip,
-        parsed_data['referralurl'] as referrer,
-        coalesce(nullIf(parsed_data['reason'],''), parsed_data['msg'], '') as reason,
-        ''                         as justification,
-        parsed_data['filename']    as file_name,
-        parsed_data['filehash']    as file_hash,
-        parsed_data['filetype']    as file_type,
-        toUInt64OrZero(parsed_data['sessionid']) as session_id,
-        parsed_data['srccountry']  as src_location,
-        parsed_data['dstcountry']  as dest_location
-    FROM syslogs
-    WHERE timestamp > now() - INTERVAL {hours} HOUR
-      AND log_type IN {_FORTI_LOG_TYPES}
-      {extra_where}
+        {_select_list(0)}
+    FROM url_logs
+    WHERE {window} AND vendor = 'fortinet'
+    UNION ALL
+    SELECT
+        {_select_list(1)}
+    FROM dns_logs
+    WHERE {window} AND vendor = 'fortinet'
+    UNION ALL
+    SELECT
+        {_select_list(2)}
+    FROM forti_utm_events
+    WHERE {window}
     """
 
 
@@ -234,12 +234,11 @@ def _combined_cte(hours: int, pa_extra: str = "", forti_extra: str = "",
         WHERE timestamp > now() - INTERVAL {hours} HOUR
           {pa_extra}
     """
-    forti_part = _fortinet_select(hours, forti_extra)
-    # When pa_cols != "*" we need to wrap the fortinet select to project
-    # the same columns. If pa_cols == "*" we use the full fortinet select.
-    if pa_cols != "*":
-        # Wrap fortinet subquery to select matching columns
-        forti_part = f"SELECT {forti_cols} FROM ({forti_part}) _f"
+    forti_part = _fortinet_select(hours)
+    # The Fortinet select is a UNION of three tables, so it is always wrapped:
+    # the wrapper projects the caller's columns and applies its extra filters
+    # against the normalised column names.
+    forti_part = f"SELECT {forti_cols} FROM ({forti_part}) _f WHERE 1=1 {forti_extra}"
 
     return f"WITH combined AS (\n{pa_part}\nUNION ALL\n{forti_part}\n)"
 
@@ -271,29 +270,27 @@ async def api_threat_summary(
                             pa_cols="severity, log_subtype, src_ip, threat_name",
                             forti_cols="severity, log_subtype, src_ip, threat_name")
 
-        # Total threat events in window
-        total_q = f"{cte} SELECT count() as total FROM combined"
-        total = client.query(total_q).result_rows
-        total_count = _safe(total[0][0]) if total else 0
+        # One pass for every scalar metric, one for the subtype breakdown.
+        metrics_q = f"""{cte}
+        SELECT
+            count() AS total,
+            countIf(lower(severity) = 'critical') AS critical,
+            countIf(lower(severity) = 'high') AS high,
+            countIf(lower(severity) = 'medium') AS medium,
+            countIf(lower(severity) = 'low') AS low,
+            countIf(lower(severity) = 'informational') AS informational,
+            uniq(src_ip) AS unique_sources,
+            uniqIf(threat_name, threat_name != '') AS unique_threats
+        FROM combined"""
+        m = list(_run(client, metrics_q).named_results())
+        m = m[0] if m else {}
+        total_count = _safe(m.get('total'))
+        sev_map = {k: _safe(m.get(k)) for k in ('critical', 'high', 'medium', 'low', 'informational')}
+        unique_sources = _safe(m.get('unique_sources'))
+        unique_threats = _safe(m.get('unique_threats'))
 
-        # By severity
-        sev_q = f"{cte} SELECT severity, count() as cnt FROM combined GROUP BY severity"
-        sev_rows = client.query(sev_q).result_rows
-        sev_map = {r[0].lower(): _safe(r[1]) for r in sev_rows}
-
-        # By subtype
         sub_q = f"{cte} SELECT log_subtype, count() as cnt FROM combined GROUP BY log_subtype ORDER BY cnt DESC"
-        sub_rows = client.query(sub_q).result_rows
-
-        # Unique source IPs
-        src_q = f"{cte} SELECT uniqExact(src_ip) as u FROM combined"
-        src = client.query(src_q).result_rows
-        unique_sources = _safe(src[0][0]) if src else 0
-
-        # Unique threats
-        thr_q = f"{cte} SELECT uniqExact(threat_name) as u FROM combined WHERE threat_name != ''"
-        thr = client.query(thr_q).result_rows
-        unique_threats = _safe(thr[0][0]) if thr else 0
+        sub_rows = _run(client, sub_q).result_rows
 
         # URL filtering count
         url_count = 0
@@ -387,21 +384,38 @@ async def api_threat_events(
             session_id"""
         cte = _combined_cte(hours, pa_cols=_cols, forti_cols=_cols)
 
-        # Count
+        # Count over the full window (cheap: no wide columns are read).
         count_q = f"{cte} SELECT count() FROM combined WHERE 1=1 {outer_where}"
-        count_result = client.query(count_q, parameters=params).result_rows
+        count_result = _run(client, count_q, params).result_rows
         total = _safe(count_result[0][0]) if count_result else 0
+
+        # Newest-first page: sorting a 7-day window means reading every wide
+        # column of ~20M rows to keep 100. The page almost always lives in the
+        # most recent slice, so try narrow windows first and widen only while
+        # they hold fewer rows than the page needs.
+        page_cte = cte
+        needed = offset + limit
+        if total > needed:
+            for narrow in (1, 6, 24, 72):
+                if narrow >= hours:
+                    break
+                n_cte = _combined_cte(narrow, pa_cols=_cols, forti_cols=_cols)
+                n_cnt = _run(client, f"{n_cte} SELECT count() FROM combined WHERE 1=1 {outer_where}",
+                             params).result_rows
+                if n_cnt and _safe(n_cnt[0][0]) >= needed:
+                    page_cte = n_cte
+                    break
 
         # Fetch rows
         query = f"""
-        {cte}
+        {page_cte}
         SELECT *
         FROM combined
         WHERE 1=1 {outer_where}
         ORDER BY timestamp DESC
         LIMIT {limit} OFFSET {offset}
         """
-        rows = client.query(query, parameters=params).named_results()
+        rows = _run(client, query, params).named_results()
 
         events = []
         for r in rows:
@@ -466,8 +480,8 @@ async def api_threat_top_sources(
         SELECT
             src_ip,
             count() as event_count,
-            uniqExact(threat_name) as unique_threats,
-            uniqExact(dest_ip) as targets,
+            uniq(threat_name) as unique_threats,
+            uniq(dest_ip) as targets,
             countIf(severity IN ('critical', 'high')) as critical_high,
             countIf(action IN ('block-url', 'deny', 'drop', 'sinkhole', 'reset-client', 'reset-server')) as blocked,
             groupArray(10)(DISTINCT severity) as severities,
@@ -478,7 +492,7 @@ async def api_threat_top_sources(
         ORDER BY event_count DESC
         LIMIT {limit}
         """
-        rows = list(client.query(query).named_results())
+        rows = list(_run(client, query).named_results())
         sources = []
         for r in rows:
             sources.append({
@@ -518,16 +532,16 @@ async def api_source_detail(
         {cte}
         SELECT
             count() as total,
-            uniqExact(threat_name) as unique_threats,
-            uniqExact(dest_ip) as unique_targets,
-            uniqExact(log_subtype) as unique_subtypes,
+            uniq(threat_name) as unique_threats,
+            uniq(dest_ip) as unique_targets,
+            uniq(log_subtype) as unique_subtypes,
             countIf(severity IN ('critical', 'high')) as critical_high,
             countIf(action IN ('block-url', 'deny', 'drop', 'sinkhole', 'reset-client', 'reset-server')) as blocked,
             any(src_user) as src_user
         FROM combined
         WHERE src_ip = {{sip:String}}
         """
-        sr = list(client.query(summary_q, parameters=params).named_results())
+        sr = list(_run(client, summary_q, params).named_results())
         s = sr[0] if sr else {}
         summary = {
             "total": _safe(s.get('total')),
@@ -547,19 +561,19 @@ async def api_source_detail(
         WHERE src_ip = {{sip:String}} AND threat_name != ''
         GROUP BY threat_name ORDER BY cnt DESC LIMIT 10
         """
-        tr = list(client.query(threats_q, parameters=params).named_results())
+        tr = list(_run(client, threats_q, params).named_results())
         top_threats = [{"threat_name": r['threat_name'], "count": _safe(r['cnt']),
                         "severity": r['sev'], "action": r['act']} for r in tr]
 
         # Top targets
         targets_q = f"""
         {cte}
-        SELECT dest_ip, count() as cnt, uniqExact(threat_name) as threats, any(action) as act
+        SELECT dest_ip, count() as cnt, uniq(threat_name) as threats, any(action) as act
         FROM combined
         WHERE src_ip = {{sip:String}}
         GROUP BY dest_ip ORDER BY cnt DESC LIMIT 10
         """
-        tg = list(client.query(targets_q, parameters=params).named_results())
+        tg = list(_run(client, targets_q, params).named_results())
         top_targets = [{"dest_ip": r['dest_ip'], "count": _safe(r['cnt']),
                         "threats": _safe(r['threats']), "action": r['act']} for r in tg]
 
@@ -571,7 +585,7 @@ async def api_source_detail(
         WHERE src_ip = {{sip:String}}
         GROUP BY log_subtype ORDER BY cnt DESC
         """
-        st = list(client.query(subtype_q, parameters=params).named_results())
+        st = list(_run(client, subtype_q, params).named_results())
         subtypes = [{"subtype": r['log_subtype'], "count": _safe(r['cnt'])} for r in st]
 
         # Severity breakdown
@@ -582,7 +596,7 @@ async def api_source_detail(
         WHERE src_ip = {{sip:String}}
         GROUP BY severity ORDER BY cnt DESC
         """
-        sv = list(client.query(sev_q, parameters=params).named_results())
+        sv = list(_run(client, sev_q, params).named_results())
         severities = [{"severity": r['severity'], "count": _safe(r['cnt'])} for r in sv]
 
         # Timeline
@@ -594,7 +608,7 @@ async def api_source_detail(
         WHERE src_ip = {{sip:String}}
         GROUP BY hour ORDER BY hour
         """
-        tl = list(client.query(tl_q, parameters=params).named_results())
+        tl = list(_run(client, tl_q, params).named_results())
         timeline = [{"hour": r['hour'].isoformat() if hasattr(r['hour'], 'isoformat') else str(r['hour']),
                       "total": _safe(r['total']), "critical_high": _safe(r['critical_high'])} for r in tl]
 
@@ -629,8 +643,8 @@ async def api_threat_top_threats(
             threat_name,
             threat_category,
             count() as event_count,
-            uniqExact(src_ip) as unique_sources,
-            uniqExact(dest_ip) as unique_targets,
+            uniq(src_ip) as unique_sources,
+            uniq(dest_ip) as unique_targets,
             any(severity) as top_severity,
             any(action) as sample_action,
             any(log_subtype) as subtype
@@ -640,7 +654,7 @@ async def api_threat_top_threats(
         ORDER BY event_count DESC
         LIMIT {limit}
         """
-        rows = list(client.query(query).named_results())
+        rows = list(_run(client, query).named_results())
         threats = []
         for r in rows:
             threats.append({
@@ -680,8 +694,8 @@ async def api_threat_sig_detail(
         {cte}
         SELECT
             count() as total,
-            uniqExact(src_ip) as unique_sources,
-            uniqExact(dest_ip) as unique_targets,
+            uniq(src_ip) as unique_sources,
+            uniq(dest_ip) as unique_targets,
             any(threat_category) as category,
             any(severity) as severity,
             any(log_subtype) as subtype,
@@ -691,7 +705,7 @@ async def api_threat_sig_detail(
         FROM combined
         WHERE threat_name = {{tn:String}}
         """
-        sr = list(client.query(summary_q, parameters=params).named_results())
+        sr = list(_run(client, summary_q, params).named_results())
         s = sr[0] if sr else {}
         summary = {
             "total": _safe(s.get('total')),
@@ -713,7 +727,7 @@ async def api_threat_sig_detail(
         WHERE threat_name = {{tn:String}}
         GROUP BY src_ip, src_user ORDER BY cnt DESC LIMIT 10
         """
-        sc = list(client.query(sources_q, parameters=params).named_results())
+        sc = list(_run(client, sources_q, params).named_results())
         top_sources = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "",
                         "count": _safe(r['cnt']), "action": r['act']} for r in sc]
 
@@ -725,7 +739,7 @@ async def api_threat_sig_detail(
         WHERE threat_name = {{tn:String}}
         GROUP BY dest_ip ORDER BY cnt DESC LIMIT 10
         """
-        tg = list(client.query(targets_q, parameters=params).named_results())
+        tg = list(_run(client, targets_q, params).named_results())
         top_targets = [{"dest_ip": r['dest_ip'], "count": _safe(r['cnt']),
                         "action": r['act']} for r in tg]
 
@@ -737,7 +751,7 @@ async def api_threat_sig_detail(
         WHERE threat_name = {{tn:String}}
         GROUP BY action ORDER BY cnt DESC
         """
-        ac = list(client.query(action_q, parameters=params).named_results())
+        ac = list(_run(client, action_q, params).named_results())
         actions = [{"action": r['action'], "count": _safe(r['cnt'])} for r in ac]
 
         # Top rules
@@ -748,7 +762,7 @@ async def api_threat_sig_detail(
         WHERE threat_name = {{tn:String}} AND rule != ''
         GROUP BY rule ORDER BY cnt DESC LIMIT 10
         """
-        rl = list(client.query(rules_q, parameters=params).named_results())
+        rl = list(_run(client, rules_q, params).named_results())
         top_rules = [{"rule": r['rule'], "count": _safe(r['cnt'])} for r in rl]
 
         # Timeline
@@ -760,7 +774,7 @@ async def api_threat_sig_detail(
         WHERE threat_name = {{tn:String}}
         GROUP BY hour ORDER BY hour
         """
-        tl = list(client.query(tl_q, parameters=params).named_results())
+        tl = list(_run(client, tl_q, params).named_results())
         timeline = [{"hour": r['hour'].isoformat() if hasattr(r['hour'], 'isoformat') else str(r['hour']),
                       "total": _safe(r['total']), "blocked": _safe(r['blocked'])} for r in tl]
 
@@ -799,7 +813,7 @@ async def api_threat_timeline(
         GROUP BY hour
         ORDER BY hour
         """
-        rows = list(client.query(query).named_results())
+        rows = list(_run(client, query).named_results())
         timeline = []
         for r in rows:
             h = r['hour']
@@ -835,7 +849,7 @@ async def api_threat_url_categories(
         SELECT
             category,
             count() as event_count,
-            uniqExact(src_ip) as unique_users,
+            uniq(src_ip) as unique_users,
             countIf(action IN ('block-url', 'deny', 'drop', 'reset-client', 'reset-server', 'reset-both')) as blocked,
             countIf(action = 'alert') as alerted,
             countIf(action = 'allow') as allowed,
@@ -847,7 +861,7 @@ async def api_threat_url_categories(
         ORDER BY event_count DESC
         LIMIT {limit}
         """
-        rows = list(client.query(query).named_results())
+        rows = list(_run(client, query).named_results())
         categories = []
         for r in rows:
             categories.append({
@@ -883,41 +897,41 @@ async def api_url_category_detail(
         tw = "timestamp > now() - INTERVAL {h:UInt32} HOUR AND url_category = {cat:String}"
 
         summary_q = f"""
-        SELECT count() as total, uniqExact(src_ip) as unique_users,
-               uniqExact(dest_ip) as unique_destinations, uniqExact(url) as unique_urls,
+        SELECT count() as total, uniq(src_ip) as unique_users,
+               uniq(dest_ip) as unique_destinations, uniq(url) as unique_urls,
                countIf(action IN ('block-url','blocked','deny','drop','reset-client','reset-server')) as blocked,
                countIf(action = 'alert') as alerted,
                countIf(action IN ('allow','passthrough')) as allowed
         FROM url_logs WHERE {tw}
         """
-        summary_rows = list(client.query(summary_q, parameters=params).named_results())
+        summary_rows = list(_run(client, summary_q, params).named_results())
         summary = {}
         if summary_rows:
             s = summary_rows[0]
             summary = {k: _safe(s.get(k)) for k in
                        ('total','unique_users','unique_destinations','unique_urls','blocked','alerted','allowed')}
 
-        urls_q = f"SELECT url, count() as hits, uniqExact(src_ip) as users, any(action) as action FROM url_logs WHERE {tw} AND url != '' GROUP BY url ORDER BY hits DESC LIMIT 15"
+        urls_q = f"SELECT url, count() as hits, uniq(src_ip) as users, any(action) as action FROM url_logs WHERE {tw} AND url != '' GROUP BY url ORDER BY hits DESC LIMIT 15"
         top_urls = [{"url": r['url'], "hits": _safe(r['hits']), "users": _safe(r['users']), "action": r['action']}
-                    for r in client.query(urls_q, parameters=params).named_results()]
+                    for r in _run(client, urls_q, params).named_results()]
 
-        users_q = f"SELECT src_ip, any(src_user) as src_user, count() as hits, uniqExact(url) as urls_visited, countIf(action IN ('block-url','blocked','deny','drop')) as blocked FROM url_logs WHERE {tw} GROUP BY src_ip ORDER BY hits DESC LIMIT 10"
+        users_q = f"SELECT src_ip, any(src_user) as src_user, count() as hits, uniq(url) as urls_visited, countIf(action IN ('block-url','blocked','deny','drop')) as blocked FROM url_logs WHERE {tw} GROUP BY src_ip ORDER BY hits DESC LIMIT 10"
         top_users = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "", "hits": _safe(r['hits']),
                       "urls_visited": _safe(r['urls_visited']), "blocked": _safe(r['blocked'])}
-                     for r in client.query(users_q, parameters=params).named_results()]
+                     for r in _run(client, users_q, params).named_results()]
 
-        dest_q = f"SELECT dest_ip, count() as hits, uniqExact(url) as unique_urls, any(action) as action FROM url_logs WHERE {tw} GROUP BY dest_ip ORDER BY hits DESC LIMIT 10"
+        dest_q = f"SELECT dest_ip, count() as hits, uniq(url) as unique_urls, any(action) as action FROM url_logs WHERE {tw} GROUP BY dest_ip ORDER BY hits DESC LIMIT 10"
         top_dests = [{"dest_ip": r['dest_ip'], "hits": _safe(r['hits']), "unique_urls": _safe(r['unique_urls']), "action": r['action']}
-                     for r in client.query(dest_q, parameters=params).named_results()]
+                     for r in _run(client, dest_q, params).named_results()]
 
         timeline_q = f"SELECT toStartOfHour(timestamp) as hour, count() as total, countIf(action IN ('block-url','blocked','deny','drop')) as blocked FROM url_logs WHERE {tw} GROUP BY hour ORDER BY hour"
         timeline = [{"hour": r['hour'].isoformat() if hasattr(r['hour'], 'isoformat') else str(r['hour']),
                       "total": _safe(r['total']), "blocked": _safe(r['blocked'])}
-                    for r in client.query(timeline_q, parameters=params).named_results()]
+                    for r in _run(client, timeline_q, params).named_results()]
 
         action_q = f"SELECT action, count() as cnt FROM url_logs WHERE {tw} GROUP BY action ORDER BY cnt DESC"
         actions = [{"action": r['action'], "count": _safe(r['cnt'])}
-                   for r in client.query(action_q, parameters=params).named_results()]
+                   for r in _run(client, action_q, params).named_results()]
 
         return JSONResponse({
             "success": True, "category": category, "hours": hours,
@@ -960,7 +974,7 @@ async def api_threat_detail(
         LIMIT 1
         """.replace("{ts}", clean_ts)
 
-        rows = list(client.query(query, parameters={"dip": device_ip}).named_results())
+        rows = list(_run(client, query, {"dip": device_ip}).named_results())
         if not rows:
             return JSONResponse({"success": False, "error": "Not found"}, status_code=404)
 
@@ -1081,7 +1095,10 @@ async def api_url_logs(
                 "dest_port": r['dest_port'],
                 "url": r['url'],
                 "hostname": r['hostname'] or "",
-                "category": r['url_category'],
+                # Mask garbage url_category values from truncated UDP syslog
+                "category": (r['url_category'] if r['url_category']
+                             and not r['url_category'].startswith('"')
+                             and len(r['url_category']) >= 3 else ""),
                 "action": r['action'],
                 "http_method": r['http_method'],
                 "user_agent": r['user_agent'],
@@ -1177,22 +1194,29 @@ async def api_url_logs_stats(
             "paloalto_count": _safe(s.get('paloalto_count')),
         }
 
-        # Top categories
+        # Top categories — exclude garbage values from truncated UDP syslog
+        # (leading `"`, length < 3) so the sidebar shows only real categories.
         cat_q = f"""
         SELECT url_category as category, count() as cnt
-        FROM url_logs WHERE {tw} AND url_category != ''
+        FROM url_logs WHERE {tw}
+          AND url_category != ''
+          AND NOT startsWith(url_category, '"')
+          AND length(url_category) >= 3
         GROUP BY url_category ORDER BY cnt DESC LIMIT 10
         """
         cats = [{"category": r['category'], "count": _safe(r['cnt'])}
                 for r in client.query(cat_q, parameters=params).named_results()]
 
         # Top users
+        # NOTE: alias the aggregate as `user_name` (not `src_user`) to avoid an
+        # ILLEGAL_AGGREGATION error in ClickHouse 24+ when the WHERE clause also
+        # references the raw `src_user` column (e.g. via the search filter).
         usr_q = f"""
-        SELECT src_ip, any(src_user) as src_user, count() as cnt
+        SELECT src_ip, any(src_user) as user_name, count() as cnt
         FROM url_logs WHERE {tw}
         GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
         """
-        users = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "", "count": _safe(r['cnt'])}
+        users = [{"src_ip": r['src_ip'], "src_user": r['user_name'] or "", "count": _safe(r['cnt'])}
                  for r in client.query(usr_q, parameters=params).named_results()]
 
         # Action breakdown
@@ -1213,10 +1237,16 @@ async def api_url_logs_stats(
         top_hostnames = [{"hostname": r['hostname'], "count": _safe(r['cnt'])}
                          for r in client.query(host_q, parameters=params).named_results()]
 
-        # Available categories for filter dropdown
+        # Available categories for filter dropdown.
+        # Exclude garbage values from truncated UDP syslog (e.g. `"Inf`, `"Govern`)
+        # — those start with a leading `"` and are partial fragments. Also exclude
+        # one-character values that are obvious noise.
         fcat_q = f"""
         SELECT DISTINCT url_category as category FROM url_logs
-        WHERE {tw} AND url_category != ''
+        WHERE {tw}
+          AND url_category != ''
+          AND NOT startsWith(url_category, '"')
+          AND length(url_category) >= 3
         ORDER BY url_category LIMIT 100
         """
         filter_categories = [r['category'] for r in client.query(fcat_q, parameters=params).named_results()]
@@ -1351,11 +1381,31 @@ async def api_dns_logs(
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_dns_logs_stats(
     hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    severity: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
 ):
-    """Stats for DNS traffic from the unified dns_logs table."""
+    """Stats for DNS traffic — filter-aware so the whole page reflects the search."""
     try:
         client = ClickHouseClient.get_client()
         tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if severity:
+            tw += " AND severity = {sev:String}"
+            params["sev"] = severity
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            params["q"] = f"%{search}%"
+            tw += (" AND (qname ILIKE {q:String} OR src_ip ILIKE {q:String} "
+                   "OR dest_ip ILIKE {q:String} OR resolved_ip ILIKE {q:String} "
+                   "OR src_user ILIKE {q:String} OR category ILIKE {q:String} "
+                   "OR threat_name ILIKE {q:String} OR msg ILIKE {q:String})")
 
         # Summary
         sum_q = f"""
@@ -1369,7 +1419,7 @@ async def api_dns_logs_stats(
                countIf(severity IN ('critical','high')) as critical_high
         FROM dns_logs WHERE {tw}
         """
-        sr = list(client.query(sum_q).named_results())
+        sr = list(client.query(sum_q, parameters=params).named_results())
         s = sr[0] if sr else {}
         summary = {
             "total": _safe(s.get('total')),
@@ -1393,20 +1443,21 @@ async def api_dns_logs_stats(
         domains = [{"threat_name": r['threat_name'], "count": _safe(r['cnt']),
                      "severity": r['sev'], "action": r['act'],
                      "category": r.get('category', '')}
-                   for r in client.query(dom_q).named_results()]
+                   for r in client.query(dom_q, parameters=params).named_results()]
 
-        # Top sources
+        # Top sources — alias `any(src_user)` as user_name to avoid
+        # ILLEGAL_AGGREGATION when WHERE also references the raw src_user column.
         src_q = f"""
-        SELECT src_ip, any(src_user) as src_user, count() as cnt,
+        SELECT src_ip, any(src_user) as user_name, count() as cnt,
                uniqExact(qname) as unique_domains,
                countIf(action IN ('sinkhole','block','deny','drop')) as blocked
         FROM dns_logs WHERE {tw}
         GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
         """
-        sources = [{"src_ip": r['src_ip'], "src_user": r['src_user'] or "",
+        sources = [{"src_ip": r['src_ip'], "src_user": r['user_name'] or "",
                      "count": _safe(r['cnt']), "unique_domains": _safe(r['unique_domains']),
                      "blocked": _safe(r['blocked'])}
-                   for r in client.query(src_q).named_results()]
+                   for r in client.query(src_q, parameters=params).named_results()]
 
         # Action breakdown
         act_q = f"""
@@ -1415,7 +1466,7 @@ async def api_dns_logs_stats(
         GROUP BY action ORDER BY cnt DESC
         """
         actions = [{"action": r['action'], "count": _safe(r['cnt'])}
-                   for r in client.query(act_q).named_results()]
+                   for r in client.query(act_q, parameters=params).named_results()]
 
         # Severity breakdown
         sev_q = f"""
@@ -1424,7 +1475,7 @@ async def api_dns_logs_stats(
         GROUP BY severity ORDER BY cnt DESC
         """
         severities = [{"severity": r['severity'], "count": _safe(r['cnt'])}
-                      for r in client.query(sev_q).named_results()]
+                      for r in client.query(sev_q, parameters=params).named_results()]
 
         return JSONResponse({
             "success": True, "summary": summary,
@@ -1434,3 +1485,127 @@ async def api_dns_logs_stats(
     except Exception as e:
         logger.error(f"DNS logs stats error: {e}")
         return JSONResponse({"success": True, "summary": {}, "top_domains": [], "top_sources": [], "actions": [], "severities": []})
+
+
+# ============================================================
+# Mini-histograms for URL / DNS log pages
+# ============================================================
+
+@router.get("/api/threats/url-logs/timeline", name="api_url_logs_timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_url_logs_timeline(
+    hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    category: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
+    clean: bool = Query(False),
+):
+    """Hourly histogram for URL logs page (allowed / blocked / alerted)."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if category:
+            tw += " AND url_category = {cat:String}"
+            params["cat"] = category
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            tw += " AND " + _build_url_search_clause(search, params)
+        if clean:
+            from ..services.siteclean import build_siteclean_where
+            sc = await build_siteclean_where()
+            if sc:
+                tw += " " + sc
+
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+
+        q = f"""
+        SELECT {bucket_sql} as bucket,
+               count() as total,
+               countIf(action IN ('block-url','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(action IN ('alert','warn','warning')) as alerted,
+               countIf(action IN ('allow','passthrough','log','pass','accept')) as allowed
+        FROM url_logs WHERE {tw}
+        GROUP BY bucket ORDER BY bucket ASC
+        """
+        rows = list(client.query(q, parameters=params).named_results())
+        return JSONResponse({"success": True, "timeline": [{
+            "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+            "total": _safe(r["total"]),
+            "blocked": _safe(r["blocked"]),
+            "alerted": _safe(r["alerted"]),
+            "allowed": _safe(r["allowed"]),
+        } for r in rows]})
+    except Exception as e:
+        logger.error(f"URL timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": []})
+
+
+@router.get("/api/threats/dns-logs/timeline", name="api_dns_logs_timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_dns_logs_timeline(
+    hours: int = Query(24, ge=1, le=720),
+    vendor: Optional[str] = None,
+    severity: Optional[str] = None,
+    action: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """Hourly histogram for DNS logs page (allowed / blocked / sinkholed)."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+        params: dict = {}
+        if vendor and vendor in ('fortinet', 'paloalto'):
+            tw += " AND vendor = {vnd:String}"
+            params["vnd"] = vendor
+        if severity:
+            tw += " AND severity = {sev:String}"
+            params["sev"] = severity
+        if action:
+            tw += " AND action = {act:String}"
+            params["act"] = action
+        if search:
+            params["q"] = f"%{search}%"
+            tw += (" AND (qname ILIKE {q:String} OR src_ip ILIKE {q:String} "
+                   "OR dest_ip ILIKE {q:String} OR resolved_ip ILIKE {q:String} "
+                   "OR src_user ILIKE {q:String} OR category ILIKE {q:String} "
+                   "OR threat_name ILIKE {q:String} OR msg ILIKE {q:String})")
+
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+
+        q = f"""
+        SELECT {bucket_sql} as bucket,
+               count() as total,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(action = 'sinkhole') as sinkholed,
+               countIf(action IN ('allow','pass','passthrough','log')) as allowed
+        FROM dns_logs WHERE {tw}
+        GROUP BY bucket ORDER BY bucket ASC
+        """
+        rows = list(client.query(q, parameters=params).named_results())
+        return JSONResponse({"success": True, "timeline": [{
+            "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+            "total": _safe(r["total"]),
+            "blocked": _safe(r["blocked"]),
+            "sinkholed": _safe(r["sinkholed"]),
+            "allowed": _safe(r["allowed"]),
+        } for r in rows]})
+    except Exception as e:
+        logger.error(f"DNS timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": []})

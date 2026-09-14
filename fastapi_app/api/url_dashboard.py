@@ -131,17 +131,23 @@ async def url_analytics_page(request: Request):
 @router.get("/api/url-analytics/summary",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_summary(hours: int = Query(24, ge=1, le=720)):
+    """Org-wide URL summary.
+
+    NOTE: Fortinet writes multiple "session-update" rows per session with
+    *cumulative* byte counters. Summing those rows over-counts bandwidth by
+    100×–1000×. We compute byte totals by first deduplicating per session_id
+    (taking max — the cumulative counter is monotonic, so max == final),
+    then summing across sessions. Count/uniq metrics still use raw rows.
+    """
     try:
         client = ClickHouseClient.get_client()
         sc = await _sc_where()
+        # Counts + uniqs from raw rows
         q = f"""
         SELECT
             count() as total_requests,
             uniqExact(if(src_user != '', src_user, src_ip)) as unique_users,
             uniqExact(hostname) as unique_sites,
-            sum(sent_bytes + recv_bytes) as total_bandwidth,
-            sum(sent_bytes) as total_sent,
-            sum(recv_bytes) as total_recv,
             countIf(action IN {BLOCKED_ACTIONS}) as blocked_count,
             uniqExact(url_category) as category_count,
             countIf(hostname LIKE '%youtube.com' OR hostname LIKE '%googlevideo.com') as youtube_requests
@@ -150,13 +156,25 @@ async def api_summary(hours: int = Query(24, ge=1, le=720)):
         """
         rows = list(client.query(q).named_results())
         s = rows[0] if rows else {}
+        # Bandwidth via session-dedup subquery
+        bw_q = f"""
+        SELECT sum(s) AS sent, sum(r) AS recv, sum(s + r) AS bw
+        FROM (
+            SELECT session_id, max(sent_bytes) AS s, max(recv_bytes) AS r
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+            GROUP BY session_id
+        )
+        """
+        bw_rows = list(client.query(bw_q).named_results())
+        bw = bw_rows[0] if bw_rows else {}
         return JSONResponse({"success": True, "summary": {
             "total_requests": _safe(s.get("total_requests")),
             "unique_users": _safe(s.get("unique_users")),
             "unique_sites": _safe(s.get("unique_sites")),
-            "total_bandwidth": _safe(s.get("total_bandwidth")),
-            "total_sent": _safe(s.get("total_sent")),
-            "total_recv": _safe(s.get("total_recv")),
+            "total_bandwidth": _safe(bw.get("bw")),
+            "total_sent": _safe(bw.get("sent")),
+            "total_recv": _safe(bw.get("recv")),
             "blocked_count": _safe(s.get("blocked_count")),
             "category_count": _safe(s.get("category_count")),
             "youtube_requests": _safe(s.get("youtube_requests")),
@@ -168,19 +186,40 @@ async def api_summary(hours: int = Query(24, ge=1, le=720)):
 
 # ── Top Categories ───────────────────────────────────────────────────
 
+# Filter clause used everywhere we read url_category. Excludes garbage values
+# from truncated UDP syslog (leading `"`, length < 3) so dashboards and
+# dropdowns only show real categories.
+VALID_CAT = (
+    "url_category != '' "
+    "AND NOT startsWith(url_category, '\"') "
+    "AND length(url_category) >= 3"
+)
+
+
 @router.get("/api/url-analytics/categories",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def api_categories(hours: int = Query(24, ge=1, le=720), limit: int = Query(20, ge=5, le=50)):
     try:
         client = ClickHouseClient.get_client()
         sc = await _sc_where()
+        # Counts from raw rows; bandwidth via session-deduped subquery
+        # (Fortinet writes multiple cumulative rows per session)
         q = f"""
-        SELECT url_category, count() as requests,
-               uniqExact(src_ip) as users,
-               sum(sent_bytes + recv_bytes) as bandwidth,
-               countIf(action IN {BLOCKED_ACTIONS}) as blocked
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND url_category != '' {sc}
+        SELECT url_category,
+               sum(req_cnt) as requests,
+               sum(usr_cnt) as users,
+               sum(bw_max)  as bandwidth,
+               sum(blk_cnt) as blocked
+        FROM (
+            SELECT url_category, session_id,
+                   count() as req_cnt,
+                   uniqExact(src_ip) as usr_cnt,
+                   max(sent_bytes + recv_bytes) as bw_max,
+                   countIf(action IN {BLOCKED_ACTIONS}) as blk_cnt
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND {VALID_CAT} {sc}
+            GROUP BY url_category, session_id
+        )
         GROUP BY url_category ORDER BY requests DESC LIMIT {limit}
         """
         rows = list(client.query(q).named_results())
@@ -212,13 +251,23 @@ async def api_hostnames(hours: int = Query(24, ge=1, le=720), limit: int = Query
     try:
         client = ClickHouseClient.get_client()
         sc = await _sc_where()
+        # Session-deduped bandwidth to avoid Fortinet cumulative-counter inflation
         q = f"""
-        SELECT hostname, count() as requests,
-               uniqExact(src_ip) as users,
-               sum(sent_bytes + recv_bytes) as bandwidth,
-               any(url_category) as category
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND hostname != '' {sc}
+        SELECT hostname,
+               sum(req_cnt) as requests,
+               sum(usr_cnt) as users,
+               sum(bw_max)  as bandwidth,
+               any(category) as category
+        FROM (
+            SELECT hostname, session_id,
+                   count() as req_cnt,
+                   uniqExact(src_ip) as usr_cnt,
+                   max(sent_bytes + recv_bytes) as bw_max,
+                   any(if({VALID_CAT}, url_category, '')) as category
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND hostname != '' {sc}
+            GROUP BY hostname, session_id
+        )
         GROUP BY hostname ORDER BY requests DESC LIMIT {limit}
         """
         rows = list(client.query(q).named_results())
@@ -241,15 +290,26 @@ async def api_users(hours: int = Query(24, ge=1, le=720), limit: int = Query(20,
     try:
         client = ClickHouseClient.get_client()
         sc = await _sc_where()
+        # Session-deduped bandwidth (Fortinet cumulative-counter rows)
         q = f"""
-        SELECT src_ip, any(src_user) as username,
-               count() as requests,
-               uniqExact(hostname) as unique_sites,
-               sum(sent_bytes + recv_bytes) as bandwidth,
-               countIf(action IN {BLOCKED_ACTIONS}) as blocked,
-               topK(5)(hostname) as top_sites
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+        SELECT src_ip, any(username) as username,
+               sum(req_cnt) as requests,
+               sum(uniq_hosts) as unique_sites,
+               sum(bw_max)  as bandwidth,
+               sum(blk_cnt) as blocked,
+               topKMerge(5)(top_sites_state) as top_sites
+        FROM (
+            SELECT src_ip, session_id,
+                   any(src_user) as username,
+                   count() as req_cnt,
+                   uniqExact(hostname) as uniq_hosts,
+                   max(sent_bytes + recv_bytes) as bw_max,
+                   countIf(action IN {BLOCKED_ACTIONS}) as blk_cnt,
+                   topKState(5)(hostname) as top_sites_state
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+            GROUP BY src_ip, session_id
+        )
         GROUP BY src_ip ORDER BY requests DESC LIMIT {limit}
         """
         rows = list(client.query(q).named_results())
@@ -276,14 +336,19 @@ async def api_youtube(hours: int = Query(24, ge=1, le=720)):
         client = ClickHouseClient.get_client()
         yt_filter = "(hostname LIKE '%youtube.com' OR hostname LIKE '%googlevideo.com' OR hostname LIKE '%ytimg.com')"
 
-        # Totals
+        # Totals — session-deduped bandwidth (Fortinet cumulative-counter rows)
         tot_q = f"""
-        SELECT count() as requests,
-               uniqExact(src_ip) as users,
-               sum(recv_bytes) as download_bytes,
-               sum(sent_bytes + recv_bytes) as total_bandwidth
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}
+        SELECT
+            (SELECT count() FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}) as requests,
+            (SELECT uniqExact(src_ip) FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}) as users,
+            sum(rmax) as download_bytes,
+            sum(smax + rmax) as total_bandwidth
+        FROM (
+            SELECT session_id, max(recv_bytes) as rmax, max(sent_bytes) as smax
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}
+            GROUP BY session_id
+        )
         """
         tr = list(client.query(tot_q).named_results())
         t = tr[0] if tr else {}
@@ -291,14 +356,22 @@ async def api_youtube(hours: int = Query(24, ge=1, le=720)):
         # Estimate: ~2.5 MB/min for 720p video
         est_minutes = round(dl_bytes / (2.5 * 1024 * 1024)) if dl_bytes else 0
 
-        # Per-user
+        # Per-user — session-deduped bandwidth
         usr_q = f"""
-        SELECT src_ip, any(src_user) as username,
-               count() as requests,
-               sum(recv_bytes) as download_bytes,
-               sum(sent_bytes + recv_bytes) as bandwidth
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}
+        SELECT src_ip, any(username) as username,
+               sum(req_cnt) as requests,
+               sum(rmax)    as download_bytes,
+               sum(smax+rmax) as bandwidth
+        FROM (
+            SELECT src_ip, session_id,
+                   any(src_user) as username,
+                   count() as req_cnt,
+                   max(recv_bytes) as rmax,
+                   max(sent_bytes) as smax
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND {yt_filter}
+            GROUP BY src_ip, session_id
+        )
         GROUP BY src_ip ORDER BY bandwidth DESC LIMIT 15
         """
         usr_rows = list(client.query(usr_q).named_results())
@@ -376,7 +449,7 @@ async def api_blocked(hours: int = Query(24, ge=1, le=720)):
 
         # Top blocked hostnames
         host_q = f"""
-        SELECT hostname, any(url_category) as category,
+        SELECT hostname, any(if({VALID_CAT}, url_category, '')) as category,
                count() as blocked_count,
                uniqExact(src_ip) as users_blocked
         FROM url_logs
@@ -392,7 +465,7 @@ async def api_blocked(hours: int = Query(24, ge=1, le=720)):
         cat_q = f"""
         SELECT url_category, count() as cnt, uniqExact(src_ip) as users
         FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {blk} AND url_category != '' {sc}
+        WHERE timestamp > now() - INTERVAL {hours} HOUR AND {blk} AND {VALID_CAT} {sc}
         GROUP BY url_category ORDER BY cnt DESC LIMIT 10
         """
         cats = [{"category": r["url_category"], "count": _safe(r["cnt"]),
@@ -429,14 +502,22 @@ async def api_bandwidth(hours: int = Query(24, ge=1, le=720), limit: int = Query
         client = ClickHouseClient.get_client()
         sc = await _sc_where()
 
-        # By user
+        # By user — session-deduped to avoid Fortinet cumulative-counter inflation
         usr_q = f"""
-        SELECT src_ip, any(src_user) as username,
-               sum(sent_bytes) as sent, sum(recv_bytes) as recv,
-               sum(sent_bytes + recv_bytes) as total_bytes,
-               count() as requests
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+        SELECT src_ip, any(username) as username,
+               sum(smax) as sent, sum(rmax) as recv,
+               sum(smax + rmax) as total_bytes,
+               sum(req_cnt) as requests
+        FROM (
+            SELECT src_ip, session_id,
+                   any(src_user) as username,
+                   max(sent_bytes) as smax,
+                   max(recv_bytes) as rmax,
+                   count() as req_cnt
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+            GROUP BY src_ip, session_id
+        )
         GROUP BY src_ip ORDER BY total_bytes DESC LIMIT {limit}
         """
         by_user = [{"src_ip": r["src_ip"], "username": r["username"] or "",
@@ -445,14 +526,23 @@ async def api_bandwidth(hours: int = Query(24, ge=1, le=720), limit: int = Query
                     "requests": _safe(r["requests"])}
                    for r in client.query(usr_q).named_results()]
 
-        # By hostname
+        # By hostname — session-deduped to avoid Fortinet cumulative-counter inflation
         host_q = f"""
         SELECT hostname,
-               sum(sent_bytes + recv_bytes) as total_bytes,
-               sum(recv_bytes) as recv, sum(sent_bytes) as sent,
-               count() as requests, uniqExact(src_ip) as users
-        FROM url_logs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR AND hostname != '' {sc}
+               sum(smax + rmax) as total_bytes,
+               sum(rmax) as recv, sum(smax) as sent,
+               sum(req_cnt) as requests,
+               sum(uniq_users) as users
+        FROM (
+            SELECT hostname, session_id,
+                   max(sent_bytes) as smax,
+                   max(recv_bytes) as rmax,
+                   count() as req_cnt,
+                   uniqExact(src_ip) as uniq_users
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND hostname != '' {sc}
+            GROUP BY hostname, session_id
+        )
         GROUP BY hostname ORDER BY total_bytes DESC LIMIT {limit}
         """
         by_host = [{"hostname": r["hostname"],
@@ -466,3 +556,310 @@ async def api_bandwidth(hours: int = Query(24, ge=1, le=720), limit: int = Query
     except Exception as e:
         logger.error(f"Bandwidth error: {e}")
         return JSONResponse({"success": True, "by_user": [], "by_hostname": []})
+
+
+# ── Timeline (hourly buckets) ────────────────────────────────────────
+
+@router.get("/api/url-analytics/timeline",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_timeline(hours: int = Query(24, ge=1, le=720)):
+    """Hourly time-series with action breakdown + bandwidth, for area chart."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        # Bucket size: 5min if ≤6h, 1h if ≤7d, 1d if >7d
+        if hours <= 6:
+            bucket_sql = "toStartOfFiveMinute(timestamp)"
+            bucket_size = "5m"
+        elif hours <= 168:
+            bucket_sql = "toStartOfHour(timestamp)"
+            bucket_size = "1h"
+        else:
+            bucket_sql = "toStartOfDay(timestamp)"
+            bucket_size = "1d"
+        # Timeline — session-deduped bandwidth per bucket (Fortinet cumulative-counter rows)
+        q = f"""
+        SELECT bucket,
+               sum(tot)  as total,
+               sum(blk)  as blocked,
+               sum(alt)  as alerted,
+               sum(alw)  as allowed,
+               sum(rmax) as recv,
+               sum(smax) as sent,
+               sum(usr)  as users
+        FROM (
+            SELECT {bucket_sql} as bucket, session_id,
+                   count() as tot,
+                   countIf(action IN {BLOCKED_ACTIONS}) as blk,
+                   countIf(action IN ('alert','warn','warning')) as alt,
+                   countIf(action IN ('allow','passthrough','log','pass','accept')) as alw,
+                   max(recv_bytes) as rmax,
+                   max(sent_bytes) as smax,
+                   uniqExact(if(src_user != '', src_user, src_ip)) as usr
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+            GROUP BY bucket, session_id
+        )
+        GROUP BY bucket
+        ORDER BY bucket ASC
+        """
+        rows = list(client.query(q).named_results())
+        return JSONResponse({
+            "success": True, "bucket_size": bucket_size,
+            "timeline": [{
+                "bucket": r["bucket"].isoformat() if hasattr(r["bucket"], "isoformat") else str(r["bucket"]),
+                "total": _safe(r["total"]),
+                "blocked": _safe(r["blocked"]),
+                "alerted": _safe(r["alerted"]),
+                "allowed": _safe(r["allowed"]),
+                "recv": _safe(r["recv"]),
+                "sent": _safe(r["sent"]),
+                "users": _safe(r["users"]),
+            } for r in rows]
+        })
+    except Exception as e:
+        logger.error(f"Timeline error: {e}")
+        return JSONResponse({"success": True, "timeline": [], "bucket_size": "1h"})
+
+
+# ── Actions breakdown ───────────────────────────────────────────────
+
+@router.get("/api/url-analytics/actions",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_actions(hours: int = Query(24, ge=1, le=720)):
+    """Action distribution + HTTP method distribution + content type distribution."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+
+        act_q = f"""
+        SELECT action, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND action != '' {sc}
+        GROUP BY action ORDER BY cnt DESC
+        """
+        actions = [{"action": r["action"], "count": _safe(r["cnt"])}
+                   for r in client.query(act_q).named_results()]
+
+        mth_q = f"""
+        SELECT http_method as method, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND http_method != '' {sc}
+        GROUP BY http_method ORDER BY cnt DESC LIMIT 10
+        """
+        methods = [{"method": r["method"], "count": _safe(r["cnt"])}
+                   for r in client.query(mth_q).named_results()]
+
+        # Vendor breakdown
+        vnd_q = f"""
+        SELECT vendor, count() as cnt
+        FROM url_logs WHERE timestamp > now() - INTERVAL {hours} HOUR AND vendor != '' {sc}
+        GROUP BY vendor ORDER BY cnt DESC
+        """
+        vendors = [{"vendor": r["vendor"], "count": _safe(r["cnt"])}
+                   for r in client.query(vnd_q).named_results()]
+
+        return JSONResponse({"success": True, "actions": actions, "methods": methods, "vendors": vendors})
+    except Exception as e:
+        logger.error(f"Actions error: {e}")
+        return JSONResponse({"success": True, "actions": [], "methods": [], "vendors": []})
+
+
+# ── Countries ───────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/countries",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_countries(hours: int = Query(24, ge=1, le=720), limit: int = Query(15, ge=5, le=50)):
+    """Top destination countries by request count."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        # Session-deduped bandwidth (Fortinet cumulative-counter rows)
+        q = f"""
+        SELECT country,
+               sum(req_cnt) as requests,
+               sum(bw_max)  as bandwidth,
+               sum(uniq_users) as users,
+               sum(blk_cnt) as blocked
+        FROM (
+            SELECT dest_country as country, session_id,
+                   count() as req_cnt,
+                   max(sent_bytes + recv_bytes) as bw_max,
+                   uniqExact(src_ip) as uniq_users,
+                   countIf(action IN {BLOCKED_ACTIONS}) as blk_cnt
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND dest_country != '' {sc}
+            GROUP BY dest_country, session_id
+        )
+        GROUP BY country ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"country": r["country"], "requests": _safe(r["requests"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "users": _safe(r["users"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "countries": rows})
+    except Exception as e:
+        logger.error(f"Countries error: {e}")
+        return JSONResponse({"success": True, "countries": []})
+
+
+# ── Applications ────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/applications",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_applications(hours: int = Query(24, ge=1, le=720), limit: int = Query(20, ge=5, le=50)):
+    """Top applications recognised by firewall (Fortinet appcat / Palo Alto app)."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        # Session-deduped bandwidth (Fortinet cumulative-counter rows)
+        q = f"""
+        SELECT app,
+               sum(req_cnt) as requests,
+               sum(uniq_users) as users,
+               sum(bw_max)  as bandwidth,
+               sum(blk_cnt) as blocked
+        FROM (
+            SELECT application as app, session_id,
+                   count() as req_cnt,
+                   uniqExact(src_ip) as uniq_users,
+                   max(sent_bytes + recv_bytes) as bw_max,
+                   countIf(action IN {BLOCKED_ACTIONS}) as blk_cnt
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR AND application != '' {sc}
+            GROUP BY application, session_id
+        )
+        GROUP BY app ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"application": r["app"], "requests": _safe(r["requests"]),
+                 "users": _safe(r["users"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "applications": rows})
+    except Exception as e:
+        logger.error(f"Applications error: {e}")
+        return JSONResponse({"success": True, "applications": []})
+
+
+# ── Devices ─────────────────────────────────────────────────────────
+
+@router.get("/api/url-analytics/devices",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_devices(hours: int = Query(24, ge=1, le=720), limit: int = Query(15, ge=5, le=50)):
+    """Activity by reporting firewall device."""
+    try:
+        client = ClickHouseClient.get_client()
+        sc = await _sc_where()
+        # Session-deduped bandwidth (Fortinet cumulative-counter rows)
+        q = f"""
+        SELECT device,
+               any(vendor) as vendor,
+               any(device_ip) as device_ip,
+               sum(req_cnt) as requests,
+               sum(uniq_users) as users,
+               sum(uniq_hosts) as sites,
+               sum(bw_max)  as bandwidth,
+               sum(blk_cnt) as blocked
+        FROM (
+            SELECT
+                coalesce(nullIf(device_name, ''), device_ip) as device, session_id,
+                any(vendor) as vendor,
+                any(device_ip) as device_ip,
+                count() as req_cnt,
+                uniqExact(src_ip) as uniq_users,
+                uniqExact(hostname) as uniq_hosts,
+                max(sent_bytes + recv_bytes) as bw_max,
+                countIf(action IN {BLOCKED_ACTIONS}) as blk_cnt
+            FROM url_logs
+            WHERE timestamp > now() - INTERVAL {hours} HOUR {sc}
+            GROUP BY device, session_id
+        )
+        GROUP BY device ORDER BY requests DESC LIMIT {limit}
+        """
+        rows = [{"device": r["device"], "vendor": r["vendor"] or "",
+                 "device_ip": r["device_ip"] or "",
+                 "requests": _safe(r["requests"]),
+                 "users": _safe(r["users"]),
+                 "sites": _safe(r["sites"]),
+                 "bandwidth": _safe(r["bandwidth"]),
+                 "blocked": _safe(r["blocked"])}
+                for r in client.query(q).named_results()]
+        return JSONResponse({"success": True, "devices": rows})
+    except Exception as e:
+        logger.error(f"Devices error: {e}")
+        return JSONResponse({"success": True, "devices": []})
+
+
+# ── DNS Overview (mini analytics integrated into URL Analytics page) ─
+
+@router.get("/api/url-analytics/dns",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_dns_overview(hours: int = Query(24, ge=1, le=720)):
+    """DNS-side overview: top domains, qtypes, sinkholed, NXDOMAIN, etc."""
+    try:
+        client = ClickHouseClient.get_client()
+        tw = f"timestamp > now() - INTERVAL {hours} HOUR"
+
+        sum_q = f"""
+        SELECT count() as total,
+               uniqExact(src_ip) as users,
+               uniqExact(qname) as unique_domains,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop','reset-client','reset-server')) as blocked,
+               countIf(severity IN ('critical','high')) as critical_high,
+               countIf(action = 'sinkhole') as sinkholed
+        FROM dns_logs WHERE {tw}
+        """
+        sr = list(client.query(sum_q).named_results())
+        s = sr[0] if sr else {}
+
+        # Top queried domains
+        dom_q = f"""
+        SELECT qname, count() as cnt, any(category) as category,
+               any(action) as action, any(severity) as severity
+        FROM dns_logs WHERE {tw} AND qname != ''
+        GROUP BY qname ORDER BY cnt DESC LIMIT 15
+        """
+        domains = [{"domain": r["qname"], "count": _safe(r["cnt"]),
+                    "category": r["category"] or "",
+                    "action": r["action"] or "",
+                    "severity": r["severity"] or ""}
+                   for r in client.query(dom_q).named_results()]
+
+        # Query type distribution
+        qtype_q = f"""
+        SELECT qtype, count() as cnt
+        FROM dns_logs WHERE {tw} AND qtype != ''
+        GROUP BY qtype ORDER BY cnt DESC LIMIT 8
+        """
+        qtypes = [{"qtype": r["qtype"], "count": _safe(r["cnt"])}
+                  for r in client.query(qtype_q).named_results()]
+
+        # Top sources
+        src_q = f"""
+        SELECT src_ip, any(src_user) as username, count() as cnt,
+               uniqExact(qname) as unique_domains,
+               countIf(action IN ('sinkhole','block','blocked','deny','drop')) as blocked
+        FROM dns_logs WHERE {tw}
+        GROUP BY src_ip ORDER BY cnt DESC LIMIT 10
+        """
+        sources = [{"src_ip": r["src_ip"], "username": r["username"] or "",
+                    "count": _safe(r["cnt"]),
+                    "unique_domains": _safe(r["unique_domains"]),
+                    "blocked": _safe(r["blocked"])}
+                   for r in client.query(src_q).named_results()]
+
+        return JSONResponse({"success": True,
+                             "summary": {
+                                 "total": _safe(s.get("total")),
+                                 "users": _safe(s.get("users")),
+                                 "unique_domains": _safe(s.get("unique_domains")),
+                                 "blocked": _safe(s.get("blocked")),
+                                 "sinkholed": _safe(s.get("sinkholed")),
+                                 "critical_high": _safe(s.get("critical_high")),
+                             },
+                             "domains": domains,
+                             "qtypes": qtypes,
+                             "sources": sources})
+    except Exception as e:
+        logger.error(f"DNS overview error: {e}")
+        return JSONResponse({"success": True, "summary": {}, "domains": [], "qtypes": [], "sources": []})

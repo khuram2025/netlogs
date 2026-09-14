@@ -296,11 +296,183 @@ class FortinetRoutingParser:
         return None
 
 
+class PaloAltoRoutingParser:
+    """
+    Parser for Palo Alto Networks (PAN-OS) routing table output.
+
+    Parses output from the operational command `show routing route`. The PAN-OS
+    output uses a flag-letter scheme rather than left-hand route-type letters;
+    flags are documented in the table header (CLI Quick Start, "show routing").
+
+    Example::
+
+        flags: A:active, ?:loose, C:connect, H:host, S:static, ~:internal,
+               R:rip, O:ospf, B:bgp, Oi:ospf intra-area, Oo:ospf inter-area,
+               O1:ospf ext-type-1, O2:ospf ext-type-2, E:ecmp, M:multicast
+
+        VIRTUAL ROUTER: default (id 1)
+        ==========
+        destination       nexthop          metric flags age   interface       next-AS
+        0.0.0.0/0         10.0.0.1         10     A S       ethernet1/1
+        10.0.0.0/24       0.0.0.0          0      A C   ?     ethernet1/1
+        172.16.0.0/16     10.10.10.2       110    A Oo  3d    tunnel.1        65000
+    """
+
+    # Order matters: longer flag tokens (Oi/Oo/O1/O2) must be matched before
+    # the single-letter ones (O), so we test multi-char codes first.
+    _MULTI_FLAG_CODES = ['Oi', 'Oo', 'O1', 'O2']
+    _FLAG_TO_TYPE = {
+        'C': 'C',   # connected
+        'S': 'S',   # static
+        'R': 'R',   # rip
+        'O': 'O',   # ospf
+        'Oi': 'IA', # OSPF intra-area  -> map to closest existing RouteType
+        'Oo': 'IA', # OSPF inter-area
+        'O1': 'E1', # OSPF external type 1
+        'O2': 'E2', # OSPF external type 2
+        'B': 'B',   # bgp
+        'H': 'C',   # host route — treat like connected
+    }
+
+    VR_HEADER_RE = re.compile(r'^VIRTUAL\s+ROUTER:\s+(?P<name>\S+)', re.IGNORECASE)
+    HEADER_LINE_RE = re.compile(r'^\s*destination\s+nexthop\b', re.IGNORECASE)
+    NETWORK_RE = re.compile(r'^(?P<network>\d{1,3}(?:\.\d{1,3}){3}/\d{1,2})\b')
+    IPV6_NETWORK_RE = re.compile(r'^(?P<network>[0-9a-fA-F:]+/\d{1,3})\b')
+    IPV4_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}$')
+
+    @classmethod
+    def _classify_route_type(cls, flag_token: str) -> str:
+        """Pick the most informative protocol code from a flag bundle.
+
+        PAN-OS prints flags concatenated like ``A C`` or ``A B Oi``. ``A``
+        means active and is informational, not a protocol; we strip it and
+        return the first protocol code we recognise."""
+        if not flag_token:
+            return 'S'
+        # Drop separators and 'A' (active) / '?' (loose) / '~' (internal) / 'M' / 'E' which are not protocols.
+        cleaned = re.sub(r'[A?~ME]', '', flag_token)
+        # First try multi-char codes, then single-letter.
+        for code in cls._MULTI_FLAG_CODES:
+            if code in cleaned:
+                return cls._FLAG_TO_TYPE[code]
+        for ch in cleaned:
+            mapped = cls._FLAG_TO_TYPE.get(ch)
+            if mapped:
+                return mapped
+        return 'S'  # fallback to Static when the protocol can't be determined
+
+    @classmethod
+    def parse(cls, raw_output: str) -> List[ParsedRoute]:
+        """Parse PAN-OS show routing route output into ParsedRoute objects."""
+        routes: List[ParsedRoute] = []
+        if not raw_output:
+            return routes
+
+        current_vr = '0'
+        in_table = False  # True after we've seen the column header for the current VR
+
+        for raw_line in raw_output.splitlines():
+            line = raw_line.rstrip()
+            if not line.strip():
+                in_table = False
+                continue
+
+            vr_match = cls.VR_HEADER_RE.match(line.strip())
+            if vr_match:
+                current_vr = vr_match.group('name')
+                in_table = False
+                continue
+
+            if cls.HEADER_LINE_RE.match(line):
+                in_table = True
+                continue
+
+            if not in_table:
+                continue
+
+            # Skip separator lines like '======' or 'flags:' continuation.
+            if set(line.strip()) <= {'='}:
+                continue
+            if line.strip().lower().startswith(('flags:', 'codes:', 'total ')):
+                continue
+
+            tokens = line.split()
+            net_match = cls.NETWORK_RE.match(tokens[0]) or cls.IPV6_NETWORK_RE.match(tokens[0])
+            if not net_match or len(tokens) < 4:
+                continue
+
+            network_full = net_match.group('network')
+            if '/' in network_full:
+                network, prefix_str = network_full.split('/', 1)
+                try:
+                    prefix_length = int(prefix_str)
+                except ValueError:
+                    continue
+            else:
+                network, prefix_length = network_full, 32
+
+            next_hop_tok = tokens[1]
+            next_hop = next_hop_tok if cls.IPV4_RE.match(next_hop_tok) else None
+            try:
+                metric = int(tokens[2])
+            except (ValueError, IndexError):
+                metric = None
+
+            # Flags can span multiple tokens (e.g. `A C` or `A B Oi`). The next
+            # numeric/age token closes the flag run; everything between the
+            # metric and that boundary is treated as flag characters.
+            flag_tokens: List[str] = []
+            cursor = 3
+            while cursor < len(tokens):
+                t = tokens[cursor]
+                # Age is an alnum token (e.g. '3d', '1d 02:30:00', '?')
+                # Interface starts with eth/ae/tunnel/loopback/vlan/sub.
+                if t.lower().startswith(('ethernet', 'ae', 'tunnel', 'loopback', 'vlan', 'sub')):
+                    break
+                if re.match(r'^\d+(?:[dhwms]|:\d+)', t):
+                    break
+                if t == '?' or len(t) <= 3 and re.match(r'^[A-Za-z?~]+$', t):
+                    flag_tokens.append(t)
+                    cursor += 1
+                else:
+                    break
+            flags = ''.join(flag_tokens)
+            route_type = cls._classify_route_type(flags)
+
+            # Optional age token (skip if matched a number/letter unit).
+            age = None
+            if cursor < len(tokens) and re.match(r'^\d+(?:[dhwms]|:\d+)', tokens[cursor]):
+                age = tokens[cursor]
+                cursor += 1
+
+            interface = None
+            if cursor < len(tokens) and not cls.IPV4_RE.match(tokens[cursor]):
+                interface = tokens[cursor]
+                cursor += 1
+
+            is_default = network == '0.0.0.0' and prefix_length == 0
+            routes.append(ParsedRoute(
+                route_type=route_type,
+                network=network_full,
+                prefix_length=prefix_length,
+                next_hop=next_hop,
+                interface=interface,
+                metric=metric,
+                age=age,
+                is_default=is_default,
+                vrf=current_vr,
+                raw_line=raw_line,
+            ))
+
+        return routes
+
+
 class RoutingTableParser:
     """Generic routing table parser - selects appropriate parser based on device type."""
 
     PARSERS = {
         'FORTINET': FortinetRoutingParser,
+        'PALOALTO': PaloAltoRoutingParser,
     }
 
     @classmethod

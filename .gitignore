@@ -30,6 +30,7 @@ logs/
 .idea/
 .vscode/
 .cursor/
+.claude/
 *.swp
 *.swo
 
@@ -52,6 +53,7 @@ backups/
 tmp/
 temp/
 .playwright-mcp/
+docs/features/tmp.md
 
 # Packer output
 packer/output-*/

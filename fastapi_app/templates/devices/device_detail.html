@@ -505,6 +505,650 @@
     .vdom-current strong {
         color: var(--primary);
     }
+
+    /* ── Management-host inline editor ── */
+    .mgmt-host-card {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 0 0 1rem;
+    }
+    .mgmt-host-row {
+        display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .mgmt-host-col { flex: 1; min-width: 240px; }
+    .mgmt-host-label {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 4px;
+    }
+    .mgmt-host-label small { font-weight: 500; opacity: 0.7; }
+    .mgmt-host-value {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .mgmt-host-value code {
+        font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        color: #e5e7eb; font-weight: 600;
+        background: rgba(15,23,42,0.6); padding: 4px 8px; border-radius: 4px;
+    }
+    .mgmt-host-pin {
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;
+    }
+    .mgmt-host-pin {
+        background: rgba(100,116,139,0.18); color: #94a3b8; cursor: help;
+    }
+    .mgmt-host-pin-override { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .mgmt-host-pin-default { background: rgba(59,130,246,0.18); color: #93c5fd; }
+    .mgmt-host-arrow {
+        font-size: 18px; color: #6b7280; flex-shrink: 0;
+    }
+    .mgmt-host-edit-btn {
+        background: transparent; color: #93c5fd;
+        border: 1px solid rgba(59,130,246,0.4); border-radius: 4px;
+        padding: 3px 10px; font-size: 11px; font-weight: 600;
+        cursor: pointer; margin-left: auto;
+    }
+    .mgmt-host-edit-btn:hover { background: rgba(59,130,246,0.1); }
+    .mgmt-host-edit {
+        margin-top: 12px; padding-top: 12px;
+        border-top: 1px solid var(--border, #2a3242);
+    }
+    .mgmt-host-edit-row {
+        display: flex; gap: 8px; align-items: center;
+    }
+    .mgmt-host-edit input {
+        flex: 1; padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+        font-size: 13px; background: var(--bg-input, #0b1120);
+        color: #e5e7eb; border: 1px solid var(--border, #2a3242);
+        border-radius: 4px;
+    }
+    .mgmt-host-help {
+        margin-top: 8px; font-size: 11px; color: #9ca3af; line-height: 1.5;
+    }
+    .mgmt-host-help code { font-family: 'JetBrains Mono', monospace; color: #cbd5e1; }
+    .mgmt-host-result {
+        margin-top: 8px; padding: 6px 10px; border-radius: 4px;
+        font-size: 12px;
+    }
+    .mgmt-host-result-pass { background: rgba(34,197,94,0.15); color: #86efac; }
+    .mgmt-host-result-fail { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+    /* Inline result panel for Fetch Routes / Fetch Zones */
+    .fetch-result {
+        margin-top: 0.75rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+    .fetch-result-head {
+        display: flex; align-items: center; gap: 0.5rem; font-weight: 600;
+    }
+    .fetch-result-body {
+        margin-top: 0.5rem;
+        font-family: ui-monospace, monospace;
+        font-size: 0.78rem;
+        opacity: 0.85;
+    }
+    .fetch-result-body code { background: rgba(255,255,255,.06); padding: 0 4px; border-radius: 3px; }
+    .fetch-result-meta { font-size: 0.75rem; opacity: 0.7; margin-left: auto; }
+    .fetch-result-pending { background: rgba(59,130,246,.12); color: #93c5fd; }
+    .fetch-result-pass    { background: rgba(34,197,94,.15);  color: #86efac; }
+    .fetch-result-fail    { background: rgba(239,68,68,.15);  color: #fca5a5; }
+    .fetch-result-spinner {
+        width: 12px; height: 12px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: fr-spin 0.7s linear infinite;
+        display: inline-block;
+    }
+    @keyframes fr-spin { to { transform: rotate(360deg); } }
+
+    /* ── Firewall Policies: compact list + click-to-expand detail ── */
+    .fw-policies-list {
+        display: flex; flex-direction: column; gap: 4px;
+        max-height: calc(100vh - 320px); overflow-y: auto;
+        padding: 4px 0;
+    }
+    .fw-policy-card {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-left-width: 3px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.1s ease, border-color 0.1s ease;
+    }
+    .fw-policy-card:hover { background: rgba(59,130,246,0.06); }
+    .fw-policy-card.fw-policy-allow    { border-left-color: #22c55e; }
+    .fw-policy-card.fw-policy-deny     { border-left-color: #ef4444; }
+    .fw-policy-card.fw-policy-disabled { opacity: 0.55; }
+    .fw-policy-card.fw-policy-open     { background: rgba(59,130,246,0.08); }
+
+    .fw-policy-row {
+        display: grid;
+        grid-template-columns: 44px minmax(180px, 1fr) minmax(280px, 2.4fr) minmax(140px, 1fr) auto 16px;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+    }
+    .fw-pol-pos {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px; font-weight: 700;
+        color: #6b7280; text-align: right;
+    }
+    .fw-pol-name { min-width: 0; }
+    .fw-pol-title {
+        font-size: 13px; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fw-pol-id {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; color: #6b7280;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fw-pol-flow {
+        display: flex; align-items: center; gap: 8px;
+        min-width: 0;
+    }
+    .fw-pol-side {
+        display: flex; flex-wrap: wrap; gap: 3px;
+        flex: 1; min-width: 0;
+    }
+    .fw-pol-arrow {
+        color: #93c5fd; font-weight: 600; flex-shrink: 0;
+    }
+    .fw-pol-svc {
+        display: flex; flex-wrap: wrap; gap: 3px;
+    }
+    .fw-pol-flags {
+        display: flex; gap: 4px; flex-shrink: 0;
+    }
+    .fw-pol-chevron {
+        color: #6b7280; transition: transform 0.15s ease;
+    }
+    .fw-policy-card.fw-policy-open .fw-pol-chevron {
+        transform: rotate(180deg);
+    }
+
+    /* Chips used in the rows + detail */
+    .fw-chip {
+        display: inline-flex; align-items: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; font-weight: 600;
+        padding: 1px 6px; border-radius: 3px;
+        background: rgba(100,116,139,0.18); color: #cbd5e1;
+        max-width: 200px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fw-chip-zone { background: rgba(59,130,246,0.18);  color: #93c5fd; }
+    .fw-chip-addr { background: rgba(168,85,247,0.18);  color: #c4b5fd; }
+    .fw-chip-svc  { background: rgba(245,158,11,0.18);  color: #fbbf24; }
+    .fw-chip-more { background: rgba(100,116,139,0.25); color: #94a3b8; }
+    .fw-chip-action { text-transform: uppercase; }
+    .fw-chip-action-allow { background: rgba(34,197,94,0.2);  color: #86efac; }
+    .fw-chip-action-deny  { background: rgba(239,68,68,0.2);  color: #fca5a5; }
+    .fw-chip-nat  { background: rgba(245,158,11,0.18);  color: #fbbf24; }
+    .fw-chip-on   { background: rgba(34,197,94,0.18);  color: #86efac; }
+    .fw-chip-off  { background: rgba(100,116,139,0.18); color: #94a3b8; }
+
+    /* Detail panel */
+    .fw-policy-detail {
+        border-top: 1px solid var(--border, #2a3242);
+        padding: 12px 14px 14px;
+        background: rgba(15,23,42,0.4);
+        border-radius: 0 0 6px 6px;
+    }
+    .fw-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+    .fw-detail-block {}
+    .fw-detail-title {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.05em; color: #9ca3af;
+        border-bottom: 1px solid var(--border, #2a3242);
+        padding-bottom: 4px; margin-bottom: 6px;
+    }
+    .fw-detail-sub {
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        color: #6b7280; margin-top: 8px; margin-bottom: 4px;
+    }
+    .fw-detail-chips, .fw-detail-resolve {
+        display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .fw-detail-resolve .fw-resolved {
+        display: inline-flex; flex-direction: column; gap: 2px;
+        background: rgba(168,85,247,0.10);
+        border-left: 2px solid rgba(168,85,247,0.5);
+        padding: 4px 8px; border-radius: 3px;
+        max-width: 100%;
+    }
+    .fw-detail-resolve .fw-resolved-name {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px; font-weight: 600; color: #c4b5fd;
+    }
+    .fw-detail-resolve .fw-resolved-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; color: #cbd5e1;
+    }
+    .fw-detail-resolve .fw-resolved-members {
+        font-size: 10px; color: #94a3b8;
+    }
+    .fw-detail-empty { font-size: 11px; color: #6b7280; }
+    .fw-detail-dl {
+        display: grid; grid-template-columns: 90px 1fr;
+        gap: 4px 10px; margin: 0; font-size: 11px;
+    }
+    .fw-detail-dl dt { color: #9ca3af; }
+    .fw-detail-dl dd { margin: 0; color: #e5e7eb; }
+    .fw-detail-comment {
+        margin-top: 12px; padding: 8px 10px;
+        background: rgba(100,116,139,0.12); border-radius: 4px;
+        font-size: 12px;
+    }
+    .fw-detail-raw {
+        margin-top: 10px; font-size: 11px;
+    }
+    .fw-detail-raw summary {
+        cursor: pointer; color: #93c5fd; user-select: none;
+    }
+    .fw-detail-raw pre {
+        margin-top: 6px; max-height: 240px; overflow: auto;
+        background: #0b1120; border: 1px solid var(--border, #2a3242);
+        border-radius: 4px; padding: 8px;
+        font-family: 'JetBrains Mono', monospace; font-size: 11px;
+        color: #cbd5e1;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       POLICY ANALYTICS DASHBOARD
+       ════════════════════════════════════════════════════════════ */
+
+    /* Top KPI strip */
+    .pa-kpi-strip {
+        display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
+        margin-bottom: 16px;
+    }
+    .pa-kpi {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-top: 3px solid #6b7280;
+        border-radius: 6px; padding: 10px 12px;
+    }
+    .pa-kpi-good    { border-top-color: #22c55e; }
+    .pa-kpi-warn    { border-top-color: #f59e0b; }
+    .pa-kpi-bad     { border-top-color: #ef4444; }
+    .pa-kpi-neutral { border-top-color: #3b82f6; }
+    .pa-kpi-value {
+        font-size: 22px; font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        color: #e5e7eb; line-height: 1;
+    }
+    .pa-kpi-unit { font-size: 12px; color: #6b7280; font-weight: 500; margin-left: 2px; }
+    .pa-kpi-label { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+    .pa-kpi-sub { font-size: 10px; color: #6b7280; margin-top: 2px; }
+
+    /* Sidebar + main shell */
+    .pa-shell {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 14px;
+        align-items: flex-start;
+    }
+    .pa-sidebar {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-radius: 6px;
+        padding: 8px 0;
+        position: sticky; top: 12px;
+    }
+    .pa-side-section {
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #6b7280;
+        padding: 12px 14px 4px;
+    }
+    .pa-side-link {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 7px 14px;
+        font-size: 12px; color: #cbd5e1; text-decoration: none;
+        border-left: 2px solid transparent;
+    }
+    .pa-side-link:hover { background: rgba(59,130,246,0.06); color: #fff; }
+    .pa-side-link.active {
+        background: rgba(59,130,246,0.1); color: #93c5fd;
+        border-left-color: #3b82f6;
+    }
+    .pa-side-link-disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+    .pa-side-count {
+        font-family: 'JetBrains Mono', monospace; font-size: 10px;
+        background: rgba(100,116,139,0.2); color: #94a3b8;
+        padding: 1px 6px; border-radius: 3px;
+    }
+    .pa-side-count-bad { background: rgba(239,68,68,0.18); color: #fca5a5; }
+    .pa-side-count-soon { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .pa-side-foot {
+        font-size: 10px; color: #6b7280;
+        padding: 12px 14px; margin-top: 8px;
+        border-top: 1px solid var(--border, #2a3242);
+        line-height: 1.5;
+    }
+
+    /* Main column */
+    .pa-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .pa-widget {
+        background: var(--bg-card, #1a1f2e);
+        border: 1px solid var(--border, #2a3242);
+        border-radius: 6px; padding: 14px 16px;
+    }
+    .pa-widget-head { margin-bottom: 12px; }
+    .pa-widget-head h3 { margin: 0; font-size: 14px; font-weight: 600; color: #e5e7eb; }
+    .pa-widget-desc { margin: 4px 0 0; font-size: 12px; color: #94a3b8; }
+    .pa-widget-foot { margin-top: 8px; font-size: 11px; color: #6b7280; }
+
+    /* Permissiveness band bar */
+    .pa-band-bar {
+        display: flex; gap: 2px; height: 28px;
+        border-radius: 4px; overflow: hidden; margin-bottom: 12px;
+    }
+    .pa-band {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 600; color: #fff;
+        text-transform: uppercase; padding: 0 8px;
+        white-space: nowrap;
+    }
+    .pa-band-critical { background: #dc2626; }
+    .pa-band-high     { background: #f97316; }
+    .pa-band-medium   { background: #eab308; color: #111; }
+    .pa-band-low      { background: #16a34a; }
+
+    /* Tables */
+    .pa-table-wrap {
+        max-height: 400px; overflow: auto;
+        border: 1px solid var(--border, #2a3242); border-radius: 4px;
+    }
+    .pa-table {
+        width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    .pa-table thead th {
+        text-align: left; padding: 8px 10px;
+        background: rgba(15,23,42,0.6);
+        color: #9ca3af; font-size: 10px; text-transform: uppercase;
+        letter-spacing: 0.05em; font-weight: 600;
+        border-bottom: 1px solid var(--border, #2a3242);
+        position: sticky; top: 0; z-index: 1;
+    }
+    .pa-table tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(42,50,66,0.5);
+        vertical-align: middle;
+    }
+    .pa-table tbody tr:hover { background: rgba(59,130,246,0.04); }
+    .pa-pos {
+        font-family: 'JetBrains Mono', monospace; font-size: 11px;
+        font-weight: 700; color: #6b7280; white-space: nowrap;
+    }
+    .pa-rule-name { font-weight: 600; color: #e5e7eb; font-size: 12px; }
+    .pa-rule-id   { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6b7280; }
+    .pa-flag-chip {
+        display: inline-block;
+        font-family: 'JetBrains Mono', monospace; font-size: 9px;
+        padding: 1px 5px; border-radius: 3px; margin-right: 3px;
+        background: rgba(239,68,68,0.15); color: #fca5a5;
+    }
+
+    /* Score column */
+    .pa-score-cell {
+        display: flex; align-items: center; gap: 8px; min-width: 130px;
+    }
+    .pa-score-bar {
+        flex: 1; height: 8px;
+        background: rgba(100,116,139,0.18); border-radius: 4px; overflow: hidden;
+    }
+    .pa-score-fill { height: 100%; transition: width 0.2s ease; }
+    .pa-score-critical { background: #dc2626; }
+    .pa-score-high     { background: #f97316; }
+    .pa-score-medium   { background: #eab308; }
+    .pa-score-low      { background: #16a34a; }
+    .pa-score-num {
+        font-family: 'JetBrains Mono', monospace; font-size: 12px;
+        font-weight: 700; min-width: 28px; text-align: right;
+    }
+    .pa-score-text-critical { color: #fca5a5; }
+    .pa-score-text-high     { color: #fdba74; }
+    .pa-score-text-medium   { color: #fde047; }
+    .pa-score-text-low      { color: #86efac; }
+
+    /* Pair list (shadowed/redundant) */
+    .pa-pair-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .pa-pair {
+        background: rgba(15,23,42,0.4);
+        border: 1px solid var(--border, #2a3242);
+        border-radius: 6px; padding: 10px 12px;
+    }
+    .pa-pair-row {
+        display: flex; align-items: center; gap: 10px; padding: 4px 0;
+    }
+    .pa-pair-row-bad   { background: rgba(239,68,68,0.06); border-left: 2px solid #ef4444; padding-left: 8px; }
+    .pa-pair-row-warn  { background: rgba(245,158,11,0.06); border-left: 2px solid #f59e0b; padding-left: 8px; }
+    .pa-pair-by {
+        font-size: 10px; color: #6b7280; padding: 2px 0 2px 16px;
+        text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .pa-pair-reason { font-size: 11px; color: #9ca3af; margin-top: 6px; line-height: 1.5; }
+
+    /* Empty state */
+    .pa-empty {
+        padding: 18px; text-align: center; font-size: 13px;
+        background: rgba(15,23,42,0.4); border-radius: 4px;
+    }
+    .pa-empty-good { color: #86efac; }
+
+    /* Object hygiene */
+    .pa-objects-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+        margin-bottom: 16px;
+    }
+    .pa-donut-card {
+        display: flex; align-items: center; gap: 14px;
+        background: rgba(15,23,42,0.4); border-radius: 6px;
+        padding: 12px;
+    }
+    .pa-donut {
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        background: conic-gradient(
+            #22c55e 0% calc(var(--pct, 0) * 1%),
+            rgba(100,116,139,0.2) calc(var(--pct, 0) * 1%) 100%
+        );
+        display: flex; align-items: center; justify-content: center;
+        position: relative;
+    }
+    .pa-donut::before {
+        content: ''; position: absolute;
+        inset: 8px; background: var(--bg-card, #1a1f2e); border-radius: 50%;
+    }
+    .pa-donut-num {
+        position: relative; z-index: 1;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 18px; font-weight: 700; color: #e5e7eb;
+    }
+    .pa-donut-label { font-size: 12px; color: #cbd5e1; line-height: 1.5; }
+    .pa-donut-label strong { color: #fff; }
+
+    .pa-collapse {
+        margin-top: 10px; font-size: 12px;
+    }
+    .pa-collapse > summary {
+        cursor: pointer; user-select: none; color: #93c5fd; padding: 6px 0;
+    }
+    .pa-chip-list {
+        display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
+        max-height: 240px; overflow-y: auto; padding: 4px;
+    }
+    .pa-sub-head { font-size: 13px; font-weight: 600; color: #e5e7eb; margin: 14px 0 8px; }
+    .pa-flow-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .pa-arrow { color: #93c5fd; font-weight: 600; padding: 0 4px; }
+
+    /* Hits column / window pill / mini-link */
+    .pa-hits-cell {
+        display: inline-flex; flex-direction: column; line-height: 1.2;
+    }
+    .pa-hits-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px; font-weight: 700; color: #93c5fd;
+    }
+    .pa-hits-last { font-size: 9px; color: #6b7280; }
+    .pa-hits-zero {
+        font-size: 11px; color: #6b7280; font-style: italic;
+    }
+    .pa-window {
+        font-size: 10px; font-weight: 500; color: #6b7280;
+        text-transform: lowercase; margin-left: 6px;
+        letter-spacing: 0;
+    }
+    .pa-mini-link {
+        font-size: 11px; color: #93c5fd; text-decoration: none;
+        white-space: nowrap;
+    }
+    .pa-mini-link:hover { text-decoration: underline; }
+    .pa-mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+    /* Sparkline column */
+    .pa-spark-cell {
+        width: 130px; padding: 4px 8px !important;
+    }
+    .pa-spark-cell svg { vertical-align: middle; }
+
+    /* Drift / activity heatmap */
+    .pa-heat-wrap {
+        overflow-x: auto; overflow-y: visible;
+        background: rgba(15,23,42,0.4); border-radius: 6px;
+        padding: 12px;
+    }
+    .pa-heat-grid {
+        display: grid;
+        grid-template-columns: 220px repeat(var(--days, 30), minmax(14px, 1fr));
+        gap: 2px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .pa-heat-corner {}
+    .pa-heat-day-label {
+        font-size: 9px; color: #6b7280; text-align: center; padding-bottom: 4px;
+        white-space: nowrap; overflow: hidden;
+    }
+    .pa-heat-row-label {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px;
+        font-size: 11px; color: #cbd5e1; padding: 0 8px;
+        white-space: nowrap; overflow: hidden;
+    }
+    .pa-heat-row-name {
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .pa-heat-row-total {
+        font-size: 10px; color: #6b7280; flex-shrink: 0;
+    }
+    .pa-heat-cell {
+        height: 22px; min-width: 14px;
+        border-radius: 3px;
+        /* i ranges 0..1; use a green→amber→red palette mapped through HSL.
+           This makes "lots of activity" visually warm without yelling at low values. */
+        background: hsl(
+            calc(140 - (var(--i, 0) * 130)),
+            calc(20% + (var(--i, 0) * 60%)),
+            calc(14% + (var(--i, 0) * 36%))
+        );
+    }
+    .pa-heat-cell:hover {
+        outline: 1px solid #93c5fd; outline-offset: 1px; cursor: help;
+    }
+    .pa-heat-legend {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 10px; color: #6b7280; margin-top: 12px;
+    }
+    .pa-heat-legend-cell { min-width: 18px; height: 18px; }
+    .pa-heat-foot { margin-left: auto; }
+
+    /* Zone reachability matrix */
+    .pa-rm-wrap {
+        background: rgba(15,23,42,0.4); border-radius: 6px;
+        padding: 12px; overflow-x: auto;
+    }
+    .pa-rm-table {
+        border-collapse: separate; border-spacing: 2px;
+        font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    }
+    .pa-rm-corner {
+        font-size: 9px; color: #6b7280; font-weight: 600;
+        padding: 4px 8px; text-align: right; vertical-align: bottom;
+        white-space: nowrap;
+    }
+    .pa-rm-col-head {
+        padding: 4px 6px; vertical-align: bottom;
+        height: 90px; min-width: 32px;
+    }
+    .pa-rm-col-name {
+        display: inline-block; transform: rotate(-45deg);
+        transform-origin: left bottom;
+        white-space: nowrap; color: #cbd5e1; font-size: 10px;
+    }
+    .pa-rm-row-head {
+        padding: 4px 8px; text-align: right;
+        color: #cbd5e1; font-size: 11px; font-weight: 500;
+        white-space: nowrap; max-width: 180px;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .pa-rm-cell {
+        width: 56px; height: 38px;
+        padding: 2px 4px; text-align: center;
+        border-radius: 3px;
+        line-height: 1.1;
+        cursor: help;
+    }
+    .pa-rm-num { font-size: 10px; font-weight: 700; }
+    .pa-rm-rules { color: rgba(255,255,255,0.95); }
+    .pa-rm-hits  { color: rgba(255,255,255,0.65); font-size: 9px; }
+
+    /* Cell state palette — picked so red+green are unambiguous on dark bg */
+    .pa-rm-state-gap              { background: rgba(100,116,139,0.10); }
+    .pa-rm-state-aligned          { background: rgba(34,197,94,0.32); }
+    .pa-rm-state-over-provisioned { background: rgba(59,130,246,0.32); }
+    .pa-rm-state-unauthorised     { background: rgba(239,68,68,0.42); }
+    .pa-rm-state-denied           { background: rgba(245,158,11,0.32); }
+
+    .pa-rm-legend {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        margin-top: 12px; align-items: center;
+    }
+    .pa-rm-key {
+        font-size: 10px; padding: 3px 8px; border-radius: 3px;
+        color: rgba(255,255,255,0.92); font-weight: 600;
+    }
+
+    /* Tab badge for the sidebar Analytics tab */
+    .tab-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        background: #ef4444; color: #fff;
+        font-size: 10px; font-weight: 700;
+        min-width: 18px; height: 18px; padding: 0 5px;
+        border-radius: 9px; margin-left: 4px;
+    }
+
+    /* Address / service objects collapsed-by-default */
+    .fw-objects-block {
+        margin-top: 1rem;
+    }
+    .fw-objects-block > summary {
+        cursor: pointer; user-select: none; padding: 8px 4px;
+    }
+    .fw-objects-count {
+        background: rgba(100,116,139,0.2); color: #94a3b8;
+        font-size: 11px; padding: 1px 8px; border-radius: 10px;
+        margin-left: 6px;
+    }
 </style>
 {% endblock %}
 
@@ -526,6 +1170,9 @@
         </button>
         <button onclick="fetchZones()" class="btn btn-success" id="fetch-zones-btn">
             Fetch Zones
+        </button>
+        <button onclick="fetchPolicies()" class="btn btn-success" id="fetch-policies-btn">
+            Fetch Policies
         </button>
         {% endif %}
         <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary">
@@ -582,14 +1229,54 @@
 {% if not has_credentials %}
 <div class="credential-alert">
     <div>
-        <strong>No SSH credentials configured.</strong>
-        Add credentials to enable routing table collection.
+        <strong>No SSH or API credentials configured.</strong>
+        Add credentials to enable routing / zone / policy collection.
     </div>
     <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary btn-sm">
         Add Credentials
     </a>
 </div>
 {% endif %}
+
+<!-- Management host: separate IP for SSH/API fetches if it differs from the syslog source IP -->
+<div class="mgmt-host-card" id="mgmt-host-card">
+    <div class="mgmt-host-row">
+        <div class="mgmt-host-col">
+            <div class="mgmt-host-label">Logging IP</div>
+            <div class="mgmt-host-value mgmt-host-locked">
+                <code>{{ device.ip_address }}</code>
+                <span class="mgmt-host-pin" title="The IP this device sends syslogs from. This cannot be changed — log identity depends on it.">syslog source</span>
+            </div>
+        </div>
+        <div class="mgmt-host-arrow">⇄</div>
+        <div class="mgmt-host-col">
+            <div class="mgmt-host-label">Management IP <small>(SSH / API)</small></div>
+            <div class="mgmt-host-value">
+                <code id="mgmt-host-display">{{ mgmt_host or device.ip_address }}</code>
+                {% if mgmt_host %}
+                <span class="mgmt-host-pin mgmt-host-pin-override">override</span>
+                {% else %}
+                <span class="mgmt-host-pin mgmt-host-pin-default">same as logging IP</span>
+                {% endif %}
+                <button type="button" class="mgmt-host-edit-btn" onclick="mgmtHostShowEdit()">Change</button>
+            </div>
+        </div>
+    </div>
+    <div class="mgmt-host-edit" id="mgmt-host-edit" hidden>
+        <div class="mgmt-host-edit-row">
+            <input type="text" id="mgmt-host-input"
+                   placeholder="Leave blank to use {{ device.ip_address }}"
+                   value="{{ mgmt_host or '' }}">
+            <button type="button" class="btn btn-primary btn-sm" onclick="mgmtHostSave()">Save</button>
+            <button type="button" class="btn btn-sm" onclick="mgmtHostCancel()" style="background: var(--border);">Cancel</button>
+        </div>
+        <div class="mgmt-host-help">
+            Routes / zones / firewall policies are fetched from this IP. Logs keep flowing from
+            <code>{{ device.ip_address }}</code> regardless. Leave blank to use the same IP for both.
+        </div>
+        <div class="mgmt-host-result" id="mgmt-host-result" hidden></div>
+    </div>
+</div>
 
 <!-- Global VDOM Selector - Outside tabs, applies to all data views -->
 {% if available_vdoms and available_vdoms|length > 0 %}
@@ -630,6 +1317,20 @@
     <div class="tabs">
         <div class="tab {% if current_tab == 'routes' %}active{% endif %}" data-tab="routes">Routing Table</div>
         <div class="tab {% if current_tab == 'zones' %}active{% endif %}" data-tab="zones">Zone / Interface / Subnet</div>
+        <div class="tab {% if current_tab == 'policies' %}active{% endif %}" data-tab="policies">Firewall Policies</div>
+        <div class="tab {% if current_tab == 'analytics' %}active{% endif %}" data-tab="analytics">
+            Analytics
+            {% if fw_analytics and (fw_analytics.kpi_critical_permissiveness + fw_analytics.kpi_shadowed_count + fw_analytics.kpi_unlogged_permits) > 0 %}
+            <span class="tab-badge">{{ fw_analytics.kpi_critical_permissiveness + fw_analytics.kpi_shadowed_count + fw_analytics.kpi_unlogged_permits }}</span>
+            {% endif %}
+        </div>
+        <div class="tab {% if current_tab == 'compliance' %}active{% endif %}" data-tab="compliance">
+            Compliance
+            {% if device_compliance %}
+            {% set _att_n = (device_compliance.values() | map(attribute='controls') | sum(start=[]) | selectattr('attested') | list | length) %}
+            {% if _att_n > 0 %}<span class="tab-badge" style="background:#059669;color:#fff">{{ _att_n }}</span>{% endif %}
+            {% endif %}
+        </div>
         <div class="tab {% if current_tab == 'changes' %}active{% endif %}" data-tab="changes">Route Changes</div>
         <div class="tab {% if current_tab == 'snapshots' %}active{% endif %}" data-tab="snapshots">Fetch History</div>
     </div>
@@ -665,7 +1366,7 @@
         </div>
 
         <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            Last fetched: {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            Last fetched: {{ snapshot.fetched_at | localdt }}
             (took {{ snapshot.fetch_duration_ms }}ms)
         </p>
 
@@ -773,7 +1474,7 @@
 
         {% if zone_snapshot %}
         <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            Last fetched: {{ zone_snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            Last fetched: {{ zone_snapshot.fetched_at | localdt }}
             (took {{ zone_snapshot.fetch_duration_ms }}ms)
         </p>
         {% endif %}
@@ -854,6 +1555,1109 @@
         {% endif %}
     </div>
 
+    <!-- Firewall Policies Tab -->
+    <div class="tab-content {% if current_tab == 'policies' %}active{% endif %}" id="tab-policies">
+        {% if fw_snapshot %}
+        <div class="zone-stats">
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.policy_count }}</div>
+                <div class="zone-stat-label">Policies</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }}</div>
+                <div class="zone-stat-label">Address Objects</div>
+            </div>
+            <div class="zone-stat">
+                <div class="zone-stat-value">{{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }}</div>
+                <div class="zone-stat-label">Service Objects</div>
+            </div>
+        </div>
+
+        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+            Last fetched: {{ fw_snapshot.fetched_at | localdt }}
+            (took {{ fw_snapshot.fetch_duration_ms or 0 }}ms)
+        </p>
+
+        <div style="display:flex; justify-content:flex-end; margin-bottom:.5rem;">
+            <a class="btn btn-secondary"
+               href="{{ url_for('device_learning_mode', device_id=device.id) }}"
+               title="Pick a broad policy and let the system suggest narrower rules from observed traffic.">
+                🎯 Learning Mode
+            </a>
+        </div>
+
+        <div class="zone-search-box">
+            <input type="text" id="policy-search" placeholder="Filter policies (name, src, dst, service, action)…"
+                   onkeyup="filterPolicies()">
+        </div>
+
+        {% if fw_policies %}
+        {# Pre-serialise the address/service maps for client-side resolution
+           in the inline detail panel — avoids one HTTP round-trip per row. #}
+        <script id="fw-addr-map" type="application/json">{{ fw_addr_map_json | tojson }}</script>
+        <script id="fw-svc-map" type="application/json">{{ fw_svc_map_json | tojson }}</script>
+        <script id="fw-pol-extras" type="application/json">{{ fw_policy_extras_json | tojson }}</script>
+
+        <div class="fw-policies-list">
+            {% for p in fw_policies %}
+            {% set act_class = 'allow' if p.action in ('accept','allow','pass') else 'deny' %}
+            <div class="fw-policy-card {{ 'fw-policy-' ~ act_class }}{% if not p.enabled %} fw-policy-disabled{% endif %}"
+                 data-pol-id="pol-{{ p.id }}"
+                 data-search="{{ ((p.name or '') ~ ' ' ~ (p.rule_id or '') ~ ' ' ~ (p.src_addresses|join(' ') if p.src_addresses else '') ~ ' ' ~ (p.dst_addresses|join(' ') if p.dst_addresses else '') ~ ' ' ~ (p.services|join(' ') if p.services else '') ~ ' ' ~ p.action) | lower }}"
+                 onclick="toggleFwPolicy('pol-{{ p.id }}')">
+                <div class="fw-policy-row">
+                    <div class="fw-pol-pos">#{{ p.position }}</div>
+                    <div class="fw-pol-name">
+                        <div class="fw-pol-title">{{ p.name or ('Rule ' ~ p.rule_id) }}</div>
+                        <div class="fw-pol-id">id: {{ p.rule_id or '-' }}{% if p.comment %} · {{ p.comment[:60] }}{% endif %}</div>
+                    </div>
+                    <div class="fw-pol-flow">
+                        <div class="fw-pol-side">
+                            {% for z in (p.src_zones or []) %}<span class="fw-chip fw-chip-zone">{{ z }}</span>{% endfor %}
+                            {% for a in (p.src_addresses or [])[:3] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                            {% if (p.src_addresses or [])|length > 3 %}<span class="fw-chip fw-chip-more">+{{ (p.src_addresses|length) - 3 }}</span>{% endif %}
+                        </div>
+                        <div class="fw-pol-arrow">→</div>
+                        <div class="fw-pol-side">
+                            {% for z in (p.dst_zones or []) %}<span class="fw-chip fw-chip-zone">{{ z }}</span>{% endfor %}
+                            {% for a in (p.dst_addresses or [])[:3] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                            {% if (p.dst_addresses or [])|length > 3 %}<span class="fw-chip fw-chip-more">+{{ (p.dst_addresses|length) - 3 }}</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="fw-pol-svc">
+                        {% for s in (p.services or [])[:3] %}<span class="fw-chip fw-chip-svc">{{ s }}</span>{% endfor %}
+                        {% if (p.services or [])|length > 3 %}<span class="fw-chip fw-chip-more">+{{ (p.services|length) - 3 }}</span>{% endif %}
+                    </div>
+                    <div class="fw-pol-flags">
+                        <span class="fw-chip fw-chip-action fw-chip-action-{{ act_class }}">{{ p.action }}</span>
+                        {% if p.nat_enabled %}<span class="fw-chip fw-chip-nat">NAT</span>{% endif %}
+                        {% if not p.enabled %}<span class="fw-chip fw-chip-off">DISABLED</span>{% endif %}
+                        {% if p.name and p.action in ('accept','allow','pass') %}
+                        <a class="fw-chip fw-chip-svc"
+                           href="{{ url_for('device_learning_mode', device_id=device.id) }}?policy_name={{ p.name | urlencode }}"
+                           title="Suggest narrower rules from real traffic"
+                           onclick="event.stopPropagation()">🎯 learn</a>
+                        {% endif %}
+                    </div>
+                    <div class="fw-pol-chevron">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                </div>
+                {# Detail panel intentionally empty — built client-side from
+                   fw-pol-extras on first expand. Keeps the initial HTML
+                   ~5 KB per row instead of ~10 KB. #}
+                <div class="fw-policy-detail" id="pol-{{ p.id }}-detail" hidden></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-data" style="padding:1rem;">
+            <p>No security policies parsed in the latest snapshot.</p>
+        </div>
+        {% endif %}
+
+        {# Address & Service objects collapsed by default — they can be heavy #}
+        {% if fw_addresses %}
+        <details class="fw-objects-block">
+            <summary><strong>Address Objects</strong> <span class="fw-objects-count">{{ fw_addresses|length }}</span></summary>
+            <div style="max-height: 360px; overflow-y: auto; margin-top: 0.5rem;">
+                <table class="zone-table">
+                    <thead><tr><th>Name</th><th>Kind</th><th>Value / Members</th><th>Comment</th></tr></thead>
+                    <tbody>
+                        {% for a in fw_addresses %}
+                        <tr>
+                            <td><span class="interface-badge">{{ a.name }}</span></td>
+                            <td><span class="type-badge">{{ a.kind }}</span></td>
+                            <td>
+                                {% if a.kind == 'group' %}
+                                    {% for m in (a.members or []) %}<span class="zone-badge">{{ m }}</span>{% endfor %}
+                                {% else %}
+                                    <code>{{ a.value or '-' }}</code>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted text-sm">{{ a.comment or '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        {% endif %}
+
+        {% if fw_services %}
+        <details class="fw-objects-block">
+            <summary><strong>Service Objects</strong> <span class="fw-objects-count">{{ fw_services|length }}</span></summary>
+            <div style="max-height: 360px; overflow-y: auto; margin-top: 0.5rem;">
+                <table class="zone-table">
+                    <thead><tr><th>Name</th><th>Protocol</th><th>Ports / Members</th><th>Category</th></tr></thead>
+                    <tbody>
+                        {% for s in fw_services %}
+                        <tr>
+                            <td><span class="interface-badge">{{ s.name }}</span></td>
+                            <td><span class="type-badge">{{ s.protocol }}</span></td>
+                            <td>
+                                {% if s.protocol == 'group' %}
+                                    {% for m in (s.members or []) %}<span class="zone-badge">{{ m }}</span>{% endfor %}
+                                {% else %}
+                                    <code>{{ s.ports or '-' }}</code>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted text-sm">{{ s.category or '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        {% endif %}
+
+        {% else %}
+        <div class="no-data">
+            <div class="no-data-icon">📜</div>
+            <h3>No Firewall Policy Data</h3>
+            <p>No firewall policies have been fetched for this device yet.</p>
+            {% if has_credentials %}
+            <button onclick="fetchPolicies()" class="btn btn-primary" style="margin-top: 1rem;">
+                Fetch Firewall Policies Now
+            </button>
+            {% else %}
+            <a href="{{ url_for('device_credentials', device_id=device.id) }}" class="btn btn-primary" style="margin-top: 1rem;">
+                Add Credentials First
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Analytics Tab -->
+    <div class="tab-content {% if current_tab == 'analytics' %}active{% endif %}" id="tab-analytics">
+        {% if fw_analytics and fw_snapshot %}
+        {% set A = fw_analytics %}
+
+        {# Report actions — stays out of the KPI strip so it doesn't shift layout on narrow screens #}
+        <div class="pa-report-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+            <a href="{{ url_for('device_analytics_pdf', device_id=device.id) }}{% if selected_vdom %}?vdom={{ selected_vdom }}{% endif %}"
+               class="btn btn-primary"
+               target="_blank" rel="noopener"
+               title="Generate a printable PDF of this analytics view">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/>
+                    <polyline points="9 15 12 18 15 15"/>
+                </svg>
+                Download PDF Report
+            </a>
+        </div>
+
+        {# Top KPI strip — what an analyst checks first thing in the morning #}
+        <div class="pa-kpi-strip">
+            <div class="pa-kpi pa-kpi-neutral">
+                <div class="pa-kpi-value">{{ A.kpi_active_rules }}</div>
+                <div class="pa-kpi-label">Active rules</div>
+                <div class="pa-kpi-sub">{{ A.kpi_disabled_rules }} disabled</div>
+            </div>
+            <div class="pa-kpi {{ 'pa-kpi-bad' if A.kpi_critical_permissiveness else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_avg_permissiveness }}<span class="pa-kpi-unit">/100</span></div>
+                <div class="pa-kpi-label">Avg permissiveness</div>
+                <div class="pa-kpi-sub">{{ A.kpi_critical_permissiveness }} critical</div>
+            </div>
+            <div class="pa-kpi {{ 'pa-kpi-bad' if A.kpi_shadowed_count else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_shadowed_count }}</div>
+                <div class="pa-kpi-label">Shadowed rules</div>
+                <div class="pa-kpi-sub">never reachable</div>
+            </div>
+            <div class="pa-kpi {{ 'pa-kpi-warn' if A.kpi_redundant_count else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_redundant_count }}</div>
+                <div class="pa-kpi-label">Redundant rules</div>
+                <div class="pa-kpi-sub">duplicate work</div>
+            </div>
+            <div class="pa-kpi {{ 'pa-kpi-bad' if A.kpi_unlogged_permits else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_unlogged_permits }}</div>
+                <div class="pa-kpi-label">Unlogged permits</div>
+                <div class="pa-kpi-sub">SIEM blind spot</div>
+            </div>
+            <div class="pa-kpi {{ 'pa-kpi-warn' if A.kpi_unreferenced_objects else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_unreferenced_objects }}</div>
+                <div class="pa-kpi-label">Unused objects</div>
+                <div class="pa-kpi-sub">addr + svc</div>
+            </div>
+            {% if A.log_window_hours %}
+            <div class="pa-kpi {{ 'pa-kpi-bad' if A.kpi_zero_hit_30d > 0 else 'pa-kpi-good' }}">
+                <div class="pa-kpi-value">{{ A.kpi_zero_hit_30d }}</div>
+                <div class="pa-kpi-label">Zero-hit rules (30d)</div>
+                <div class="pa-kpi-sub">cleanup candidates</div>
+            </div>
+            <div class="pa-kpi pa-kpi-neutral">
+                <div class="pa-kpi-value">{{ '{:,}'.format(A.kpi_total_hits_30d) if A.kpi_total_hits_30d < 1000000 else '%.1fM' | format(A.kpi_total_hits_30d / 1000000) }}</div>
+                <div class="pa-kpi-label">Total hits (30d)</div>
+                <div class="pa-kpi-sub">across all rules</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Sidebar nav + main panel #}
+        <div class="pa-shell">
+            <aside class="pa-sidebar">
+                <div class="pa-side-section">Hygiene</div>
+                <a class="pa-side-link active" href="#pa-shadowed">
+                    <span>Shadowed rules</span><span class="pa-side-count">{{ A.kpi_shadowed_count }}</span></a>
+                <a class="pa-side-link" href="#pa-redundant">
+                    <span>Redundant rules</span><span class="pa-side-count">{{ A.kpi_redundant_count }}</span></a>
+                <a class="pa-side-link" href="#pa-objects">
+                    <span>Object hygiene</span><span class="pa-side-count">{{ A.kpi_unreferenced_objects }}</span></a>
+
+                <div class="pa-side-section">Risk</div>
+                <a class="pa-side-link" href="#pa-permissive">
+                    <span>Permissiveness</span><span class="pa-side-count pa-side-count-bad">{{ A.kpi_critical_permissiveness }}</span></a>
+                <a class="pa-side-link" href="#pa-unlogged">
+                    <span>Unlogged permits</span><span class="pa-side-count pa-side-count-bad">{{ A.kpi_unlogged_permits }}</span></a>
+
+                {% if A.log_window_hours %}
+                <div class="pa-side-section">Usage</div>
+                <a class="pa-side-link" href="#pa-zerohit">
+                    <span>Zero-hit rules</span><span class="pa-side-count {% if A.kpi_zero_hit_30d %}pa-side-count-bad{% endif %}">{{ A.kpi_zero_hit_30d }}</span></a>
+                <a class="pa-side-link" href="#pa-implicit-deny">
+                    <span>Implicit-deny hits</span><span class="pa-side-count {% if A.implicit_deny %}pa-side-count-bad{% endif %}">{{ A.implicit_deny|length }}</span></a>
+                {% if A.daily_hits %}
+                <a class="pa-side-link" href="#pa-heatmap">
+                    <span>Activity heatmap</span><span class="pa-side-count">{{ A.daily_window_days }}d</span></a>
+                {% endif %}
+                {% endif %}
+
+                {% if A.reachability %}
+                <div class="pa-side-section">Coverage</div>
+                <a class="pa-side-link" href="#pa-reachability">
+                    <span>Zone reachability</span><span class="pa-side-count">{{ A.reachability.src_zones|length }}×{{ A.reachability.dst_zones|length }}</span></a>
+                {% endif %}
+
+                <div class="pa-side-foot">
+                    Snapshot {{ fw_snapshot.fetched_at | localdt('%Y-%m-%d %H:%M') }}<br>
+                    {{ A.kpi_active_rules + A.kpi_disabled_rules }} rules ·
+                    {{ fw_snapshot.address_count + fw_snapshot.addrgrp_count }} addrs ·
+                    {{ fw_snapshot.service_count + fw_snapshot.servicegrp_count }} svcs
+                </div>
+            </aside>
+
+            <div class="pa-main">
+
+                {# ── Permissiveness ─────────────────────────────── #}
+                <section class="pa-widget" id="pa-permissive">
+                    <div class="pa-widget-head">
+                        <h3>Permissiveness score</h3>
+                        <p class="pa-widget-desc">Each "any" dimension adds risk. Highest-risk rules first.</p>
+                    </div>
+                    {% set bands = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0} %}
+                    {% for r in A.permissiveness %}{% set _ = bands.update({r.band: bands[r.band] + 1}) %}{% endfor %}
+                    <div class="pa-band-bar">
+                        {% for b in ['critical','high','medium','low'] %}
+                            {% if bands[b] %}
+                            <span class="pa-band pa-band-{{ b }}" style="flex: {{ bands[b] }}" title="{{ bands[b] }} {{ b }} rules">
+                                {{ b }} · {{ bands[b] }}
+                            </span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="pa-table-wrap">
+                        <table class="pa-table">
+                            <thead><tr><th>#</th><th>Rule</th><th>Action</th><th>Flags</th><th>Score</th>{% if A.log_window_hours %}<th>Hits (30d)</th><th>Trend</th>{% endif %}</tr></thead>
+                            <tbody>
+                                {% for r in A.permissiveness[:25] %}
+                                {% set rule_key = (r.rule.name or r.rule.rule_id or '') | lower %}
+                                {% set hit_info = A.hits_by_name.get(rule_key) %}
+                                {% set series = A.daily_hits.get(rule_key) %}
+                                <tr>
+                                    <td class="pa-pos">#{{ r.rule.position }}</td>
+                                    <td>
+                                        <div class="pa-rule-name">{{ r.rule.name or 'Rule ' ~ r.rule.rule_id }}</div>
+                                        <div class="pa-rule-id">id: {{ r.rule.rule_id or '-' }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if r.rule.action in ('accept','allow','pass') else 'deny' }}">{{ r.rule.action }}</span>
+                                    </td>
+                                    <td>
+                                        {% for f in r.flags %}<span class="pa-flag-chip">{{ f }}</span>{% endfor %}
+                                    </td>
+                                    <td>
+                                        <div class="pa-score-cell">
+                                            <div class="pa-score-bar">
+                                                <div class="pa-score-fill pa-score-{{ r.band }}" style="width: {{ r.score }}%"></div>
+                                            </div>
+                                            <span class="pa-score-num pa-score-text-{{ r.band }}">{{ r.score }}</span>
+                                        </div>
+                                    </td>
+                                    {% if A.log_window_hours %}
+                                    <td>
+                                        {% if hit_info %}
+                                            <div class="pa-hits-cell">
+                                                <span class="pa-hits-num">{{ '{:,}'.format(hit_info.hits) }}</span>
+                                                <span class="pa-hits-last">last {{ (hit_info.last_seen | localdt('%Y-%m-%d %H:%M')) if hit_info.last_seen else '—' }}</span>
+                                            </div>
+                                        {% else %}
+                                            <span class="pa-hits-zero">no hits</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="pa-spark-cell">
+                                        {% if series %}{{ series | sparkline(120, 26, '#93c5fd') | safe }}{% else %}<span class="pa-hits-zero">—</span>{% endif %}
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if A.permissiveness|length > 25 %}
+                    <div class="pa-widget-foot">Showing top 25 of {{ A.permissiveness|length }} rules.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Shadowed rules ─────────────────────────────── #}
+                <section class="pa-widget" id="pa-shadowed">
+                    <div class="pa-widget-head">
+                        <h3>Shadowed rules</h3>
+                        <p class="pa-widget-desc">An earlier rule with a different action already matches every flow these rules would handle. Safe to disable.</p>
+                    </div>
+                    {% if A.shadowed %}
+                    <ul class="pa-pair-list">
+                        {% for s in A.shadowed %}
+                        <li class="pa-pair">
+                            <div class="pa-pair-row pa-pair-row-bad">
+                                <span class="pa-pos">#{{ s.rule.position }}</span>
+                                <span class="pa-rule-name">{{ s.rule.name or 'Rule ' ~ s.rule.rule_id }}</span>
+                                <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if s.rule.action in ('accept','allow','pass') else 'deny' }}">{{ s.rule.action }}</span>
+                            </div>
+                            <div class="pa-pair-by">shadowed by</div>
+                            <div class="pa-pair-row">
+                                <span class="pa-pos">#{{ s.shadowed_by.position }}</span>
+                                <span class="pa-rule-name">{{ s.shadowed_by.name or 'Rule ' ~ s.shadowed_by.rule_id }}</span>
+                                <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if s.shadowed_by.action in ('accept','allow','pass') else 'deny' }}">{{ s.shadowed_by.action }}</span>
+                            </div>
+                            <div class="pa-pair-reason">{{ s.reason }}</div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="pa-empty pa-empty-good">✓ No shadowed rules detected.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Redundant rules ────────────────────────────── #}
+                <section class="pa-widget" id="pa-redundant">
+                    <div class="pa-widget-head">
+                        <h3>Redundant rules</h3>
+                        <p class="pa-widget-desc">These rules duplicate the action of an earlier broader rule. Removing them simplifies the rule base.</p>
+                    </div>
+                    {% if A.redundant %}
+                    <ul class="pa-pair-list">
+                        {% for r in A.redundant %}
+                        <li class="pa-pair">
+                            <div class="pa-pair-row pa-pair-row-warn">
+                                <span class="pa-pos">#{{ r.rule.position }}</span>
+                                <span class="pa-rule-name">{{ r.rule.name or 'Rule ' ~ r.rule.rule_id }}</span>
+                                <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if r.rule.action in ('accept','allow','pass') else 'deny' }}">{{ r.rule.action }}</span>
+                            </div>
+                            <div class="pa-pair-by">duplicate of</div>
+                            <div class="pa-pair-row">
+                                <span class="pa-pos">#{{ r.duplicate_of.position }}</span>
+                                <span class="pa-rule-name">{{ r.duplicate_of.name or 'Rule ' ~ r.duplicate_of.rule_id }}</span>
+                                <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if r.duplicate_of.action in ('accept','allow','pass') else 'deny' }}">{{ r.duplicate_of.action }}</span>
+                            </div>
+                            <div class="pa-pair-reason">{{ r.reason }}</div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="pa-empty pa-empty-good">✓ No redundant rules detected.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Unlogged permits ───────────────────────────── #}
+                <section class="pa-widget" id="pa-unlogged">
+                    <div class="pa-widget-head">
+                        <h3>Unlogged permit rules</h3>
+                        <p class="pa-widget-desc">Permit rules without traffic logging — flows matched here are invisible to SIEM.</p>
+                    </div>
+                    {% if A.unlogged_permits %}
+                    <div class="pa-table-wrap">
+                        <table class="pa-table">
+                            <thead><tr><th>#</th><th>Rule</th><th>Source → Destination</th><th>Service</th><th>Risk</th></tr></thead>
+                            <tbody>
+                                {% for u in A.unlogged_permits %}
+                                <tr>
+                                    <td class="pa-pos">#{{ u.rule.position }}</td>
+                                    <td>
+                                        <div class="pa-rule-name">{{ u.rule.name or 'Rule ' ~ u.rule.rule_id }}</div>
+                                        <div class="pa-rule-id">id: {{ u.rule.rule_id or '-' }}</div>
+                                    </td>
+                                    <td class="pa-flow-cell">
+                                        {% for a in (u.rule.src_addresses or [])[:2] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                                        <span class="pa-arrow">→</span>
+                                        {% for a in (u.rule.dst_addresses or [])[:2] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for s in (u.rule.services or [])[:3] %}<span class="fw-chip fw-chip-svc">{{ s }}</span>{% endfor %}
+                                    </td>
+                                    <td><span class="fw-chip fw-chip-action-deny">log-off</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="pa-empty pa-empty-good">✓ All permit rules have logging enabled.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Zero-hit rules (Phase 2) ──────────────────── #}
+                {% if A.log_window_hours %}
+                <section class="pa-widget" id="pa-zerohit">
+                    <div class="pa-widget-head">
+                        <h3>Zero-hit rules <span class="pa-window">last {{ A.log_window_hours }}h</span></h3>
+                        <p class="pa-widget-desc">Active rules with no traffic in the time window. Likely cleanup candidates — verify before disabling.</p>
+                    </div>
+                    {% if A.zero_hit_rules %}
+                    <div class="pa-table-wrap">
+                        <table class="pa-table">
+                            <thead><tr><th>#</th><th>Rule</th><th>Action</th><th>Source → Destination</th><th>Service</th></tr></thead>
+                            <tbody>
+                                {% for p in A.zero_hit_rules[:50] %}
+                                <tr>
+                                    <td class="pa-pos">#{{ p.position }}</td>
+                                    <td>
+                                        <div class="pa-rule-name">{{ p.name or 'Rule ' ~ p.rule_id }}</div>
+                                        <div class="pa-rule-id">id: {{ p.rule_id or '-' }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-chip fw-chip-action fw-chip-action-{{ 'allow' if p.action in ('accept','allow','pass') else 'deny' }}">{{ p.action }}</span>
+                                    </td>
+                                    <td class="pa-flow-cell">
+                                        {% for a in (p.src_addresses or [])[:2] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                                        <span class="pa-arrow">→</span>
+                                        {% for a in (p.dst_addresses or [])[:2] %}<span class="fw-chip fw-chip-addr">{{ a }}</span>{% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for s in (p.services or [])[:3] %}<span class="fw-chip fw-chip-svc">{{ s }}</span>{% endfor %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if A.zero_hit_rules|length > 50 %}
+                    <div class="pa-widget-foot">Showing first 50 of {{ A.zero_hit_rules|length }} zero-hit rules.</div>
+                    {% endif %}
+                    {% else %}
+                    <div class="pa-empty pa-empty-good">✓ Every active rule has been hit in the last {{ A.log_window_hours }} hours.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Implicit-deny spotlight (Phase 2) ─────────── #}
+                <section class="pa-widget" id="pa-implicit-deny">
+                    <div class="pa-widget-head">
+                        <h3>Implicit-deny hits <span class="pa-window">last {{ A.log_window_hours }}h</span></h3>
+                        <p class="pa-widget-desc">Top denied flows that hit no named policy — these are flows users likely want and may need a new rule.</p>
+                    </div>
+                    {% if A.implicit_deny %}
+                    <div class="pa-table-wrap">
+                        <table class="pa-table">
+                            <thead><tr><th>Source IP</th><th>Destination</th><th>Port</th><th>Proto</th><th>Hits</th><th></th></tr></thead>
+                            <tbody>
+                                {% for r in A.implicit_deny %}
+                                <tr>
+                                    <td class="pa-mono">{{ r.srcip }}</td>
+                                    <td class="pa-mono">{{ r.dstip }}</td>
+                                    <td class="pa-mono">{{ r.dstport or '—' }}</td>
+                                    <td class="pa-mono">{{ {6:'tcp', 17:'udp', 1:'icmp'}.get(r.proto, r.proto) }}</td>
+                                    <td><strong>{{ '{:,}'.format(r.hits) }}</strong></td>
+                                    <td>
+                                        <a class="pa-mini-link" target="_blank"
+                                           href="/policy-lookup/?dstip={{ r.dstip }}&dstport={{ r.dstport }}&srcip={{ r.srcip }}&time_range=24h">
+                                            Lookup →
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="pa-empty pa-empty-good">✓ No implicit-deny noise in the time window.</div>
+                    {% endif %}
+                </section>
+
+                {# ── Drift heatmap (Phase 3) ──────────────────── #}
+                {% if A.daily_hits %}
+                <section class="pa-widget" id="pa-heatmap">
+                    <div class="pa-widget-head">
+                        <h3>Activity heatmap <span class="pa-window">{{ A.daily_window_days }}d × per rule</span></h3>
+                        <p class="pa-widget-desc">Hits per day per rule, log-scaled. Spot dying or spiking rules at a glance — empty rows are zero-hit candidates.</p>
+                    </div>
+                    {# Sort rules by total hits descending; show top 30 with traffic. #}
+                    {% set ranked = [] %}
+                    {% for p in fw_policies %}
+                        {% set k = (p.name or p.rule_id or '') | lower %}
+                        {% set s = A.daily_hits.get(k) %}
+                        {% if s and s | sum > 0 %}
+                            {% set _ = ranked.append((p, s, s | sum)) %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set ranked = ranked | sort(attribute=2, reverse=True) %}
+                    {% set top_total = ranked[0][2] if ranked else 1 %}
+                    {% if ranked %}
+                    <div class="pa-heat-wrap">
+                        <div class="pa-heat-grid" style="--days: {{ A.daily_window_days }};">
+                            <div class="pa-heat-corner"></div>
+                            {% for d in range(A.daily_window_days) %}
+                            <div class="pa-heat-day-label">{% if d % 5 == 0 or d == A.daily_window_days - 1 %}D-{{ A.daily_window_days - 1 - d }}{% endif %}</div>
+                            {% endfor %}
+
+                            {% for p, series, total in ranked[:30] %}
+                            <div class="pa-heat-row-label" title="{{ p.name or 'Rule ' ~ p.rule_id }}">
+                                <span class="pa-heat-row-name">{{ (p.name or 'Rule ' ~ p.rule_id)[:24] }}</span>
+                                <span class="pa-heat-row-total">{{ '{:,}'.format(total) if total < 1000000 else '%.1fM' | format(total / 1000000) }}</span>
+                            </div>
+                            {% set max_in_series = series | max %}
+                            {% for v in series %}
+                                {% if v == 0 %}
+                                    {% set intensity = 0 %}
+                                {% else %}
+                                    {# log-scale within this rule's own range — so a quiet rule
+                                       with consistent traffic looks consistent, while a noisy
+                                       rule's spikes still pop. #}
+                                    {% set intensity = ((v / max_in_series) ** 0.5) %}
+                                {% endif %}
+                                <div class="pa-heat-cell"
+                                     style="--i: {{ intensity }}"
+                                     title="D-{{ A.daily_window_days - 1 - loop.index0 }}: {{ '{:,}'.format(v) }} hits"></div>
+                            {% endfor %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="pa-heat-legend">
+                        <span>Less</span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.25"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.5"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 0.75"></span>
+                        <span class="pa-heat-cell pa-heat-legend-cell" style="--i: 1"></span>
+                        <span>More</span>
+                        <span class="pa-heat-foot">Showing top {{ [ranked|length, 30] | min }} of {{ ranked|length }} rules with traffic.</span>
+                    </div>
+                    {% else %}
+                    <div class="pa-empty">No daily traffic data yet.</div>
+                    {% endif %}
+                </section>
+                {% endif %}{# end of A.daily_hits #}
+                {% endif %}{# end of A.log_window_hours wrapping zero-hit + implicit-deny + heatmap #}
+
+                {# ── Zone reachability matrix (Phase 4) ───────── #}
+                {% if A.reachability %}
+                {% set R = A.reachability %}
+                <section class="pa-widget" id="pa-reachability">
+                    <div class="pa-widget-head">
+                        <h3>Zone reachability matrix
+                            <span class="pa-window">
+                                {{ R.src_zones|length }} src × {{ R.dst_zones|length }} dst zones
+                                {% if R.has_observed %} · observed last 7d{% endif %}
+                            </span>
+                        </h3>
+                        <p class="pa-widget-desc">
+                            Each cell shows configured permits ↘ vs observed traffic ↗ between zone pairs.
+                            <strong>Red</strong> = traffic flows but no permit rule (deny / asymmetric).
+                            <strong>Blue</strong> = configured but unused (over-provisioned).
+                            <strong>Green</strong> = aligned. Empty = intended gap.
+                        </p>
+                    </div>
+                    <div class="pa-rm-wrap">
+                        <table class="pa-rm-table">
+                            <thead>
+                                <tr>
+                                    <th class="pa-rm-corner">SRC ↓ / DST →</th>
+                                    {% for d in R.dst_zones %}
+                                    <th class="pa-rm-col-head">
+                                        <span class="pa-rm-col-name">{{ d }}</span>
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in R.src_zones %}
+                                <tr>
+                                    <th class="pa-rm-row-head">{{ s }}</th>
+                                    {% for d in R.dst_zones %}
+                                    {% set c = R.cell(s, d) %}
+                                    <td class="pa-rm-cell pa-rm-state-{{ c.state }}"
+                                        title="{{ s }} → {{ d }} · {{ c.rule_count }} permit rule(s) · {{ c.deny_rule_count }} deny rule(s) · {{ '{:,}'.format(c.observed_hits) }} observed hits">
+                                        {% if c.rule_count or c.deny_rule_count or c.observed_hits %}
+                                            <div class="pa-rm-num pa-rm-rules">{{ c.rule_count if c.rule_count else (('-' ~ c.deny_rule_count) if c.deny_rule_count else '·') }}</div>
+                                            <div class="pa-rm-num pa-rm-hits">
+                                                {% if c.observed_hits >= 1000000 %}{{ '%.1fM' | format(c.observed_hits / 1000000) }}
+                                                {% elif c.observed_hits >= 1000 %}{{ '%.1fk' | format(c.observed_hits / 1000) }}
+                                                {% elif c.observed_hits %}{{ c.observed_hits }}
+                                                {% else %}·{% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pa-rm-legend">
+                        <span class="pa-rm-key pa-rm-state-aligned">aligned</span>
+                        <span class="pa-rm-key pa-rm-state-over-provisioned">over-provisioned</span>
+                        <span class="pa-rm-key pa-rm-state-unauthorised">unauthorised / asymmetric</span>
+                        <span class="pa-rm-key pa-rm-state-denied">explicit deny</span>
+                        <span class="pa-rm-key pa-rm-state-gap">no rule, no traffic</span>
+                    </div>
+                </section>
+                {% endif %}
+
+                {# ── Object hygiene ─────────────────────────────── #}
+                <section class="pa-widget" id="pa-objects">
+                    <div class="pa-widget-head">
+                        <h3>Object hygiene</h3>
+                        <p class="pa-widget-desc">Address & service objects not referenced by any rule, or duplicating each other's value.</p>
+                    </div>
+
+                    <div class="pa-objects-grid">
+                        <div>
+                            <div class="pa-donut-card">
+                                <div class="pa-donut" style="--pct: {{ (A.object_hygiene.referenced_addrs / A.object_hygiene.total_addrs * 100) | round if A.object_hygiene.total_addrs else 0 }};">
+                                    <div class="pa-donut-num">{{ (A.object_hygiene.referenced_addrs / A.object_hygiene.total_addrs * 100) | round if A.object_hygiene.total_addrs else 0 }}<span style="font-size:14px">%</span></div>
+                                </div>
+                                <div class="pa-donut-label">
+                                    <strong>{{ A.object_hygiene.referenced_addrs }}/{{ A.object_hygiene.total_addrs }}</strong>
+                                    address objects in use
+                                </div>
+                            </div>
+                            {% if A.object_hygiene.unreferenced_addrs %}
+                            <details class="pa-collapse">
+                                <summary>{{ A.object_hygiene.unreferenced_addrs|length }} unreferenced address objects</summary>
+                                <div class="pa-chip-list">
+                                    {% for a in A.object_hygiene.unreferenced_addrs %}
+                                    <span class="fw-chip fw-chip-addr" title="{{ a.kind }}: {{ a.value or (a.members|join(', ') if a.members else '') }}">{{ a.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </details>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <div class="pa-donut-card">
+                                <div class="pa-donut" style="--pct: {{ (A.object_hygiene.referenced_services / A.object_hygiene.total_services * 100) | round if A.object_hygiene.total_services else 0 }};">
+                                    <div class="pa-donut-num">{{ (A.object_hygiene.referenced_services / A.object_hygiene.total_services * 100) | round if A.object_hygiene.total_services else 0 }}<span style="font-size:14px">%</span></div>
+                                </div>
+                                <div class="pa-donut-label">
+                                    <strong>{{ A.object_hygiene.referenced_services }}/{{ A.object_hygiene.total_services }}</strong>
+                                    service objects in use
+                                </div>
+                            </div>
+                            {% if A.object_hygiene.unreferenced_services %}
+                            <details class="pa-collapse">
+                                <summary>{{ A.object_hygiene.unreferenced_services|length }} unreferenced service objects</summary>
+                                <div class="pa-chip-list">
+                                    {% for s in A.object_hygiene.unreferenced_services %}
+                                    <span class="fw-chip fw-chip-svc" title="{{ s.protocol }}/{{ s.ports or '' }}">{{ s.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </details>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if A.object_hygiene.duplicate_addr_groups %}
+                    <h4 class="pa-sub-head">Duplicate address values ({{ A.object_hygiene.duplicate_addr_groups|length }} groups)</h4>
+                    <div class="pa-table-wrap">
+                        <table class="pa-table">
+                            <thead><tr><th>Value</th><th>Objects with this value</th></tr></thead>
+                            <tbody>
+                                {% for value, group in A.object_hygiene.duplicate_addr_groups[:10] %}
+                                <tr>
+                                    <td><code>{{ value }}</code></td>
+                                    <td>
+                                        {% for a in group %}<span class="fw-chip fw-chip-addr">{{ a.name }}</span>{% endfor %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </section>
+
+            </div>
+        </div>
+
+        {% else %}
+        <div class="no-data" style="padding:1.5rem;">
+            <div class="no-data-icon">📊</div>
+            <h3>No analytics data yet</h3>
+            <p>Fetch firewall policies first — analytics derive from the latest policy snapshot.</p>
+            {% if has_credentials %}
+            <button onclick="fetchPolicies()" class="btn btn-primary" style="margin-top: 1rem;">
+                Fetch Firewall Policies Now
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Compliance Tab -->
+    <div class="tab-content {% if current_tab == 'compliance' %}active{% endif %}" id="tab-compliance">
+        {% if device_compliance %}
+        <style>
+            .cmp-intro { color: #94a3b8; font-size: 13px; margin: 4px 0 16px; max-width: 900px; line-height: 1.55; }
+            .cmp-intro strong { color: #e2e8f0; }
+            .cmp-fw { border: 1px solid #334155; border-radius: 8px; background: #0f172a; margin-bottom: 18px; overflow: hidden; }
+            .cmp-fw-hdr {
+                display: grid; grid-template-columns: 1fr auto auto;
+                gap: 16px; align-items: center;
+                padding: 14px 18px; background: #1e293b; border-bottom: 1px solid #334155;
+            }
+            .cmp-fw-title { font-weight: 700; font-size: 14px; color: #e2e8f0; letter-spacing: -0.01em; }
+            .cmp-fw-ver { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+            .cmp-fw-counts { display: flex; gap: 10px; font-size: 11px; font-weight: 700; }
+            .cmp-fw-counts .c-pass    { color: #4ade80; }
+            .cmp-fw-counts .c-partial { color: #fbbf24; }
+            .cmp-fw-counts .c-fail    { color: #f87171; }
+            .cmp-fw-counts .c-na      { color: #94a3b8; }
+            .cmp-fw-cov { font-size: 20px; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+            .cmp-row {
+                display: grid;
+                grid-template-columns: 80px 1fr 200px 120px;
+                gap: 14px;
+                padding: 14px 18px;
+                border-bottom: 1px solid rgba(148,163,184,0.1);
+                align-items: start;
+            }
+            .cmp-row:last-child { border-bottom: 0; }
+            .cmp-cid { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3b82f6; font-weight: 700; }
+            .cmp-cid-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3b82f6; font-weight: 700; }
+            .cmp-row.cmp-excluded { opacity: 0.55; }
+            .cmp-row.cmp-excluded .cmp-cid-text { color: #64748b; }
+            .cmp-title-body h5 { margin: 0 0 3px; font-size: 13px; color: #e2e8f0; font-weight: 600; }
+            .cmp-title-body p  { margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.45; }
+            .cmp-title-body .auto-ev { margin-top: 4px; font-size: 10.5px; color: #64748b; font-style: italic; }
+            .cmp-controls { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+            .cmp-controls select {
+                background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+                border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%;
+            }
+            .cmp-controls textarea {
+                background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+                border-radius: 4px; padding: 6px 8px; font-size: 12px;
+                resize: vertical; min-height: 36px; font-family: inherit;
+            }
+            .cmp-file-row { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+            .cmp-file-row input[type="file"] { flex: 1; color: #cbd5e1; font-size: 11px; }
+            .cmp-preview img { max-width: 100%; max-height: 80px; border-radius: 4px; border: 1px solid #334155; }
+            .cmp-save {
+                background: #3b82f6; color: #fff; border: 0; border-radius: 4px;
+                padding: 6px 10px; font-weight: 600; font-size: 11px; cursor: pointer;
+            }
+            .cmp-save.saving { background: #6b7280; }
+            .cmp-save.saved  { background: #059669; }
+            .cmp-clear {
+                background: transparent; color: #94a3b8; border: 1px solid #334155;
+                border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer;
+            }
+            .cmp-status-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12px; }
+            .cmp-pill {
+                display: inline-block; padding: 2px 8px; border-radius: 10px;
+                font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            }
+            .cmp-pill.pass    { background: rgba(34,197,94,.15);  color: #4ade80; }
+            .cmp-pill.partial { background: rgba(245,158,11,.15); color: #fbbf24; }
+            .cmp-pill.fail    { background: rgba(239,68,68,.15);  color: #f87171; }
+            .cmp-pill.na      { background: rgba(148,163,184,.2); color: #cbd5e1; }
+            .cmp-pill.auto    { background: rgba(59,130,246,.15); color: #93c5fd; }
+            .cmp-attested-tag {
+                font-size: 9px; color: #059669; font-weight: 700;
+                letter-spacing: 0.08em; text-transform: uppercase;
+            }
+            .cmp-attestor-line { font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.3; }
+            .cmp-attestor-line strong { color: #e2e8f0; }
+        </style>
+
+        <p class="cmp-intro">
+            Manual attestation lets a reviewer mark controls that can't be
+            proven from firewall config or logs alone (e.g. quarterly log
+            review, segmentation exceptions with sign-off). The reviewer's
+            status, notes, and attached screenshot flow into the
+            <strong>Compliance sections of the PDF report</strong> next to
+            the auto-evaluated findings. Leave the override as <em>Use
+            automatic</em> to let the analytics engine decide.
+        </p>
+
+        {% for fw_slug, fw in device_compliance.items() %}
+        <div class="cmp-fw" data-framework="{{ fw_slug }}">
+            <div class="cmp-fw-hdr">
+                <div>
+                    <div class="cmp-fw-title">{{ fw.title }}</div>
+                    <div class="cmp-fw-ver">{{ fw.version }} &middot; {{ fw.scope }}</div>
+                </div>
+                <div class="cmp-fw-counts">
+                    <span class="c-pass">{{ fw.pass }} pass</span>
+                    <span class="c-partial">{{ fw.partial }} partial</span>
+                    <span class="c-fail">{{ fw.fail }} fail</span>
+                    {% if fw.na %}<span class="c-na">{{ fw.na }} n/a</span>{% endif %}
+                    {% if fw.excluded %}<span class="c-na">{{ fw.excluded }} excluded</span>{% endif %}
+                </div>
+                <div class="cmp-fw-cov">{{ fw.coverage }}%</div>
+            </div>
+            {# ── Bulk-action toolbar ───────────────────────────────── #}
+            <div class="cmp-toolbar" style="display:flex;gap:12px;align-items:center;padding:10px 18px;background:rgba(59,130,246,.05);border-bottom:1px solid #334155;font-size:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px;color:#cbd5e1;cursor:pointer">
+                    <input type="checkbox" class="cmp-select-all">
+                    <span>Select all</span>
+                </label>
+                <span style="color:#94a3b8">Bulk:</span>
+                <select class="cmp-bulk-status" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:4px 8px">
+                    <option value="">&mdash; choose status &mdash;</option>
+                    <option value="pass">Pass</option>
+                    <option value="partial">Partial</option>
+                    <option value="fail">Fail</option>
+                    <option value="na">N/A</option>
+                    <option value="auto">Clear (use auto)</option>
+                </select>
+                <button type="button" class="cmp-bulk-apply" style="background:#3b82f6;color:#fff;border:0;border-radius:4px;padding:5px 14px;font-weight:600;font-size:12px;cursor:pointer">Apply to selected</button>
+                <span style="color:#64748b;font-size:11px">|</span>
+                <button type="button" class="cmp-bulk-include" data-action="include" style="background:transparent;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">✓ Include selected</button>
+                <button type="button" class="cmp-bulk-include" data-action="exclude" style="background:transparent;color:#f87171;border:1px solid #334155;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">✗ Exclude selected</button>
+                <span class="cmp-bulk-count" style="color:#94a3b8;margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums">0 selected</span>
+            </div>
+            {% for c in fw.controls %}
+            <div class="cmp-row{% if not c.include_in_report %} cmp-excluded{% endif %}" data-control-id="{{ c.id }}" data-framework="{{ fw_slug }}" data-include="{{ 'true' if c.include_in_report else 'false' }}">
+                <div class="cmp-cid" style="display:flex;flex-direction:column;gap:6px">
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:#94a3b8;font-family:inherit;font-weight:500;text-transform:uppercase;letter-spacing:0.06em">
+                        <input type="checkbox" class="cmp-select">
+                        <span>Select</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:#94a3b8;font-family:inherit;font-weight:500;text-transform:uppercase;letter-spacing:0.06em" title="Include this control in the PDF report">
+                        <input type="checkbox" class="cmp-include" {% if c.include_in_report %}checked{% endif %}>
+                        <span>In report</span>
+                    </label>
+                    <span class="cmp-cid-text">{{ c.id }}</span>
+                </div>
+                <div class="cmp-title-body">
+                    <h5>{{ c.title }}</h5>
+                    <p>{{ c.requirement }}</p>
+                    <div class="auto-ev">Auto-analysis: {{ c.auto_evidence }}</div>
+                </div>
+                <div class="cmp-controls">
+                    <select class="cmp-status">
+                        <option value="">Use automatic</option>
+                        <option value="pass"    {% if c.attested and c.status == 'pass' %}selected{% endif %}>Pass</option>
+                        <option value="partial" {% if c.attested and c.status == 'partial' %}selected{% endif %}>Partial</option>
+                        <option value="fail"    {% if c.attested and c.status == 'fail' %}selected{% endif %}>Fail</option>
+                        <option value="na"      {% if c.attested and c.status == 'na' %}selected{% endif %}>N/A</option>
+                    </select>
+                    <textarea class="cmp-notes" rows="2" placeholder="Reviewer notes (optional)">{{ c.notes or '' }}</textarea>
+                    <div class="cmp-file-row">
+                        <input type="file" class="cmp-proof" accept="image/png,image/jpeg,image/webp,image/gif">
+                        {% if c.proof_url %}
+                        <label style="color:#94a3b8;font-size:10px">
+                            <input type="checkbox" class="cmp-remove-proof"> remove
+                        </label>
+                        {% endif %}
+                    </div>
+                    {% if c.proof_url %}
+                    <div class="cmp-preview"><img src="{{ c.proof_url }}" alt="proof"></div>
+                    {% endif %}
+                    <div style="display:flex;gap:6px">
+                        <button type="button" class="cmp-save">Save</button>
+                        {% if c.attested %}
+                        <button type="button" class="cmp-clear" title="Revert to automatic evaluation">Clear</button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="cmp-status-col">
+                    <span class="cmp-pill {{ c.status }}">{{ c.status }}</span>
+                    {% if c.attested %}
+                    <span class="cmp-attested-tag">● Attested</span>
+                    <div class="cmp-attestor-line">
+                        <strong>{{ c.attested_by or 'unknown' }}</strong>
+                        {% if c.attested_at %}<br>{{ c.attested_at[:16] }}{% endif %}
+                    </div>
+                    {% else %}
+                    <span class="cmp-pill auto">auto</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        <script>
+        (function() {
+            const tab = document.getElementById('tab-compliance');
+            if (!tab) return;
+            const deviceId = {{ device.id }};
+
+            // ── Helpers ────────────────────────────────────────────────
+            function buildFormData(row, {statusOverride = null, includeOnly = false} = {}) {
+                const fd = new FormData();
+                const statusEl = row.querySelector('.cmp-status');
+                const status = statusOverride !== null ? statusOverride : (statusEl ? statusEl.value : '');
+                // "auto" (= clear) is expressed as empty status.
+                if (status && status !== 'auto') fd.append('status', status);
+                if (!includeOnly) {
+                    const notes = row.querySelector('.cmp-notes');
+                    if (notes && notes.value) fd.append('notes', notes.value);
+                    const fileInput = row.querySelector('.cmp-proof');
+                    if (fileInput && fileInput.files[0]) fd.append('proof', fileInput.files[0]);
+                    const remove = row.querySelector('.cmp-remove-proof');
+                    if (remove && remove.checked) fd.append('remove_proof', '1');
+                }
+                const inc = row.querySelector('.cmp-include');
+                fd.append('include_in_report', inc && inc.checked ? '1' : '0');
+                return fd;
+            }
+
+            async function putRow(row, fd, btn) {
+                const fw = row.dataset.framework;
+                const cid = row.dataset.controlId;
+                if (btn) { btn.classList.add('saving'); btn.textContent = 'Saving…'; }
+                const resp = await fetch(
+                    `/api/devices/${deviceId}/attestations/${fw}/${encodeURIComponent(cid)}`,
+                    { method: 'PUT', body: fd, credentials: 'same-origin' }
+                );
+                if (!resp.ok) {
+                    const err = await resp.text();
+                    if (btn) { btn.classList.remove('saving'); btn.textContent = 'Save'; }
+                    throw new Error(err || `HTTP ${resp.status}`);
+                }
+                if (btn) {
+                    btn.classList.remove('saving'); btn.classList.add('saved'); btn.textContent = 'Saved';
+                    setTimeout(() => { btn.classList.remove('saved'); btn.textContent = 'Save'; }, 1200);
+                }
+            }
+
+            async function deleteRow(row) {
+                const fw = row.dataset.framework;
+                const cid = row.dataset.controlId;
+                const resp = await fetch(
+                    `/api/devices/${deviceId}/attestations/${fw}/${encodeURIComponent(cid)}`,
+                    { method: 'DELETE', credentials: 'same-origin' }
+                );
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            }
+
+            // ── Per-row Save ───────────────────────────────────────────
+            tab.querySelectorAll('.cmp-save').forEach(btn => {
+                btn.addEventListener('click', async (ev) => {
+                    const row = ev.target.closest('.cmp-row');
+                    try {
+                        await putRow(row, buildFormData(row), btn);
+                        setTimeout(() => window.location.reload(), 500);
+                    } catch (e) { alert('Save failed: ' + e.message); }
+                });
+            });
+
+            // ── Per-row Clear ──────────────────────────────────────────
+            tab.querySelectorAll('.cmp-clear').forEach(btn => {
+                btn.addEventListener('click', async (ev) => {
+                    if (!confirm('Revert this control to the automatic evaluation?')) return;
+                    const row = ev.target.closest('.cmp-row');
+                    try { await deleteRow(row); window.location.reload(); }
+                    catch (e) { alert('Clear failed: ' + e.message); }
+                });
+            });
+
+            // ── Include-in-report auto-save (no manual Save needed) ───
+            tab.querySelectorAll('.cmp-include').forEach(cb => {
+                cb.addEventListener('change', async (ev) => {
+                    const row = ev.target.closest('.cmp-row');
+                    try {
+                        await putRow(row, buildFormData(row, {includeOnly: true}), null);
+                        row.classList.toggle('cmp-excluded', !cb.checked);
+                    } catch (e) {
+                        cb.checked = !cb.checked; // rollback
+                        alert('Update failed: ' + e.message);
+                    }
+                });
+            });
+
+            // ── Per-framework bulk toolbar ─────────────────────────────
+            tab.querySelectorAll('.cmp-fw').forEach(fwEl => {
+                const selAll    = fwEl.querySelector('.cmp-select-all');
+                const countLbl  = fwEl.querySelector('.cmp-bulk-count');
+                const bulkStat  = fwEl.querySelector('.cmp-bulk-status');
+                const bulkApply = fwEl.querySelector('.cmp-bulk-apply');
+                const incBtns   = fwEl.querySelectorAll('.cmp-bulk-include');
+                const rows      = fwEl.querySelectorAll('.cmp-row');
+                const checks    = fwEl.querySelectorAll('.cmp-select');
+
+                function refreshCount() {
+                    const n = [...checks].filter(c => c.checked).length;
+                    if (countLbl) countLbl.textContent = `${n} selected`;
+                }
+                if (selAll) {
+                    selAll.addEventListener('change', () => {
+                        checks.forEach(c => { c.checked = selAll.checked; });
+                        refreshCount();
+                    });
+                }
+                checks.forEach(c => c.addEventListener('change', refreshCount));
+
+                if (bulkApply) {
+                    bulkApply.addEventListener('click', async () => {
+                        const status = bulkStat.value;
+                        if (!status) { alert('Pick a status first.'); return; }
+                        const selectedRows = [...rows].filter(r => r.querySelector('.cmp-select').checked);
+                        if (!selectedRows.length) { alert('No rows selected.'); return; }
+                        if (!confirm(`Apply ${status.toUpperCase()} to ${selectedRows.length} control(s)?`)) return;
+                        bulkApply.disabled = true; const orig = bulkApply.textContent;
+                        bulkApply.textContent = `Saving 0/${selectedRows.length}…`;
+                        let ok = 0;
+                        for (const row of selectedRows) {
+                            try {
+                                if (status === 'auto') {
+                                    await deleteRow(row);
+                                } else {
+                                    await putRow(row, buildFormData(row, {statusOverride: status, includeOnly: true}), null);
+                                }
+                                ok++;
+                                bulkApply.textContent = `Saving ${ok}/${selectedRows.length}…`;
+                            } catch (e) { console.error('bulk save failed for row', row, e); }
+                        }
+                        bulkApply.textContent = `Saved ${ok}/${selectedRows.length}`;
+                        setTimeout(() => { window.location.reload(); }, 600);
+                    });
+                }
+
+                incBtns.forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const action = btn.dataset.action;  // 'include' | 'exclude'
+                        const selectedRows = [...rows].filter(r => r.querySelector('.cmp-select').checked);
+                        if (!selectedRows.length) { alert('No rows selected.'); return; }
+                        btn.disabled = true;
+                        for (const row of selectedRows) {
+                            const cb = row.querySelector('.cmp-include');
+                            cb.checked = (action === 'include');
+                            try {
+                                await putRow(row, buildFormData(row, {includeOnly: true}), null);
+                                row.classList.toggle('cmp-excluded', !cb.checked);
+                            } catch (e) { console.error(e); }
+                        }
+                        btn.disabled = false;
+                    });
+                });
+            });
+        })();
+        </script>
+
+        {% else %}
+        <div class="pl-empty" style="padding:40px">
+            <h3>Compliance data unavailable</h3>
+            <p>Fetch the firewall policies first so the compliance engine has
+            a snapshot to evaluate.</p>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Changes Tab -->
     <div class="tab-content {% if current_tab == 'changes' %}active{% endif %}" id="tab-changes">
         {% if changes %}
@@ -870,7 +2674,7 @@
             <tbody>
                 {% for change in changes %}
                 <tr>
-                    <td>{{ change.detected_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ change.detected_at | localdt('%Y-%m-%d %H:%M') }}</td>
                     <td>
                         <span class="change-badge {{ change.change_type|lower }}">
                             {{ change.change_type }}
@@ -912,7 +2716,7 @@
         {% for snap in snapshots %}
         <div class="snapshot-card">
             <div class="snapshot-info">
-                <div class="snapshot-time">{{ snap.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</div>
+                <div class="snapshot-time">{{ snap.fetched_at | localdt }}</div>
                 <div class="snapshot-meta">
                     {% if snap.success %}
                         {{ snap.route_count }} routes &bull; {{ snap.fetch_duration_ms }}ms
@@ -1042,78 +2846,349 @@ function filterZones() {
     });
 }
 
-// Fetch routing table
+// Fetch routing table — inline pending/result, no blocking alert.
 async function fetchRoutes() {
     const btn = document.getElementById('fetch-btn');
     if (!btn) return;
 
+    const out = ensureFetchResultPanel('fetch-result', btn);
     btn.disabled = true;
-    btn.textContent = 'Fetching...';
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
 
+    const t0 = performance.now();
     try {
         const response = await fetch('{{ url_for("fetch_routing_table", device_id=device.id) }}', {
             method: 'POST'
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
 
-        const vdomLines = (data.vdom_results || []).map(r => {
-            const status = r.success ? 'OK' : 'FAIL';
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
             const routes = (r.route_count ?? 0) + ' routes';
-            const msg = r.message ? (' - ' + r.message) : '';
-            return `${r.vdom}: ${status} (${routes})${msg}`;
-        });
-        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${routes}${escapeHtml(msg)}</div>`;
+        }).join('');
 
         if (data.success) {
-            alert(`Routing fetch completed.\n${data.message}\nTotal routes: ${data.route_count ?? 0}${details}`);
-            location.reload();
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.route_count ?? 0} routes`, lines, took);
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert(`Routing fetch failed.\n${data.message}${details}`);
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
             btn.disabled = false;
-            btn.textContent = 'Fetch Routing Table';
+            btn.textContent = origLabel;
         }
     } catch (error) {
-        alert('Error fetching routing table: ' + error.message);
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
         btn.disabled = false;
-        btn.textContent = 'Fetch Routing Table';
+        btn.textContent = origLabel;
+    }
+}
+
+function ensureFetchResultPanel(id, anchor) {
+    let el = document.getElementById(id);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'fetch-result';
+        anchor.parentElement.insertAdjacentElement('afterend', el);
+    }
+    return el;
+}
+function setFetchPanel(el, kind, primary, html, took) {
+    el.className = 'fetch-result fetch-result-' + kind;
+    const meta = (took != null) ? `<span class="fetch-result-meta">${took} ms</span>` : '';
+    const spin = kind === 'pending' ? '<span class="fetch-result-spinner"></span>' : '';
+    el.innerHTML = `<div class="fetch-result-head">${spin}<span>${escapeHtml(primary)}</span>${meta}</div>${html ? '<div class="fetch-result-body">' + html + '</div>' : ''}`;
+}
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ── Management host inline editor ──
+function mgmtHostShowEdit() {
+    document.getElementById('mgmt-host-edit').hidden = false;
+    document.getElementById('mgmt-host-input').focus();
+    const r = document.getElementById('mgmt-host-result');
+    if (r) r.hidden = true;
+}
+function mgmtHostCancel() {
+    document.getElementById('mgmt-host-edit').hidden = true;
+}
+async function mgmtHostSave() {
+    const input = document.getElementById('mgmt-host-input');
+    const out = document.getElementById('mgmt-host-result');
+    const value = (input.value || '').trim();
+    out.hidden = false;
+    out.className = 'mgmt-host-result mgmt-host-result-pass';
+    out.textContent = 'Saving…';
+    try {
+        const fd = new FormData();
+        fd.append('ssh_host', value);
+        const r = await fetch('{{ url_for("set_management_host", device_id=device.id) }}',
+                              { method: 'POST', body: fd });
+        const data = await r.json();
+        if (!data.success) {
+            out.className = 'mgmt-host-result mgmt-host-result-fail';
+            out.textContent = '✗ ' + (data.message || 'Failed');
+            return;
+        }
+        out.className = 'mgmt-host-result mgmt-host-result-pass';
+        out.textContent = '✓ ' + data.message;
+        // Reload after a brief delay so the rest of the page picks up the
+        // new value (fetch buttons, banner text, etc.)
+        setTimeout(() => location.reload(), 800);
+    } catch (e) {
+        out.className = 'mgmt-host-result mgmt-host-result-fail';
+        out.textContent = '✗ ' + (e.message || e);
     }
 }
 
 // Fetch zone data
+async function fetchPolicies() {
+    const btn = document.getElementById('fetch-policies-btn');
+    if (!btn) return;
+
+    const out = ensureFetchResultPanel('fetch-policies-result', btn);
+    btn.disabled = true;
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
+
+    const t0 = performance.now();
+    try {
+        const response = await fetch('{{ url_for("fetch_firewall_policies", device_id=device.id) }}', {
+            method: 'POST'
+        });
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
+
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
+            const counts = `${r.policy_count ?? 0} policies, ${r.address_count ?? 0} addrs, ${r.service_count ?? 0} svcs`;
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${counts}${escapeHtml(msg)}</div>`;
+        }).join('');
+
+        if (data.success) {
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.policy_count ?? 0} policies, ${data.address_count ?? 0} address objects, ${data.service_count ?? 0} service objects`,
+                lines, took);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
+            btn.disabled = false;
+            btn.textContent = origLabel;
+        }
+    } catch (error) {
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
+        btn.disabled = false;
+        btn.textContent = origLabel;
+    }
+}
+
+function filterPolicies() {
+    const q = (document.getElementById('policy-search')?.value || '').toLowerCase().trim();
+    document.querySelectorAll('.fw-policy-card').forEach(c => {
+        const haystack = c.dataset.search || c.innerText.toLowerCase();
+        c.style.display = q && !haystack.includes(q) ? 'none' : '';
+    });
+}
+
+// Lazy-parse the address/service/policy maps once, then reuse on every expand.
+let _fwAddrMap = null, _fwSvcMap = null, _fwPolMap = null;
+function _fwMaps() {
+    if (_fwAddrMap === null) {
+        try { _fwAddrMap = JSON.parse(document.getElementById('fw-addr-map')?.textContent || '{}'); }
+        catch { _fwAddrMap = {}; }
+    }
+    if (_fwSvcMap === null) {
+        try { _fwSvcMap = JSON.parse(document.getElementById('fw-svc-map')?.textContent || '{}'); }
+        catch { _fwSvcMap = {}; }
+    }
+    if (_fwPolMap === null) {
+        try { _fwPolMap = JSON.parse(document.getElementById('fw-pol-extras')?.textContent || '{}'); }
+        catch { _fwPolMap = {}; }
+    }
+    return { addrs: _fwAddrMap, svcs: _fwSvcMap, pols: _fwPolMap };
+}
+
+function _renderResolvedAddr(name, addrs) {
+    const a = addrs[name];
+    if (!a) {
+        // Reference to an object the snapshot didn't capture (often "all", "any", or a built-in).
+        return `<span class="fw-resolved"><span class="fw-resolved-name">${escapeHtml(name)}</span><span class="fw-resolved-value">(unresolved)</span></span>`;
+    }
+    let value = '';
+    if (a.kind === 'group') {
+        value = `<span class="fw-resolved-members">group of ${(a.members || []).length}: ${(a.members || []).slice(0, 8).map(escapeHtml).join(', ')}${(a.members || []).length > 8 ? ', …' : ''}</span>`;
+    } else if (a.value) {
+        value = `<span class="fw-resolved-value">${escapeHtml(a.value)}</span>`;
+    } else {
+        value = `<span class="fw-resolved-value">${escapeHtml(a.kind)}</span>`;
+    }
+    const cmt = a.comment ? ` <span class="fw-resolved-members">— ${escapeHtml(a.comment)}</span>` : '';
+    return `<span class="fw-resolved"><span class="fw-resolved-name">${escapeHtml(name)} <small style="opacity:.6">[${escapeHtml(a.kind)}]</small></span>${value}${cmt}</span>`;
+}
+function _renderResolvedSvc(name, svcs) {
+    const s = svcs[name];
+    if (!s) {
+        return `<span class="fw-resolved"><span class="fw-resolved-name">${escapeHtml(name)}</span><span class="fw-resolved-value">(unresolved)</span></span>`;
+    }
+    let value = '';
+    if (s.protocol === 'group') {
+        value = `<span class="fw-resolved-members">group of ${(s.members || []).length}: ${(s.members || []).slice(0, 8).map(escapeHtml).join(', ')}${(s.members || []).length > 8 ? ', …' : ''}</span>`;
+    } else {
+        value = `<span class="fw-resolved-value">${escapeHtml(s.protocol)}/${escapeHtml(s.ports || '?')}</span>`;
+    }
+    return `<span class="fw-resolved"><span class="fw-resolved-name">${escapeHtml(name)} <small style="opacity:.6">[${escapeHtml(s.protocol)}]</small></span>${value}</span>`;
+}
+
+// Build the detail panel HTML for one policy on demand.
+// Previous incarnation rendered this server-side for all 500 rows (9.4 MB
+// HTML, 50s+ server time). Client-side from the policy-extras JSON map
+// keeps the initial HTML small and feels instant on expand.
+function _renderPolicyDetail(polId, pol, addrs, svcs) {
+    const chip = (txt, cls = 'fw-chip') => `<span class="${cls}">${escapeHtml(txt)}</span>`;
+    const zoneChips = list => (list && list.length)
+        ? list.map(z => chip(z, 'fw-chip fw-chip-zone')).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const resolveAddrs = list => (list && list.length)
+        ? list.map(n => _renderResolvedAddr(n, addrs)).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const resolveSvcs = list => (list && list.length)
+        ? list.map(n => _renderResolvedSvc(n, svcs)).join('')
+        : '<span class="fw-detail-empty">—</span>';
+    const plainChips = list => (list && list.length)
+        ? list.map(x => chip(x)).join('') : '';
+
+    const actClass = ['accept','allow','pass'].includes((pol.action || '').toLowerCase()) ? 'allow' : 'deny';
+    const applications = pol.applications || [];
+    const users = pol.users || [];
+
+    let appsBlock = '';
+    if (applications.length) {
+        appsBlock = `<div class="fw-detail-sub">Applications</div><div class="fw-detail-chips">${plainChips(applications)}</div>`;
+    }
+    let usersBlock = '';
+    if (users.length) {
+        usersBlock = `<div class="fw-detail-sub">Users</div><div class="fw-detail-chips">${plainChips(users)}</div>`;
+    }
+
+    const commentHtml = pol.comment
+        ? `<div class="fw-detail-comment"><strong>Comment:</strong> ${escapeHtml(pol.comment)}</div>` : '';
+    const rawHtml = pol.raw_definition
+        ? `<details class="fw-detail-raw"><summary>Raw definition</summary><pre>${escapeHtml(pol.raw_definition)}</pre></details>` : '';
+
+    return `
+        <div class="fw-detail-grid">
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Source</div>
+                <div class="fw-detail-sub">Zones</div>
+                <div class="fw-detail-chips">${zoneChips(pol.src_zones)}</div>
+                <div class="fw-detail-sub">Addresses</div>
+                <div class="fw-detail-resolve">${resolveAddrs(pol.src_addresses)}</div>
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Destination</div>
+                <div class="fw-detail-sub">Zones</div>
+                <div class="fw-detail-chips">${zoneChips(pol.dst_zones)}</div>
+                <div class="fw-detail-sub">Addresses</div>
+                <div class="fw-detail-resolve">${resolveAddrs(pol.dst_addresses)}</div>
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Service</div>
+                <div class="fw-detail-resolve">${resolveSvcs(pol.services)}</div>
+                ${appsBlock}${usersBlock}
+            </div>
+            <div class="fw-detail-block">
+                <div class="fw-detail-title">Settings</div>
+                <dl class="fw-detail-dl">
+                    <dt>Action</dt><dd><span class="fw-chip fw-chip-action fw-chip-action-${actClass}">${escapeHtml(pol.action || '')}</span></dd>
+                    <dt>Status</dt><dd>${pol.enabled ? '<span class="fw-chip fw-chip-on">enabled</span>' : '<span class="fw-chip fw-chip-off">disabled</span>'}</dd>
+                    <dt>NAT</dt><dd>${pol.nat_enabled ? 'enabled' : 'disabled'}</dd>
+                    <dt>Log Traffic</dt><dd>${escapeHtml(pol.log_traffic || '—')}</dd>
+                    <dt>Schedule</dt><dd>${escapeHtml(pol.schedule || '—')}</dd>
+                    <dt>Position</dt><dd>#${pol.position}</dd>
+                    <dt>Rule ID</dt><dd>${escapeHtml(pol.rule_id || '—')}</dd>
+                    <dt>VDOM</dt><dd>${escapeHtml(pol.vdom || 'global')}</dd>
+                </dl>
+            </div>
+        </div>
+        ${commentHtml}${rawHtml}
+    `;
+}
+
+function toggleFwPolicy(polId) {
+    const card = document.querySelector(`[data-pol-id="${polId}"]`);
+    if (!card) return;
+    const detail = document.getElementById(`${polId}-detail`);
+    const open = card.classList.toggle('fw-policy-open');
+    if (detail) detail.hidden = !open;
+    if (open && !card.dataset.resolved && detail) {
+        const { addrs, svcs, pols } = _fwMaps();
+        const pol = pols[polId];
+        if (pol) {
+            detail.innerHTML = _renderPolicyDetail(polId, pol, addrs, svcs);
+        } else {
+            detail.innerHTML = '<div class="fw-detail-empty">Policy data not available.</div>';
+        }
+        card.dataset.resolved = '1';
+    }
+}
+
 async function fetchZones() {
     const btn = document.getElementById('fetch-zones-btn');
     if (!btn) return;
 
+    const out = ensureFetchResultPanel('fetch-zones-result', btn);
     btn.disabled = true;
-    btn.textContent = 'Fetching...';
+    const origLabel = btn.textContent;
+    btn.textContent = 'Fetching…';
+    setFetchPanel(out, 'pending', 'Connecting to device…', '');
 
+    const t0 = performance.now();
     try {
         const response = await fetch('{{ url_for("fetch_zone_data", device_id=device.id) }}', {
             method: 'POST'
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({
+            success: false, message: `HTTP ${response.status}`
+        }));
+        const took = Math.round(performance.now() - t0);
 
-        const vdomLines = (data.vdom_results || []).map(r => {
-            const status = r.success ? 'OK' : 'FAIL';
-            const zones = (r.zone_count ?? 0) + ' zones';
-            const intfs = (r.interface_count ?? 0) + ' interfaces';
-            const msg = r.message ? (' - ' + r.message) : '';
-            return `${r.vdom}: ${status} (${zones}, ${intfs})${msg}`;
-        });
-        const details = vdomLines.length ? `\n\nDetails:\n${vdomLines.join('\n')}` : '';
+        const lines = (data.vdom_results || []).map(r => {
+            const status = r.success ? '✓' : '✗';
+            const z = (r.zone_count ?? 0) + ' zones';
+            const i = (r.interface_count ?? 0) + ' ifaces';
+            const msg = r.message ? ` — ${r.message}` : '';
+            return `<div>${status} <code>${escapeHtml(String(r.vdom))}</code>: ${z}, ${i}${escapeHtml(msg)}</div>`;
+        }).join('');
 
         if (data.success) {
-            alert(`Zone fetch completed.\n${data.message}\nTotal: ${data.zone_count ?? 0} zones, ${data.interface_count ?? 0} interfaces${details}`);
-            location.reload();
+            setFetchPanel(out, 'pass',
+                `Fetched ${data.zone_count ?? 0} zones, ${data.interface_count ?? 0} interfaces`,
+                lines, took);
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert(`Zone fetch failed.\n${data.message}${details}`);
+            setFetchPanel(out, 'fail', data.message || 'Fetch failed', lines, took);
             btn.disabled = false;
-            btn.textContent = 'Fetch Zones';
+            btn.textContent = origLabel;
         }
     } catch (error) {
-        alert('Error fetching zone data: ' + error.message);
+        setFetchPanel(out, 'fail',
+            'Request error: ' + (error.message || error), '');
         btn.disabled = false;
-        btn.textContent = 'Fetch Zones';
+        btn.textContent = origLabel;
     }
 }
 </script>

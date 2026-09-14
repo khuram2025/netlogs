@@ -11,6 +11,7 @@ import threading
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,13 @@ class IOCMatcher:
         # IOC lookup structures
         self._ip_iocs: Dict[str, dict] = {}       # ip_string -> ioc_info
         self._domain_iocs: Dict[str, dict] = {}    # domain -> ioc_info
+        self._url_iocs: Dict[str, dict] = {}       # url -> ioc_info
         self._hash_iocs: Dict[str, dict] = {}      # hash_value -> ioc_info
 
         # Fast lookup sets (just values for O(1) membership test)
         self._ip_set: frozenset = frozenset()
         self._domain_set: frozenset = frozenset()
+        self._url_set: frozenset = frozenset()
         self._hash_set: frozenset = frozenset()
 
         # CIDR networks for subnet matching
@@ -82,6 +85,11 @@ class IOCMatcher:
             for ioc in grouped_iocs.get("domain", []):
                 domain_iocs[ioc["value"].lower()] = ioc
 
+            # Build URL lookup (exact match)
+            url_iocs = {}
+            for ioc in grouped_iocs.get("url", []):
+                url_iocs[ioc["value"]] = ioc
+
             # Build hash lookup (combine all hash types)
             hash_iocs = {}
             for hash_type in ("hash_md5", "hash_sha1", "hash_sha256"):
@@ -93,71 +101,113 @@ class IOCMatcher:
             self._cidr_networks = cidr_networks
             self._domain_iocs = domain_iocs
             self._domain_set = frozenset(domain_iocs.keys())
+            self._url_iocs = url_iocs
+            self._url_set = frozenset(url_iocs.keys())
             self._hash_iocs = hash_iocs
             self._hash_set = frozenset(hash_iocs.keys())
             self._last_refresh = time.time()
 
-            total = len(ip_iocs) + len(cidr_networks) + len(domain_iocs) + len(hash_iocs)
+            total = (len(ip_iocs) + len(cidr_networks) + len(domain_iocs)
+                     + len(url_iocs) + len(hash_iocs))
             logger.info(
                 f"IOC matcher loaded: {len(ip_iocs)} IPs, {len(cidr_networks)} CIDRs, "
-                f"{len(domain_iocs)} domains, {len(hash_iocs)} hashes (total: {total})"
+                f"{len(domain_iocs)} domains, {len(url_iocs)} URLs, "
+                f"{len(hash_iocs)} hashes (total: {total})"
             )
 
-    def check_log(self, srcip: str, dstip: str, **kwargs) -> List[dict]:
-        """
-        Check a log entry against all loaded IOCs.
-        Returns list of matches (empty if no match).
+    # ── Single-value matchers (shared by check_log and the batch sweep) ──
 
-        This is the hot path - optimized for speed.
-        """
+    def _match_ip(self, ip: str) -> Optional[dict]:
+        """Match an IP against exact IP IOCs, then CIDR ranges."""
+        if not ip:
+            return None
+        ioc = self._ip_iocs.get(ip)
+        if ioc:
+            return ioc
+        if self._cidr_networks:
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+            except ValueError:
+                return None
+            for net, cidr_ioc in self._cidr_networks:
+                if ip_obj in net:
+                    return cidr_ioc
+        return None
+
+    def _match_domain(self, name: str) -> Optional[dict]:
+        """Match a hostname against domain IOCs — exact, then parent suffixes,
+        so a domain IOC also matches its subdomains."""
+        if not name or not self._domain_set:
+            return None
+        host = str(name).strip().rstrip(".").lower()
+        if not host:
+            return None
+        ioc = self._domain_iocs.get(host)
+        if ioc:
+            return ioc
+        labels = host.split(".")
+        for i in range(1, len(labels) - 1):
+            ioc = self._domain_iocs.get(".".join(labels[i:]))
+            if ioc:
+                return ioc
+        return None
+
+    def _match_url(self, url: str) -> Optional[dict]:
+        """Match a URL exactly, then fall back to its host as a domain IOC."""
+        if not url or not (self._url_set or self._domain_set):
+            return None
+        ioc = self._url_iocs.get(url) or self._url_iocs.get(url.rstrip("/"))
+        if ioc:
+            return ioc
+        try:
+            host = urlparse(url if "://" in url else "http://" + url).hostname
+        except ValueError:
+            host = None
+        return self._match_domain(host) if host else None
+
+    def _match_hash(self, value: str) -> Optional[dict]:
+        """Match a file hash (any algorithm) — exact, case-insensitive."""
+        if not value:
+            return None
+        return self._hash_iocs.get(str(value).strip().lower())
+
+    def check_value(self, value: str, kind: str) -> Optional[dict]:
+        """Match one value of a given kind (ip / domain / url / hash).
+        The batch log sweep uses this for the non-firewall log streams."""
+        if not value:
+            return None
+        if kind == "ip":
+            return self._match_ip(value)
+        if kind == "domain":
+            return self._match_domain(value)
+        if kind == "url":
+            return self._match_url(value)
+        if kind == "hash":
+            return self._match_hash(value)
+        return None
+
+    def total_iocs(self) -> int:
+        """Total IOCs currently held in memory across all types."""
+        return (len(self._ip_iocs) + len(self._cidr_networks)
+                + len(self._domain_iocs) + len(self._url_iocs)
+                + len(self._hash_iocs))
+
+    def check_log(self, srcip: str, dstip: str, **kwargs) -> List[dict]:
+        """Check a firewall log's src/dst IPs against IP IOCs.
+        Hot path on the syslog pipeline — kept minimal."""
         self._stats["checks"] += 1
         matches = []
-
         try:
-            # Check source IP
-            if srcip and srcip in self._ip_set:
-                ioc = self._ip_iocs[srcip]
-                matches.append({
-                    "matched_field": "srcip",
-                    **ioc
-                })
-
-            # Check destination IP
-            if dstip and dstip in self._ip_set:
-                ioc = self._ip_iocs[dstip]
-                matches.append({
-                    "matched_field": "dstip",
-                    **ioc
-                })
-
-            # Check CIDR networks (only if no exact match and CIDRs exist)
-            if self._cidr_networks:
-                for ip_str, field in ((srcip, "srcip"), (dstip, "dstip")):
-                    if not ip_str:
-                        continue
-                    # Skip if already matched by exact lookup
-                    if any(m["matched_field"] == field for m in matches):
-                        continue
-                    try:
-                        ip_obj = ipaddress.ip_address(ip_str)
-                        for net, ioc in self._cidr_networks:
-                            if ip_obj in net:
-                                matches.append({
-                                    "matched_field": field,
-                                    **ioc
-                                })
-                                break
-                    except ValueError:
-                        pass
-
+            for ip, field in ((srcip, "srcip"), (dstip, "dstip")):
+                ioc = self._match_ip(ip)
+                if ioc:
+                    matches.append({"matched_field": field, **ioc})
         except Exception as e:
             self._stats["errors"] += 1
             if self._stats["errors"] % 1000 == 1:
                 logger.error(f"IOC matcher error: {e}")
-
         if matches:
             self._stats["matches"] += len(matches)
-
         return matches
 
     def needs_refresh(self) -> bool:
@@ -168,11 +218,11 @@ class IOCMatcher:
         """Get matcher statistics."""
         with self._data_lock:
             return {
-                "total_iocs": len(self._ip_iocs) + len(self._cidr_networks) +
-                              len(self._domain_iocs) + len(self._hash_iocs),
+                "total_iocs": self.total_iocs(),
                 "ip_count": len(self._ip_iocs),
                 "cidr_count": len(self._cidr_networks),
                 "domain_count": len(self._domain_iocs),
+                "url_count": len(self._url_iocs),
                 "hash_count": len(self._hash_iocs),
                 "checks": self._stats["checks"],
                 "matches": self._stats["matches"],

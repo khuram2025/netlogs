@@ -9,11 +9,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Query, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, desc, delete
+from sqlalchemy import select, func, desc, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..models.threat_intel import ThreatFeed, IOC, FeedType
+from ..models.threat_intel import ThreatFeed, IOC, FeedType, IOCSighting, TIAllowlist
 from ..core.permissions import require_min_role
 from ..services.threat_intel_service import (
     fetch_feed, get_ioc_match_stats, get_ioc_matches_paginated,
@@ -77,12 +77,17 @@ async def threat_intel_feeds_page(request: Request, db: AsyncSession = Depends(g
     # Get match stats
     match_stats = get_ioc_match_stats(hours=24)
 
+    # Get batch-sweep coverage stats (domain/URL/hash detection)
+    from ..services.ioc_sweep import get_sweep_stats
+    sweep_stats = await get_sweep_stats()
+
     return _render("threat_intel/feeds.html", request, {
         "feeds": feeds,
         "feed_stats": feed_stats,
         "total_iocs": total_iocs,
         "matcher_stats": matcher_stats,
         "match_stats": match_stats,
+        "sweep_stats": sweep_stats,
     })
 
 
@@ -149,29 +154,76 @@ async def threat_intel_iocs_page(
 # IOC Matches UI
 # ============================================================
 
+_SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
 @router.get("/threat-intel/matches/", response_class=HTMLResponse, name="threat_intel_matches",
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def threat_intel_matches_page(
     request: Request,
-    severity: Optional[str] = None,
-    ioc_type: Optional[str] = None,
-    hours: int = Query(24, ge=1, le=720),
+    status: str = Query("new"),
+    direction: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
-    """IOC matches viewer page."""
-    matches, total = get_ioc_matches_paginated(
-        page=1, per_page=100, severity=severity, ioc_type=ioc_type, hours=hours
-    )
-    match_stats = get_ioc_match_stats(hours=hours)
+    """IOC Sightings — the de-duplicated triage queue over raw matches."""
+    # Status counts for the queue tabs.
+    rows = (await db.execute(
+        select(IOCSighting.status, func.count(IOCSighting.id))
+        .group_by(IOCSighting.status)
+    )).all()
+    status_counts = {r[0]: r[1] for r in rows}
+    escalated_count = (await db.execute(
+        select(func.count(IOCSighting.id)).where(
+            IOCSighting.escalated.is_(True),
+            IOCSighting.status.in_(("new", "investigating")))
+    )).scalar() or 0
 
-    return _render("threat_intel/matches.html", request, {
-        "matches": matches,
-        "total": total,
-        "match_stats": match_stats,
-        "filters": {
-            "severity": severity or "",
-            "ioc_type": ioc_type or "",
-            "hours": hours,
-        },
+    # The selected queue.
+    q = select(IOCSighting)
+    if status == "escalated":
+        q = q.where(IOCSighting.escalated.is_(True),
+                    IOCSighting.status.in_(("new", "investigating")))
+    elif status and status != "all":
+        q = q.where(IOCSighting.status == status)
+    if direction:
+        q = q.where(IOCSighting.direction == direction)
+    q = q.order_by(IOCSighting.escalated.desc(),
+                   IOCSighting.last_seen.desc()).limit(300)
+    sightings = list((await db.execute(q)).scalars().all())
+    # Severity-rank within the page so the worst float up.
+    sightings.sort(key=lambda s: (not s.escalated,
+                                  _SEV_ORDER.get(s.severity, 9)))
+
+    return _render("threat_intel/sightings.html", request, {
+        "sightings": sightings,
+        "status_counts": status_counts,
+        "escalated_count": escalated_count,
+        "filters": {"status": status, "direction": direction or ""},
+    })
+
+
+# ============================================================
+# Allowlist UI
+# ============================================================
+
+@router.get("/threat-intel/allowlist/", response_class=HTMLResponse,
+            name="threat_intel_allowlist",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def threat_intel_allowlist_page(request: Request,
+                                      db: AsyncSession = Depends(get_db)):
+    """Allow / warning list — known-benign values that suppress sightings."""
+    entries = list((await db.execute(
+        select(TIAllowlist).where(TIAllowlist.is_active.is_(True))
+        .order_by(TIAllowlist.list_name, TIAllowlist.entry_type,
+                  TIAllowlist.value)
+    )).scalars().all())
+    suppressed_count = (await db.execute(
+        select(func.count(IOCSighting.id)).where(
+            IOCSighting.status == "suppressed")
+    )).scalar() or 0
+    return _render("threat_intel/allowlist.html", request, {
+        "entries": entries,
+        "suppressed_count": suppressed_count,
     })
 
 
@@ -526,3 +578,153 @@ async def api_list_matches(
         page=page, per_page=per_page, severity=severity, ioc_type=ioc_type, hours=hours
     )
     return {"success": True, "total": total, "matches": matches}
+
+
+# Sighting Endpoints
+
+_VALID_SIGHTING_STATUS = {"new", "investigating", "resolved", "false_positive"}
+
+
+@router.post("/api/threat-intel/sightings/{sighting_id}/status",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_update_sighting_status(
+    sighting_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Update a sighting's triage status (and optional notes / assignee)."""
+    data = await request.json()
+    new_status = (data.get("status") or "").strip()
+    if new_status not in _VALID_SIGHTING_STATUS:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "error": f"status must be one of {sorted(_VALID_SIGHTING_STATUS)}"})
+    s = (await db.execute(
+        select(IOCSighting).where(IOCSighting.id == sighting_id)
+    )).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    s.status = new_status
+    if "notes" in data:
+        s.notes = (data.get("notes") or "").strip() or None
+    if "assigned_to" in data:
+        s.assigned_to = (data.get("assigned_to") or "").strip() or None
+    await db.commit()
+    return {"success": True, "status": s.status}
+
+
+@router.get("/api/threat-intel/sightings/{sighting_id}/events",
+            dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_sighting_events(sighting_id: int, db: AsyncSession = Depends(get_db)):
+    """The raw ioc_matches evidence behind a sighting."""
+    s = (await db.execute(
+        select(IOCSighting).where(IOCSighting.id == sighting_id)
+    )).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    from ..services.ioc_sightings import get_sighting_events
+    events = await get_sighting_events(s.ioc_value, s.internal_asset, s.direction)
+    return {"success": True, "events": events,
+            "ioc_value": s.ioc_value, "internal_asset": s.internal_asset}
+
+
+# Allowlist Endpoints
+
+_VALID_ALLOWLIST_TYPES = {"ip", "cidr", "domain", "url", "hash"}
+
+
+def _allowlist_type_for_ioc(ioc_type: str, value: str) -> str:
+    """Map an IOC type to an allowlist entry_type."""
+    if ioc_type == "ip":
+        return "cidr" if "/" in (value or "") else "ip"
+    if ioc_type == "domain":
+        return "domain"
+    if ioc_type == "url":
+        return "url"
+    return "hash"
+
+
+@router.post("/api/threat-intel/allowlist/",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_add_allowlist_entry(request: Request,
+                                  db: AsyncSession = Depends(get_db)):
+    """Add an allow / warning-list entry."""
+    data = await request.json()
+    entry_type = (data.get("entry_type") or "").strip().lower()
+    value = (data.get("value") or "").strip()
+    if entry_type not in _VALID_ALLOWLIST_TYPES:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "error": f"entry_type must be one of {sorted(_VALID_ALLOWLIST_TYPES)}"})
+    if not value:
+        return JSONResponse(status_code=400,
+                            content={"success": False, "error": "value is required"})
+    dup = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.entry_type == entry_type, TIAllowlist.value == value
+    ))).scalar_one_or_none()
+    if dup:
+        if not dup.is_active:
+            dup.is_active = True
+            await db.commit()
+        return {"success": True, "id": dup.id, "duplicate": True}
+    user = getattr(request.state, "current_user", None)
+    entry = TIAllowlist(
+        entry_type=entry_type, value=value,
+        list_name=(data.get("list_name") or "Analyst").strip() or "Analyst",
+        reason=(data.get("reason") or "").strip() or None,
+        source="analyst", created_by=getattr(user, "username", None),
+        is_active=True,
+    )
+    db.add(entry)
+    await db.commit()
+    return {"success": True, "id": entry.id}
+
+
+@router.delete("/api/threat-intel/allowlist/{entry_id}",
+               dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_delete_allowlist_entry(entry_id: int,
+                                     db: AsyncSession = Depends(get_db)):
+    """Remove an allowlist entry."""
+    entry = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.id == entry_id))).scalar_one_or_none()
+    if not entry:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Entry not found"})
+    await db.delete(entry)
+    await db.commit()
+    return {"success": True}
+
+
+@router.post("/api/threat-intel/allowlist/from-sighting/{sighting_id}",
+             dependencies=[Depends(require_min_role("ANALYST"))])
+async def api_allowlist_from_sighting(sighting_id: int, request: Request,
+                                      db: AsyncSession = Depends(get_db)):
+    """Allowlist a sighting's IOC and suppress every open sighting for it."""
+    s = (await db.execute(select(IOCSighting).where(
+        IOCSighting.id == sighting_id))).scalar_one_or_none()
+    if not s:
+        return JSONResponse(status_code=404,
+                            content={"success": False, "error": "Sighting not found"})
+    entry_type = _allowlist_type_for_ioc(s.ioc_type, s.ioc_value)
+    dup = (await db.execute(select(TIAllowlist).where(
+        TIAllowlist.entry_type == entry_type,
+        TIAllowlist.value == s.ioc_value))).scalar_one_or_none()
+    if not dup:
+        user = getattr(request.state, "current_user", None)
+        db.add(TIAllowlist(
+            entry_type=entry_type, value=s.ioc_value, list_name="Analyst",
+            reason=f"False positive — allowlisted from sighting #{s.id}",
+            source="analyst", created_by=getattr(user, "username", None),
+            is_active=True,
+        ))
+    elif not dup.is_active:
+        dup.is_active = True
+    # Retroactively suppress every open sighting for this IOC.
+    result = await db.execute(
+        update(IOCSighting)
+        .where(IOCSighting.ioc_value == s.ioc_value,
+               IOCSighting.status.in_(("new", "investigating")))
+        .values(status="suppressed", escalated=False)
+    )
+    await db.commit()
+    return {"success": True, "suppressed": result.rowcount or 0}

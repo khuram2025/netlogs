@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Windows Service installation and configuration.
+
+  Service: ZentrycDnsAgent
+  Account: LocalSystem (needs ETW session rights)
+  Startup: Automatic (Delayed Start)
+  Recovery: Restart after 60s, 300s, 900s
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Fragment>
+    <ComponentGroup Id="ServiceComponents" Directory="INSTALLFOLDER">
+
+      <Component Id="ServiceComponent" Guid="1A2B3C4D-5E6F-7890-ABCD-EF1234560004">
+
+        <!-- Reference the main executable -->
+        <File Id="ServiceExe"
+              Source="$(var.ZentrycDnsAgent.TargetDir)\ZentrycDnsAgent.exe"
+              KeyPath="yes" />
+
+        <!-- Install the Windows Service -->
+        <ServiceInstall Id="ZentrycDnsAgentService"
+                        Name="ZentrycDnsAgent"
+                        DisplayName="Zentryc DNS Log Agent"
+                        Description="Collects DNS Server logs and forwards them to Zentryc SIEM via syslog. Captures queries, responses, dynamic updates, and zone transfers from the Windows DNS Server role."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Arguments="--service">
+
+          <!-- Delayed auto-start: don't slow down boot -->
+          <ServiceConfig DelayedAutoStart="yes"
+                         OnInstall="yes"
+                         OnReinstall="yes" />
+
+          <!-- Service dependencies: DNS Server must be running -->
+          <ServiceDependency Id="DNS" />
+
+          <!-- Recovery actions: restart on failure -->
+          <util:ServiceConfig
+              FirstFailureActionType="restart"
+              SecondFailureActionType="restart"
+              ThirdFailureActionType="restart"
+              RestartServiceDelayInSeconds="60"
+              ResetPeriodInDays="1" />
+
+        </ServiceInstall>
+
+        <!-- Control the service lifecycle -->
+        <ServiceControl Id="StartZentrycDnsAgent"
+                        Name="ZentrycDnsAgent"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

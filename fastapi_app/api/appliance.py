@@ -34,3 +34,10 @@ async def appliance_operation(operation: str, request: Request):
         return JSONResponse(response.json(), status_code=response.status_code)
     except httpx.HTTPError:
         raise HTTPException(503, 'Appliance management is temporarily unavailable; use the console to inspect services')
+
+# Preserve upstream's named navigation route without enabling a second updater.
+updates_compat_router = APIRouter(dependencies=[Depends(require_role('ADMIN'))])
+@updates_compat_router.get('/system/updates/', name='updates_page')
+async def appliance_updates_page(request: Request):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse('/system/#updates', status_code=303)

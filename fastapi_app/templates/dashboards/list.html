@@ -62,7 +62,7 @@
             </div>
             <div class="card-desc">{{ d.description or 'No description' }}</div>
             <div class="card-meta">
-                <span>Created {{ d.created_at.strftime('%Y-%m-%d') if d.created_at else 'N/A' }}</span>
+                <span>Created {{ (d.created_at | localdt('%Y-%m-%d')) if d.created_at else 'N/A' }}</span>
             </div>
         </div>
         {% endfor %}

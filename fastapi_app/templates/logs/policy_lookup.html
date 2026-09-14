@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Zentryc - Policy Lookup{% endblock %}
+{% block title %}ZenShield - Policy Lookup{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -77,8 +77,26 @@
     .pl-field input:focus { border-color: var(--pl-blue); }
     .pl-field input::placeholder { color: var(--pl-dim); }
 
-    /* Time pills */
-    .pl-time-pills { display: flex; gap: 4px; }
+    /* Pill groups (time range, protocol, …) */
+    .pl-pill-group { display: flex; gap: 4px; }
+    .pl-resolved-banner {
+        margin-top: 10px;
+        padding: 6px 10px;
+        background: rgba(59,130,246,.08);
+        border: 1px solid rgba(59,130,246,.25);
+        border-radius: 6px;
+        color: var(--pl-muted);
+        font-size: 12px;
+    }
+    .pl-resolved-banner code {
+        background: var(--pl-input);
+        border: 1px solid var(--pl-border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        color: var(--pl-text);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+    }
     .pl-pill {
         padding: 7px 14px;
         border-radius: 6px;
@@ -170,6 +188,7 @@
     .pl-badge-green  { background: rgba(34,197,94,.15); color: #4ade80; }
     .pl-badge-red    { background: rgba(239,68,68,.15); color: #f87171; }
     .pl-badge-amber  { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pl-badge-blue   { background: rgba(59,130,246,.15); color: #93c5fd; }
 
     /* ── Tables ── */
     .pl-table-wrap {
@@ -227,6 +246,168 @@
     .pl-mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
     .pl-dim  { color: var(--pl-dim); }
     .pl-small { font-size: 10px; color: var(--pl-dim); margin-top: 2px; }
+
+    /* Action chips: one per distinct action (close ×90, client-rst ×14, …). */
+    .pl-action-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pl-action-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; font-weight: 700;
+        padding: 2px 6px; border-radius: 4px;
+        text-transform: lowercase;
+    }
+    .pl-action-chip .ct { font-weight: 500; opacity: .8; }
+    .pl-action-allow { background: rgba(34,197,94,.15); color: #4ade80; }
+    .pl-action-deny  { background: rgba(239,68,68,.15); color: #f87171; }
+    .pl-action-rst   { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pl-action-other { background: rgba(100,116,139,.15); color: #cbd5e1; }
+
+    /* NAT chip */
+    .pl-nat-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: rgba(139,92,246,.12); color: #c4b5fd;
+        border: 1px solid rgba(139,92,246,.25);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; padding: 2px 6px; border-radius: 4px;
+        margin-top: 2px;
+    }
+    .pl-nat-label { font-weight: 700; opacity: .7; font-size: 9px; }
+
+    /* Bytes */
+    .pl-bytes      { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .pl-bytes-up   { color: #93c5fd; }
+    .pl-bytes-down { color: #86efac; }
+
+    /* Change badge (snapshot diff vs. prior period of equal length) */
+    .pl-change {
+        display: inline-block;
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .05em;
+        padding: 2px 6px; border-radius: 4px;
+        margin-left: 4px;
+    }
+    .pl-change-new          { background: rgba(59,130,246,.15);  color: #93c5fd; }
+    .pl-change-became_denied{ background: rgba(239,68,68,.18);   color: #fca5a5; }
+    .pl-change-became_allowed{background: rgba(34,197,94,.18);   color: #86efac; }
+    .pl-change-changed      { background: rgba(245,158,11,.18);  color: #fbbf24; }
+    /* unchanged: render nothing — keep the table quiet */
+
+    /* Suggested-rule CLI block per gap device */
+    .pl-cli-toggle {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 11px; font-weight: 600;
+        color: #fbbf24;
+        background: transparent;
+        border: 1px solid rgba(245,158,11,.4);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+    }
+    .pl-cli-toggle:hover { background: rgba(245,158,11,.1); }
+    .pl-cli-block {
+        position: relative;
+        margin-top: 8px;
+        background: #020617;
+        border: 1px solid var(--pl-border);
+        border-radius: 6px;
+        padding: 12px 14px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: #cbd5e1;
+        white-space: pre-wrap;
+        line-height: 1.55;
+        max-width: 720px;
+        display: none;
+    }
+    .pl-cli-block.open { display: block; }
+    .pl-cli-copy {
+        position: absolute; top: 6px; right: 6px;
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        color: var(--pl-text);
+        font-size: 10px; font-weight: 600;
+        padding: 4px 8px; border-radius: 4px;
+        cursor: pointer;
+    }
+    .pl-cli-copy:hover { background: rgba(59,130,246,.2); }
+    .pl-cli-vendor {
+        display: inline-block;
+        margin-left: 6px; padding: 1px 6px;
+        font-size: 9px; font-weight: 700;
+        background: rgba(139,92,246,.15); color: #c4b5fd;
+        border-radius: 4px;
+    }
+
+    /* Path breadcrumb (multi-firewall hop trail) */
+    .pl-path {
+        display: flex; align-items: center; gap: 8px;
+        flex-wrap: wrap;
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+    }
+    .pl-path-label {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .06em; color: var(--pl-muted); margin-right: 4px;
+    }
+    .pl-path-hop {
+        display: inline-flex; flex-direction: column;
+        background: var(--pl-card-alt); border: 1px solid var(--pl-border);
+        border-radius: 6px; padding: 4px 10px; min-width: 0;
+    }
+    .pl-path-hop-name {
+        font-family: 'JetBrains Mono', monospace; font-size: 11px;
+        color: var(--pl-text); font-weight: 600;
+    }
+    .pl-path-hop-zones {
+        font-family: 'JetBrains Mono', monospace; font-size: 9px;
+        color: var(--pl-dim); margin-top: 2px;
+    }
+    .pl-path-arrow {
+        color: var(--pl-blue); font-size: 14px; line-height: 1;
+        flex-shrink: 0;
+    }
+
+    /* Hop badge inside the table */
+    .pl-hop {
+        display: inline-block;
+        font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+        background: rgba(59,130,246,.15); color: #93c5fd;
+        padding: 1px 5px; border-radius: 3px;
+        margin-right: 6px;
+    }
+
+    /* Bidirectional chip */
+    .pl-dir {
+        display: inline-block;
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+    }
+    .pl-dir-bi  { background: rgba(34,197,94,.15);  color: #86efac; }
+    .pl-dir-uni { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+    /* Permissive scope chips */
+    .pl-perm {
+        display: inline-block;
+        font-size: 9px; font-weight: 700; text-transform: uppercase;
+        padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+        background: rgba(239,68,68,.15); color: #fca5a5;
+    }
+
+    /* Open in Logs button (per row) */
+    .pl-open-logs {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-size: 10px; font-weight: 600;
+        color: var(--pl-blue);
+        text-decoration: none;
+        padding: 3px 6px; border-radius: 4px;
+        border: 1px solid rgba(59,130,246,.25);
+        background: rgba(59,130,246,.06);
+    }
+    .pl-open-logs:hover { background: rgba(59,130,246,.16); }
+    .pl-open-logs svg { width: 11px; height: 11px; }
 
     /* ── Gap Analysis ── */
     .pl-gap-card {
@@ -291,10 +472,151 @@
         margin-bottom: 1rem;
     }
 
+    /* ── Path-Aware Flow Visualisation ── */
+    .pl-path-card {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-bottom: 1rem;
+    }
+    .pl-path-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .pl-path-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    .pl-verdict-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+    }
+    .pl-verdict-chip.allow { background: rgba(34,197,94,.14); color: #4ade80; border: 1px solid rgba(34,197,94,.35); }
+    .pl-verdict-chip.deny  { background: rgba(239,68,68,.14); color: #f87171; border: 1px solid rgba(239,68,68,.35); }
+    .pl-verdict-chip.indet { background: rgba(245,158,11,.14); color: #fbbf24; border: 1px solid rgba(245,158,11,.35); }
+    .pl-path-reason {
+        font-size: 12.5px;
+        color: var(--pl-muted);
+        margin-bottom: 14px;
+    }
+    .pl-path-flow {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        overflow-x: auto;
+        padding-bottom: 6px;
+    }
+    .pl-hop {
+        flex: 0 0 240px;
+        background: var(--pl-card-alt);
+        border: 1px solid var(--pl-border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        position: relative;
+    }
+    .pl-hop.allow { border-color: rgba(34,197,94,.5); box-shadow: 0 0 0 1px rgba(34,197,94,.15) inset; }
+    .pl-hop.deny  { border-color: rgba(239,68,68,.6); box-shadow: 0 0 0 1px rgba(239,68,68,.2) inset; }
+    .pl-hop.indet { border-color: rgba(245,158,11,.5); box-shadow: 0 0 0 1px rgba(245,158,11,.15) inset; }
+    .pl-hop-idx {
+        display: inline-block;
+        background: rgba(59,130,246,.18);
+        color: #93c5fd;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+    }
+    .pl-hop-dev {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--pl-text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        margin-bottom: 6px;
+        word-break: break-all;
+    }
+    .pl-hop-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--pl-muted);
+        gap: 6px;
+        margin-top: 3px;
+    }
+    .pl-hop-row code {
+        background: rgba(59,130,246,.1);
+        color: #bfdbfe;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 10.5px;
+    }
+    .pl-hop-action {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--pl-border);
+        font-size: 11.5px;
+    }
+    .pl-hop-rule {
+        font-size: 11px;
+        color: var(--pl-muted);
+        margin-top: 2px;
+        word-break: break-all;
+    }
+    .pl-hop-arrow {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        color: var(--pl-dim);
+        font-size: 18px;
+    }
+    .pl-hop-arrow.deny { color: var(--pl-red); }
+    .pl-path-endpoints {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        padding: 12px 10px;
+        background: rgba(59,130,246,.05);
+        border: 1px dashed rgba(59,130,246,.3);
+        border-radius: 10px;
+        color: var(--pl-muted);
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+    }
+    .pl-hop-unresolved {
+        flex: 0 0 180px;
+        border: 1px dashed rgba(245,158,11,.5);
+        border-radius: 10px;
+        padding: 12px;
+        color: #fbbf24;
+        font-size: 12px;
+        font-style: italic;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 900px) {
         .pl-form-row { flex-direction: column; }
         .pl-summary { grid-template-columns: 1fr 1fr; }
+        .pl-path-flow { flex-wrap: wrap; }
     }
 </style>
 {% endblock %}
@@ -318,15 +640,27 @@
     <form class="pl-form-card" method="get" action="{{ url_for('policy_lookup') }}" id="plForm">
         <div class="pl-form-row">
             <div class="pl-field">
-                <label>Destination IP *</label>
+                <label>Destination (IP or FQDN) *</label>
                 <input type="text" name="dstip" value="{{ current_dstip or '' }}"
-                       placeholder="10.10.122.31" required
-                       pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
+                       placeholder="10.10.122.31 or example.com" required
+                       pattern="(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*)"
+                       style="width:220px">
             </div>
             <div class="pl-field">
                 <label>Destination Port *</label>
                 <input type="number" name="dstport" value="{{ current_dstport or '' }}"
                        placeholder="443" required min="0" max="65535" style="width:110px">
+            </div>
+            <div class="pl-field">
+                <label>Protocol</label>
+                <div class="pl-pill-group" data-target="plProto">
+                    {% set _proto = (current_proto or 'any') %}
+                    <button type="button" class="pl-pill{% if _proto == 'any' %} active{% endif %}" data-value="any">Any</button>
+                    <button type="button" class="pl-pill{% if _proto == 'tcp' %} active{% endif %}" data-value="tcp">TCP</button>
+                    <button type="button" class="pl-pill{% if _proto == 'udp' %} active{% endif %}" data-value="udp">UDP</button>
+                    <button type="button" class="pl-pill{% if _proto == 'icmp' %} active{% endif %}" data-value="icmp">ICMP</button>
+                </div>
+                <input type="hidden" name="proto" id="plProto" value="{{ _proto }}">
             </div>
             <div class="pl-field">
                 <label>Source IP (optional)</label>
@@ -335,12 +669,22 @@
                        pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="width:170px">
             </div>
             <div class="pl-field">
+                <label>Mode</label>
+                <div class="pl-pill-group" data-target="plMode">
+                    {% set _mode = (current_mode or 'both') %}
+                    <button type="button" class="pl-pill{% if _mode == 'both' %} active{% endif %}" data-value="both" title="Logs + Config">Both</button>
+                    <button type="button" class="pl-pill{% if _mode == 'logs' %} active{% endif %}" data-value="logs" title="Logs only">Logs</button>
+                    <button type="button" class="pl-pill{% if _mode == 'config' %} active{% endif %}" data-value="config" title="Config only">Config</button>
+                </div>
+                <input type="hidden" name="mode" id="plMode" value="{{ _mode }}">
+            </div>
+            <div class="pl-field">
                 <label>Time Range</label>
-                <div class="pl-time-pills">
-                    <button type="button" class="pl-pill{% if current_time_range == '1h' %} active{% endif %}" data-range="1h">1H</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '24h' %} active{% endif %}" data-range="24h">24H</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '7d' %} active{% endif %}" data-range="7d">7D</button>
-                    <button type="button" class="pl-pill{% if current_time_range == '30d' %} active{% endif %}" data-range="30d">30D</button>
+                <div class="pl-pill-group" data-target="plTimeRange">
+                    <button type="button" class="pl-pill{% if current_time_range == '1h' %} active{% endif %}" data-value="1h">1H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '24h' %} active{% endif %}" data-value="24h">24H</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '7d' %} active{% endif %}" data-value="7d">7D</button>
+                    <button type="button" class="pl-pill{% if current_time_range == '30d' %} active{% endif %}" data-value="30d">30D</button>
                 </div>
                 <input type="hidden" name="time_range" id="plTimeRange" value="{{ current_time_range or '24h' }}">
             </div>
@@ -352,6 +696,13 @@
                 </button>
             </div>
         </div>
+        {% if resolved_fqdn and resolved_ips %}
+        <div class="pl-resolved-banner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            Resolved <code>{{ resolved_fqdn }}</code> &rarr;
+            {% for ip in resolved_ips %}<code>{{ ip }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
     </form>
 
     {% if error %}
@@ -409,6 +760,158 @@
         </div>
     </div>
 
+    {# ── Resolved Path (src → dst hop-by-hop) ───────────────────── #}
+    {% if results.path_evaluation and results.path_evaluation.hops %}
+    {% set pe = results.path_evaluation %}
+    <div class="pl-path-card">
+        <div class="pl-path-header">
+            <div class="pl-path-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><polyline points="12 19 20 11 12 3"/></svg>
+                Resolved Path
+                <span class="pl-small pl-dim">— {{ pe.hop_count }} hop{{ 's' if pe.hop_count != 1 }} via routing table{% if not pe.path_complete %} (partial){% endif %}</span>
+            </div>
+            <span class="pl-verdict-chip {% if pe.effective_action == 'allow' %}allow{% elif pe.effective_action == 'deny' %}deny{% else %}indet{% endif %}">
+                {% if pe.effective_action == 'allow' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg> Allow
+                {% elif pe.effective_action == 'deny' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Deny
+                {% else %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:12px;height:12px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Indeterminate
+                {% endif %}
+            </span>
+        </div>
+        {% if pe.effective_reason %}
+        <div class="pl-path-reason">{{ pe.effective_reason }}</div>
+        {% endif %}
+        <div class="pl-path-flow">
+            <div class="pl-path-endpoints">
+                <div>
+                    <div style="color:var(--pl-text);font-weight:600;margin-bottom:2px">Source</div>
+                    {{ current_srcip }}
+                </div>
+            </div>
+            {% for hop in pe.hops %}
+            {% set hop_class = 'allow' if hop.action in ['accept','allow'] else ('deny' if hop.action in ['deny','implicit-deny'] else 'indet') %}
+            <div class="pl-hop-arrow {% if hop_class == 'deny' %}deny{% endif %}">&rarr;</div>
+            <div class="pl-hop {{ hop_class }}">
+                <span class="pl-hop-idx">HOP {{ hop.index }}</span>
+                <div class="pl-hop-dev">{{ hop.device_display }}</div>
+                <div class="pl-hop-row">
+                    <span>In:</span>
+                    <span>
+                        {% if hop.ingress_zone %}<code>{{ hop.ingress_zone }}</code>{% endif %}
+                        {% if hop.ingress_iface %}<span class="pl-dim">{{ hop.ingress_iface }}</span>{% endif %}
+                        {% if not hop.ingress_zone and not hop.ingress_iface %}<span class="pl-dim">—</span>{% endif %}
+                    </span>
+                </div>
+                <div class="pl-hop-row">
+                    <span>Out:</span>
+                    <span>
+                        {% if hop.egress_zone %}<code>{{ hop.egress_zone }}</code>{% endif %}
+                        {% if hop.egress_iface %}<span class="pl-dim">{{ hop.egress_iface }}</span>{% endif %}
+                        {% if not hop.egress_zone and not hop.egress_iface %}<span class="pl-dim">—</span>{% endif %}
+                    </span>
+                </div>
+                {% if hop.next_hop %}
+                <div class="pl-hop-row"><span>Next:</span><code>{{ hop.next_hop }}</code></div>
+                {% endif %}
+                {% if hop.route_network %}
+                <div class="pl-hop-row"><span>Route:</span><code>{{ hop.route_network }}</code>{% if hop.route_type %} <span class="pl-dim">[{{ hop.route_type }}]</span>{% endif %}</div>
+                {% endif %}
+                <div class="pl-hop-action">
+                    {% if hop.action in ['accept','allow'] %}
+                        <span class="pl-action-chip allow">{{ hop.action }}</span>
+                    {% elif hop.action == 'implicit-deny' %}
+                        <span class="pl-action-chip deny" title="No rule matched; vendor default applies">implicit&nbsp;deny</span>
+                    {% elif hop.action == 'no-policy-data' %}
+                        <span class="pl-action-chip" style="background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.35)">no policy data</span>
+                    {% else %}
+                        <span class="pl-action-chip deny">{{ hop.action }}</span>
+                    {% endif %}
+                    {% if hop.matched and hop.policyname %}
+                        <div class="pl-hop-rule">{{ hop.policyname }}{% if hop.position is not none %} <span class="pl-dim">(pos {{ hop.position }})</span>{% endif %}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if not pe.path_complete %}
+            <div class="pl-hop-arrow">&rarr;</div>
+            <div class="pl-hop-unresolved">
+                Path unresolved:<br>{{ pe.path_stop_reason or 'unknown' }}
+            </div>
+            {% else %}
+            <div class="pl-hop-arrow">&rarr;</div>
+            <div class="pl-path-endpoints">
+                <div>
+                    <div style="color:var(--pl-text);font-weight:600;margin-bottom:2px">Destination</div>
+                    {{ current_dstip }}:{{ current_dstport }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Macro: bidirectional / unidirectional chip ─────────────── #}
+    {% macro dir_chip(bi) %}
+        {% if bi == True %}<span class="pl-dir pl-dir-bi" title="Reverse traffic seen on the same device — symmetric path">↔ bi</span>
+        {% elif bi == False %}<span class="pl-dir pl-dir-uni" title="No reverse traffic seen on this device — possible asymmetric path or stateful session">→ only</span>
+        {% endif %}
+    {% endmacro %}
+
+    {# ── Macro: overly-permissive scope chip ────────────────────── #}
+    {% macro scope_chip(label, kind) %}
+        {% if label in ('broad','any') %}
+            <span class="pl-perm" title="This rule has matched a {{ label }} set of {{ kind }} addresses in the time window">{{ kind }}: {{ label }}</span>
+        {% endif %}
+    {% endmacro %}
+
+    {# ── Macro: snapshot-diff change badge ──────────────────────── #}
+    {% macro change_badge(change) %}
+        {% if change == 'became_denied' %}<span class="pl-change pl-change-became_denied" title="Was allowed in the prior window of equal length">↓ became denied</span>
+        {% elif change == 'became_allowed' %}<span class="pl-change pl-change-became_allowed" title="Was denied in the prior window of equal length">↑ became allowed</span>
+        {% elif change in ('new_allow','new_deny','new') %}<span class="pl-change pl-change-new" title="Not seen in the prior window of equal length">new</span>
+        {% elif change == 'changed' %}<span class="pl-change pl-change-changed" title="Action class differs from prior window">changed</span>
+        {% endif %}
+    {% endmacro %}
+
+    {# ── Macro: action chip ─────────────────────────────────────── #}
+    {% macro action_chip(name, count) %}
+        {% set lc = (name or '')|lower %}
+        {% if lc in ('accept','allow','pass','close') %}{% set cls = 'pl-action-allow' %}
+        {% elif lc in ('deny','drop','block','reject','blocked') %}{% set cls = 'pl-action-deny' %}
+        {% elif 'rst' in lc or lc == 'reset-both' %}{% set cls = 'pl-action-rst' %}
+        {% else %}{% set cls = 'pl-action-other' %}{% endif %}
+        <span class="pl-action-chip {{ cls }}">{{ name }} <span class="ct">×{{ format_number(count) }}</span></span>
+    {% endmacro %}
+
+    {# ── Macro: open-in-logs link for one row ───────────────────── #}
+    {% macro open_logs_link(row) %}
+        {% set _src = current_srcip or (row.sample_sources[0] if row.sample_sources else '') %}
+        <a class="pl-open-logs" target="_blank"
+           href="/logs/?dstip={{ current_dstip }}&dstport={{ current_dstport }}{% if _src %}&srcip={{ _src }}{% endif %}&device={{ row.device_display }}{% if row.policyname %}&policyname={{ row.policyname }}{% endif %}&time_range={{ current_time_range or '24h' }}"
+           title="Open matching logs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v7H3V3h7"/></svg>
+            Logs
+        </a>
+    {% endmacro %}
+
+    <!-- Inferred path (from log timing) -->
+    {% if results.path and results.path|length > 1 %}
+    <div class="pl-path" title="Inferred from the order each device first observed the flow. Useful for multi-firewall paths but can be approximate under log buffering.">
+        <span class="pl-path-label">Inferred path</span>
+        {% for hop in results.path %}
+            {% if not loop.first %}<span class="pl-path-arrow">→</span>{% endif %}
+            <span class="pl-path-hop">
+                <span class="pl-path-hop-name">{{ hop.device }}</span>
+                {% if hop.src_zone or hop.dst_zone %}
+                <span class="pl-path-hop-zones">{{ hop.src_zone or '?' }} → {{ hop.dst_zone or '?' }}</span>
+                {% endif %}
+            </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Allowed Policies Table -->
     {% if results.allowed %}
     <div class="pl-section-hdr">
@@ -421,43 +924,68 @@
                 <tr>
                     <th>Device</th>
                     <th>Policy</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                     <th>Sources</th>
                     <th>Events</th>
-                    <th>First Seen</th>
-                    <th>Last Seen</th>
-                    <th>Port Specificity</th>
-                    <th>Application</th>
-                    <th>Zones</th>
-                    {% if current_srcip %}<th>Src Covered</th>{% endif %}
+                    <th>Bytes</th>
+                    <th>Seen</th>
+                    <th>Port</th>
+                    <th>App</th>
+                    <th>Zones / NAT</th>
+                    {% if current_srcip %}<th>Src</th>{% endif %}
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in results.allowed %}
                 <tr class="pl-row-allow">
                     <td>
-                        <div class="pl-mono" style="font-weight:600">{{ row.device_display }}</div>
+                        <div class="pl-mono" style="font-weight:600">
+                            {% if row.hop_index and (results.path|length) > 1 %}<span class="pl-hop" title="Inferred hop position in the path">#{{ row.hop_index }}</span>{% endif %}{{ row.device_display }}
+                        </div>
                         {% if row.vdom %}<div class="pl-small">vdom: {{ row.vdom }}</div>{% endif %}
                     </td>
-                    <td><span class="pl-mono">{{ row.policyname or '-' }}</span></td>
-                    <td><span style="color:var(--pl-green);font-weight:600;text-transform:uppercase;font-size:11px">{{ row.action }}</span></td>
+                    <td>
+                        <span class="pl-mono">{{ row.policyname or '-' }}</span>{{ change_badge(row.change) }}{{ dir_chip(row.bidirectional) }}{{ scope_chip(row.src_specificity, 'src') }}{{ scope_chip(row.dst_specificity, 'dst') }}
+                    </td>
+                    <td>
+                        <div class="pl-action-chips">
+                            {% for a, c in row.actions %}{{ action_chip(a, c) }}{% endfor %}
+                        </div>
+                    </td>
                     <td>
                         <div style="font-weight:600">{{ row.unique_src_count }} unique</div>
                         {% if row.sample_sources %}
-                        <div class="pl-small">{{ row.sample_sources[:5]|join(', ') }}{% if row.unique_src_count > 5 %} ...{% endif %}</div>
+                        <div class="pl-small pl-mono">{{ row.sample_sources[:5]|join(', ') }}{% if row.unique_src_count > 5 %} …{% endif %}</div>
                         {% endif %}
                     </td>
                     <td style="font-weight:600">{{ format_number(row.event_count) }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</td>
+                    <td class="pl-bytes">
+                        {% if (row.sent_bytes or 0) + (row.recv_bytes or 0) > 0 %}
+                            <div><span class="pl-bytes-up">↑</span> {{ row.sent_bytes | format_bytes }}</div>
+                            <div><span class="pl-bytes-down">↓</span> {{ row.recv_bytes | format_bytes }}</div>
+                        {% else %}<span class="pl-dim">-</span>{% endif %}
+                    </td>
+                    <td class="pl-mono pl-dim" style="font-size:10px;white-space:nowrap">
+                        <div>{{ row.first_seen | localdt }}</div>
+                        <div>{{ row.last_seen | localdt }}</div>
+                    </td>
                     <td>
                         <span class="pl-spec-badge pl-spec-{{ row.specificity_label }}">{{ row.specificity_label }}</span>
                     </td>
-                    <td class="pl-mono">{{ row.application or '-' }}</td>
+                    <td class="pl-mono">{{ row.application or row.category or '-' }}</td>
                     <td>
                         {% if row.src_zone or row.dst_zone %}
-                        <span class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</span>
-                        {% else %}-{% endif %}
+                        <div class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</div>
+                        {% else %}<span class="pl-dim">-</span>{% endif %}
+                        {% if row.nat_srcip or row.nat_dstip %}
+                        <span class="pl-nat-chip" title="NAT translation">
+                            <span class="pl-nat-label">NAT</span>
+                            {{ row.nat_srcip or '?' }}{% if row.nat_srcport %}:{{ row.nat_srcport }}{% endif %}
+                            &rarr;
+                            {{ row.nat_dstip or '?' }}{% if row.nat_dstport %}:{{ row.nat_dstport }}{% endif %}
+                        </span>
+                        {% endif %}
                     </td>
                     {% if current_srcip %}
                     <td>
@@ -470,6 +998,7 @@
                         {% endif %}
                     </td>
                     {% endif %}
+                    <td>{{ open_logs_link(row) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -489,13 +1018,14 @@
                 <tr>
                     <th>Device</th>
                     <th>Policy</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                     <th>Sources</th>
                     <th>Events</th>
-                    <th>First Seen</th>
-                    <th>Last Seen</th>
-                    <th>Application</th>
-                    <th>Zones</th>
+                    <th>Bytes</th>
+                    <th>Seen</th>
+                    <th>App</th>
+                    <th>Zones / NAT</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -505,23 +1035,109 @@
                         <div class="pl-mono" style="font-weight:600">{{ row.device_display }}</div>
                         {% if row.vdom %}<div class="pl-small">vdom: {{ row.vdom }}</div>{% endif %}
                     </td>
-                    <td><span class="pl-mono">{{ row.policyname or '-' }}</span></td>
-                    <td><span style="color:var(--pl-red);font-weight:600;text-transform:uppercase;font-size:11px">{{ row.action }}</span></td>
+                    <td>
+                        <span class="pl-mono">{{ row.policyname or '-' }}</span>{{ change_badge(row.change) }}{{ dir_chip(row.bidirectional) }}
+                    </td>
+                    <td>
+                        <div class="pl-action-chips">
+                            {% for a, c in row.actions %}{{ action_chip(a, c) }}{% endfor %}
+                        </div>
+                    </td>
                     <td>
                         <div style="font-weight:600">{{ row.unique_src_count }} unique</div>
                         {% if row.sample_sources %}
-                        <div class="pl-small">{{ row.sample_sources[:3]|join(', ') }}{% if row.unique_src_count > 3 %} ...{% endif %}</div>
+                        <div class="pl-small pl-mono">{{ row.sample_sources[:3]|join(', ') }}{% if row.unique_src_count > 3 %} …{% endif %}</div>
                         {% endif %}
                     </td>
                     <td style="font-weight:600">{{ format_number(row.event_count) }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.first_seen[:19] if row.first_seen|length > 19 else row.first_seen }}</td>
-                    <td class="pl-mono pl-dim" style="font-size:11px;white-space:nowrap">{{ row.last_seen[:19] if row.last_seen|length > 19 else row.last_seen }}</td>
-                    <td class="pl-mono">{{ row.application or '-' }}</td>
+                    <td class="pl-bytes">
+                        {% if (row.sent_bytes or 0) + (row.recv_bytes or 0) > 0 %}
+                            <div><span class="pl-bytes-up">↑</span> {{ row.sent_bytes | format_bytes }}</div>
+                            <div><span class="pl-bytes-down">↓</span> {{ row.recv_bytes | format_bytes }}</div>
+                        {% else %}<span class="pl-dim">-</span>{% endif %}
+                    </td>
+                    <td class="pl-mono pl-dim" style="font-size:10px;white-space:nowrap">
+                        <div>{{ row.first_seen | localdt }}</div>
+                        <div>{{ row.last_seen | localdt }}</div>
+                    </td>
+                    <td class="pl-mono">{{ row.application or row.category or '-' }}</td>
                     <td>
                         {% if row.src_zone or row.dst_zone %}
-                        <span class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</span>
-                        {% else %}-{% endif %}
+                        <div class="pl-mono">{{ row.src_zone or '?' }} &rarr; {{ row.dst_zone or '?' }}</div>
+                        {% else %}<span class="pl-dim">-</span>{% endif %}
+                        {% if row.nat_srcip or row.nat_dstip %}
+                        <span class="pl-nat-chip" title="NAT translation">
+                            <span class="pl-nat-label">NAT</span>
+                            {{ row.nat_srcip or '?' }}{% if row.nat_srcport %}:{{ row.nat_srcport }}{% endif %}
+                            &rarr;
+                            {{ row.nat_dstip or '?' }}{% if row.nat_dstport %}:{{ row.nat_dstport }}{% endif %}
+                        </span>
+                        {% endif %}
                     </td>
+                    <td>{{ open_logs_link(row) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Would Match (config-simulated, no traffic yet)
+         Filtered: only firewalls that are NOT on the resolved path. -->
+    {% if results.would_match %}
+    <div class="pl-section-hdr">
+        {% if results.path_evaluation and results.path_evaluation.hops %}
+        <h3>Off-path matches <span class="pl-small" style="font-weight:400">— other firewalls with a rule for this flow; traffic does not traverse these</span></h3>
+        {% else %}
+        <h3>Would Match <span class="pl-small" style="font-weight:400">— predicted from rule base, no logs yet</span></h3>
+        {% endif %}
+        <span class="pl-section-badge pl-badge-blue">{{ results.would_match|length }} results</span>
+    </div>
+    <div class="pl-table-wrap">
+        <table class="pl-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Policy</th>
+                    <th>Pos</th>
+                    <th>Action</th>
+                    <th>Evidence</th>
+                    <th>Config Hits</th>
+                    <th>Last Hit</th>
+                    <th>Snapshot</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in results.would_match %}
+                <tr>
+                    <td>
+                        <div style="font-weight:600">{{ row.device_display }}</div>
+                        {% if row.vdom %}<div class="pl-small pl-dim">vdom: {{ row.vdom }}</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if row.matched %}
+                            <div style="font-weight:600">{{ row.policyname or '-' }}</div>
+                            {% if row.rule_id %}<div class="pl-small pl-dim">id: {{ row.rule_id }}</div>{% endif %}
+                        {% else %}
+                            <div class="pl-dim pl-small">{{ row.reason }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="pl-mono">{{ row.position if row.position is not none else '-' }}</td>
+                    <td>
+                        {% if row.action == 'accept' or row.action == 'allow' %}
+                            <span class="pl-action-chip allow">{{ row.action }}</span>
+                        {% elif row.action == 'implicit-deny' %}
+                            <span class="pl-action-chip deny" title="No rule matched; vendor default applies">implicit&nbsp;deny</span>
+                        {% else %}
+                            <span class="pl-action-chip deny">{{ row.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="pl-nat-chip"><span class="pl-nat-label">CONFIG</span></span>
+                    </td>
+                    <td class="pl-mono">{{ format_number(row.hit_count) if row.hit_count else '-' }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ (row.last_hit_at | localdt) or '-' }}</td>
+                    <td class="pl-mono pl-dim" style="font-size:10px">{{ (row.snapshot_fetched_at | localdt) or '-' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -539,27 +1155,78 @@
             </svg>
             Gap Analysis &mdash; {{ results.gap_devices|length }} device{{ 's' if results.gap_devices|length != 1 }} deny-only (no allow rule found)
         </div>
-        <div class="pl-gap-list">
+        <div class="pl-gap-list" style="flex-direction:column;align-items:stretch">
             {% for dev in results.gap_devices %}
-            <div class="pl-gap-item">
-                <span class="pl-gap-device">{{ dev }}</span>
-                <a class="pl-gap-link" href="{{ url_for('policy_builder') }}?dstip={{ current_dstip }}&dstport={{ current_dstport }}&device={{ dev }}">
-                    Build Policy &rarr;
-                </a>
+            {% set parser = (results.gap_parsers or {}).get(dev, 'GENERIC') %}
+            {% set cli = (results.gap_suggestions or {}).get(dev) %}
+            <div class="pl-gap-item" style="flex-direction:column;align-items:stretch;gap:8px">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span class="pl-gap-device">{{ dev }}</span>
+                    <span class="pl-cli-vendor">{{ parser }}</span>
+                    {% if cli %}
+                    <button type="button" class="pl-cli-toggle" onclick="plToggleCli('cli-{{ loop.index }}')">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        Suggested rule
+                    </button>
+                    {% endif %}
+                    <a class="pl-gap-link" href="{{ url_for('policy_builder') }}?dstip={{ current_dstip }}&dstport={{ current_dstport }}&device={{ dev }}">
+                        Open Policy Builder &rarr;
+                    </a>
+                </div>
+                {% if cli %}
+                <pre class="pl-cli-block" id="cli-{{ loop.index }}"><button type="button" class="pl-cli-copy" onclick="plCopyCli('cli-{{ loop.index }}', this)">Copy</button>{{ cli }}</pre>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
     </div>
+    <script>
+        function plToggleCli(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.toggle('open');
+        }
+        function plCopyCli(id, btn) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            // Strip the inner Copy button text from clipboard payload.
+            var text = el.innerText.replace(/^Copy\s*/, '');
+            (navigator.clipboard ? navigator.clipboard.writeText(text)
+                : Promise.reject()).then(function () {
+                btn.textContent = 'Copied!';
+                setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+            }).catch(function () {
+                // Fallback for non-secure contexts.
+                var ta = document.createElement('textarea');
+                ta.value = text; document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); btn.textContent = 'Copied!'; }
+                catch (e) { btn.textContent = 'Copy failed'; }
+                document.body.removeChild(ta);
+                setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+            });
+        }
+    </script>
     {% endif %}
 
-    <!-- No results with query -->
-    {% if results and not results.allowed and not results.denied %}
+    <!-- No results with query — only show when every section is empty -->
+    {% if results
+          and not results.allowed
+          and not results.denied
+          and not results.would_match
+          and not (results.path_evaluation and results.path_evaluation.hops) %}
     <div class="pl-empty">
         <div class="pl-empty-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         </div>
         <h3>No Traffic Found</h3>
-        <p>No allowed or denied traffic to {{ current_dstip }}:{{ current_dstport }} in the selected time range. Try expanding the time range or check the destination.</p>
+        <p>No allowed or denied traffic to {{ current_dstip }}:{{ current_dstport }} in the selected time range, and no device rule base predicts a match. Try expanding the time range, widening the source scope, or confirm routing/zone snapshots exist for the firewalls in the path.</p>
+    </div>
+    {% elif results
+          and not results.allowed
+          and not results.denied
+          and (results.would_match or (results.path_evaluation and results.path_evaluation.hops)) %}
+    <div class="pl-resolved-banner" style="margin-top:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        No log hits in this window — verdict above is predicted from rule base + routing configuration. Expand the time range if you want to see real traffic too.
     </div>
     {% endif %}
 
@@ -581,13 +1248,19 @@
 {% block extra_js %}
 <script>
 (function() {
-    const pills = document.querySelectorAll('.pl-pill');
-    const hidden = document.getElementById('plTimeRange');
-    pills.forEach(pill => {
-        pill.addEventListener('click', () => {
-            pills.forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
-            hidden.value = pill.dataset.range;
+    // Each pill group writes into the hidden input identified by its
+    // `data-target` attribute. Using groups lets us have multiple pill
+    // rows (time range, protocol, …) without their click handlers stepping
+    // on each other.
+    document.querySelectorAll('.pl-pill-group').forEach(group => {
+        const hidden = document.getElementById(group.dataset.target);
+        const pills = group.querySelectorAll('.pl-pill');
+        pills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                pills.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                if (hidden) hidden.value = pill.dataset.value;
+            });
         });
     });
 })();

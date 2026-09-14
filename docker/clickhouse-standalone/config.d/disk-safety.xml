@@ -1,0 +1,18 @@
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <default>
+                <keep_free_space_bytes>53687091200</keep_free_space_bytes>
+            </default>
+        </disks>
+    </storage_configuration>
+    <!-- Reduce merge_with_ttl_timeout so TTL cleanup happens faster -->
+    <merge_tree>
+        <merge_with_ttl_timeout>3600</merge_with_ttl_timeout>
+    </merge_tree>
+    <!-- Server-level drop-size safety limits (0 = no size cap on DROP).
+         These are NOT MergeTree settings; ClickHouse 25.x aborts (exit 115)
+         if they appear under <merge_tree>. Must live at <clickhouse> top level. -->
+    <max_partition_size_to_drop>0</max_partition_size_to_drop>
+    <max_table_size_to_drop>0</max_table_size_to_drop>
+</clickhouse>

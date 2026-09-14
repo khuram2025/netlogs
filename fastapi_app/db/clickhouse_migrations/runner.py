@@ -5,6 +5,7 @@ Migrations are numbered Python files: 001_description.py, 002_description.py, et
 Each must define an `upgrade(client)` function that receives a ClickHouse client.
 """
 
+import fcntl
 import importlib
 import logging
 from pathlib import Path
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent
 CH_VERSION_KEY = "clickhouse_schema_version"
+# uvicorn starts every worker at once; without this each of them read the same
+# schema version and applied the same migration in parallel (migration 006's
+# backfill was inserted four times over). Workers queue on the lock and re-read
+# the version once it is theirs, so the second one finds nothing pending.
+MIGRATION_LOCK_PATH = "/tmp/zentryc_ch_migrations.lock"
 
 
 def _discover_migrations() -> list[tuple[int, str, Path]]:
@@ -66,7 +72,18 @@ async def _set_current_version(version: int) -> None:
 
 
 async def run_clickhouse_migrations() -> int:
-    """Run all pending ClickHouse migrations. Returns count of applied migrations."""
+    """Run all pending ClickHouse migrations. Returns count of applied migrations.
+
+    Serialised across worker processes with a file lock (see MIGRATION_LOCK_PATH)."""
+    with open(MIGRATION_LOCK_PATH, "w") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            return await _run_pending_migrations()
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+async def _run_pending_migrations() -> int:
     current = await _get_current_version()
     migrations = _discover_migrations()
     pending = [(v, name, p) for v, name, p in migrations if v > current]

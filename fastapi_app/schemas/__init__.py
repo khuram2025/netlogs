@@ -31,6 +31,12 @@ from .auth import (
     SetupStep2Request,
 )
 
+from .correlation import (
+    StageSchema,
+    CorrelationRuleCreate,
+    CorrelationRuleUpdate,
+)
+
 __all__ = [
     "DeviceBase",
     "DeviceCreate",
@@ -56,4 +62,7 @@ __all__ = [
     "NotificationChannelRequest",
     "SetupStep1Request",
     "SetupStep2Request",
+    "StageSchema",
+    "CorrelationRuleCreate",
+    "CorrelationRuleUpdate",
 ]

@@ -5,18 +5,27 @@ HTML view routes for the web UI.
 import asyncio
 import json
 import logging
+import re
+import socket
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from ipaddress import IPv4Address, IPv6Address
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.clickhouse import ClickHouseClient
+from ..services.policy_match_engine import (
+    MatchQuery,
+    match_all_devices,
+    match_path,
+)
+from ..core.cache import get_redis
 from ..models.device import Device, DeviceStatus, ParserType, RetentionDays
 from ..models.credential import DeviceCredential, CredentialType, DeviceVdom
 from ..models.device_ssh_settings import DeviceSshSettings
@@ -28,6 +37,15 @@ logger = logging.getLogger(__name__)
 
 # Thread pool for running blocking ClickHouse queries in parallel
 _executor = ThreadPoolExecutor(max_workers=8)
+
+# Separate, smaller pool for search-bar autocomplete. Suggestions fire on every
+# keystroke, so they get their own lane — a burst of typing must never starve the
+# actual log queries.
+_suggest_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="nql-suggest")
+
+# Upper bound for exact log counts. Past this the pager shows "100,000+" instead
+# of forcing a multi-second full scan to get an exact (and rarely useful) total.
+COUNT_CAP = 100000
 
 router = APIRouter(tags=["views"])
 
@@ -97,6 +115,563 @@ def format_number(num: int) -> str:
     return f"{num:,}"
 
 
+async def _load_attestations(db, device_id: int, *, embed_proofs: bool = False) -> dict:
+    """Load manual compliance attestations for a device.
+
+    Returns ``{(framework, control_id): row_dict}``. When ``embed_proofs``
+    is True any attached proof image is read from disk and converted to a
+    ``data:image/...;base64,...`` URL — used by the PDF generator so the
+    output is self-contained (Playwright's Chrome never has to reach back
+    to the web server). The web UI uses the regular ``/static/...`` URL
+    instead to keep payloads small.
+    """
+    from ..models.compliance_attestation import ComplianceAttestation
+    import base64 as _b64
+    from pathlib import Path as _Path
+
+    rows = (await db.execute(
+        select(ComplianceAttestation)
+        .where(ComplianceAttestation.device_id == device_id)
+    )).scalars().all()
+    out: dict = {}
+    static_root = _Path(__file__).resolve().parent.parent / "static"
+    for r in rows:
+        entry = {
+            "status":            r.status,
+            "include_in_report": r.include_in_report,
+            "notes":             r.notes,
+            "reviewed_by":       r.reviewed_by,
+            "reviewed_at":       r.reviewed_at.isoformat() if r.reviewed_at else None,
+            "proof_url":         f"/static/{r.proof_path}" if r.proof_path else None,
+            "proof_filename":    r.proof_filename,
+            "proof_mimetype":    r.proof_mimetype,
+        }
+        if embed_proofs and r.proof_path:
+            try:
+                f = static_root / r.proof_path
+                if f.is_file():
+                    b = f.read_bytes()
+                    mime = r.proof_mimetype or "image/png"
+                    entry["proof_data_url"] = (
+                        f"data:{mime};base64,{_b64.b64encode(b).decode('ascii')}"
+                    )
+            except OSError as e:
+                logger.warning(f"Could not embed proof {r.proof_path}: {e}")
+        out[(r.framework, r.control_id)] = entry
+    return out
+
+
+def _compute_compliance_findings(analytics, attestations: Optional[dict] = None) -> dict:
+    """Map the analytics bundle to relevant controls across four frameworks.
+
+    ``attestations`` — optional ``{(framework, control_id): row_dict}`` map
+    of manual reviewer overrides. When a control has a manual attestation,
+    the manual status + evidence text wins over the auto-evaluated one,
+    and an ``attested_by`` / ``attested_at`` / ``proof_url`` / ``proof_mimetype``
+    payload is attached so the UI and PDF can render the reviewer note.
+
+    Each framework section returns:
+        {
+          "title":      human-readable framework name,
+          "version":    publication / effective version,
+          "scope":      what part of the framework we cover,
+          "controls":   [ {id, title, requirement, status, evidence,
+                           auto_status, auto_evidence,
+                           attested, attested_by, attested_at,
+                           notes, proof_url, proof_mimetype}, ... ],
+          "pass":       # of controls with status == 'pass',
+          "partial":    # with status == 'partial',
+          "fail":       # with status == 'fail',
+          "na":         # with status == 'na' (not evidenceable from config),
+          "coverage":   int percent — pass counts full, partial counts half,
+        }
+
+    Status rubric:
+      pass    = evidence clearly meets the control
+      partial = evidence shows the control is partially met (reasonable
+                compensating posture exists, but gaps remain)
+      fail    = evidence shows a material control gap
+      na      = the control can't be evidenced from firewall analytics
+                alone (e.g. physical security, identity proofing) —
+                excluded from coverage %
+    """
+    a = analytics
+    perm = a.permissiveness or []
+    crit = sum(1 for r in perm if r.band == "critical")
+    high = sum(1 for r in perm if r.band == "high")
+    zr = getattr(a, "reachability", None)
+
+    # ---- shared evaluators ----
+    def _deny_by_default():
+        policies_with_pos = [(p, p.position) for p in getattr(a, "zero_hit_rules", []) or []]
+        # Can't easily know the bottom rule from the bundle alone, so rely on
+        # a heuristic: if the bundle reports zero implicit_deny hits it means
+        # traffic isn't falling through; plus the permissiveness rubric
+        # already catches any-any allows at the bottom.
+        if crit > 0 or high > 2:
+            return "partial", (
+                f"{crit} critical and {high} high-band permit rules; "
+                "bottom catch-all may be over-permissive"
+            )
+        return "pass", "No critical/high-band catch-all permits detected"
+
+    def _least_privilege():
+        if crit > 0:
+            return "fail", f"{crit} CRITICAL-band permit rule{'s' if crit != 1 else ''} combine multiple any-dimensions"
+        if high > 0:
+            return "partial", f"{high} HIGH-band permit rule{'s' if high != 1 else ''}; tighten src / dst / service"
+        return "pass", "Permissiveness avg {}/100, no CRITICAL or HIGH permits".format(a.kpi_avg_permissiveness)
+
+    def _logging_complete():
+        n = int(a.kpi_unlogged_permits or 0)
+        if n == 0:
+            return "pass", "All enabled permit rules have traffic logging enabled"
+        if n <= 2:
+            return "partial", f"{n} permit rule{'s' if n != 1 else ''} with logging disabled"
+        return "fail", f"{n} permit rules with logging disabled — SIEM blind spots"
+
+    def _rulebase_hygiene():
+        sd = int(a.kpi_shadowed_count or 0)
+        rd = int(a.kpi_redundant_count or 0)
+        zero = int(a.kpi_zero_hit_30d or 0)
+        debt = sd + rd
+        total_debt = debt + zero
+        if total_debt == 0:
+            return "pass", "No shadowed, redundant, or zero-hit rules"
+        if total_debt <= 10:
+            return "partial", f"{debt} shadowed/redundant + {zero} zero-hit rules"
+        return "fail", f"{debt} shadowed/redundant + {zero} zero-hit rules — periodic review overdue"
+
+    def _segmentation():
+        if not zr or not zr.src_zones:
+            return "na", "Zone snapshot not available"
+        counts = {"aligned": 0, "over-provisioned": 0, "unauthorised": 0, "gap": 0, "denied": 0}
+        total = 0
+        for sz in zr.src_zones:
+            for dz in zr.dst_zones:
+                total += 1
+                counts[(zr.cell(sz, dz).state or "gap")] = counts.get((zr.cell(sz, dz).state or "gap"), 0) + 1
+        if total == 0:
+            return "na", "No zone pairs to evaluate"
+        unauth = counts.get("unauthorised", 0)
+        over = counts.get("over-provisioned", 0)
+        unauth_pct = 100 * unauth / total
+        if unauth_pct >= 10:
+            return "fail", f"{unauth} unauthorised zone pairs ({unauth_pct:.1f}%) — traffic crossing zones without permits"
+        if unauth > 0 or over > 0:
+            return "partial", f"{unauth} unauthorised, {over} over-provisioned zone pairs"
+        return "pass", "No unauthorised zone-to-zone traffic; segmentation matches config"
+
+    def _object_hygiene():
+        oh = getattr(a, "object_hygiene", None)
+        if not oh or not (oh.total_addrs or oh.total_services):
+            return "na", "No object inventory"
+        ref_pct = 100 * (oh.referenced_addrs + oh.referenced_services) / max(1, oh.total_addrs + oh.total_services)
+        if ref_pct >= 70:
+            return "pass", f"{ref_pct:.0f}% of defined objects are referenced"
+        if ref_pct >= 40:
+            return "partial", f"Only {ref_pct:.0f}% of defined objects are referenced"
+        return "fail", f"Only {ref_pct:.0f}% of defined objects are referenced — stale inventory"
+
+    def _implicit_deny_visibility():
+        n = len(a.implicit_deny or [])
+        if not a.log_window_hours:
+            return "na", "Log-join not available"
+        if n == 0:
+            return "pass", "No significant implicit-deny hits in 30 days"
+        return "partial", f"{n} top-flow tuples hitting implicit deny — possible missing rules"
+
+    def _zero_hit_review():
+        n = int(a.kpi_zero_hit_30d or 0)
+        if not a.log_window_hours:
+            return "na", "Log-join not available"
+        if n == 0:
+            return "pass", "No zero-hit rules in 30 days"
+        if n <= 10:
+            return "partial", f"{n} zero-hit rules — review candidates"
+        return "fail", f"{n} zero-hit rules — rule-base review overdue"
+
+    # ---- Framework control lists ----
+    nca_ecc = {
+        "title":   "NCA Essential Cybersecurity Controls (ECC)",
+        "version": "ECC-1:2018 / ECC-2:2024",
+        "scope":   "Domain 2 — Cybersecurity Defence (Network Security + Logging)",
+        "controls": [
+            {"id": "2-3-1-1", "title": "Restrict network access",
+             "requirement": "Network access restricted by need-to-know; prohibit any-to-any permits",
+             **_eval_status(*_least_privilege())},
+            {"id": "2-3-1-3", "title": "Default-deny posture",
+             "requirement": "Firewall enforces an explicit deny-by-default baseline",
+             **_eval_status(*_deny_by_default())},
+            {"id": "2-3-2",   "title": "Network segmentation",
+             "requirement": "Different security classifications logically segmented with enforced controls",
+             **_eval_status(*_segmentation())},
+            {"id": "2-3-3-1", "title": "Configuration integrity",
+             "requirement": "Firewall configurations hardened and reviewed periodically (shadowed / redundant / zero-hit rules)",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "2-8-1-1", "title": "Security event logging",
+             "requirement": "Security-relevant events captured for critical systems; logging mandatory on permit rules",
+             **_eval_status(*_logging_complete())},
+            {"id": "2-8-1-4", "title": "Log review and analysis",
+             "requirement": "Periodic review of logs and rule base for anomalies",
+             **_eval_status(*_zero_hit_review())},
+            {"id": "2-8-1-5", "title": "Implicit-deny visibility",
+             "requirement": "Traffic hitting default-deny monitored for missing-rule indicators",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "2-12",    "title": "Asset / object inventory",
+             "requirement": "Accurate inventory of network objects maintained",
+             **_eval_status(*_object_hygiene())},
+        ],
+    }
+
+    pci_dss = {
+        "title":   "PCI DSS — Install and Maintain Network Security Controls",
+        "version": "v4.0 (effective 2024-03-31)",
+        "scope":   "Requirement 1 — Network Security Controls",
+        "controls": [
+            {"id": "1.2.1",  "title": "Configuration standards defined",
+             "requirement": "NSC configuration standards documented and consistently applied",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "1.2.5",  "title": "Allowed services/ports/protocols",
+             "requirement": "All allowed services, ports, and protocols identified and business-justified",
+             **_eval_status(*_least_privilege())},
+            {"id": "1.2.7",  "title": "Periodic NSC config review",
+             "requirement": "NSC configurations reviewed at least every 6 months; unused rules retired",
+             **_eval_status(*_zero_hit_review())},
+            {"id": "1.3.1",  "title": "Inbound traffic restriction",
+             "requirement": "Inbound traffic to CDE restricted to necessary authorised traffic",
+             **_eval_status(*_segmentation())},
+            {"id": "1.3.2",  "title": "Outbound traffic restriction",
+             "requirement": "Outbound traffic from CDE restricted to authorised destinations",
+             **_eval_status(*_segmentation())},
+            {"id": "1.4.1",  "title": "Network security controls deny-all default",
+             "requirement": "NSC configured to deny all inbound/outbound traffic by default",
+             **_eval_status(*_deny_by_default())},
+            {"id": "1.4.4",  "title": "Explicit deny for all other traffic",
+             "requirement": "Final rule explicitly denies anything not permitted above",
+             **_eval_status(*_deny_by_default())},
+            {"id": "10.2.1", "title": "Audit log events for network activity",
+             "requirement": "All individual access to network resources logged",
+             **_eval_status(*_logging_complete())},
+        ],
+    }
+
+    iso_27001 = {
+        "title":   "ISO/IEC 27001:2022 — Annex A (selected)",
+        "version": "2022 Edition",
+        "scope":   "Organisational / Technological network & logging controls",
+        "controls": [
+            {"id": "A.5.15", "title": "Access control",
+             "requirement": "Access-control rules implemented on least-privilege basis",
+             **_eval_status(*_least_privilege())},
+            {"id": "A.8.15", "title": "Logging",
+             "requirement": "Event logs produced, stored, protected and analysed",
+             **_eval_status(*_logging_complete())},
+            {"id": "A.8.16", "title": "Monitoring activities",
+             "requirement": "Networks, systems and applications monitored for anomalous behaviour",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "A.8.20", "title": "Networks security",
+             "requirement": "Networks and devices secured and managed to protect information",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "A.8.21", "title": "Security of network services",
+             "requirement": "Security mechanisms, service levels and requirements identified and applied",
+             **_eval_status(*_deny_by_default())},
+            {"id": "A.8.22", "title": "Segregation of networks",
+             "requirement": "Information services, users and systems separated on networks",
+             **_eval_status(*_segmentation())},
+            {"id": "A.8.9",  "title": "Configuration management",
+             "requirement": "Configurations including security configs established, documented, monitored",
+             **_eval_status(*_object_hygiene())},
+        ],
+    }
+
+    cis_v8 = {
+        "title":   "CIS Critical Security Controls",
+        "version": "v8.1 (2024)",
+        "scope":   "Controls 12 (Network Infrastructure Management) + 13 (Network Monitoring & Defence)",
+        "controls": [
+            {"id": "12.2",  "title": "Secure network architecture",
+             "requirement": "Establish and maintain secure network architecture",
+             **_eval_status(*_segmentation())},
+            {"id": "12.3",  "title": "Securely manage network infrastructure",
+             "requirement": "Securely manage network infrastructure; reviewed and updated",
+             **_eval_status(*_rulebase_hygiene())},
+            {"id": "12.4",  "title": "Network object inventory",
+             "requirement": "Maintain and enforce up-to-date inventory of network objects and addresses",
+             **_eval_status(*_object_hygiene())},
+            {"id": "12.8",  "title": "Network access control to least privilege",
+             "requirement": "Least-privilege network access enforced; broad any-to-any rules flagged",
+             **_eval_status(*_least_privilege())},
+            {"id": "13.1",  "title": "Centralise security event alerting",
+             "requirement": "Security events from network infrastructure forwarded to central SIEM",
+             **_eval_status(*_logging_complete())},
+            {"id": "13.6",  "title": "Collect network traffic flow logs",
+             "requirement": "Network traffic flow logs collected, reviewed, and alerted on",
+             **_eval_status(*_implicit_deny_visibility())},
+            {"id": "13.10", "title": "Baseline of network behaviour",
+             "requirement": "Traffic patterns baselined; anomalies (zero-hit rules, implicit deny spikes) investigated",
+             **_eval_status(*_zero_hit_review())},
+        ],
+    }
+
+    frameworks = {"nca_ecc": nca_ecc, "pci_dss": pci_dss,
+                  "iso_27001": iso_27001, "cis_v8": cis_v8}
+
+    # ── Merge manual reviewer attestations ──────────────────────────
+    # The override applies one row at a time. We retain the auto-evaluated
+    # status in ``auto_status``/``auto_evidence`` so the UI can still show
+    # "auto says PARTIAL, reviewer says PASS" side-by-side, and the PDF
+    # shows the reviewer name + timestamp below the evidence line.
+    atts = attestations or {}
+    for fw_slug, fw in frameworks.items():
+        for c in fw["controls"]:
+            c["auto_status"] = c["status"]
+            c["auto_evidence"] = c["evidence"]
+            c["attested"] = False
+            c["include_in_report"] = True  # default — everything renders
+            key = (fw_slug, c["id"])
+            override = atts.get(key)
+            if override:
+                c["include_in_report"] = override.get("include_in_report", True)
+                # status may be None if the row exists only to carry the
+                # include-in-report flag. Only swap status / evidence when
+                # the reviewer actually picked one.
+                if override.get("status"):
+                    c["status"] = override["status"]
+                    c["evidence"] = override.get("notes") or c["auto_evidence"]
+                    c["attested"] = True
+                    c["attested_by"] = override.get("reviewed_by")
+                    c["attested_at"] = override.get("reviewed_at")
+                c["notes"] = override.get("notes")
+                c["proof_url"] = override.get("proof_url")
+                c["proof_mimetype"] = override.get("proof_mimetype")
+                c["proof_data_url"] = override.get("proof_data_url")
+
+    for fw in frameworks.values():
+        # Counts and coverage consider only controls the user opted to
+        # include in the report, so excluding an irrelevant control doesn't
+        # leave its auto-FAIL dragging the score down.
+        included = [c for c in fw["controls"] if c.get("include_in_report", True)]
+        p = sum(1 for c in included if c["status"] == "pass")
+        pa = sum(1 for c in included if c["status"] == "partial")
+        f = sum(1 for c in included if c["status"] == "fail")
+        na = sum(1 for c in included if c["status"] == "na")
+        evaluated = p + pa + f
+        coverage = int(round(100 * (p + 0.5 * pa) / evaluated)) if evaluated else 0
+        excluded = len(fw["controls"]) - len(included)
+        fw.update({"pass": p, "partial": pa, "fail": f, "na": na,
+                   "evaluated": evaluated, "coverage": coverage,
+                   "excluded": excluded})
+    return frameworks
+
+
+def _eval_status(status: str, evidence: str) -> dict:
+    """Helper — bundles (status, evidence) into the dict shape the template
+    expects on each control row."""
+    return {"status": status, "evidence": evidence}
+
+
+def _compute_risk_posture(analytics) -> dict:
+    """Derive an overall 0–100 risk-posture score for the report cover.
+
+    Scored by deducting from a perfect 100:
+      - each critical permissive rule  → −12
+      - each high permissive rule      → −5  (capped at −20)
+      - each unlogged permit            → −3  (capped at −15)
+      - average permissiveness KPI      → −0.3× (so a 40/100 avg shaves 12pt)
+      - implicit-deny spotlights active → −5  (one-shot)
+      - shadowed rules                  → −0.05× (capped at −8)
+      - redundant rules                 → −0.1×  (capped at −5)
+    The weights lean hardest on "something is actively lying about what
+    the firewall will accept" (critical permissives, unlogged permits) and
+    soft-penalise rulebase clutter (shadowed / redundant).
+    """
+    score = 100.0
+    crit = int(analytics.kpi_critical_permissiveness or 0)
+    score -= crit * 12
+    highs = sum(1 for r in (analytics.permissiveness or []) if r.band == "high")
+    score -= min(highs * 5, 20)
+    score -= min(int(analytics.kpi_unlogged_permits or 0) * 3, 15)
+    score -= 0.3 * float(analytics.kpi_avg_permissiveness or 0)
+    if analytics.implicit_deny:
+        score -= 5
+    score -= min(int(analytics.kpi_shadowed_count or 0) * 0.05, 8)
+    score -= min(int(analytics.kpi_redundant_count or 0) * 0.1, 5)
+    score = max(0.0, min(100.0, score))
+    rounded = int(round(score))
+    if rounded >= 80:
+        band, label = "low", "Low Risk"
+    elif rounded >= 60:
+        band, label = "medium", "Moderate Risk"
+    elif rounded >= 40:
+        band, label = "high", "High Risk"
+    else:
+        band, label = "critical", "Critical Risk"
+    return {"score": rounded, "band": band, "label": label}
+
+
+def _report_chart_data(analytics) -> dict:
+    """Pre-compute chart inputs for the report template.
+
+    Kept in Python so the template stays declarative — no arithmetic in
+    Jinja. Emits:
+      - ``perm_distribution``: 4 slices (critical/high/medium/low) with
+        absolute count, percent-of-total, and the SVG arc endpoints for
+        a donut chart.
+      - ``top_risk_bars``: top-10 permit rules by score with the bar
+        width in percent (normalised to max score in the window).
+    """
+    rows = list(analytics.permissiveness or [])
+    buckets = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for r in rows:
+        buckets[r.band] = buckets.get(r.band, 0) + 1
+    total = sum(buckets.values()) or 1
+
+    # Donut arc math — radius 36, stroke 12, circumference 2πr = 226.19
+    import math
+    r_radius = 36
+    circumference = 2 * math.pi * r_radius
+    perm_distribution = []
+    cursor = 0.0
+    # Emit in visual order (critical first so it lands at 12 o'clock).
+    for key, colour in (("critical", "#dc2626"),
+                        ("high",     "#d97706"),
+                        ("medium",   "#f59e0b"),
+                        ("low",      "#059669")):
+        count = buckets.get(key, 0)
+        pct = (count / total) if total else 0
+        arc_len = pct * circumference
+        perm_distribution.append({
+            "band": key,
+            "count": count,
+            "pct": round(pct * 100, 1),
+            "colour": colour,
+            "stroke_dasharray": f"{arc_len:.2f} {circumference - arc_len:.2f}",
+            "stroke_dashoffset": f"{-cursor:.2f}",
+        })
+        cursor += arc_len
+
+    # Horizontal bar chart of the top 10 permit rules by score.
+    top = rows[:10]
+    max_score = max((r.score for r in top), default=100) or 100
+    top_risk_bars = [{
+        "name":    (r.rule.name or r.rule.rule_id or f"#{r.rule.position}"),
+        "position": r.rule.position,
+        "score":   r.score,
+        "band":    r.band,
+        "width":   round(100 * r.score / max_score, 1),
+    } for r in top]
+
+    # ── Implicit-deny stats + top-10 with bar widths ─────────────────
+    implicit_rows = list(analytics.implicit_deny or [])
+    implicit_stats = {
+        "total_hits":    sum(r.hits for r in implicit_rows) if implicit_rows else 0,
+        "unique_src":    len({r.srcip for r in implicit_rows}) if implicit_rows else 0,
+        "unique_dst":    len({r.dstip for r in implicit_rows}) if implicit_rows else 0,
+        "unique_ports":  len({r.dstport for r in implicit_rows}) if implicit_rows else 0,
+    }
+    max_hits = max((r.hits for r in implicit_rows), default=1) or 1
+    _PROTO_NAMES = {6: "tcp", 17: "udp", 1: "icmp", 47: "gre", 50: "esp", 51: "ah"}
+    implicit_top = [{
+        "srcip":   r.srcip,
+        "dstip":   r.dstip,
+        "dstport": r.dstport,
+        "proto":   _PROTO_NAMES.get(int(r.proto), str(r.proto)) if str(r.proto).isdigit() else r.proto,
+        "hits":    r.hits,
+        "width":   round(100 * r.hits / max_hits, 1),
+    } for r in implicit_rows[:10]]
+    # Top 5 source IPs aggregated
+    from collections import Counter as _Counter
+    src_counter = _Counter()
+    dst_counter = _Counter()
+    port_counter = _Counter()
+    for r in implicit_rows:
+        src_counter[r.srcip]  += r.hits
+        dst_counter[r.dstip]  += r.hits
+        port_counter[r.dstport] += r.hits
+    top5_src  = [{"key": k, "hits": v} for k, v in src_counter.most_common(5)]
+    top5_dst  = [{"key": k, "hits": v} for k, v in dst_counter.most_common(5)]
+    top5_port = [{"key": k, "hits": v} for k, v in port_counter.most_common(5)]
+
+    # ── Zone reachability: state counts + top zone pairs ─────────────
+    zr = getattr(analytics, "reachability", None)
+    zr_state_counts = {"aligned": 0, "over-provisioned": 0,
+                       "unauthorised": 0, "denied": 0, "gap": 0}
+    zr_top_pairs = []
+    if zr and zr.src_zones:
+        # Count states across all cells. Gap cells aren't stored explicitly
+        # (absence = gap), so derive from the src × dst grid.
+        considered = 0
+        for sz in zr.src_zones:
+            for dz in zr.dst_zones:
+                cell = zr.cell(sz, dz)
+                state = cell.state or "gap"
+                if state in zr_state_counts:
+                    zr_state_counts[state] += 1
+                else:
+                    zr_state_counts["gap"] += 1
+                considered += 1
+        # Top zone pairs by permit-rule count (most-authorised edges).
+        pairs_with_rules = []
+        for (sz, dz), cell in (zr.cells or {}).items():
+            if cell.rule_count or cell.deny_rule_count or cell.observed_hits:
+                pairs_with_rules.append({
+                    "src":         sz,
+                    "dst":         dz,
+                    "permits":     cell.rule_count,
+                    "denies":      cell.deny_rule_count,
+                    "observed":    cell.observed_hits,
+                    "state":       cell.state,
+                })
+        pairs_with_rules.sort(
+            key=lambda p: (p["permits"], p["observed"]), reverse=True
+        )
+        max_permits = max((p["permits"] for p in pairs_with_rules), default=1) or 1
+        for p in pairs_with_rules[:10]:
+            p["width"] = round(100 * p["permits"] / max_permits, 1)
+        zr_top_pairs = pairs_with_rules[:10]
+
+    return {
+        "perm_distribution": perm_distribution,
+        "perm_total": total,
+        "top_risk_bars": top_risk_bars,
+        "donut_circumference": round(circumference, 2),
+        # Implicit deny
+        "implicit_stats": implicit_stats,
+        "implicit_top":   implicit_top,
+        "implicit_top5_src":  top5_src,
+        "implicit_top5_dst":  top5_dst,
+        "implicit_top5_port": top5_port,
+        # Zone reachability
+        "zr_state_counts": zr_state_counts,
+        "zr_top_pairs":    zr_top_pairs,
+        "zr_total_pairs":  sum(zr_state_counts.values()),
+    }
+
+
+def format_compact(num: Optional[int]) -> str:
+    """Short human-scale number: 1_234_567 → ``1.2M``.
+
+    Used by print-oriented reports where KPI tiles can't wrap comma-
+    separated integers onto multiple lines.
+    """
+    if num is None:
+        return "—"
+    n = int(num)
+    for threshold, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+        if n >= threshold:
+            v = n / threshold
+            # 1.0 → "1", 1.2 → "1.2", 12.3 → "12", 123.4 → "123"
+            if v >= 100:
+                body = f"{v:.0f}"
+            elif v >= 10:
+                body = f"{v:.0f}"
+            else:
+                body = f"{v:.1f}".rstrip("0").rstrip(".")
+            return f"{body}{suffix}"
+    return str(n)
+
+
 def timesince(dt: datetime) -> str:
     """Return human-readable time since datetime."""
     if not dt:
@@ -115,10 +690,42 @@ def timesince(dt: datetime) -> str:
         return f"{seconds // 86400} days"
 
 
+def sparkline_svg(series, width: int = 90, height: int = 24,
+                   color: str = "#93c5fd") -> str:
+    """Render a list of ints as an inline SVG sparkline.
+
+    Why server-side instead of a JS lib? Keeps the dashboard a single HTML
+    document — no client-side render lag for 100s of rules, no flicker on
+    expand. Each sparkline is ~280 bytes.
+    """
+    if not series:
+        return f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}"></svg>'
+    n = len(series)
+    mx = max(series) or 1  # guard against all-zero
+    # Polyline points across the full width; clip top by 1px so the stroke
+    # doesn't get cut.
+    pts = []
+    for i, v in enumerate(series):
+        x = (i / (n - 1)) * (width - 2) + 1 if n > 1 else width / 2
+        y = (height - 2) - ((v / mx) * (height - 4)) + 1
+        pts.append(f"{x:.1f},{y:.1f}")
+    # Render a soft fill underneath the line — easier to scan in a table.
+    fill_pts = f"{pts[0].split(',')[0]},{height-1} " + " ".join(pts) + f" {pts[-1].split(',')[0]},{height-1}"
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
+        f'preserveAspectRatio="none" style="display:block">'
+        f'<polygon points="{fill_pts}" fill="{color}" fill-opacity="0.18"/>'
+        f'<polyline points="{" ".join(pts)}" fill="none" stroke="{color}" '
+        f'stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>'
+        f'</svg>'
+    )
+
+
 # Add custom filters to templates
 templates.env.filters['format_bytes'] = format_bytes
 templates.env.filters['format_number'] = format_number
 templates.env.filters['timesince'] = timesince
+templates.env.filters['sparkline'] = sparkline_svg
 
 
 @router.get("/", response_class=HTMLResponse, name="home")
@@ -227,147 +834,211 @@ def _sanitize(obj):
     return obj
 
 
+# Shared dashboard payload cache (Redis-backed so all uvicorn workers share it).
+_DASHBOARD_API_CACHE_KEY = "dashboard:api:stats:v1"
+_DASHBOARD_API_CACHE_TTL = 300        # serve fresh for 5 min
+_DASHBOARD_API_STALE_TTL = 600        # serve stale up to 10 min while refreshing
+_dashboard_api_refreshing = False     # in-process flag to dedupe refresh threads
+
+
+async def _compute_dashboard_payload() -> dict:
+    """Run all the dashboard queries and return the response payload."""
+    loop = asyncio.get_event_loop()
+    stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
+    logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
+
+    def _get_url_dns_stats():
+        try:
+            client = ClickHouseClient.get_client()
+            r = list(client.query("""
+                WITH combined AS (
+                    SELECT log_subtype, action, severity
+                    FROM pa_threat_logs
+                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                  UNION ALL
+                    SELECT
+                        CASE log_type
+                            WHEN 'utm/webfilter' THEN 'url'
+                            WHEN 'utm/dns'       THEN 'spyware'
+                            WHEN 'utm/virus'     THEN 'virus'
+                            WHEN 'utm/ips'       THEN 'vulnerability'
+                            ELSE log_type
+                        END as log_subtype,
+                        action,
+                        multiIf(
+                            parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
+                            parsed_data['level'] = 'error',   'high',
+                            parsed_data['level'] = 'warning', 'medium',
+                            parsed_data['level'] = 'notice',  'low',
+                            'informational'
+                        ) as severity
+                    FROM syslogs
+                    WHERE timestamp > now() - INTERVAL 24 HOUR
+                      AND log_type IN ('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')
+                )
+                SELECT
+                    countIf(log_subtype = 'url') as url_total,
+                    countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
+                    countIf(log_subtype = 'spyware') as dns_total,
+                    countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
+                    countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
+                FROM combined
+            """).named_results())
+            if r:
+                return {k: _safe_int(v) for k, v in r[0].items()}
+            return {}
+        except Exception:
+            return {}
+
+    url_dns_future = loop.run_in_executor(_executor, _get_url_dns_stats)
+    stats, logs, url_dns = await asyncio.gather(stats_future, logs_future, url_dns_future)
+
+    severity_data = []
+    for item in stats.get('severity_breakdown', []):
+        severity_data.append({
+            'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
+            'count': _safe_int(item.get('count', 0)),
+            'severity': _safe_int(item.get('severity', 6))
+        })
+
+    timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
+    for item in stats.get('traffic_timeline', []):
+        hour = item.get('hour')
+        timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
+        timeline['total'].append(_safe_int(item.get('total', 0)))
+        timeline['critical'].append(_safe_int(item.get('critical', 0)))
+        timeline['denied'].append(_safe_int(item.get('denied', 0)))
+
+    realtime = {'labels': [], 'data': []}
+    for item in stats.get('realtime_traffic', []):
+        minute = item.get('minute')
+        realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
+        realtime['data'].append(_safe_int(item.get('count', 0)))
+
+    actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
+    protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
+    top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
+    top_dests = [{'ip': str(d.get('ip', '')), 'count': _safe_int(d.get('count', 0)), 'denied_count': _safe_int(d.get('denied_count', 0))} for d in stats.get('top_destinations', [])]
+    threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
+    ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
+    devices = []
+    for dv in stats.get('device_activity', []):
+        ls = dv.get('last_seen')
+        devices.append({
+            'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
+            'critical_count': _safe_int(dv.get('critical_count', 0)),
+            'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
+        })
+
+    recent = []
+    for log in (logs or [])[:15]:
+        ts = log.get('timestamp')
+        sev = log.get('severity', 6)
+        recent.append({
+            'timestamp': ts.strftime('%H:%M:%S') if hasattr(ts, 'strftime') else str(ts) if ts else '-',
+            'device_ip': log.get('device_ip', ''),
+            'severity': sev,
+            'severity_name': SEVERITY_MAP.get(sev, 'Unknown'),
+            'message': (log.get('message', '') or '')[:150],
+        })
+
+    payload = {
+        'kpi': {
+            'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
+            'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
+            'current_eps': round(float(stats.get('current_eps', 0)), 1),
+            'allowed': _safe_int(stats.get('allowed_count', 0)),
+            'denied': _safe_int(stats.get('denied_count', 0)),
+            'critical': _safe_int(stats.get('critical_count', 0)),
+            'active_devices': _safe_int(stats.get('active_devices', 0)),
+            'url_total': _safe_int(url_dns.get('url_total', 0)),
+            'url_blocked': _safe_int(url_dns.get('url_blocked', 0)),
+            'dns_total': _safe_int(url_dns.get('dns_total', 0)),
+            'dns_sinkholed': _safe_int(url_dns.get('dns_sinkholed', 0)),
+            'dns_critical': _safe_int(url_dns.get('dns_critical', 0)),
+        },
+        'severity_data': severity_data,
+        'timeline': timeline,
+        'realtime': realtime,
+        'actions': actions,
+        'protocols': protocols,
+        'top_sources': top_sources,
+        'top_destinations': top_dests,
+        'threats': threats,
+        'ports': ports,
+        'devices': devices,
+        'recent_logs': recent,
+    }
+    return _sanitize(payload)
+
+
+async def _refresh_dashboard_cache_async():
+    """Recompute the payload and store in Redis. Used as background refresh."""
+    global _dashboard_api_refreshing
+    try:
+        payload = await _compute_dashboard_payload()
+        try:
+            redis = await get_redis()
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY,
+                json.dumps(payload),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY + ":fresh_until",
+                str(int(time.time()) + _DASHBOARD_API_CACHE_TTL),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"Dashboard cache write failed: {e}")
+    finally:
+        _dashboard_api_refreshing = False
+
+
 @router.get("/api/dashboard/stats")
 async def api_dashboard_stats():
-    """JSON API for dashboard stats — called async after page load."""
+    """JSON API for dashboard stats — called async after page load.
+
+    Cached in Redis (shared across uvicorn workers). Stale-while-revalidate:
+    serves cached data instantly and refreshes in the background once the
+    fresh window expires, so the user never waits 12+s for the heavy
+    ClickHouse aggregations to run.
+    """
+    global _dashboard_api_refreshing
     try:
-        loop = asyncio.get_event_loop()
-        stats_future = loop.run_in_executor(_executor, ClickHouseClient.get_dashboard_stats)
-        logs_future = loop.run_in_executor(_executor, lambda: ClickHouseClient.get_recent_logs(limit=15))
+        # Try the cache first.
+        try:
+            redis = await get_redis()
+            cached = await redis.get(_DASHBOARD_API_CACHE_KEY)
+            fresh_until_raw = await redis.get(_DASHBOARD_API_CACHE_KEY + ":fresh_until")
+            if cached:
+                now = time.time()
+                fresh_until = int(fresh_until_raw) if fresh_until_raw else 0
+                # Stale → kick off background refresh, return stale immediately.
+                if now > fresh_until and not _dashboard_api_refreshing:
+                    _dashboard_api_refreshing = True
+                    asyncio.create_task(_refresh_dashboard_cache_async())
+                return JSONResponse(json.loads(cached))
+        except Exception as e:
+            logger.warning(f"Dashboard cache read failed, recomputing: {e}")
 
-        # URL/DNS stats from pa_threat_logs + Fortinet UTM syslogs
-        def _get_url_dns_stats():
-            try:
-                client = ClickHouseClient.get_client()
-                r = list(client.query("""
-                    WITH combined AS (
-                        SELECT log_subtype, action, severity
-                        FROM pa_threat_logs
-                        WHERE timestamp > now() - INTERVAL 24 HOUR
-                      UNION ALL
-                        SELECT
-                            CASE log_type
-                                WHEN 'utm/webfilter' THEN 'url'
-                                WHEN 'utm/dns'       THEN 'spyware'
-                                WHEN 'utm/virus'     THEN 'virus'
-                                WHEN 'utm/ips'       THEN 'vulnerability'
-                                ELSE log_type
-                            END as log_subtype,
-                            action,
-                            multiIf(
-                                parsed_data['level'] IN ('emergency','alert','critical'), 'critical',
-                                parsed_data['level'] = 'error',   'high',
-                                parsed_data['level'] = 'warning', 'medium',
-                                parsed_data['level'] = 'notice',  'low',
-                                'informational'
-                            ) as severity
-                        FROM syslogs
-                        WHERE timestamp > now() - INTERVAL 24 HOUR
-                          AND log_type IN ('utm/webfilter', 'utm/dns', 'utm/virus', 'utm/ips')
-                    )
-                    SELECT
-                        countIf(log_subtype = 'url') as url_total,
-                        countIf(log_subtype = 'url' AND action IN ('block-url','deny','drop','reset-client','reset-server')) as url_blocked,
-                        countIf(log_subtype = 'spyware') as dns_total,
-                        countIf(log_subtype = 'spyware' AND action = 'sinkhole') as dns_sinkholed,
-                        countIf(log_subtype = 'spyware' AND severity IN ('critical','high')) as dns_critical
-                    FROM combined
-                """).named_results())
-                if r:
-                    return {k: _safe_int(v) for k, v in r[0].items()}
-                return {}
-            except Exception:
-                return {}
-
-        url_dns_future = loop.run_in_executor(_executor, _get_url_dns_stats)
-        stats, logs, url_dns = await asyncio.gather(stats_future, logs_future, url_dns_future)
-
-        # Prepare severity data
-        severity_data = []
-        for item in stats.get('severity_breakdown', []):
-            severity_data.append({
-                'name': SEVERITY_MAP.get(item.get('severity'), f"Level {item.get('severity')}"),
-                'count': _safe_int(item.get('count', 0)),
-                'severity': _safe_int(item.get('severity', 6))
-            })
-
-        # Prepare timeline
-        timeline = {'labels': [], 'total': [], 'critical': [], 'denied': []}
-        for item in stats.get('traffic_timeline', []):
-            hour = item.get('hour')
-            timeline['labels'].append(hour.strftime('%H:%M') if hasattr(hour, 'strftime') else str(hour))
-            timeline['total'].append(_safe_int(item.get('total', 0)))
-            timeline['critical'].append(_safe_int(item.get('critical', 0)))
-            timeline['denied'].append(_safe_int(item.get('denied', 0)))
-
-        # Prepare realtime
-        realtime = {'labels': [], 'data': []}
-        for item in stats.get('realtime_traffic', []):
-            minute = item.get('minute')
-            realtime['labels'].append(minute.strftime('%H:%M') if hasattr(minute, 'strftime') else str(minute))
-            realtime['data'].append(_safe_int(item.get('count', 0)))
-
-        # Actions
-        actions = [{'action': str(a.get('action_type', '')), 'count': _safe_int(a.get('count', 0))} for a in stats.get('action_breakdown', [])]
-
-        # Protocols
-        protocols = [{'protocol': str(p.get('protocol', '')), 'count': _safe_int(p.get('count', 0))} for p in stats.get('protocol_distribution', [])]
-
-        # Top sources / destinations / threats / ports / devices
-        top_sources = [{'ip': str(s.get('ip', '')), 'count': _safe_int(s.get('count', 0)), 'denied_count': _safe_int(s.get('denied_count', 0))} for s in stats.get('top_sources', [])]
-        top_dests = [{'ip': str(d.get('ip', '')), 'count': _safe_int(d.get('count', 0)), 'denied_count': _safe_int(d.get('denied_count', 0))} for d in stats.get('top_destinations', [])]
-        threats = [{'ip': str(t.get('ip', '')), 'denied_count': _safe_int(t.get('denied_count', 0)), 'unique_targets': _safe_int(t.get('unique_targets', 0)), 'unique_ports': _safe_int(t.get('unique_ports', 0))} for t in stats.get('potential_threats', [])]
-        ports = [{'port': _safe_int(p.get('port', 0)), 'service': _PORT_SERVICES.get(_safe_int(p.get('port', 0)), '-'), 'count': _safe_int(p.get('count', 0)), 'denied_count': _safe_int(p.get('denied_count', 0))} for p in stats.get('top_ports', [])]
-        devices = []
-        for dv in stats.get('device_activity', []):
-            ls = dv.get('last_seen')
-            devices.append({
-                'device': str(dv.get('device', '')), 'log_count': _safe_int(dv.get('log_count', 0)),
-                'critical_count': _safe_int(dv.get('critical_count', 0)),
-                'last_seen': ls.isoformat() if hasattr(ls, 'isoformat') else str(ls) if ls else None,
-            })
-
-        # Recent logs (get_recent_logs returns list of dicts)
-        recent = []
-        for log in (logs or [])[:15]:
-            ts = log.get('timestamp')
-            sev = log.get('severity', 6)
-            recent.append({
-                'timestamp': ts.strftime('%H:%M:%S') if hasattr(ts, 'strftime') else str(ts) if ts else '-',
-                'device_ip': log.get('device_ip', ''),
-                'severity': sev,
-                'severity_name': SEVERITY_MAP.get(sev, 'Unknown'),
-                'message': (log.get('message', '') or '')[:150],
-            })
-
-        payload = {
-            'kpi': {
-                'total_24h': _safe_int(stats.get('total_logs_24h', 0)),
-                'avg_eps': round(float(stats.get('avg_eps', 0)), 1),
-                'current_eps': round(float(stats.get('current_eps', 0)), 1),
-                'allowed': _safe_int(stats.get('allowed_count', 0)),
-                'denied': _safe_int(stats.get('denied_count', 0)),
-                'critical': _safe_int(stats.get('critical_count', 0)),
-                'active_devices': _safe_int(stats.get('active_devices', 0)),
-                'url_total': _safe_int(url_dns.get('url_total', 0)),
-                'url_blocked': _safe_int(url_dns.get('url_blocked', 0)),
-                'dns_total': _safe_int(url_dns.get('dns_total', 0)),
-                'dns_sinkholed': _safe_int(url_dns.get('dns_sinkholed', 0)),
-                'dns_critical': _safe_int(url_dns.get('dns_critical', 0)),
-            },
-            'severity_data': severity_data,
-            'timeline': timeline,
-            'realtime': realtime,
-            'actions': actions,
-            'protocols': protocols,
-            'top_sources': top_sources,
-            'top_destinations': top_dests,
-            'threats': threats,
-            'ports': ports,
-            'devices': devices,
-            'recent_logs': recent,
-        }
-        return JSONResponse(_sanitize(payload))
+        # No cache — compute synchronously and store.
+        payload = await _compute_dashboard_payload()
+        try:
+            redis = await get_redis()
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY,
+                json.dumps(payload),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+            await redis.set(
+                _DASHBOARD_API_CACHE_KEY + ":fresh_until",
+                str(int(time.time()) + _DASHBOARD_API_CACHE_TTL),
+                ex=_DASHBOARD_API_STALE_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"Dashboard cache write failed: {e}")
+        return JSONResponse(payload)
     except Exception as e:
         logger.error(f"Dashboard stats API error: {e}")
         import traceback
@@ -392,6 +1063,10 @@ async def log_list(
     dstip: Optional[str] = Query(None),
     srcport: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
+    srcip_not: Optional[str] = Query(None),
+    dstip_not: Optional[str] = Query(None),
+    srcport_not: Optional[str] = Query(None),
+    dstport_not: Optional[str] = Query(None),
     protocol: Optional[str] = Query(None),
     # Policy & Security filters
     policyname: Optional[str] = Query(None),
@@ -400,6 +1075,7 @@ async def log_list(
     # Traffic analysis filters
     application: Optional[str] = Query(None),
     session_end_reason: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
     # Infrastructure filters
     src_zone: Optional[str] = Query(None),
     dst_zone: Optional[str] = Query(None),
@@ -407,6 +1083,9 @@ async def log_list(
     view: Optional[str] = Query(None),
     group_by: Optional[str] = Query(None),
     subnet_rollup: Optional[str] = Query(None),
+    # Compare-windows mode (Tier 1 enhancement to aggregate view)
+    compare: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """Log list view with filtering."""
     try:
@@ -444,23 +1123,13 @@ async def log_list(
         default_time_range = '1h'
         effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
 
-        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d)
-        if effective_time_range.endswith('m'):
+        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d). The start is
+        # rounded (see _round_window) so repeated loads share cached scans.
+        _unit = {'m': 'minutes', 'h': 'hours', 'd': 'days'}.get(effective_time_range[-1:])
+        if _unit:
             try:
-                minutes = int(effective_time_range[:-1])
-                start_time = now - timedelta(minutes=minutes)
-            except ValueError:
-                pass
-        elif effective_time_range.endswith('h'):
-            try:
-                hours = int(effective_time_range[:-1])
-                start_time = now - timedelta(hours=hours)
-            except ValueError:
-                pass
-        elif effective_time_range.endswith('d'):
-            try:
-                days = int(effective_time_range[:-1])
-                start_time = now - timedelta(days=days)
+                delta = timedelta(**{_unit: int(effective_time_range[:-1])})
+                start_time = _round_window(now - delta, delta)
             except ValueError:
                 pass
 
@@ -479,24 +1148,29 @@ async def log_list(
         # Build search query from direct filter parameters (srcip, dstip, dstport)
         search_parts = []
 
-        def _fmt(field, val):
+        def _fmt(field, val, negated: bool = False):
             """Quote values with spaces so the regex parser captures the full value."""
-            return f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+            return _nql_term(field, val, negated)
+
+        srcip_not_flag = _is_not_flag(srcip_not)
+        dstip_not_flag = _is_not_flag(dstip_not)
+        srcport_not_flag = _is_not_flag(srcport_not)
+        dstport_not_flag = _is_not_flag(dstport_not)
 
         # Handle srcip parameter
         srcip_clean = srcip.strip() if srcip and srcip.strip() else None
         if srcip_clean:
-            search_parts.append(_fmt("srcip", srcip_clean))
+            search_parts.append(_fmt("srcip", srcip_clean, srcip_not_flag))
 
         # Handle dstip parameter
         dstip_clean = dstip.strip() if dstip and dstip.strip() else None
         if dstip_clean:
-            search_parts.append(_fmt("dstip", dstip_clean))
+            search_parts.append(_fmt("dstip", dstip_clean, dstip_not_flag))
 
         # Handle dstport parameter
         dstport_clean = dstport.strip() if dstport and dstport.strip() else None
         if dstport_clean:
-            search_parts.append(_fmt("dstport", dstport_clean))
+            search_parts.append(_fmt("dstport", dstport_clean, dstport_not_flag))
 
         # Handle policyname parameter
         policyname_clean = policyname.strip() if policyname and policyname.strip() else None
@@ -506,7 +1180,7 @@ async def log_list(
         # Handle srcport parameter
         srcport_clean = srcport.strip() if srcport and srcport.strip() else None
         if srcport_clean:
-            search_parts.append(_fmt("srcport", srcport_clean))
+            search_parts.append(_fmt("srcport", srcport_clean, srcport_not_flag))
 
         # Handle protocol parameter
         protocol_clean = protocol.strip() if protocol and protocol.strip() else None
@@ -533,6 +1207,13 @@ async def log_list(
         if session_end_reason_clean:
             search_parts.append(_fmt("session_end_reason", session_end_reason_clean))
 
+        # Traffic scope (sidebar "Internet" etc.) — just another AND-ed NQL
+        # term, so it narrows whatever Src/Dst/action filters are already set
+        # and on its own simply shows internet-bound traffic.
+        scope_clean = _clean_scope(scope)
+        if scope_clean:
+            search_parts.append(_fmt("scope", scope_clean))
+
         # Handle src_zone parameter
         src_zone_clean = src_zone.strip() if src_zone and src_zone.strip() else None
         if src_zone_clean:
@@ -543,15 +1224,6 @@ async def log_list(
         if dst_zone_clean:
             search_parts.append(_fmt("dst_zone", dst_zone_clean))
 
-        # Combine with existing q parameter if present
-        search_query = q or ""
-        if search_parts:
-            direct_filters = " ".join(search_parts)
-            if search_query:
-                search_query = f"{search_query} {direct_filters}"
-            else:
-                search_query = direct_filters
-
         if action:
             # Map action filter to search terms using pipe for OR logic
             action_terms = {
@@ -561,10 +1233,34 @@ async def log_list(
                 'timeout': 'action:timeout',
             }
             if action in action_terms:
-                if search_query:
-                    search_query = f"{search_query} {action_terms[action]}"
-                else:
-                    search_query = action_terms[action]
+                search_parts.append(action_terms[action])
+
+        # The NQL bar (`q`) is the primary search. Toolbar/sidebar fields are
+        # AND-ed onto it with the user's expression parenthesised, so an OR in the
+        # bar keeps its meaning. Any `| stats ...` pipeline in `q` stays at the end.
+        from ..services.nql_parser import compose_nql, compile_nql, NQLSyntaxError
+        search_query = compose_nql(q or "", search_parts)
+
+        # Compile once up front: a syntax error renders as an inline message
+        # instead of a 500, and a `| stats` pipeline switches the main table
+        # into aggregate mode.
+        nql_error: Optional[str] = None
+        nql_compiled: Optional[dict] = None
+        if search_query:
+            try:
+                nql_compiled = compile_nql(search_query)
+            except NQLSyntaxError as e:
+                nql_error = str(e)
+        nql_mode = 'aggregate' if (nql_compiled and nql_compiled.get('is_aggregate')) else 'logs'
+        nql_order_by = None
+        nql_limit = None
+        if nql_compiled and nql_mode == 'logs':
+            nql_order_by = nql_compiled.get('order_by') or None
+            nql_limit = nql_compiled.get('limit') or None
+            if nql_limit:
+                # `| limit N` on a log search caps the result set, not the page.
+                per_page_num = max(1, min(per_page_num, nql_limit))
+                offset = (page_num - 1) * per_page_num
 
         # Determine if aggregate view
         is_aggregate = view and view.strip().lower() == 'aggregate'
@@ -583,8 +1279,47 @@ async def log_list(
 
         # Run all ClickHouse queries in parallel for better performance
         loop = asyncio.get_event_loop()
+        query_started = time.perf_counter()
+        nql_columns: List[str] = []
+        nql_rows: List[dict] = []
 
-        if is_aggregate:
+        if nql_error:
+            # Nothing to run — the page shows the syntax error where the query is.
+            devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            logs_or_agg, total, stats = [], 0, {}
+            is_aggregate = False
+        elif nql_mode == 'aggregate':
+            is_aggregate = False   # the NQL result table replaces the log table
+            agg_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.run_nql_aggregate(
+                    nql_compiled,
+                    device_ips=device_ips,
+                    severities=severities,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query,
+                    default_limit=per_page_num,
+                )
+            )
+            stats_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.get_log_stats_summary(
+                    device_ips=device_ips, start_time=start_time, end_time=end_time,
+                    query_text=search_query,
+                )
+            )
+            devices_future = loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            try:
+                agg_result, stats, devices = await asyncio.gather(agg_future, stats_future, devices_future)
+                nql_columns = agg_result["columns"]
+                nql_rows = [{k: _serialize_value(v) for k, v in r.items()} for r in agg_result["rows"]]
+            except Exception as e:
+                logger.error(f"NQL aggregate failed for {search_query!r}: {e}")
+                nql_error = _friendly_ch_error(e)
+                stats, devices = {}, await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            logs_or_agg, total = [], len(nql_rows)
+        elif is_aggregate:
             logs_future = loop.run_in_executor(
                 _executor,
                 lambda: ClickHouseClient.aggregate_logs(
@@ -623,6 +1358,7 @@ async def log_list(
                     start_time=start_time,
                     end_time=end_time,
                     query_text=search_query if search_query else None,
+                    order_by=nql_order_by,
                 )
             )
 
@@ -634,32 +1370,64 @@ async def log_list(
                     start_time=start_time,
                     end_time=end_time,
                     query_text=search_query if search_query else None,
+                    max_count=COUNT_CAP,
                 )
             )
 
-        stats_future = loop.run_in_executor(
-            _executor,
-            lambda: ClickHouseClient.get_log_stats_summary(
-                device_ips=device_ips,
-                start_time=start_time,
-                end_time=end_time,
-                query_text=search_query if search_query else None,
+        if not nql_error and nql_mode != 'aggregate':
+            # skip_total: the count future above already scans this exact
+            # filter set — running it twice doubled the CPU cost of every load.
+            stats_future = loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.get_log_stats_summary(
+                    device_ips=device_ips,
+                    start_time=start_time,
+                    end_time=end_time,
+                    query_text=search_query if search_query else None,
+                    skip_total=True,
+                )
             )
-        )
 
-        devices_future = loop.run_in_executor(
-            _executor,
-            ClickHouseClient.get_distinct_devices
-        )
+            devices_future = loop.run_in_executor(
+                _executor,
+                ClickHouseClient.get_distinct_devices
+            )
 
-        # Wait for all queries to complete
-        logs_or_agg, total, stats, devices = await asyncio.gather(
-            logs_future, total_future, stats_future, devices_future
-        )
+            # Wait for all queries to complete
+            try:
+                logs_or_agg, total, stats, devices = await asyncio.gather(
+                    logs_future, total_future, stats_future, devices_future
+                )
+            except Exception as e:
+                if not search_query:
+                    raise
+                # A query that parsed but ClickHouse rejected (e.g. an aggregate
+                # over a non-numeric field) is a user error, not a server fault.
+                logger.error(f"NQL log query failed for {search_query!r}: {e}")
+                nql_error = _friendly_ch_error(e)
+                logs_or_agg, total, stats = [], 0, {}
+                devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
 
-        # Format count display
-        is_approximate = False
-        total_display = f"{total:,}"
+            if nql_limit and total >= 0:
+                total = min(total, nql_limit)
+            # A count that hit its time budget (-1) is still exact when the
+            # first page came back short: every match is already on screen.
+            if total < 0 and page_num == 1 and len(logs_or_agg) < per_page_num:
+                total = len(logs_or_agg)
+            if stats and stats.get('total_logs') is None:
+                stats['total_logs'] = total
+
+        nql_elapsed_ms = int((time.perf_counter() - query_started) * 1000)
+
+        # Format count display. count_logs returns -1 when the exact count timed
+        # out (a non-indexed Map-column filter over a wide window). In that case
+        # show "100,000+" and cap the pager; otherwise show the true exact count.
+        is_approximate = total < 0
+        if is_approximate:
+            total = COUNT_CAP
+            total_display = f"{COUNT_CAP:,}+"
+        else:
+            total_display = f"{total:,}"
 
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
 
@@ -693,6 +1461,10 @@ async def log_list(
             "current_dstip": dstip_clean,
             "current_srcport": srcport_clean,
             "current_dstport": dstport_clean,
+            "current_srcip_not": srcip_not_flag,
+            "current_dstip_not": dstip_not_flag,
+            "current_srcport_not": srcport_not_flag,
+            "current_dstport_not": dstport_not_flag,
             "current_protocol": protocol_clean,
             # Policy & Security filter values
             "current_policyname": policyname_clean,
@@ -701,6 +1473,7 @@ async def log_list(
             # Traffic analysis filter values
             "current_application": application_clean,
             "current_session_end_reason": session_end_reason_clean,
+            "current_scope": scope_clean,
             # Infrastructure filter values
             "current_src_zone": src_zone_clean,
             "current_dst_zone": dst_zone_clean,
@@ -711,14 +1484,161 @@ async def log_list(
             "group_fields": group_fields,
             "is_subnet_rollup": is_subnet_rollup,
             "error": None,
+            # NQL search state
+            "nql_mode": nql_mode,
+            "nql_error": nql_error,
+            "nql_columns": nql_columns,
+            "nql_rows": nql_rows,
+            "nql_group_fields": _nql_group_fields(nql_compiled) if nql_mode == 'aggregate' else [],
+            "nql_table": _nql_table(nql_columns, nql_rows, _nql_group_fields(nql_compiled)) if nql_mode == 'aggregate' else None,
+            "nql_effective_query": search_query,
+            "nql_elapsed_ms": nql_elapsed_ms,
+            "nql_sorted": bool(nql_order_by),
+            "nql_limit": nql_limit,
         }
 
+        if nql_mode == 'aggregate':
+            context["total_display"] = f"{len(nql_rows):,}"
+            context["total_pages"] = 1
+            context["has_prev"] = context["has_next"] = False
+
         if is_aggregate:
+            # Tier 1 aggregate enrichment:
+            #  • prior-window aggregate → anomaly state (NEW / SPIKE) + Δ%
+            #  • device IP → device.id map → Learning-Mode + drill-in URLs
+            agg_rows = list(logs_or_agg)
+            is_compare_mode = bool(compare and compare.strip().lower() in ('1', 'true', 'on'))
+
+            prior_map: Dict[Tuple, int] = {}
+            # end_time is often None (the user gave a relative time_range);
+            # treat that as "now" so we can derive a comparable prior window.
+            effective_end_time = end_time or now
+            if start_time and agg_rows:
+                try:
+                    prior_map = await loop.run_in_executor(
+                        _executor,
+                        lambda: ClickHouseClient.aggregate_prior_window(
+                            group_by_fields=group_fields,
+                            start_time=start_time,
+                            end_time=effective_end_time,
+                            device_ips=device_ips,
+                            severities=severities,
+                            query_text=search_query if search_query else None,
+                            subnet_rollup=is_subnet_rollup,
+                        ),
+                    )
+                except Exception as _e:
+                    logger.warning(f"prior-window enrichment skipped: {_e}")
+                    prior_map = {}
+
+            # Median of prior counts is the anchor for SPIKE detection — far
+            # more robust than the mean against a single noisy baseline row.
+            prior_values = sorted(prior_map.values()) if prior_map else []
+            if prior_values:
+                _mid = len(prior_values) // 2
+                prior_median = (
+                    prior_values[_mid] if len(prior_values) % 2 == 1
+                    else (prior_values[_mid - 1] + prior_values[_mid]) / 2
+                )
+            else:
+                prior_median = 0
+
+            def _row_key(r):
+                # Mirrors the column order used in aggregate_prior_window().
+                key = []
+                for f in group_fields:
+                    if f == 'srcip' and is_subnet_rollup:
+                        key.append(r.get('src_subnet') or '')
+                    else:
+                        key.append(r.get(f) if r.get(f) is not None else '')
+                return tuple(key)
+
+            for r in agg_rows:
+                cur = int(r.get('event_count') or 0)
+                prior = int(prior_map.get(_row_key(r), 0))
+                r['prior_count'] = prior
+                if prior == 0:
+                    r['anomaly_state'] = 'NEW'
+                    r['delta_pct'] = None
+                elif cur >= 5 * prior and cur >= max(10, 3 * (prior_median or 1)):
+                    r['anomaly_state'] = 'SPIKE'
+                    r['delta_pct'] = round(((cur - prior) / prior) * 100.0, 1)
+                else:
+                    if cur > prior * 1.5:
+                        r['anomaly_state'] = 'GROWING'
+                    elif cur < prior * 0.5:
+                        r['anomaly_state'] = 'SHRINKING'
+                    else:
+                        r['anomaly_state'] = 'STEADY'
+                    r['delta_pct'] = round(((cur - prior) / prior) * 100.0, 1) if prior else None
+
+            # When compare mode is on, surface GONE keys (in prior, absent now)
+            # at the bottom — capped so a hot device doesn't blow up the page.
+            if is_compare_mode and prior_map:
+                current_keys = {_row_key(r) for r in agg_rows}
+                gone = [
+                    {**dict(zip(group_fields, k)),
+                     'event_count': 0, 'prior_count': v,
+                     'anomaly_state': 'GONE', 'delta_pct': -100.0,
+                     'first_seen': None, 'last_seen': None,
+                     'top_action': None, 'top_policy': None, 'top_app': None,
+                     'device_count': 0,
+                     # subnet rollup mirrors src column when applicable
+                     **({'src_subnet': k[0], 'unique_src_ips': 0, 'sample_ips': []}
+                        if is_subnet_rollup and 'srcip' in group_fields else {}),
+                     }
+                    for k, v in prior_map.items() if k not in current_keys
+                ]
+                gone.sort(key=lambda x: -x.get('prior_count', 0))
+                agg_rows.extend(gone[:25])
+
+            # Map every device-display label seen on this page back to a
+            # Device.id so the per-row Learning-Mode and Policy-Lookup chips
+            # have somewhere to deep-link to. Display labels look like
+            # "192.168.100.221_root" (ip_vdom) or "10.10.0.1" (no vdom).
+            device_ip_to_id: Dict[str, int] = {}
+            try:
+                rows = (await db.execute(select(Device.id, Device.ip_address))).all()
+                device_ip_to_id = {str(ip): int(rid) for rid, ip in rows}
+            except Exception as _e:
+                logger.warning(f"device-id map skipped: {_e}")
+
+            current_device_ip: Optional[str] = None
+            current_device_id: Optional[int] = None
+            if current_device:
+                # Strip a trailing _vdom suffix to get the bare IP.
+                bare = current_device.rsplit('_', 1)[0]
+                if bare in device_ip_to_id:
+                    current_device_ip = bare
+                    current_device_id = device_ip_to_id[bare]
+
+            # Anomaly counts for the compare-mode summary banner.
+            anomaly_counts = {'NEW': 0, 'SPIKE': 0, 'GROWING': 0,
+                              'SHRINKING': 0, 'STEADY': 0, 'GONE': 0}
+            current_window_total = 0
+            for r in agg_rows:
+                state = r.get('anomaly_state') or 'STEADY'
+                anomaly_counts[state] = anomaly_counts.get(state, 0) + 1
+                if state != 'GONE':
+                    current_window_total += int(r.get('event_count') or 0)
+
             context["logs"] = []
-            context["agg_rows"] = logs_or_agg
+            context["agg_rows"] = agg_rows
+            context["is_compare_mode"] = is_compare_mode
+            context["prior_window_total"] = sum(prior_map.values()) if prior_map else 0
+            context["current_window_total"] = current_window_total
+            context["anomaly_counts"] = anomaly_counts
+            context["device_ip_to_id"] = device_ip_to_id
+            context["current_device_ip"] = current_device_ip
+            context["current_device_id"] = current_device_id
         else:
             context["logs"] = logs_or_agg
             context["agg_rows"] = []
+            context["is_compare_mode"] = False
+            context["prior_window_total"] = 0
+            context["device_ip_to_id"] = {}
+            context["current_device_ip"] = None
+            context["current_device_id"] = None
 
         return _render("logs/log_list.html", request, context)
     except Exception as e:
@@ -754,6 +1674,10 @@ async def log_list(
             "current_dstip": dstip if dstip else None,
             "current_srcport": srcport if srcport else None,
             "current_dstport": dstport if dstport else None,
+            "current_srcip_not": False,
+            "current_dstip_not": False,
+            "current_srcport_not": False,
+            "current_dstport_not": False,
             "current_protocol": protocol if protocol else None,
             # Policy & Security filter values
             "current_policyname": policyname if policyname else None,
@@ -762,6 +1686,7 @@ async def log_list(
             # Traffic analysis filter values
             "current_application": application if application else None,
             "current_session_end_reason": session_end_reason if session_end_reason else None,
+            "current_scope": _clean_scope(scope),
             # Infrastructure filter values
             "current_src_zone": src_zone if src_zone else None,
             "current_dst_zone": dst_zone if dst_zone else None,
@@ -773,7 +1698,75 @@ async def log_list(
             "is_subnet_rollup": False,
             "agg_rows": [],
             "error": str(e),
+            "nql_mode": "logs",
+            "nql_error": None,
+            "nql_columns": [],
+            "nql_rows": [],
+            "nql_group_fields": [],
+            "nql_table": None,
+            "nql_effective_query": q or "",
+            "nql_elapsed_ms": 0,
+            "nql_sorted": False,
+            "nql_limit": None,
         })
+
+
+def _friendly_ch_error(e: Exception) -> str:
+    """Turn a ClickHouse exception into a short, non-leaky message for the
+    search bar. The full error goes to the log."""
+    text = str(e)
+    low = text.lower()
+    if "timeout" in low or "max_execution_time" in low:
+        return "Query timed out — narrow the time range or add a filter on an indexed field (srcip, dstip, action, policyname, dstport)."
+    if "memory" in low:
+        return "Query needs too much memory — group by fewer fields or narrow the time range."
+    if "illegal type" in low or "cannot convert" in low or "no function matches" in low:
+        return "Aggregate function does not fit that field's type — sum/avg/min/max need a numeric field such as sent_bytes, recv_bytes or duration."
+    return "Query could not be executed — check field names and aggregate columns."
+
+
+def _nql_table(columns: List[str], rows: List[dict], group_fields: List[str]) -> dict:
+    """Presentation model for a `| stats` result: which columns are group keys,
+    per-cell display text, and a 0-100 bar width for numeric columns relative
+    to the column maximum (so the table doubles as a bar chart)."""
+    group_set = set(group_fields)
+    cols = []
+    for c in columns:
+        numeric = c not in group_set and all(
+            isinstance(r.get(c), (int, float)) and not isinstance(r.get(c), bool)
+            for r in rows if r.get(c) is not None)
+        cols.append({"name": c, "is_group": c in group_set, "numeric": numeric,
+                     "bytes": numeric and "byte" in c.lower()})
+    maxes = {c["name"]: max((float(r.get(c["name"]) or 0) for r in rows), default=0.0)
+             for c in cols if c["numeric"]}
+    out_rows = []
+    for r in rows:
+        cells = []
+        for c in cols:
+            v = r.get(c["name"])
+            if c["numeric"]:
+                num = float(v or 0)
+                if c["bytes"]:
+                    text = format_bytes(int(num))
+                elif isinstance(v, float) and not num.is_integer():
+                    text = f"{num:,.2f}"
+                else:
+                    text = f"{int(num):,}"
+                mx = maxes.get(c["name"]) or 0
+                pct = round(num / mx * 100, 1) if mx > 0 else 0
+                cells.append({"text": text, "raw": v, "pct": pct})
+            else:
+                text = "" if v is None else str(v)
+                cells.append({"text": text, "raw": text, "pct": None})
+        out_rows.append(cells)
+    return {"columns": cols, "rows": out_rows}
+
+
+def _nql_group_fields(compiled: Optional[dict]) -> List[str]:
+    """Group-by column names of a compiled `| stats ... by a, b` pipeline."""
+    if not compiled or not compiled.get("group_by"):
+        return []
+    return [g.strip() for g in compiled["group_by"].split(",") if g.strip()]
 
 
 @router.get("/logs/detail-panel", response_class=HTMLResponse, name="log_detail_panel")
@@ -782,6 +1775,11 @@ async def log_detail_panel(
     timestamp: str = Query(..., description="Log timestamp in ISO format"),
     device: str = Query(..., description="Device IP"),
     index: int = Query(1, description="Row index for element IDs"),
+    srcip: Optional[str] = Query(None),
+    dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None),
+    dstport: Optional[str] = Query(None),
+    proto: Optional[str] = Query(None),
 ):
     """Return rendered HTML for a single log's detail panel (lazy-loaded on row expand)."""
     try:
@@ -789,6 +1787,11 @@ async def log_detail_panel(
             timestamp=timestamp,
             device_ip=device,
             include_raw=True,
+            srcip=srcip,
+            dstip=dstip,
+            srcport=srcport,
+            dstport=dstport,
+            proto=proto,
         )
         if not log:
             return HTMLResponse('<div class="detail-empty">Log entry not found</div>')
@@ -1051,21 +2054,349 @@ async def policy_builder(
         })
 
 
+def _suggest_rule_cli(parser: str, dstip: str, dstport: int,
+                       srcip: Optional[str], src_zone: Optional[str] = None,
+                       dst_zone: Optional[str] = None) -> str:
+    """Generate a minimal vendor-correct allow-rule CLI snippet.
+
+    Used by the Policy Lookup "Devices with Gap" panel so an operator can
+    copy-paste a starter rule that closes the gap.
+    """
+    src = (srcip or 'all').strip()
+    rule_name = f"Allow_{(srcip or 'any').replace('.', '_')}_to_{dstip.replace('.', '_')}_{dstport}"[:63]
+    p = (parser or '').upper()
+
+    if p == 'FORTINET':
+        srcaddr = f'"{srcip}"' if srcip else '"all"'
+        return (
+            "config firewall policy\n"
+            "    edit 0\n"
+            f'        set name "{rule_name}"\n'
+            f'        set srcintf "{src_zone or "any"}"\n'
+            f'        set dstintf "{dst_zone or "any"}"\n'
+            f'        set srcaddr {srcaddr}\n'
+            f'        set dstaddr "{dstip}"\n'
+            f'        set service "PORT_{dstport}_TCP"\n'
+            "        set action accept\n"
+            '        set schedule "always"\n'
+            "        set logtraffic all\n"
+            "    next\n"
+            "end\n"
+            f"# NOTE: define address objects for {dstip}"
+            f"{' and ' + srcip if srcip else ''} and a service object for tcp/{dstport} first."
+        )
+    if p == 'PALOALTO':
+        srcline = src
+        return (
+            "configure\n"
+            f"set rulebase security rules {rule_name} \\\n"
+            f"  from {src_zone or 'any'} to {dst_zone or 'any'} \\\n"
+            f"  source {srcline} destination {dstip} \\\n"
+            f"  application any service service-tcp-{dstport} \\\n"
+            "  action allow log-end yes\n"
+            "commit\n"
+            f"# NOTE: create service-tcp-{dstport} (or reuse service-https for 443) "
+            "and address objects as needed."
+        )
+    # Generic / unknown vendor — just describe the intent.
+    return (
+        f"# Suggested rule (vendor unknown, please adapt to your CLI)\n"
+        f"# Action : allow\n"
+        f"# Source : {src}{(' (zone ' + src_zone + ')') if src_zone else ''}\n"
+        f"# Destination: {dstip}{(' (zone ' + dst_zone + ')') if dst_zone else ''}\n"
+        f"# Service: tcp/{dstport}\n"
+    )
+
+
+_IPV4_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+# Accept RFC-1123-ish hostnames. Strictness here matters: loose regex would
+# forward attacker-controlled content to getaddrinfo.
+_HOST_RE = re.compile(
+    r'^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?'
+    r'(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$'
+)
+_ALLOWED_PROTOS = ('any', 'tcp', 'udp', 'icmp')
+# Controls which result surfaces appear on the Policy Lookup page.
+# - ``both``   : run both log scan and config-match, merge results
+# - ``logs``   : log scan only (backward-compat default behavior)
+# - ``config`` : config-match only (fast path when there's no log history)
+_ALLOWED_MODES = ('both', 'logs', 'config')
+
+
+def _resolve_destination(value: str) -> Tuple[List[str], Optional[str], Optional[str]]:
+    """Resolve a Policy Lookup destination to one or more IPv4 addresses.
+
+    Returns ``(ips, fqdn, error)``:
+      - literal IPv4  -> ``([value], None, None)``
+      - hostname OK  -> ``(resolved_ips, hostname, None)``
+      - invalid/fail -> ``([], hostname_or_None, error_string)``
+
+    Blocking call — run inside a thread executor.
+    """
+    v = (value or '').strip()
+    if not v:
+        return [], None, "Destination is required"
+    if _IPV4_RE.match(v):
+        return [v], None, None
+    if not _HOST_RE.match(v):
+        return [], None, f"Invalid destination: {v!r}"
+    try:
+        infos = socket.getaddrinfo(v, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        return [], v, f"DNS lookup failed for {v!r}: {e}"
+    ips = sorted({info[4][0] for info in infos})
+    if not ips:
+        return [], v, f"No A records for {v!r}"
+    return ips, v, None
+
+
+def _empty_log_results() -> dict:
+    """Minimal shape the template expects when the log pass is skipped."""
+    return {
+        "allowed": [], "denied": [], "gap_devices": [], "path": [],
+        "summary": {
+            "total_devices_checked": 0, "devices_with_allow": 0,
+            "devices_with_deny_only": 0, "total_allow_policies": 0,
+            "total_allowed_events": 0, "total_denied_events": 0,
+            "source_already_covered": None,
+        },
+    }
+
+
+async def _run_config_match(db, resolved_ips, dst_port, proto, src_ip, fqdn):
+    """Run the config-match engine once per resolved IP and dedupe results.
+
+    FQDN inputs may resolve to multiple A records; the engine needs to run
+    per-IP because a rule may only cover some of them. We keep the most
+    specific / most recently-hit result per (device, vdom).
+    """
+    merged: dict = {}
+    for ip in resolved_ips:
+        q = MatchQuery(
+            dst_ip=ip,
+            dst_port=dst_port,
+            proto=proto,
+            src_ip=src_ip,
+            dst_fqdn=fqdn,
+        )
+        for r in await match_all_devices(db, q):
+            key = (r.device_id, r.vdom)
+            cur = merged.get(key)
+            # Prefer: matched over implicit-deny; higher hit_count wins ties.
+            if cur is None:
+                merged[key] = r
+                continue
+            if r.matched and not cur.matched:
+                merged[key] = r
+            elif r.matched and cur.matched:
+                if (r.hit_count or 0) > (cur.hit_count or 0):
+                    merged[key] = r
+    return list(merged.values())
+
+
+def _merge_config_into_results(results: dict, config_matches: list) -> None:
+    """Bolt config-match output onto the existing log-result payload.
+
+    Mutates ``results`` in place:
+    - ``would_match``: config hits that the log scan did not already
+      surface (no ``(device, policy)`` equivalent seen in allowed/denied).
+    - ``summary.config_match_devices``: count of devices with a predicted
+      match.
+    """
+    seen_keys: set = set()
+    for row in results.get('allowed', []) or []:
+        seen_keys.add((row.get('device_display'), row.get('policyname')))
+    for row in results.get('denied', []) or []:
+        seen_keys.add((row.get('device_display'), row.get('policyname')))
+
+    would_match: list = []
+    config_devices_matched = 0
+    for m in config_matches:
+        if m.matched:
+            config_devices_matched += 1
+        key = (m.device_display, m.policy_name)
+        if key in seen_keys:
+            continue
+        would_match.append({
+            'device_id': m.device_id,
+            'device_display': m.device_display,
+            'vdom': m.vdom,
+            'matched': m.matched,
+            'action': m.action,
+            'rule_id': m.rule_id,
+            'policyname': m.policy_name,
+            'position': m.position,
+            'hit_count': m.hit_count,
+            'last_hit_at': str(m.last_hit_at) if m.last_hit_at else '',
+            'snapshot_fetched_at': (
+                str(m.snapshot_fetched_at) if m.snapshot_fetched_at else ''
+            ),
+            'reason': m.reason,
+        })
+
+    results['would_match'] = would_match
+    summary = results.setdefault('summary', {})
+    summary['config_match_devices'] = config_devices_matched
+    summary['would_match_count'] = len(would_match)
+
+
+def _serialize_path(evaluation) -> Optional[dict]:
+    """Flatten a PathEvaluation into a plain dict for the Jinja template.
+
+    Template avoids touching dataclass internals; this keeps rendering
+    purely data-driven and makes the shape easy to unit-test.
+    """
+    if evaluation is None:
+        return None
+    hops = []
+    for idx, hv in enumerate(evaluation.hops):
+        hop = hv.hop
+        m = hv.match
+        hops.append({
+            'index': idx + 1,
+            'device_id': hop.device_id,
+            'device_display': hop.device_display,
+            'vdom': hop.vdom,
+            'ingress_iface': hop.ingress_iface,
+            'ingress_zone': hop.ingress_zone,
+            'egress_iface': hop.egress_iface,
+            'egress_zone': hop.egress_zone,
+            'next_hop': hop.next_hop,
+            'route_type': hop.route_type,
+            'route_network': hop.route_network,
+            'src_ip': hop.src_ip,
+            'dst_ip': hop.dst_ip,
+            'matched': m.matched,
+            'action': m.action,
+            'rule_id': m.rule_id,
+            'policyname': m.policy_name,
+            'position': m.position,
+            'hit_count': m.hit_count,
+            'last_hit_at': str(m.last_hit_at) if m.last_hit_at else '',
+            'snapshot_fetched_at': (
+                str(m.snapshot_fetched_at) if m.snapshot_fetched_at else ''
+            ),
+            'reason': m.reason,
+            'is_effective_hop': (
+                evaluation.effective_at_hop_index is not None
+                and idx == evaluation.effective_at_hop_index
+            ),
+        })
+    return {
+        'hops': hops,
+        'hop_count': len(hops),
+        'path_complete': evaluation.path_complete,
+        'path_stop_reason': evaluation.path_stop_reason,
+        'effective_action': evaluation.effective_action,
+        'effective_reason': evaluation.effective_reason,
+        'effective_at_hop_index': evaluation.effective_at_hop_index,
+    }
+
+
+def _filter_would_match_off_path(
+    results: dict, path_data: Optional[dict]
+) -> None:
+    """Drop Would-Match rows for devices the walker already evaluated.
+
+    Before path-aware lookup existed, Would-Match surfaced every
+    firewall that *could* accept the flow by its rule base. Now that
+    the resolved path evaluates each hop with its own zone context,
+    re-listing those same devices in a separate table is confusing —
+    users see "Deny-ALL at pos 391 on 192.168.100.102" twice, once
+    inside the path card (where it's the effective verdict) and once
+    under Would-Match (where the context is lost). We keep the
+    section only for firewalls *not* on the path: rules on boxes the
+    packet never crosses are genuinely new information ("a second
+    firewall in your fabric also has a rule for this flow, though
+    this specific src doesn't reach it").
+    """
+    if not path_data or not path_data.get('hops'):
+        return
+    on_path_ids = {
+        h.get('device_id') for h in path_data['hops'] if h.get('device_id')
+    }
+    if not on_path_ids:
+        return
+    would_match = results.get('would_match') or []
+    filtered = [
+        row for row in would_match
+        if row.get('device_id') not in on_path_ids
+    ]
+    results['would_match'] = filtered
+    summary = results.setdefault('summary', {})
+    summary['would_match_count'] = len(filtered)
+
+
+def _apply_path_to_summary(results: dict, path_data: Optional[dict]) -> None:
+    """Backfill the KPI cards with path-based counts when log data is empty.
+
+    The old cards were wired to log-hit counters only, so config-only
+    lookups showed four zeroes next to a populated Would-Match table.
+    When we have path data we compute per-hop counts and promote them
+    to the summary so the cards agree with what the page actually
+    renders below.
+    """
+    summary = results.setdefault('summary', {})
+    if not path_data or not path_data.get('hops'):
+        return
+
+    hops = path_data['hops']
+    logs_empty = not (results.get('allowed') or results.get('denied'))
+
+    allow_hops = sum(
+        1 for h in hops if h['action'] in ('accept', 'allow')
+    )
+    deny_hops = sum(
+        1 for h in hops if h['action'] in ('deny', 'implicit-deny')
+    )
+
+    if logs_empty:
+        summary['total_devices_checked'] = path_data['hop_count']
+        summary['devices_with_allow'] = allow_hops
+        summary['total_allow_policies'] = allow_hops
+        summary['devices_with_deny_only'] = deny_hops
+
+    # Source coverage: yes when the first hop recognises the src subnet
+    # (an ingress zone was resolved for it); no when the path had to
+    # fall back to "closest device" because no firewall owns the src.
+    if summary.get('source_already_covered') is None:
+        first = hops[0]
+        if first.get('ingress_zone') or first.get('ingress_iface'):
+            summary['source_already_covered'] = True
+        elif path_data.get('path_stop_reason') in ('no_src_owner', 'no_routes'):
+            summary['source_already_covered'] = False
+
+
 @router.get("/policy-lookup/", response_class=HTMLResponse, name="policy_lookup")
 async def policy_lookup_page(
     request: Request,
     dstip: Optional[str] = Query(None),
     dstport: Optional[str] = Query(None),
     srcip: Optional[str] = Query(None),
+    proto: Optional[str] = Query("any"),
+    mode: Optional[str] = Query("both"),
     time_range: Optional[str] = Query("24h"),
+    db: AsyncSession = Depends(get_db),
 ):
     """Policy lookup — find existing allow/deny policies for a destination."""
     results = None
     error = None
+    resolved_fqdn: Optional[str] = None
+    resolved_ips: List[str] = []
 
     dstip_clean = dstip.strip() if dstip and dstip.strip() else None
     dstport_clean = dstport.strip() if dstport and dstport.strip() else None
     srcip_clean = srcip.strip() if srcip and srcip.strip() else None
+
+    # Normalise proto. Anything outside the allowed set collapses to "any" so
+    # we never pass surprising values to the CH layer.
+    proto_clean = (proto or 'any').strip().lower()
+    if proto_clean not in _ALLOWED_PROTOS:
+        proto_clean = 'any'
+
+    mode_clean = (mode or 'both').strip().lower()
+    if mode_clean not in _ALLOWED_MODES:
+        mode_clean = 'both'
 
     if dstip_clean and dstport_clean:
         try:
@@ -1093,17 +2424,110 @@ async def policy_lookup_page(
                 default_hours = max(1, int((now - start_time).total_seconds() / 3600))
 
             loop = asyncio.get_event_loop()
-            results = await loop.run_in_executor(
-                _executor,
-                lambda: ClickHouseClient.policy_lookup(
-                    dstip=dstip_clean,
-                    dstport=port_int,
-                    srcip=srcip_clean,
-                    start_time=start_time,
-                    end_time=end_time,
-                    default_hours=default_hours,
-                )
+
+            # Resolve FQDN → A records (blocking → thread) so the CH query
+            # can scan across every IP the hostname maps to in one pass.
+            resolved_ips, resolved_fqdn, resolve_err = await loop.run_in_executor(
+                _executor, _resolve_destination, dstip_clean
             )
+            if resolve_err:
+                raise ValueError(resolve_err)
+
+            log_task = None
+            cfg_task = None
+            if mode_clean in ('both', 'logs'):
+                log_task = loop.run_in_executor(
+                    _executor,
+                    lambda: ClickHouseClient.policy_lookup(
+                        dstip=resolved_ips[0],
+                        dstips=resolved_ips if len(resolved_ips) > 1 else None,
+                        dstport=port_int,
+                        srcip=srcip_clean,
+                        start_time=start_time,
+                        end_time=end_time,
+                        default_hours=default_hours,
+                        proto=proto_clean,
+                    )
+                )
+            if mode_clean in ('both', 'config'):
+                # Engine runs once per resolved IP and merges the results so
+                # an FQDN lookup surfaces every rule that covers *any* of its
+                # A records, without running N independent CH passes.
+                cfg_task = _run_config_match(
+                    db,
+                    resolved_ips,
+                    port_int,
+                    proto_clean,
+                    srcip_clean,
+                    resolved_fqdn,
+                )
+
+            results = (await log_task) if log_task else _empty_log_results()
+            config_matches = (await cfg_task) if cfg_task else []
+
+            # Attach config-side info: add a ``would_match`` section for
+            # rules the engine predicts but logs haven't observed, and
+            # annotate log rows with the matching policy metadata when we
+            # can correlate them.
+            _merge_config_into_results(results, config_matches)
+
+            # Path-aware evaluation: only when both endpoints known and
+            # config evaluation is in scope. This traces the hop-by-hop
+            # firewall chain and aggregates per-hop verdicts into an
+            # effective allow/deny for the whole flow.
+            path_data = None
+            if (
+                srcip_clean
+                and resolved_ips
+                and mode_clean in ('both', 'config')
+            ):
+                path_eval = await match_path(
+                    db,
+                    MatchQuery(
+                        dst_ip=resolved_ips[0],
+                        dst_port=port_int,
+                        proto=proto_clean,
+                        src_ip=srcip_clean,
+                        dst_fqdn=resolved_fqdn,
+                    ),
+                )
+                path_data = _serialize_path(path_eval)
+                _apply_path_to_summary(results, path_data)
+                _filter_would_match_off_path(results, path_data)
+            results['path_evaluation'] = path_data
+
+            # ── Phase 2: vendor-aware suggested rule per gap device ──
+            # Look up parser type for each gap device's IP (strip the optional
+            # _vdom suffix), then render a starter CLI snippet.
+            gap_devices = results.get('gap_devices') or []
+            if gap_devices:
+                gap_ips = sorted({d.split('_', 1)[0] for d in gap_devices})
+                # ip_address column is INET; cast to text for the VARCHAR IN().
+                ip_text = cast(Device.ip_address, String)
+                rows = (await db.execute(
+                    select(ip_text.label('ip'), Device.parser).where(ip_text.in_(gap_ips))
+                )).all()
+                parser_by_ip = {ip: parser for ip, parser in rows}
+                # Pull a representative src_zone/dst_zone from any denied row
+                # for this device, when available (improves CLI quality).
+                zone_by_dev: dict = {}
+                for r in results.get('denied') or []:
+                    key = r['device_display']
+                    if key in gap_devices and key not in zone_by_dev:
+                        zone_by_dev[key] = (r.get('src_zone') or '', r.get('dst_zone') or '')
+                results['gap_suggestions'] = {
+                    dev: _suggest_rule_cli(
+                        parser_by_ip.get(dev.split('_', 1)[0], 'GENERIC'),
+                        dstip_clean, port_int, srcip_clean,
+                        zone_by_dev.get(dev, ('', ''))[0] or None,
+                        zone_by_dev.get(dev, ('', ''))[1] or None,
+                    )
+                    for dev in gap_devices
+                }
+                results['gap_parsers'] = {
+                    dev: parser_by_ip.get(dev.split('_', 1)[0], 'GENERIC')
+                    for dev in gap_devices
+                }
         except ValueError as ve:
             error = str(ve)
         except Exception as e:
@@ -1115,7 +2539,11 @@ async def policy_lookup_page(
         "current_dstip": dstip_clean,
         "current_dstport": dstport_clean,
         "current_srcip": srcip_clean,
+        "current_proto": proto_clean,
+        "current_mode": mode_clean,
         "current_time_range": (time_range or "24h").strip().lower(),
+        "resolved_fqdn": resolved_fqdn,
+        "resolved_ips": resolved_ips,
         "error": error,
         "format_number": format_number,
     })
@@ -1352,13 +2780,14 @@ async def device_detail(
     )
     credentials_count = creds_result.scalar() or 0
 
-    # Check if device has active SSH credentials
+    # Any active credential (SSH or API) is enough to drive routing/zone/policy
+    # fetches — the services pick the best transport per device.
     active_cred_result = await db.execute(
         select(DeviceCredential)
         .where(
             DeviceCredential.device_id == device_id,
             DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
+            DeviceCredential.credential_type.in_(['SSH', 'API']),
         )
         .limit(1)
     )
@@ -1404,9 +2833,96 @@ async def device_detail(
     zone_snapshot = await ZoneService.get_latest_snapshot(device_id, db, vdom=selected_vdom)
     zone_table_data = await ZoneService.get_zone_interface_table(device_id, db, vdom=selected_vdom)
 
+    # Get firewall policy data (Phase 1: Fortinet only).
+    from ..services.firewall_policy_service import FirewallPolicyService
+    fw_snapshot = await FirewallPolicyService.get_latest_snapshot(device_id, db, vdom=selected_vdom)
+    fw_policies = await FirewallPolicyService.get_policies(device_id, db, vdom=selected_vdom, limit=500)
+    fw_addresses = await FirewallPolicyService.get_address_objects(device_id, db, vdom=selected_vdom)
+    fw_services = await FirewallPolicyService.get_service_objects(device_id, db, vdom=selected_vdom)
+    # Quick name → object lookups so the policy detail panel can resolve
+    # `srcaddr=["AppServers"]` into the real CIDR/IPs without per-row queries.
+    # Serialise to plain dicts here (Jinja can't do dict comprehensions).
+    # Pull the management-host override so the device-detail header can show
+    # both the syslog-source IP (device.ip_address) and the SSH/API target.
+    mgmt_q = await db.execute(
+        select(DeviceSshSettings.ssh_host)
+        .where(DeviceSshSettings.device_id == device_id).limit(1)
+    )
+    mgmt_host = (mgmt_q.scalar_one_or_none() or "").strip() or None
+
+    fw_addr_map_json = {
+        a.name: {
+            "kind": a.kind, "value": a.value,
+            "members": a.members, "comment": a.comment,
+        } for a in fw_addresses
+    }
+    fw_svc_map_json = {
+        s.name: {
+            "protocol": s.protocol, "ports": s.ports,
+            "members": s.members, "category": s.category,
+        } for s in fw_services
+    }
+    # Compact per-policy detail map for client-side detail-panel render
+    # (fixes the 9.4 MB pages caused by 500 inline detail blocks). Only
+    # ship fields the panel actually displays; cap raw_definition.
+    fw_policy_extras_json = {
+        f"pol-{p.id}": {
+            "name": p.name, "rule_id": p.rule_id, "position": p.position,
+            "enabled": p.enabled, "action": p.action, "vdom": p.vdom,
+            "src_zones": p.src_zones or [], "dst_zones": p.dst_zones or [],
+            "src_addresses": p.src_addresses or [],
+            "dst_addresses": p.dst_addresses or [],
+            "services": p.services or [],
+            "applications": p.applications or [],
+            "users": p.users or [],
+            "nat_enabled": p.nat_enabled,
+            "log_traffic": p.log_traffic,
+            "schedule": p.schedule,
+            "comment": p.comment,
+            "raw_definition": (p.raw_definition or "")[:2000],
+        } for p in fw_policies
+    }
+    # Policy analytics: Phase 1 (config-only) + Phase 2 (log join) + Phase 4
+    # (zone reachability matrix). Pull interface entries so the matrix can
+    # resolve log src/dst IPs back to a zone label.
+    from ..services.policy_analytics_service import PolicyAnalyticsService
+    from sqlalchemy import select as _sel
+    from ..models.zone import InterfaceEntry as _IfaceEntry
+    from ..models.routing import RoutingEntry as _RouteEntry
+    iface_rows = (await db.execute(
+        _sel(_IfaceEntry).where(_IfaceEntry.device_id == device_id)
+    )).scalars().all()
+    # Routes give us the zone label for routed (non-directly-connected)
+    # subnets — vital for transit firewalls where most traffic comes from
+    # remote networks, not the device's own LAN.
+    route_rows = (await db.execute(
+        _sel(_RouteEntry).where(_RouteEntry.device_id == device_id)
+    )).scalars().all()
+    fw_analytics = PolicyAnalyticsService.compute(
+        fw_policies, fw_addresses, fw_services,
+        device_ip=str(device.ip_address) if device else None,
+        log_window_hours=720,  # 30 days
+        interfaces=iface_rows,
+        routes=route_rows,
+        vdom=selected_vdom,
+    )
+
     # Validate and default current tab
-    valid_tabs = ['routes', 'zones', 'changes', 'snapshots']
+    valid_tabs = ['routes', 'zones', 'policies', 'analytics', 'compliance', 'changes', 'snapshots']
     current_tab = tab if tab in valid_tabs else 'routes'
+
+    # Load compliance findings for the Compliance tab (always computed so
+    # the tab is populated without a second round-trip; the cost is
+    # bounded by the fixed control list).
+    device_compliance = None
+    compliance_attestations = {}
+    try:
+        compliance_attestations = await _load_attestations(db, device_id, embed_proofs=False)
+        device_compliance = _compute_compliance_findings(
+            fw_analytics, attestations=compliance_attestations,
+        )
+    except Exception as e:
+        logger.warning(f"Compliance bundle for device {device_id} skipped: {e}")
 
     return _render("devices/device_detail.html", request, {
         "device": device,
@@ -1422,8 +2938,184 @@ async def device_detail(
         "selected_vdom": selected_vdom,
         "zone_snapshot": zone_snapshot,
         "zone_table_data": zone_table_data,
+        "fw_snapshot": fw_snapshot,
+        "fw_policies": fw_policies,
+        "fw_addresses": fw_addresses,
+        "fw_services": fw_services,
+        "fw_addr_map_json": fw_addr_map_json,
+        "fw_policy_extras_json": fw_policy_extras_json,
+        "mgmt_host": mgmt_host,
+        "fw_svc_map_json": fw_svc_map_json,
+        "fw_analytics": fw_analytics,
+        "device_compliance": device_compliance,
         "current_tab": current_tab,
     })
+
+
+@router.get(
+    "/devices/{device_id}/analytics/report.pdf",
+    name="device_analytics_pdf",
+)
+async def device_analytics_pdf(
+    request: Request,
+    device_id: int,
+    vdom: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Render a PDF firewall analytics report for a device.
+
+    Reuses the same ``PolicyAnalyticsService.compute`` call that powers
+    the Analytics tab, then renders a print-oriented Jinja2 template
+    (``devices/analytics_report.html``) to PDF via Playwright's
+    headless Chromium.
+
+    The ``vdom`` query parameter scopes multi-VDOM Fortinet devices;
+    omit it for single-VDOM or PAN-OS boxes.
+    """
+    device = (await db.execute(
+        select(Device).where(Device.id == device_id)
+    )).scalar_one_or_none()
+    if device is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    # Import here to keep cold-start cheap for non-PDF requests.
+    from ..services.policy_analytics_service import PolicyAnalyticsService
+    from ..services.pdf_report_service import render_html_to_pdf
+    from ..models.firewall_policy import (
+        FirewallPolicySnapshot as _FwSnap,
+        FirewallPolicy as _FwPol,
+        FirewallAddressObject as _FwAddr,
+        FirewallServiceObject as _FwSvc,
+    )
+    from ..models.zone import InterfaceEntry as _IfaceEntry
+    from ..models.routing import RoutingEntry as _RouteEntry
+
+    # Pick the latest successful policy snapshot, optionally vdom-scoped.
+    snap_q = (
+        select(_FwSnap)
+        .where(_FwSnap.device_id == device_id, _FwSnap.success.is_(True))
+        .order_by(_FwSnap.fetched_at.desc())
+        .limit(1)
+    )
+    if vdom:
+        snap_q = snap_q.where(_FwSnap.vdom == vdom)
+    fw_snapshot = (await db.execute(snap_q)).scalar_one_or_none()
+
+    fw_policies = []
+    fw_addresses = []
+    fw_services = []
+    if fw_snapshot:
+        fw_policies  = (await db.execute(
+            select(_FwPol).where(_FwPol.snapshot_id == fw_snapshot.id)
+                          .order_by(_FwPol.position.asc())
+        )).scalars().all()
+        fw_addresses = (await db.execute(
+            select(_FwAddr).where(_FwAddr.snapshot_id == fw_snapshot.id)
+        )).scalars().all()
+        fw_services  = (await db.execute(
+            select(_FwSvc).where(_FwSvc.snapshot_id == fw_snapshot.id)
+        )).scalars().all()
+
+    iface_rows = (await db.execute(
+        select(_IfaceEntry).where(_IfaceEntry.device_id == device_id)
+    )).scalars().all()
+    route_rows = (await db.execute(
+        select(_RouteEntry).where(_RouteEntry.device_id == device_id)
+    )).scalars().all()
+
+    fw_analytics = PolicyAnalyticsService.compute(
+        fw_policies, fw_addresses, fw_services,
+        device_ip=str(device.ip_address) if device else None,
+        log_window_hours=720,
+        interfaces=iface_rows,
+        routes=route_rows,
+        vdom=vdom,
+    )
+
+    # Friendly labels for the cover page. Parser is stored as an enum-ish
+    # string constant (e.g. "PALOALTO"); map to a display label.
+    parser_display = {
+        "FORTINET": "Fortinet FortiGate",
+        "PALOALTO": "Palo Alto Networks",
+        "GENERIC":  "Generic / Syslog",
+    }.get((device.parser or "").upper(), device.parser or "Unknown")
+
+    risk_posture = _compute_risk_posture(fw_analytics)
+    chart_data = _report_chart_data(fw_analytics)
+    # Embed proofs as data URLs so the PDF is self-contained (Chrome never
+    # needs to fetch from the app while rendering).
+    attestations = await _load_attestations(db, device_id, embed_proofs=True)
+    compliance = _compute_compliance_findings(fw_analytics, attestations=attestations)
+
+    html = templates.get_template("devices/analytics_report.html").render({
+        "request": request,
+        "device": device,
+        "parser_display": parser_display,
+        "device_model": None,     # Hook for later: fill from system-info probe.
+        "device_version": None,
+        "fw_snapshot": fw_snapshot,
+        "fw_analytics": fw_analytics,
+        "risk_posture": risk_posture,
+        "chart_data": chart_data,
+        "compliance": compliance,
+        "generated_at": datetime.now(timezone.utc),
+        "format_number": format_number,
+        "format_compact": format_compact,
+    })
+
+    # Header/footer templates for Chrome's print engine. The cover page
+    # sets ``@page :first { margin-top: 0 }`` so the footer here only
+    # appears from page 2 onward.
+    device_label = device.hostname or str(device.ip_address)
+    date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    footer_html = (
+        '<div style="font-size:8pt;color:#6b7280;width:100%;'
+        'padding:0 15mm;display:flex;justify-content:space-between;'
+        'font-family:-apple-system,Helvetica,Arial,sans-serif;">'
+        f'<span>Zentryc · {device_label} · {date_label}</span>'
+        '<span>Page <span class="pageNumber"></span> / '
+        '<span class="totalPages"></span></span>'
+        '</div>'
+    )
+
+    pdf_bytes = await render_html_to_pdf(html, footer_html=footer_html)
+
+    filename = (
+        f"zentryc-analytics-"
+        f"{str(device.ip_address).replace('/', '_')}-{date_label}.pdf"
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+async def _pick_fetch_credential(device_id: int, db: AsyncSession):
+    """Return the best available credential for an automated fetch, preferring
+    API tokens over SSH (faster, more reliable, no shell-privilege issues)."""
+    api_q = await db.execute(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.is_active == True,
+            DeviceCredential.credential_type == 'API',
+        ).limit(1)
+    )
+    api_cred = api_q.scalar_one_or_none()
+    if api_cred:
+        return api_cred
+    ssh_q = await db.execute(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.is_active == True,
+            DeviceCredential.credential_type == 'SSH',
+        ).limit(1)
+    )
+    return ssh_q.scalar_one_or_none()
 
 
 @router.post("/devices/{device_id}/fetch-routes/", name="fetch_routing_table")
@@ -1441,23 +3133,15 @@ async def fetch_routing_table(
     if not device:
         return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
 
-    # Get active SSH credential
-    cred_result = await db.execute(
-        select(DeviceCredential)
-        .where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
-        )
-        .limit(1)
-    )
-    credential = cred_result.scalar_one_or_none()
-
+    credential = await _pick_fetch_credential(device_id, db)
     if not credential:
-        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     # Fetch routing tables for all VDOMs (or global if no VDOMs configured)
     results = await RoutingService.fetch_all_vdom_routing_tables(device, credential, db)
+    # Fresh snapshot → drop cached analytics so the next page load reflects it.
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
 
     # Aggregate results
     total_routes = 0
@@ -1511,23 +3195,14 @@ async def fetch_zone_data(
     if not device:
         return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
 
-    # Get active SSH credential
-    cred_result = await db.execute(
-        select(DeviceCredential)
-        .where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.is_active == True,
-            DeviceCredential.credential_type == 'SSH'
-        )
-        .limit(1)
-    )
-    credential = cred_result.scalar_one_or_none()
-
+    credential = await _pick_fetch_credential(device_id, db)
     if not credential:
-        return JSONResponse({"success": False, "message": "No SSH credentials configured"})
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
 
     # Fetch zone data for all VDOMs (or global if no VDOMs configured)
     results = await ZoneService.fetch_all_vdom_zone_data(device, credential, db)
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
 
     # Aggregate results
     total_zones = 0
@@ -1568,6 +3243,117 @@ async def fetch_zone_data(
         "zone_count": total_zones,
         "interface_count": total_interfaces,
         "vdom_results": vdom_results
+    })
+
+
+@router.post("/devices/{device_id}/management-host/", name="set_management_host",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def set_management_host(
+    device_id: int,
+    ssh_host: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or clear the management IP override for SSH/API fetches.
+
+    The override only affects outbound SSH/REST calls — syslog ingest still
+    uses the original `device.ip_address` for log attribution. Clearing the
+    override (empty string) reverts to using the device IP for management."""
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
+
+    cleaned = (ssh_host or "").strip()
+
+    existing_q = await db.execute(
+        select(DeviceSshSettings).where(DeviceSshSettings.device_id == device_id).limit(1)
+    )
+    row = existing_q.scalar_one_or_none()
+
+    if cleaned:
+        if row:
+            row.ssh_host = cleaned
+        else:
+            db.add(DeviceSshSettings(device_id=device_id, ssh_host=cleaned))
+        await db.commit()
+        return JSONResponse({
+            "success": True,
+            "message": f"Management IP set to {cleaned}",
+            "ssh_host": cleaned,
+            "default_ip": str(device.ip_address),
+        })
+    else:
+        if row:
+            await db.delete(row)
+            await db.commit()
+        return JSONResponse({
+            "success": True,
+            "message": "Management IP cleared — using device IP",
+            "ssh_host": "",
+            "default_ip": str(device.ip_address),
+        })
+
+
+@router.post("/devices/{device_id}/fetch-policies/", name="fetch_firewall_policies")
+async def fetch_firewall_policies(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch firewall policy / rule base + objects from device via SSH."""
+    from ..services.firewall_policy_service import FirewallPolicyService
+
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        return JSONResponse({"success": False, "message": "Device not found"}, status_code=404)
+
+    credential = await _pick_fetch_credential(device_id, db)
+    if not credential:
+        return JSONResponse({"success": False, "message": "No SSH or API credentials configured"})
+
+    results = await FirewallPolicyService.fetch_all_vdom_policies(device, credential, db)
+    from ..services.policy_analytics_service import PolicyAnalyticsService as _PAS
+    _PAS.invalidate_log_cache(str(device.ip_address))
+
+    total_policies = 0
+    total_addrs = 0
+    total_services = 0
+    vdom_results = []
+    overall_success = False
+
+    for vdom_name, (success, message, snapshot) in results.items():
+        policy_count = snapshot.policy_count if snapshot else 0
+        addr_count = (snapshot.address_count + snapshot.addrgrp_count) if snapshot else 0
+        svc_count = (snapshot.service_count + snapshot.servicegrp_count) if snapshot else 0
+        total_policies += policy_count
+        total_addrs += addr_count
+        total_services += svc_count
+        vdom_results.append({
+            "vdom": vdom_name,
+            "success": success,
+            "message": message,
+            "policy_count": policy_count,
+            "address_count": addr_count,
+            "service_count": svc_count,
+        })
+        if success:
+            overall_success = True
+
+    failed = [r for r in vdom_results if not r["success"]]
+    if len(vdom_results) > 1:
+        summary = f"Policy fetch: {len(vdom_results) - len(failed)}/{len(vdom_results)} VDOM(s) succeeded"
+        if failed:
+            summary += "; failed: " + ", ".join(str(r["vdom"]) for r in failed)
+    else:
+        summary = vdom_results[0]["message"] if vdom_results else "No VDOMs configured"
+
+    return JSONResponse({
+        "success": overall_success,
+        "message": summary,
+        "policy_count": total_policies,
+        "address_count": total_addrs,
+        "service_count": total_services,
+        "vdom_results": vdom_results,
     })
 
 
@@ -1754,7 +3540,9 @@ async def test_credential(
     # Update last_used
     credential.last_used = datetime.utcnow()
 
-    ssh_host = device.ip_address
+    # device.ip_address comes back from the INET column as an ipaddress.IPv4Address
+    # object; paramiko/socket need a plain string.
+    ssh_host = str(device.ip_address)
     ssh_host_result = await db.execute(
         select(DeviceSshSettings.ssh_host)
         .where(DeviceSshSettings.device_id == device_id)
@@ -1762,28 +3550,65 @@ async def test_credential(
     )
     ssh_host_override = ssh_host_result.scalar_one_or_none()
     if ssh_host_override:
-        ssh_host = ssh_host_override.strip() or ssh_host
+        override = str(ssh_host_override).strip()
+        if override:
+            ssh_host = override
 
-    # Test connection in thread pool (blocking operation)
+    # Vendor / transport branch: API test = quick auth-probe against the
+    # device's REST API; SSH test = TCP+auth handshake (defined elsewhere).
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor,
-        lambda: SSHService.test_connection(
-            host=ssh_host,
-            username=credential.username,
-            password=credential.password,
-            port=credential.port
+    if (credential.credential_type or "SSH").upper() == "API":
+        def _probe_fortinet_api():
+            import time as _t
+            from ..services.fortinet_api_service import FortinetAPIClient, FortinetAPIError
+            client = FortinetAPIClient(
+                host=ssh_host, token=credential.password,
+                port=credential.port or 443,
+            )
+            t0 = _t.time()
+            try:
+                status = client.system_status()
+                ms = int((_t.time() - t0) * 1000)
+                # Surface hostname/version when available so the operator
+                # can confirm they hit the right device.
+                hostname = (status.get("results") or {}).get("hostname") or status.get("hostname")
+                version = (status.get("results") or {}).get("version") or status.get("version")
+                msg = f"FortiGate API OK"
+                if hostname or version:
+                    msg += f" ({hostname or ''} {version or ''})".rstrip()
+                return type("R", (), {"success": True, "error": msg, "duration_ms": ms})()
+            except FortinetAPIError as e:
+                ms = int((_t.time() - t0) * 1000)
+                return type("R", (), {"success": False, "error": str(e), "duration_ms": ms})()
+            except Exception as e:
+                ms = int((_t.time() - t0) * 1000)
+                return type("R", (), {"success": False, "error": f"{type(e).__name__}: {e}", "duration_ms": ms})()
+        result = await loop.run_in_executor(_executor, _probe_fortinet_api)
+    else:
+        result = await loop.run_in_executor(
+            _executor,
+            lambda: SSHService.test_connection(
+                host=ssh_host,
+                username=credential.username,
+                password=credential.password,
+                port=credential.port
+            )
         )
-    )
 
     if result.success:
         credential.last_success = datetime.utcnow()
 
     await db.commit()
 
+    # When the test passes, the API path packs hostname/version into
+    # `result.error` for display; SSH path leaves it None.
+    if result.success:
+        message = result.error or "Connection successful"
+    else:
+        message = result.error or "Test failed"
     return JSONResponse({
         "success": result.success,
-        "message": result.error if not result.success else "Connection successful",
+        "message": message,
         "duration_ms": result.duration_ms
     })
 
@@ -2017,8 +3842,21 @@ from .storage_monitor import get_disk_usage
 
 @router.get("/system/storage-monitor/", response_class=HTMLResponse, name="storage_monitor",
             dependencies=[Depends(require_min_role("ANALYST"))])
-async def system_monitor(request: Request):
+async def system_monitor(request: Request, saved: Optional[str] = Query(None)):
     """System monitoring page showing disk usage and ClickHouse storage."""
+    from ..core.app_settings import (
+        all_timezones, get_display_timezone, get_default_source_timezone,
+    )
+    from ..services.time_status import get_time_status
+
+    time_ctx = {
+        "time_status": get_time_status(),
+        "display_tz": get_display_timezone(),
+        "source_tz": get_default_source_timezone(),
+        "timezones": all_timezones(),
+        "saved": saved or "",
+    }
+
     try:
         # Get disk usage
         disk_info = get_disk_usage('/')
@@ -2064,6 +3902,7 @@ async def system_monitor(request: Request):
             "clickhouse_percent_of_used": clickhouse_percent_of_used,
             "sys_partitions": sys_partitions,
             "error": None,
+            **time_ctx,
         })
 
     except Exception as e:
@@ -2080,7 +3919,42 @@ async def system_monitor(request: Request):
             "clickhouse_percent_of_used": 0,
             "sys_partitions": {'disks': [], 'partitions': [], 'unallocated': [], 'has_hostfs': False},
             "error": str(e),
+            **time_ctx,
         })
+
+
+@router.post("/system/time/", name="system_time_save",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def system_time_save(
+    request: Request,
+    display_tz: str = Form(...),
+    source_tz: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist display + default source timezones from the Time tab."""
+    from ..core.app_settings import (
+        set_display_timezone, set_default_source_timezone,
+    )
+    try:
+        await set_display_timezone(db, (display_tz or "").strip())
+        await set_default_source_timezone(db, (source_tz or "").strip())
+        return RedirectResponse(url="/system/storage-monitor/?saved=1#tab-time", status_code=303)
+    except ValueError:
+        return RedirectResponse(url="/system/storage-monitor/?saved=err#tab-time", status_code=303)
+
+
+@router.get("/api/system/time/", name="system_time_status")
+async def system_time_status_api(request: Request):
+    """JSON snapshot for the live-updating clock in the Time tab."""
+    from ..core.app_settings import (
+        get_display_timezone, get_default_source_timezone,
+    )
+    from ..services.time_status import get_time_status
+    return JSONResponse({
+        "status": get_time_status(),
+        "display_tz": get_display_timezone(),
+        "source_tz": get_default_source_timezone(),
+    })
 
 
 @router.post("/api/system/truncate-table/", name="truncate_system_table",
@@ -2536,6 +4410,40 @@ async def estimate_cleanup(request: Request):
 
 
 # ============================================================
+# Preferences — app-wide display settings (Admin Only)
+# ============================================================
+
+@router.get("/system/preferences/", response_class=HTMLResponse,
+            name="preferences_page",
+            dependencies=[Depends(require_role("ADMIN"))])
+async def preferences_page(request: Request, saved: Optional[str] = Query(None)):
+    """App-wide preferences page — currently the display timezone."""
+    from ..core.app_settings import all_timezones, get_display_timezone
+    return _render("system/preferences.html", request, {
+        "timezones": all_timezones(),
+        "current_tz": get_display_timezone(),
+        "saved": saved or "",
+        "now_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+    })
+
+
+@router.post("/system/preferences/timezone/", name="preferences_set_timezone",
+             dependencies=[Depends(require_role("ADMIN"))])
+async def preferences_set_timezone(
+    request: Request,
+    tz: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist the app-wide display timezone."""
+    from ..core.app_settings import set_display_timezone
+    try:
+        await set_display_timezone(db, (tz or "").strip())
+        return RedirectResponse(url="/system/preferences/?saved=1", status_code=303)
+    except ValueError:
+        return RedirectResponse(url="/system/preferences/?saved=err", status_code=303)
+
+
+# ============================================================
 # Audit Log Viewer (Admin Only)
 # ============================================================
 
@@ -2678,101 +4586,120 @@ async def nql_query(request: Request):
     except NQLSyntaxError as e:
         return JSONResponse(status_code=400, content={"detail": str(e), "type": "syntax_error"})
 
-    # Build time filter
-    time_map = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440, "7d": 10080, "30d": 43200}
-    minutes = time_map.get(time_range, 60)
-    time_filter = f"timestamp > now() - INTERVAL {minutes} MINUTE"
+    # Same time semantics as the explorer: an explicit start/end wins, otherwise
+    # a relative window ending now.
+    start_time, end_time = _explorer_time_window(None, data.get("start"), data.get("end"))
+    if start_time is None and end_time is None:
+        start_time = datetime.now(timezone.utc) - timedelta(minutes=_nql_minutes(time_range))
+    device_ips = [data["device"]] if data.get("device") else None
 
     loop = asyncio.get_event_loop()
-
-    def _run_query(sql_text):
-        """Run a ClickHouse query with a fresh client to avoid concurrency issues."""
-        c = ClickHouseClient.get_client()
-        return c.query(sql_text)
-
     try:
         if compiled["is_aggregate"]:
-            # Aggregate query
-            select_clause = compiled["select"] or "count() as count"
-            group_by = f"GROUP BY {compiled['group_by']}" if compiled["group_by"] else ""
-            having = f"HAVING {compiled['having']}" if compiled["having"] else ""
-            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else ""
-            limit_val = compiled["limit"] or per_page
+            result = await loop.run_in_executor(
+                _executor,
+                lambda: ClickHouseClient.run_nql_aggregate(
+                    compiled, device_ips=device_ips, start_time=start_time, end_time=end_time,
+                    query_text=query_text, default_limit=per_page, max_execution_time=20),
+            )
+            rows = [{k: _serialize_value(v) for k, v in r.items()} for r in result["rows"]]
+            return {"type": "aggregate", "columns": result["columns"], "rows": rows,
+                    "total": len(rows), "sql": result["sql"]}
 
-            sql = f"""SELECT {select_clause}
-FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}
-{group_by}
-{having}
-{order_by}
-LIMIT {limit_val}"""
-
-            result = await loop.run_in_executor(_executor, lambda: _run_query(sql))
-            columns = result.column_names
-            rows = []
-            for row in result.result_rows:
-                rows.append({columns[i]: _serialize_value(row[i]) for i in range(len(columns))})
-
-            return {
-                "type": "aggregate",
-                "columns": columns,
-                "rows": rows,
-                "total": len(rows),
-                "sql": sql,
-            }
-        else:
-            # Regular query
-            offset = (page - 1) * per_page
-            order_by = f"ORDER BY {compiled['order_by']}" if compiled["order_by"] else "ORDER BY timestamp DESC"
-            limit_val = compiled["limit"] or per_page
-
-            columns_str = ClickHouseClient.LIGHT_COLUMNS
-
-            sql = f"""SELECT {columns_str}
-FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}
-{order_by}
-LIMIT {limit_val} OFFSET {offset}"""
-
-            count_sql = f"""SELECT count()
-FROM syslogs
-PREWHERE {time_filter}
-WHERE {compiled['where']}"""
-
-            result_future = loop.run_in_executor(_executor, lambda: list(_run_query(sql).named_results()))
-            count_future = loop.run_in_executor(_executor, lambda: _run_query(count_sql).result_rows[0][0])
-
-            logs, total = await asyncio.gather(result_future, count_future)
-
-            # Serialize results
-            serialized = []
-            for log in logs:
-                row = {}
-                for k, v in log.items():
-                    row[k] = _serialize_value(v)
-                serialized.append(row)
-
-            return {
-                "type": "logs",
-                "rows": serialized,
-                "total": total,
-                "page": page,
-                "per_page": per_page,
-                "sql": sql,
-            }
+        limit_cap = compiled.get("limit")
+        if limit_cap:
+            per_page = max(1, min(per_page, limit_cap))
+        offset = (page - 1) * per_page
+        rows_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.search_logs(
+                limit=per_page, offset=offset, device_ips=device_ips,
+                start_time=start_time, end_time=end_time, query_text=query_text,
+                order_by=compiled.get("order_by") or None),
+        )
+        count_future = loop.run_in_executor(
+            _executor,
+            lambda: ClickHouseClient.count_logs(
+                device_ips=device_ips, start_time=start_time, end_time=end_time,
+                query_text=query_text, max_count=COUNT_CAP),
+        )
+        logs, total = await asyncio.gather(rows_future, count_future)
+        is_approximate = total < 0
+        if is_approximate:
+            total = COUNT_CAP
+        if limit_cap:
+            total = min(total, limit_cap)
+        serialized = [{k: _serialize_value(v) for k, v in log.items()} for log in logs]
+        return {"type": "logs", "rows": serialized, "total": total,
+                "is_approximate": is_approximate, "page": page, "per_page": per_page}
 
     except Exception as e:
         logger.error(f"NQL query error: {e}")
-        return JSONResponse(status_code=400, content={"detail": f"Query execution error: {str(e)}"})
+        # Do not leak ClickHouse SQL fragments / schema to the client.
+        return JSONResponse(status_code=400, content={"detail": _friendly_ch_error(e)})
 
 
 @router.get("/api/nql/fields", dependencies=[Depends(require_min_role("VIEWER"))])
 async def nql_fields():
     """Return field metadata for NQL autocomplete."""
     from ..services.nql_parser import FIELD_METADATA
-    return {"fields": FIELD_METADATA}
+    return {"fields": dict(FIELD_METADATA)}
+
+
+# Relative time range -> minutes, shared by the suggestion endpoints so value
+# counts reflect the window the explorer is currently showing.
+_NQL_RANGE_MINUTES = {
+    "15m": 15, "30m": 30, "1h": 60, "3h": 180, "6h": 360, "12h": 720,
+    "24h": 1440, "2d": 2880, "7d": 10080, "30d": 43200,
+}
+
+
+def _nql_minutes(time_range: Optional[str]) -> int:
+    if not time_range:
+        return 60
+    tr = time_range.strip().lower()
+    if tr in _NQL_RANGE_MINUTES:
+        return _NQL_RANGE_MINUTES[tr]
+    m = re.match(r'^(\d+)([mhd])$', tr)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)
+        minutes = n * {"m": 1, "h": 60, "d": 1440}[unit]
+        return max(1, min(minutes, 43200))
+    return 60
+
+
+@router.get("/api/nql/suggest", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_suggest(
+    q: str = "",
+    cursor: Optional[int] = None,
+    time_range: str = "1h",
+):
+    """Context-aware completions for the search bar.
+
+    Works out whether the cursor sits on a field name, a value, an operator or a
+    pipeline stage, and returns the matching suggestions — including live values
+    counted from ClickHouse over the current time window."""
+    from ..services.nql_schema import build_suggestions
+
+    minutes = _nql_minutes(time_range)
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            _suggest_executor, lambda: build_suggestions(q or "", cursor, minutes)
+        )
+    except Exception as e:
+        logger.warning(f"NQL suggest failed: {e}")
+        return {"context": "field", "token": "", "replace_start": 0,
+                "replace_end": 0, "suggestions": []}
+    return result
+
+
+@router.get("/api/nql/schema", dependencies=[Depends(require_min_role("VIEWER"))])
+async def nql_schema():
+    """Full searchable-field reference for the query-help panel."""
+    from ..services.nql_schema import field_catalog
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_suggest_executor, field_catalog)
 
 
 def _serialize_value(v):
@@ -2790,3 +4717,237 @@ def _serialize_value(v):
 @router.get("/system/", response_class=HTMLResponse, name="system_monitor", dependencies=[Depends(require_role("ADMIN"))])
 async def appliance_management(request: Request):
     return _render("system/appliance.html", request, {})
+
+# ============================================================
+# Log Explorer: field facets, raw export
+# (shared filter helpers so all three honor the same filters as the log list)
+# ============================================================
+
+def _round_window(start_time, delta):
+    """Round a relative window's start down so the generated SQL is stable for
+    a while: whole minutes for windows of an hour or more, 10 s below that.
+    Repeated page loads, pagination and facet fetches within that period then
+    hit the ClickHouse query cache instead of rescanning the window."""
+    if start_time is None:
+        return None
+    step = 60 if delta >= timedelta(hours=1) else 10
+    return start_time.replace(second=(start_time.second // step) * step, microsecond=0)
+
+
+def _explorer_time_window(time_range, start, end):
+    """Resolve (start_time, end_time) from a relative range (e.g. '1h','24h','7d')
+    or explicit ISO start/end. Returns (None, None) to let the query layer apply
+    its default 1h bound."""
+    now = datetime.now(timezone.utc)
+    start_time = end_time = None
+    if start and start.strip():
+        try: start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        except ValueError: pass
+    if end and end.strip():
+        try: end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        except ValueError: pass
+    if start_time is None and end_time is None and time_range and time_range.strip():
+        m = re.match(r'^(\d+)([mhd])$', time_range.strip().lower())
+        if m:
+            n, u = int(m.group(1)), m.group(2)
+            delta = {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
+                     'd': timedelta(days=n)}[u]
+            start_time = _round_window(now - delta, delta)
+    return start_time, end_time
+
+
+def _explorer_severities(severity):
+    if not severity or not severity.strip():
+        return None
+    out = []
+    for tok in severity.split(','):
+        tok = tok.strip()
+        if tok.isdigit():
+            out.append(int(tok))
+    return out or None
+
+
+def _is_not_flag(val: Optional[str]) -> bool:
+    return bool(val and val.strip().lower() in ('1', 'true', 'on', 'yes'))
+
+
+def _clean_scope(scope) -> Optional[str]:
+    """Normalise the `scope` query param; anything not a known scope is ignored."""
+    from ..services.nql_schema import SCOPE_VALUES
+    v = (scope or "").strip().lower()
+    return v if v in SCOPE_VALUES else None
+
+
+def _nql_term(field: str, val: str, negated: bool = False) -> str:
+    inner = f'{field}:"{val}"' if ' ' in val else f'{field}:{val}'
+    return f'-{inner}' if negated else inner
+
+
+def _explorer_search_query(q=None, action=None, log_type=None, application=None,
+                           srcip=None, dstip=None, policyname=None, src_zone=None,
+                           dst_zone=None, session_end_reason=None, dstport=None,
+                           srcport=None, src_country=None, dst_country=None, service=None,
+                           srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None,
+                           scope=None):
+    """Compose an NQL query string (user query + toolbar field:value terms)
+    parsed by ClickHouseClient._build_where_clause, so facets, exports and
+    analytics honor exactly the filters the log table shows."""
+    from ..services.nql_parser import compose_nql
+    parts = []
+    for field, val, negated in (
+        ("action", action, False),
+        ("log_type", log_type, False),
+        ("application", application, False),
+        ("srcip", srcip, _is_not_flag(srcip_not)),
+        ("dstip", dstip, _is_not_flag(dstip_not)),
+        ("srcport", srcport, _is_not_flag(srcport_not)),
+        ("dstport", dstport, _is_not_flag(dstport_not)),
+        ("policyname", policyname, False),
+        ("src_zone", src_zone, False),
+        ("dst_zone", dst_zone, False),
+        ("session_end_reason", session_end_reason, False),
+        ("src_country", src_country, False),
+        ("dst_country", dst_country, False),
+        ("service", service, False),
+        ("scope", _clean_scope(scope), False),
+    ):
+        if val is not None and str(val).strip():
+            parts.append(_nql_term(field, str(val).strip(), negated))
+    combined = compose_nql(q or "", parts)
+    return combined or None
+
+
+@router.get("/api/logs/facets", dependencies=[Depends(require_min_role("VIEWER"))])
+async def logs_facets(
+    field: str = Query(...), time_range: Optional[str] = Query(None),
+    start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+    device: Optional[str] = Query(None), severity: Optional[str] = Query(None),
+    q: Optional[str] = Query(None), action: Optional[str] = Query(None),
+    log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
+    limit: int = Query(10),
+):
+    """Top-N values (+counts) for a facetable field — the left-rail click-to-filter."""
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sev = _explorer_severities(severity)
+    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+                                scope=scope)
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_field_facets(
+        field=field, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
+        query_text=sq, limit=min(max(int(limit), 1), 50)))
+    return data
+
+
+@router.get("/logs/export", dependencies=[Depends(require_min_role("VIEWER"))])
+async def logs_export(
+    format: str = Query("csv"), time_range: Optional[str] = Query(None),
+    start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+    device: Optional[str] = Query(None), severity: Optional[str] = Query(None),
+    q: Optional[str] = Query(None), action: Optional[str] = Query(None),
+    log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+    srcip: Optional[str] = Query(None), dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None), dstport: Optional[str] = Query(None),
+    srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
+    srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
+    policyname: Optional[str] = Query(None), scope: Optional[str] = Query(None),
+    limit: int = Query(100000),
+):
+    """Stream the current filtered logs as CSV or JSON (capped at `limit` rows)."""
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sev = _explorer_severities(severity)
+    sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+                                srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
+                                srcip_not=srcip_not, dstip_not=dstip_not,
+                                srcport_not=srcport_not, dstport_not=dstport_not,
+                                policyname=policyname, scope=scope)
+    cap = min(max(int(limit), 1), 500000)
+    cols = ["timestamp", "device_ip", "vdom", "severity", "srcip", "dstip", "srcport",
+            "dstport", "proto", "action", "policyname", "log_type", "application",
+            "src_zone", "dst_zone", "sent_bytes", "recv_bytes", "src_country",
+            "dst_country", "service", "session_end_reason", "threat_id"]
+    fmt = (format or "csv").lower()
+
+    # A `| stats ...` search exports the aggregate table, not raw rows.
+    from ..services.nql_parser import compile_nql, NQLSyntaxError
+    compiled = None
+    if sq:
+        try:
+            compiled = compile_nql(sq)
+        except NQLSyntaxError as e:
+            return JSONResponse(status_code=400, content={"detail": str(e)})
+
+    def _run():
+        if compiled and compiled.get("is_aggregate"):
+            res = ClickHouseClient.run_nql_aggregate(
+                compiled, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
+                query_text=sq, default_limit=ClickHouseClient.NQL_AGG_MAX_ROWS,
+                max_execution_time=60)
+            return res["columns"], [tuple(r[c] for c in res["columns"]) for r in res["rows"]]
+        prewhere_clause, where_sql = ClickHouseClient._count_prewhere_where(
+            device_ips, sev, st, et, sq, None)
+        order = (compiled or {}).get("order_by") or "timestamp DESC"
+        sql = (f"SELECT {', '.join(cols)} FROM syslogs PREWHERE {prewhere_clause} "
+               f"WHERE {where_sql} ORDER BY {order} LIMIT {cap} "
+               f"SETTINGS max_execution_time=60")
+        return cols, ClickHouseClient.get_client().query(sql).result_rows
+
+    cols, rows = await asyncio.get_event_loop().run_in_executor(_executor, _run)
+
+    if fmt == "json":
+        def jgen():
+            yield "[\n"
+            for i, r in enumerate(rows):
+                obj = {c: _serialize_value(v) for c, v in zip(cols, r)}
+                yield ("," if i else "") + json.dumps(obj, default=str)
+            yield "\n]"
+        return StreamingResponse(jgen(), media_type="application/json",
+                                 headers={"Content-Disposition": "attachment; filename=zentryc_logs.json"})
+
+    def cgen():
+        import csv, io
+        buf = io.StringIO(); w = csv.writer(buf)
+        w.writerow(cols); yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+        for r in rows:
+            w.writerow([_serialize_value(v) for v in r])
+            yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+    return StreamingResponse(cgen(), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=zentryc_logs.csv"})
+
+
+# ============================================================
+# Traffic Analytics (FortiView-style bandwidth/top-talker/geo)
+# ============================================================
+
+def _hours_from_range(tr, fallback=24):
+    if not tr:
+        return fallback
+    m = re.match(r'^(\d+)([mhd])$', tr.strip().lower())
+    if not m:
+        return fallback
+    n, u = int(m.group(1)), m.group(2)
+    return max(1, n // 60) if u == 'm' else (n if u == 'h' else n * 24)
+
+
+@router.get("/analytics/traffic", response_class=HTMLResponse, name="traffic_analytics",
+            dependencies=[Depends(require_min_role("VIEWER"))])
+async def traffic_analytics_page(request: Request, time_range: str = Query("1h")):
+    return _render("analytics/traffic.html", request, {"current_time_range": time_range})
+
+
+@router.get("/api/analytics/traffic", dependencies=[Depends(require_min_role("VIEWER"))])
+async def api_traffic_analytics(
+    time_range: Optional[str] = Query("24h"), start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None), device: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+):
+    st, et = _explorer_time_window(time_range, start, end)
+    device_ips = [device] if device and device.strip() else None
+    sq = _explorer_search_query(q=q)
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_traffic_analytics(
+        start_time=st, end_time=et, device_ips=device_ips, query_text=sq,
+        default_hours=_hours_from_range(time_range)))
+    return data

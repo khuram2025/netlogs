@@ -164,9 +164,13 @@
        ================================================================ */
     .cr-metrics {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         gap: 1rem;
         margin-bottom: 2rem;
+    }
+
+    @media (max-width: 1100px) {
+        .cr-metrics { grid-template-columns: repeat(3, 1fr); }
     }
 
     .cr-metric-card {
@@ -185,6 +189,8 @@
     .cr-metric-card:nth-child(2) { animation-delay: 0.12s; }
     .cr-metric-card:nth-child(3) { animation-delay: 0.19s; }
     .cr-metric-card:nth-child(4) { animation-delay: 0.26s; }
+    .cr-metric-card:nth-child(5) { animation-delay: 0.33s; }
+    .cr-metric-card:nth-child(6) { animation-delay: 0.40s; }
 
     .cr-metric-card::before {
         content: '';
@@ -211,6 +217,14 @@
         background: linear-gradient(90deg, #f59e0b, #f97316);
     }
 
+    .cr-metric-card:nth-child(5)::before {
+        background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    }
+
+    .cr-metric-card:nth-child(6)::before {
+        background: linear-gradient(90deg, #64748b, #94a3b8);
+    }
+
     .cr-metric-label {
         font-family: 'Outfit', sans-serif;
         font-size: 0.7rem;
@@ -231,6 +245,8 @@
 
     .cr-metric-value.cr-danger { color: var(--cr-danger); }
     .cr-metric-value.cr-warning { color: var(--cr-warning); }
+    .cr-metric-value.cr-info { color: #38bdf8; }
+    .cr-metric-value.cr-muted { color: var(--cr-text-muted); }
 
     .cr-metric-sub {
         font-family: 'Outfit', sans-serif;
@@ -584,6 +600,43 @@
         overflow: hidden;
     }
 
+    .cr-filter-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.75rem 1.125rem;
+        margin-bottom: 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        border-radius: 0.625rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        color: var(--cr-text);
+    }
+
+    .cr-filter-banner strong {
+        color: #60a5fa;
+        font-weight: 600;
+    }
+
+    .cr-filter-clear {
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .cr-filter-clear:hover {
+        background: rgba(59, 130, 246, 0.35);
+    }
+
     .cr-matches-table {
         width: 100%;
         border-collapse: collapse;
@@ -893,6 +946,344 @@
         border-radius: 0.2rem;
         font-size: 0.65rem;
         color: #93c5fd;
+    }
+
+    /* ================================================================
+       VISUAL STAGE BUILDER (Phase 2b)
+       ================================================================ */
+    #addRuleModal .cr-modal { max-width: 880px; }
+
+    .cr-stage-card {
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.7rem;
+        padding: 0.9rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .cr-stage-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .cr-stage-num {
+        flex: none;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-radius: 0.4rem;
+    }
+
+    .cr-stage-head input.cr-stage-name {
+        flex: 1;
+        margin: 0;
+    }
+
+    .cr-stage-srcrow {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.7rem;
+    }
+
+    .cr-stage-srcrow select {
+        margin: 0;
+        flex: 1;
+        max-width: 340px;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .cr-icon-btn {
+        flex: none;
+        width: 1.7rem;
+        height: 1.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(148, 163, 184, 0.1);
+        border: 1px solid var(--cr-border);
+        border-radius: 0.4rem;
+        color: var(--cr-text-muted);
+        font-size: 0.85rem;
+        cursor: pointer;
+        font-family: 'Outfit', sans-serif;
+        line-height: 1;
+    }
+
+    .cr-icon-btn:hover { background: rgba(148, 163, 184, 0.22); color: #fff; }
+    .cr-icon-btn.danger:hover { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+    .cr-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .cr-cond-label, .cr-stage-meta-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--cr-text-muted);
+        margin-bottom: 0.3rem;
+    }
+
+    /* Grid gives predictable column sizing — flex let the value input
+       overflow the card. Columns: field, operator, value, var-picker, remove. */
+    .cr-cond-row {
+        display: grid;
+        grid-template-columns: 1.3fr 1.1fr 1.6fr 2rem 1.7rem;
+        gap: 0.4rem;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .cr-cond-row select, .cr-cond-row input {
+        margin: 0;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.5rem;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .cr-cond-var { padding: 0.4rem 0.15rem !important; text-align: center; }
+
+    .cr-cond-add {
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px dashed rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.3rem 0.7rem;
+        border-radius: 0.4rem;
+        cursor: pointer;
+        margin-top: 0.15rem;
+    }
+    .cr-cond-add:hover { background: rgba(59, 130, 246, 0.22); }
+
+    .cr-stage-meta {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+
+    .cr-stage-add {
+        width: 100%;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px dashed rgba(59, 130, 246, 0.45);
+        color: #93c5fd;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 0.6rem;
+        border-radius: 0.55rem;
+        cursor: pointer;
+    }
+    .cr-stage-add:hover { background: rgba(59, 130, 246, 0.2); }
+
+    .cr-builder-error {
+        margin-top: 0.6rem;
+        padding: 0.55rem 0.8rem;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 0.45rem;
+        color: #fca5a5;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+    }
+
+    .cr-adv-json {
+        margin-top: 0.5rem;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.55rem;
+        padding: 0.4rem 0.75rem;
+    }
+    .cr-adv-json summary {
+        cursor: pointer;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: var(--cr-text-muted);
+        padding: 0.25rem 0;
+    }
+    .cr-adv-json summary:hover { color: #93c5fd; }
+    .cr-adv-json textarea {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.72rem;
+        margin-top: 0.5rem;
+    }
+    .cr-adv-json-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin: 0.5rem 0 0.25rem;
+    }
+    .cr-adv-json-actions button { font-size: 0.72rem; padding: 0.35rem 0.7rem; }
+
+    /* ===== Test / preview panel ===== */
+    .cr-preview {
+        margin-top: 0.75rem;
+        border: 1px solid var(--cr-border);
+        border-radius: 0.6rem;
+        padding: 0.85rem 1rem;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .cr-preview-loading {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        color: var(--cr-text-muted);
+    }
+    .cr-preview-head {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    .cr-preview-head.ok { color: #4ade80; }
+    .cr-preview-head.no { color: #fbbf24; }
+    .cr-preview-err {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        color: #fca5a5;
+        margin-bottom: 0.5rem;
+    }
+    .cr-preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+    }
+    .cr-preview-table th {
+        text-align: left;
+        color: var(--cr-text-muted);
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.25rem 0.4rem;
+        border-bottom: 1px solid var(--cr-border);
+    }
+    .cr-preview-table td {
+        padding: 0.35rem 0.4rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+        color: var(--cr-text);
+    }
+    .cr-preview-bad { color: #fca5a5; }
+    .cr-preview-samples {
+        margin-top: 0.6rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.74rem;
+        color: var(--cr-text-muted);
+    }
+    .cr-preview-samples code {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(59, 130, 246, 0.12);
+        color: #93c5fd;
+        padding: 0.1rem 0.35rem;
+        border-radius: 0.25rem;
+        font-size: 0.7rem;
+        margin: 0 0.15rem;
+    }
+    .cr-btn-test {
+        font-family: 'Outfit', sans-serif;
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        font-weight: 600;
+        font-size: 0.82rem;
+        padding: 0.55rem 1.1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+    }
+    .cr-btn-test:hover { background: rgba(59, 130, 246, 0.28); }
+
+    /* ===== Incidents tab ===== */
+    .cr-inc-status {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.72rem;
+        padding: 0.25rem 0.4rem;
+        border-radius: 0.35rem;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid var(--cr-border);
+        color: var(--cr-text);
+        cursor: pointer;
+    }
+    .cr-risk {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: #fbbf24;
+    }
+
+    /* ===== Attack-chain visualization ===== */
+    .cd-chain {
+        display: flex;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0.25rem 0 1rem;
+    }
+    .cd-chain-node {
+        flex: 1;
+        min-width: 130px;
+        background: linear-gradient(145deg, rgba(59,130,246,0.12), rgba(99,102,241,0.08));
+        border: 1px solid rgba(59,130,246,0.3);
+        border-radius: 0.55rem;
+        padding: 0.55rem 0.7rem;
+    }
+    .cd-chain-num {
+        width: 1.3rem; height: 1.3rem;
+        display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff; font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem; font-weight: 600; border-radius: 0.3rem;
+        margin-bottom: 0.3rem;
+    }
+    .cd-chain-name {
+        font-family: 'Outfit', sans-serif; font-size: 0.8rem;
+        font-weight: 600; color: var(--cr-text); line-height: 1.25;
+    }
+    .cd-chain-meta {
+        font-family: 'Outfit', sans-serif; font-size: 0.66rem;
+        color: var(--cr-text-muted); margin-top: 0.2rem;
+    }
+    .cd-chain-arrow {
+        display: flex; align-items: center;
+        color: #6366f1; font-size: 1rem;
+    }
+
+    /* ===== Rule health scorecard ===== */
+    .cd-health {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.55rem;
+        margin-top: 0.25rem;
+    }
+    .cd-health-badge {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.25rem 0.6rem;
+        border-radius: 0.4rem;
+        border: 1px solid;
+    }
+    .cd-health-stat {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.76rem;
+        color: var(--cr-text-muted);
+    }
+    .cd-health-stat strong {
+        color: var(--cr-text);
+        font-family: 'JetBrains Mono', monospace;
     }
 
     .cr-btn-submit {
@@ -1404,6 +1795,7 @@
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             MITRE ATT&CK Map
         </a>
+        <button class="cr-btn-mitre" onclick="runValidation()">Validate Detections</button>
         {% if current_user and current_user.role == 'ADMIN' %}
         <button class="cr-btn-add" onclick="showAddRuleModal()">+ Add Rule</button>
         {% endif %}
@@ -1414,6 +1806,7 @@
 <div class="cr-tab-nav">
     <a class="cr-tab active" onclick="showTab('rules')">Rules</a>
     <a class="cr-tab" onclick="showTab('matches')">Recent Matches</a>
+    <a class="cr-tab" onclick="showTab('incidents')">Incidents</a>
 </div>
 
 <!-- Hero Metrics -->
@@ -1437,6 +1830,16 @@
         <div class="cr-metric-label">High</div>
         <div class="cr-metric-value cr-warning" data-count="{{ match_stats.high }}">0</div>
         <div class="cr-metric-sub">high severity matches</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Medium</div>
+        <div class="cr-metric-value cr-info" data-count="{{ match_stats.medium }}">0</div>
+        <div class="cr-metric-sub">medium severity matches</div>
+    </div>
+    <div class="cr-metric-card">
+        <div class="cr-metric-label">Low</div>
+        <div class="cr-metric-value cr-muted" data-count="{{ match_stats.low }}">0</div>
+        <div class="cr-metric-sub">low severity matches</div>
     </div>
 </div>
 
@@ -1487,7 +1890,7 @@
                         <span class="cr-stat-label">Last Triggered</span>
                         <span class="cr-stat-val" style="font-size:0.75rem;">
                             {% if rule.last_triggered_at %}
-                            {{ rule.last_triggered_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ rule.last_triggered_at | localdt('%Y-%m-%d %H:%M') }}
                             {% else %}
                             <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
                             {% endif %}
@@ -1497,7 +1900,7 @@
                         <span class="cr-stat-label">Last Evaluated</span>
                         <span class="cr-stat-val" style="font-size:0.75rem;">
                             {% if rule.last_evaluated_at %}
-                            {{ rule.last_evaluated_at.strftime('%H:%M:%S') }}
+                            {{ rule.last_evaluated_at | localdt('%H:%M:%S') }}
                             {% else %}
                             <span style="color:var(--cr-text-muted);font-weight:400;">Never</span>
                             {% endif %}
@@ -1510,6 +1913,7 @@
                     </button>
                     <button class="cr-btn" onclick="showRuleDetail({{ rule.id }})">Detail</button>
                     {% if current_user and current_user.role == 'ADMIN' %}
+                    <button class="cr-btn" onclick="editRule({{ rule.id }})">Edit</button>
                     <button class="cr-btn cr-btn-delete" onclick="deleteRule({{ rule.id }}, '{{ rule.name }}')">Delete</button>
                     {% endif %}
                 </div>
@@ -1531,6 +1935,10 @@
 <!-- Matches Tab -->
 <div id="tab-matches" style="display:none;">
     {% if recent_matches %}
+    <div id="matchesFilterBanner" class="cr-filter-banner" style="display:none;">
+        <span>Showing matches for rule: <strong id="matchesFilterName"></strong></span>
+        <button type="button" class="cr-filter-clear" onclick="clearMatchesFilter()">&times; Clear filter</button>
+    </div>
     <div class="cr-matches-wrap">
         <table class="cr-matches-table">
             <thead>
@@ -1547,13 +1955,13 @@
             </thead>
             <tbody>
                 {% for m in recent_matches %}
-                <tr>
-                    <td><span class="cr-match-time">{{ m.timestamp }}</span></td>
+                <tr data-rule="{{ m.rule_name }}">
+                    <td><span class="cr-match-time">{{ m.timestamp | localdt }}</span></td>
                     <td><span class="cr-match-rule">{{ m.rule_name }}</span></td>
                     <td><span class="cr-severity-badge {{ m.severity }}">{{ m.severity }}</span></td>
                     <td>
                         {% if m.key_value %}
-                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-key-pill" title="Search logs for {{ m.key_value }}">{{ m.key_value }}</a>
+                        <a href="{{ m.log_url or '/logs/?srcip=' ~ m.key_value }}" class="cr-key-pill" title="Exact logs behind this match: {{ m.key_value }}">{{ m.key_value }}</a>
                         {% else %}
                         <span style="color:var(--cr-text-muted);">&mdash;</span>
                         {% endif %}
@@ -1576,7 +1984,7 @@
                     </td>
                     <td>
                         {% if m.key_value %}
-                        <a href="/logs/?q=srcip:{{ m.key_value }},dstip:{{ m.key_value }}&time_range=1h" class="cr-view-btn" title="Investigate in logs">
+                        <a href="{{ m.log_url or '/logs/?srcip=' ~ m.key_value }}" class="cr-view-btn" title="Exact logs behind this match">
                             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             Logs
                         </a>
@@ -1586,6 +1994,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        <div id="matchesNoResults" class="cr-empty" style="display:none;padding:2rem;">
+            <div class="cr-empty-title">No recent matches for this rule</div>
+            <div class="cr-empty-desc">This rule has no matches in the loaded window. Open the rule's Detail view for the full history.</div>
+        </div>
     </div>
     {% else %}
     <div class="cr-empty">
@@ -1596,6 +2008,39 @@
         <div class="cr-empty-desc">Correlation matches will appear here when rules detect multi-stage attack patterns.</div>
     </div>
     {% endif %}
+</div>
+
+<!-- Incidents tab (Phase 5) -->
+<div id="tab-incidents" style="display:none;">
+    <div id="incidentsContainer">
+        <div class="cr-preview-loading">Loading incidents…</div>
+    </div>
+</div>
+
+<!-- Incident Detail Modal -->
+<div id="incidentDetailModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 class="cr-modal-title" id="incidentDetailTitle">Incident</h3>
+        </div>
+        <div class="cr-modal-body" id="incidentDetailBody"></div>
+        <div class="cr-modal-footer">
+            <button type="button" class="cr-btn-cancel" onclick="closeModal('incidentDetailModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Detection Validation Modal (Phase 6 — purple-team) -->
+<div id="validateModal" class="cr-modal-overlay">
+    <div class="cr-modal">
+        <div class="cr-modal-header">
+            <h3 class="cr-modal-title">Detection Validation</h3>
+        </div>
+        <div class="cr-modal-body" id="validateBody"></div>
+        <div class="cr-modal-footer">
+            <button type="button" class="cr-btn-cancel" onclick="closeModal('validateModal')">Close</button>
+        </div>
+    </div>
 </div>
 
 <!-- Rule Detail Modal -->
@@ -1609,7 +2054,7 @@
         </div>
         <div class="cr-modal-footer">
             <div class="cd-detail-footer-row">
-                <a id="detailViewAllMatches" href="#" class="cr-view-btn" style="display:none;" onclick="showTab('matches');closeModal('ruleDetailModal');">
+                <a id="detailViewAllMatches" href="#" class="cr-view-btn" style="display:none;" onclick="event.preventDefault();viewAllMatchesForRule();">
                     <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                     View All Matches
                 </a>
@@ -1623,10 +2068,23 @@
 <div id="addRuleModal" class="cr-modal-overlay">
     <div class="cr-modal">
         <div class="cr-modal-header">
-            <h3 class="cr-modal-title">Add Correlation Rule</h3>
+            <h3 class="cr-modal-title" id="addRuleModalTitle">Add Correlation Rule</h3>
         </div>
         <form id="addRuleForm" onsubmit="return submitAddRule(event)">
             <div class="cr-modal-body">
+                <div class="cr-form-group" id="templatePickerGroup">
+                    <label>Start from a Template <span style="color:var(--cr-text-muted);font-weight:400;">(optional)</span></label>
+                    <select id="ruleTemplate" onchange="applyTemplate(this.value)"></select>
+                    <details class="cr-adv-json" id="sigmaImportGroup" style="margin-top:0.5rem;">
+                        <summary>…or import a Sigma rule</summary>
+                        <textarea id="sigmaYaml" rows="6" spellcheck="false"
+                                  placeholder="Paste Sigma rule YAML here…"></textarea>
+                        <div class="cr-adv-json-actions">
+                            <button type="button" class="cr-btn-cancel" onclick="importSigma()">Import Sigma → Builder</button>
+                        </div>
+                        <div id="sigmaWarnings" class="cr-form-hint"></div>
+                    </details>
+                </div>
                 <div class="cr-form-group">
                     <label>Rule Name</label>
                     <input type="text" id="ruleName" required placeholder="e.g., Scan then Exploit">
@@ -1663,21 +2121,71 @@
                         <input type="text" id="ruleMitreTechnique" placeholder="e.g., T1190">
                     </div>
                 </div>
-                <div class="cr-form-group">
-                    <label>Stages (JSON Array)</label>
-                    <textarea id="ruleStages" rows="8" required placeholder='[
-  {"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300},
-  {"name": "Stage 2", "filter": {"action": "allow", "srcip": "$stage1.srcip"}, "threshold": 1, "window": 600}
-]'></textarea>
-                    <div class="cr-form-hint">
-                        Each stage: name, filter (field conditions), threshold (min events), window (seconds).
-                        Use <code>$stage1.field</code> for variable substitution between stages.
+                <div class="cr-form-row">
+                    <div class="cr-form-group">
+                        <label>Stage Ordering</label>
+                        <select id="ruleOrdering">
+                            <option value="sequence" selected>Sequence — B must follow A</option>
+                            <option value="any_order">Any order</option>
+                        </select>
+                    </div>
+                    <div class="cr-form-group">
+                        <label>Match Mode</label>
+                        <select id="ruleMatchMode">
+                            <option value="discrete" selected>Discrete — one record per chain</option>
+                            <option value="recurring">Recurring — continuous monitor</option>
+                        </select>
+                    </div>
+                    <div class="cr-form-group">
+                        <label>Suppress Window (sec)</label>
+                        <input type="number" id="ruleSuppressWindow" value="3600" min="60" max="604800">
                     </div>
                 </div>
+                <div class="cr-form-group">
+                    <label>Join Keys <span style="color:var(--cr-text-muted);font-weight:400;">(optional, comma-separated)</span></label>
+                    <input type="text" id="ruleJoinKeys" placeholder="leave blank to use Stage 1 group-by — e.g. srcip  or  srcip,dstip">
+                </div>
+                <div class="cr-form-group">
+                    <label>Response Actions <span style="color:var(--cr-text-muted);font-weight:400;">(optional JSON)</span></label>
+                    <textarea id="ruleActions" rows="2" spellcheck="false"
+                              style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;"
+                              placeholder='[{"type": "log", "level": "warning"}, {"type": "webhook", "url": "https://..."}]'></textarea>
+                    <div class="cr-form-hint">
+                        Fired when the rule records a match. Action types:
+                        <code>log</code>, <code>webhook</code>.
+                    </div>
+                </div>
+
+                <!-- ===== Visual Stage Builder ===== -->
+                <div class="cr-form-group">
+                    <label>Stages</label>
+                    <div id="stagesContainer"></div>
+                    <button type="button" class="cr-stage-add" onclick="builderAddStage()">+ Add Stage</button>
+                    <div id="builderError" class="cr-builder-error" style="display:none;"></div>
+                </div>
+
+                <!-- ===== Advanced JSON (escape hatch) ===== -->
+                <details class="cr-adv-json">
+                    <summary>Advanced — view / edit stage JSON</summary>
+                    <textarea id="ruleStagesJson" rows="8" spellcheck="false"
+                              placeholder='[{"name": "Stage 1", "filter": {"action": "deny", "group_by": "srcip"}, "threshold": 10, "window": 300}]'></textarea>
+                    <div class="cr-adv-json-actions">
+                        <button type="button" class="cr-btn-cancel" onclick="builderSyncToJson()">Builder → JSON</button>
+                        <button type="button" class="cr-btn-cancel" onclick="builderApplyJson()">JSON → Builder</button>
+                    </div>
+                    <div class="cr-form-hint">
+                        The builder and this JSON are kept in sync on demand. Use
+                        <code>$stage1.field</code> for cross-stage variable references.
+                    </div>
+                </details>
+
+                <!-- ===== Test / preview results ===== -->
+                <div id="builderPreview" class="cr-preview" style="display:none;"></div>
             </div>
             <div class="cr-modal-footer">
                 <button type="button" class="cr-btn-cancel" onclick="closeModal('addRuleModal')">Cancel</button>
-                <button type="submit" class="cr-btn-submit">Create Rule</button>
+                <button type="button" class="cr-btn-test" onclick="builderTestRule()">Test Rule</button>
+                <button type="submit" class="cr-btn-submit" id="addRuleSubmitBtn">Create Rule</button>
             </div>
         </form>
     </div>
@@ -1721,12 +2229,175 @@
 // ================================================================
 // TAB SWITCHING
 // ================================================================
-function showTab(tab) {
+function showTab(tab, ruleFilter) {
     document.getElementById('tab-rules').style.display = tab === 'rules' ? 'block' : 'none';
     document.getElementById('tab-matches').style.display = tab === 'matches' ? 'block' : 'none';
+    document.getElementById('tab-incidents').style.display = tab === 'incidents' ? 'block' : 'none';
+    var order = {rules: 0, matches: 1, incidents: 2};
     document.querySelectorAll('.cr-tab').forEach(function(a, i) {
-        a.classList.toggle('active', (i === 0 && tab === 'rules') || (i === 1 && tab === 'matches'));
+        a.classList.toggle('active', i === order[tab]);
     });
+    if (tab === 'matches') { applyMatchesFilter(ruleFilter || null); }
+    if (tab === 'incidents') { loadIncidents(); }
+}
+
+// ================================================================
+// INCIDENTS (Phase 5)
+// ================================================================
+var _incidentStatuses = ['new', 'investigating', 'contained', 'resolved', 'suppressed'];
+
+// Phase 6: purple-team detection validation — dry-run every enabled rule.
+async function runValidation() {
+    var body = document.getElementById('validateBody');
+    body.innerHTML = '<div class="cr-preview-loading">Dry-running every enabled rule against live data…</div>';
+    document.getElementById('validateModal').classList.add('active');
+    try {
+        var d = await (await fetch('/api/correlation/validate')).json();
+        var h = '<div class="cd-header-row">' +
+            '<span class="cr-mitre-tag">' + d.firing + ' of ' + d.total_rules + ' rules firing</span>' +
+            '<span class="cr-mitre-tag">' + d.tactics_covered.length + ' MITRE tactics covered</span>' +
+            '</div>';
+        if (d.tactics_covered.length) {
+            h += '<p class="cd-desc">Tactics with a firing detection: ' +
+                 _cdEsc(d.tactics_covered.join(', ')) + '</p>';
+        }
+        h += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>' +
+             '<th>Rule</th><th>Severity</th><th>Status</th><th>Chains</th>' +
+             '<th>MITRE Tactic</th></tr></thead><tbody>';
+        d.results.forEach(function(r) {
+            var status = r.error
+                ? '<span class="cr-preview-bad">error</span>'
+                : r.fires
+                    ? '<span style="color:#4ade80;font-weight:600;">&#10003; fires</span>'
+                    : '<span style="color:var(--cr-text-muted);">&mdash; quiet</span>';
+            h += '<tr><td>' + _cdEsc(r.rule) + '</td>' +
+                 '<td><span class="cr-severity-badge ' + r.severity + '">' + r.severity + '</span></td>' +
+                 '<td>' + status + '</td>' +
+                 '<td>' + r.matched_chains + '</td>' +
+                 '<td>' + _cdEsc(r.mitre_tactic || '—') + '</td></tr>';
+        });
+        body.innerHTML = h + '</tbody></table></div>';
+    } catch (e) {
+        body.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+    }
+}
+
+function loadIncidents() {
+    var c = document.getElementById('incidentsContainer');
+    c.innerHTML = '<div class="cr-preview-loading">Loading incidents…</div>';
+    fetch('/api/correlation/incidents')
+        .then(function(r) { return r.json(); })
+        .then(function(list) { c.innerHTML = _renderIncidents(list); })
+        .catch(function(e) {
+            c.innerHTML = '<div class="cr-preview-err">Failed to load incidents: ' + e.message + '</div>';
+        });
+}
+
+function _renderIncidents(list) {
+    if (!list || !list.length) {
+        return '<div class="cr-empty"><div class="cr-empty-title">No incidents yet</div>' +
+               '<div class="cr-empty-desc">Incidents form as correlation matches accumulate ' +
+               'risk on an entity — related matches group into one prioritized incident.</div></div>';
+    }
+    var h = '<div class="cr-matches-wrap"><table class="cr-matches-table"><thead><tr>' +
+            '<th>Severity</th><th>Entity</th><th>Risk</th><th>Matches</th><th>Rules</th>' +
+            '<th>MITRE</th><th>Last Seen</th><th>Status</th><th>Actions</th>' +
+            '</tr></thead><tbody>';
+    list.forEach(function(i) {
+        var opts = _incidentStatuses.map(function(s) {
+            return '<option value="' + s + '"' + (s === i.status ? ' selected' : '') + '>' + s + '</option>';
+        }).join('');
+        h += '<tr>' +
+            '<td><span class="cr-severity-badge ' + i.severity + '">' + i.severity + '</span></td>' +
+            '<td><span class="cr-match-rule">' + _cdEsc(i.entity_type + ': ' + i.entity_value) + '</span></td>' +
+            '<td><span class="cr-risk">' + i.risk_score + '</span></td>' +
+            '<td>' + i.match_count + '</td>' +
+            '<td>' + _cdEsc((i.rule_names || []).join(', ') || '—') + '</td>' +
+            '<td>' + _cdEsc((i.mitre_tactics || []).join(', ') || '—') + '</td>' +
+            '<td><span class="cr-match-time">' + window.fmtTime(i.last_seen) + '</span></td>' +
+            '<td><select class="cr-inc-status" onchange="changeIncidentStatus(' + i.id + ',this.value)">' +
+                opts + '</select></td>' +
+            '<td><button class="cr-btn" onclick="showIncidentDetail(' + i.id + ')">Detail</button></td>' +
+            '</tr>';
+    });
+    return h + '</tbody></table></div>';
+}
+
+function changeIncidentStatus(id, status) {
+    fetch('/api/correlation/incidents/' + id + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status}),
+    }).then(function(r) {
+        showToast(r.ok ? 'Incident marked ' + status : 'Failed to update incident',
+                  r.ok ? 'success' : 'error');
+    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
+}
+
+function showIncidentDetail(id) {
+    var body = document.getElementById('incidentDetailBody');
+    body.innerHTML = '<div class="cr-preview-loading">Loading…</div>';
+    document.getElementById('incidentDetailModal').classList.add('active');
+    fetch('/api/correlation/incidents/' + id)
+        .then(function(r) { return r.json(); })
+        .then(function(i) {
+            document.getElementById('incidentDetailTitle').textContent =
+                'Incident — ' + i.entity_type + ': ' + i.entity_value;
+            var h = '<div class="cd-header-row">' +
+                '<span class="cr-severity-badge ' + i.severity + '">' + i.severity + '</span>' +
+                '<span class="cd-status-tag enabled">' + _cdEsc(i.status) + '</span>' +
+                '<span class="cr-mitre-tag">risk ' + i.risk_score + '</span>' +
+                '<span class="cr-mitre-tag">' + i.match_count + ' matches</span></div>';
+            h += '<p class="cd-desc">Rules: ' + _cdEsc((i.rule_names || []).join(', ') || '—') +
+                 ' &middot; MITRE: ' + _cdEsc((i.mitre_tactics || []).join(', ') || '—') + '</p>';
+            var ms = i.matches || [];
+            h += '<div class="cd-section-title">Contributing matches (' + ms.length + ')</div>';
+            h += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>' +
+                 '<th>Time</th><th>Rule</th><th>Attack Chain</th><th>Events</th></tr></thead><tbody>';
+            ms.forEach(function(m) {
+                h += '<tr><td>' + _cdEsc(window.fmtTime(m.timestamp)) + '</td>' +
+                     '<td>' + _cdEsc(m.rule_name || '') + '</td>' +
+                     '<td>' + _cdEsc(m.chain || '') + '</td>' +
+                     '<td>' + (m.total_events || 0) + '</td></tr>';
+            });
+            body.innerHTML = h + '</tbody></table></div>';
+        })
+        .catch(function(e) {
+            body.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+        });
+}
+
+// Filter the Recent Matches table to a single rule (or null to show all).
+function applyMatchesFilter(ruleName) {
+    var banner = document.getElementById('matchesFilterBanner');
+    var nameEl = document.getElementById('matchesFilterName');
+    var noResults = document.getElementById('matchesNoResults');
+    var rows = document.querySelectorAll('#tab-matches tbody tr');
+    if (!rows.length) return;  // no matches at all — empty state is shown
+    var visible = 0;
+    rows.forEach(function(tr) {
+        var show = !ruleName || tr.getAttribute('data-rule') === ruleName;
+        tr.style.display = show ? '' : 'none';
+        if (show) { visible++; }
+    });
+    if (banner) {
+        banner.style.display = ruleName ? 'flex' : 'none';
+        if (ruleName && nameEl) { nameEl.textContent = ruleName; }
+    }
+    if (noResults) {
+        noResults.style.display = (ruleName && visible === 0) ? 'block' : 'none';
+    }
+}
+
+function clearMatchesFilter() {
+    applyMatchesFilter(null);
+}
+
+// Open the Recent Matches tab filtered to the rule currently shown in the
+// detail modal.
+function viewAllMatchesForRule() {
+    closeModal('ruleDetailModal');
+    showTab('matches', _cdCurrentRuleName || null);
 }
 
 // ================================================================
@@ -1746,48 +2417,553 @@ function closeModal(id) {
     document.getElementById(id).classList.remove('active');
 }
 
-function showAddRuleModal() {
+// ================================================================
+// VISUAL STAGE BUILDER (Phase 2b)
+// ================================================================
+var corrSchema = null;
+var _editingRuleId = null;
+var _schemaPromise = fetch('/api/correlation/schema')
+    .then(function(r) { return r.json(); })
+    .then(function(s) { corrSchema = s; return s; })
+    .catch(function() { corrSchema = {sources: {syslogs: []}, operators: {}}; return corrSchema; });
+
+async function _ensureSchema() { if (!corrSchema) { await _schemaPromise; } }
+
+// ---- Templates (Phase 6) ----
+var _corrTemplates = [];
+async function _loadTemplates() {
+    try {
+        _corrTemplates = await (await fetch('/api/correlation/templates')).json();
+    } catch (e) { _corrTemplates = []; }
+}
+function _populateTemplateSelect() {
+    var sel = document.getElementById('ruleTemplate');
+    if (!sel) { return; }
+    var byCat = {};
+    _corrTemplates.forEach(function(t) { (byCat[t.category] = byCat[t.category] || []).push(t); });
+    var opts = ['<option value="">— build from scratch —</option>'];
+    Object.keys(byCat).sort().forEach(function(cat) {
+        opts.push('<optgroup label="' + _cdEsc(cat) + '">');
+        byCat[cat].forEach(function(t) {
+            var label = t.name + (t.available ? '' : ' (data source unavailable)');
+            opts.push('<option value="' + t.id + '"' + (t.available ? '' : ' disabled') +
+                      '>' + _cdEsc(label) + '</option>');
+        });
+        opts.push('</optgroup>');
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+}
+// Populate the whole builder from a flat rule draft (template or Sigma import).
+function _applyRuleDraft(r) {
+    document.getElementById('ruleName').value = r.name || '';
+    document.getElementById('ruleDesc').value = r.description || '';
+    document.getElementById('ruleSeverity').value = r.severity || 'high';
+    document.getElementById('ruleMitreTactic').value = r.mitre_tactic || '';
+    document.getElementById('ruleMitreTechnique').value = r.mitre_technique || '';
+    document.getElementById('ruleOrdering').value = r.ordering || 'sequence';
+    document.getElementById('ruleMatchMode').value = r.match_mode || 'discrete';
+    document.getElementById('ruleSuppressWindow').value = r.suppress_window || 3600;
+    document.getElementById('ruleJoinKeys').value = (r.join_keys || []).join(', ');
+    document.getElementById('ruleActions').value =
+        r.actions ? JSON.stringify(r.actions, null, 2) : '';
+    document.getElementById('stagesContainer').innerHTML = '';
+    (r.stages || []).forEach(function(s) { builderAddStage(s); });
+    if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+}
+
+function applyTemplate(templateId) {
+    if (!templateId) { return; }
+    var t = _corrTemplates.filter(function(x) { return x.id === templateId; })[0];
+    if (!t) { return; }
+    var r = t.rule || {};
+    _applyRuleDraft({
+        name: t.name, description: t.description, severity: r.severity,
+        mitre_tactic: t.mitre_tactic, mitre_technique: t.mitre_technique,
+        ordering: r.ordering, match_mode: r.match_mode,
+        suppress_window: r.suppress_window, join_keys: r.join_keys, stages: r.stages,
+    });
+    showToast('Loaded template: ' + t.name, 'success');
+}
+
+async function importSigma() {
+    var yamlText = document.getElementById('sigmaYaml').value.trim();
+    if (!yamlText) { showToast('Paste a Sigma rule first', 'error'); return; }
+    try {
+        var res = await fetch('/api/correlation/sigma/import', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({yaml: yamlText}),
+        });
+        var d = await res.json();
+        if (!res.ok) { showToast(d.detail || 'Sigma import failed', 'error'); return; }
+        _applyRuleDraft(d.rule);
+        document.getElementById('sigmaWarnings').textContent =
+            (d.warnings && d.warnings.length)
+                ? 'Imported with notes: ' + d.warnings.join('; ')
+                : 'Imported cleanly — review the fields before saving.';
+        showToast('Sigma rule imported — review before saving', 'success');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function _srcFields(source) {
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.fields) || [];
+}
+function _srcEntities(source) {
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.entities) || [];
+}
+function _allSources() {
+    return (corrSchema && corrSchema.sources) ? Object.keys(corrSchema.sources) : ['syslogs'];
+}
+function _sourceLabel(source) {
+    var s = corrSchema && corrSchema.sources && corrSchema.sources[source];
+    return (s && s.label) || source;
+}
+function _stageSource(card) {
+    var sel = card.querySelector('.cr-stage-source');
+    return (sel && sel.value) || 'syslogs';
+}
+function _fieldType(source, field) {
+    var f = _srcFields(source).filter(function(x) { return x.name === field; })[0];
+    return f ? f.type : 'string';
+}
+function _opSuffix(op) {
+    return {eq: '', ne: '_ne', gt: '_gt', lt: '_lt', gte: '_gte', lte: '_lte'}[op] || '';
+}
+function _splitFieldOp(key) {
+    var sfx = [['_gte', 'gte'], ['_lte', 'lte'], ['_gt', 'gt'], ['_lt', 'lt'], ['_ne', 'ne']];
+    for (var i = 0; i < sfx.length; i++) {
+        if (key.length > sfx[i][0].length && key.slice(-sfx[i][0].length) === sfx[i][0]) {
+            return {field: key.slice(0, -sfx[i][0].length), op: sfx[i][1]};
+        }
+    }
+    return {field: key, op: 'eq'};
+}
+function _fieldOptionsHtml(source, selected) {
+    return _srcFields(source).map(function(f) {
+        return '<option value="' + f.name + '"' + (f.name === selected ? ' selected' : '') +
+               '>' + f.name + ' (' + f.type + ')</option>';
+    }).join('');
+}
+function _sourceOptionsHtml(selected) {
+    return _allSources().map(function(s) {
+        return '<option value="' + s + '"' + (s === selected ? ' selected' : '') +
+               '>' + _cdEsc(_sourceLabel(s)) + '</option>';
+    }).join('');
+}
+function _groupByOptionsHtml(source, selected) {
+    var html = '<option value="">(none)</option>';
+    var ents = _srcEntities(source);
+    if (ents.length) {
+        html += '<optgroup label="Canonical entities — cross-source join">';
+        ents.forEach(function(e) {
+            html += '<option value="' + e + '"' + (e === selected ? ' selected' : '') +
+                    '>' + e + ' — entity</option>';
+        });
+        html += '</optgroup>';
+    }
+    html += '<optgroup label="Columns">' + _fieldOptionsHtml(source, selected) + '</optgroup>';
+    return html;
+}
+function _opOptionsHtml(type, selected) {
+    var ops = (corrSchema && corrSchema.operators && corrSchema.operators[type]) ||
+              (corrSchema && corrSchema.operators && corrSchema.operators.string) || [];
+    return ops.map(function(o) {
+        return '<option value="' + o.op + '"' + (o.op === selected ? ' selected' : '') +
+               '>' + o.label + '</option>';
+    }).join('');
+}
+
+function builderAddStage(data) {
+    var container = document.getElementById('stagesContainer');
+    var card = document.createElement('div');
+    card.className = 'cr-stage-card';
+    card.innerHTML =
+        '<div class="cr-stage-head">' +
+          '<span class="cr-stage-num">1</span>' +
+          '<input class="cr-stage-name" placeholder="Stage name — e.g. Port Scan Detected">' +
+          '<button type="button" class="cr-icon-btn" title="Move up" onclick="builderMoveStage(this,-1)">&uarr;</button>' +
+          '<button type="button" class="cr-icon-btn" title="Move down" onclick="builderMoveStage(this,1)">&darr;</button>' +
+          '<button type="button" class="cr-icon-btn danger" title="Remove stage" onclick="builderRemoveStage(this)">&times;</button>' +
+        '</div>' +
+        '<div class="cr-stage-srcrow">' +
+          '<span class="cr-stage-meta-label" style="margin:0;">Data source</span>' +
+          '<select class="cr-stage-source" onchange="_onStageSourceChange(this)"></select>' +
+        '</div>' +
+        '<div class="cr-cond-label">Conditions — all must match</div>' +
+        '<div class="cr-conds"></div>' +
+        '<button type="button" class="cr-cond-add" onclick="builderAddCondition(this.closest(\'.cr-stage-card\'))">+ Condition</button>' +
+        '<div class="cr-stage-meta">' +
+          '<div><div class="cr-stage-meta-label">Group by / entity</div>' +
+            '<select class="cr-stage-groupby"></select></div>' +
+          '<div><div class="cr-stage-meta-label">Threshold (min events)</div>' +
+            '<input type="number" class="cr-stage-threshold" min="1" value="1"></div>' +
+          '<div><div class="cr-stage-meta-label">Window (seconds)</div>' +
+            '<input type="number" class="cr-stage-window" min="1" value="300"></div>' +
+        '</div>';
+    container.appendChild(card);
+
+    var source = (data && data.source) || 'syslogs';
+    card.querySelector('.cr-stage-source').innerHTML = _sourceOptionsHtml(source);
+    card.querySelector('.cr-stage-groupby').innerHTML = _groupByOptionsHtml(source, '');
+
+    if (data) {
+        card.querySelector('.cr-stage-name').value = data.name || '';
+        card.querySelector('.cr-stage-threshold').value = data.threshold || 1;
+        card.querySelector('.cr-stage-window').value = data.window || 300;
+        var filter = data.filter || {};
+        if (filter.group_by) card.querySelector('.cr-stage-groupby').value = filter.group_by;
+        Object.keys(filter).forEach(function(key) {
+            if (key === 'group_by' || key === 'threshold' || key === 'window') { return; }
+            var fo = _splitFieldOp(key);
+            builderAddCondition(card, {field: fo.field, op: fo.op, value: filter[key]});
+        });
+    }
+    if (!card.querySelector('.cr-cond-row')) { builderAddCondition(card); }
+    _renumberStages();
+}
+
+function builderAddCondition(card, data) {
+    var conds = card.querySelector('.cr-conds');
+    var source = _stageSource(card);
+    var fields = _srcFields(source);
+    var field = (data && data.field) || (fields[0] || {}).name || '';
+    var ftype = _fieldType(source, field);
+    var row = document.createElement('div');
+    row.className = 'cr-cond-row';
+    row.innerHTML =
+        '<select class="cr-cond-field" onchange="_onCondFieldChange(this)">' +
+            _fieldOptionsHtml(source, field) + '</select>' +
+        '<select class="cr-cond-op">' + _opOptionsHtml(ftype, (data && data.op) || 'eq') + '</select>' +
+        '<input class="cr-cond-value" placeholder="value or $stage1.field">' +
+        '<select class="cr-cond-var" title="insert a cross-stage variable" ' +
+            'onmousedown="_populateVarPicker(this)" onchange="_onVarPick(this)">' +
+            '<option value="">&#402;</option></select>' +
+        '<button type="button" class="cr-icon-btn danger" title="Remove condition" ' +
+            'onclick="this.closest(\'.cr-cond-row\').remove()">&times;</button>';
+    conds.appendChild(row);
+    if (data && data.value !== undefined && data.value !== null) {
+        row.querySelector('.cr-cond-value').value = data.value;
+    }
+}
+
+function _onCondFieldChange(select) {
+    var card = select.closest('.cr-stage-card');
+    var row = select.closest('.cr-cond-row');
+    var opSel = row.querySelector('.cr-cond-op');
+    opSel.innerHTML = _opOptionsHtml(_fieldType(_stageSource(card), select.value), opSel.value);
+}
+
+function _onStageSourceChange(select) {
+    // Changing a stage's source resets its conditions and group-by, since
+    // the available columns differ per source.
+    var card = select.closest('.cr-stage-card');
+    var source = select.value;
+    card.querySelector('.cr-conds').innerHTML = '';
+    card.querySelector('.cr-stage-groupby').innerHTML = _groupByOptionsHtml(source, '');
+    builderAddCondition(card);
+}
+
+function _populateVarPicker(select) {
+    var card = select.closest('.cr-stage-card');
+    var cards = [].slice.call(document.querySelectorAll('#stagesContainer .cr-stage-card'));
+    var myIdx = cards.indexOf(card);
+    var opts = ['<option value="">&#402;</option>'];
+    for (var i = 0; i < myIdx; i++) {
+        var gb = cards[i].querySelector('.cr-stage-groupby').value;
+        if (gb) {
+            var v = '$stage' + (i + 1) + '.' + gb;
+            opts.push('<option value="' + v + '">' + v + '</option>');
+        }
+    }
+    select.innerHTML = opts.join('');
+}
+
+function _onVarPick(select) {
+    if (select.value) {
+        select.closest('.cr-cond-row').querySelector('.cr-cond-value').value = select.value;
+    }
+    select.selectedIndex = 0;
+}
+
+function builderRemoveStage(btn) {
+    var cards = document.querySelectorAll('#stagesContainer .cr-stage-card');
+    if (cards.length <= 1) { showToast('A rule needs at least one stage', 'error'); return; }
+    btn.closest('.cr-stage-card').remove();
+    _renumberStages();
+}
+
+function builderMoveStage(btn, dir) {
+    var card = btn.closest('.cr-stage-card');
+    if (dir < 0 && card.previousElementSibling) {
+        card.parentNode.insertBefore(card, card.previousElementSibling);
+    } else if (dir > 0 && card.nextElementSibling) {
+        card.parentNode.insertBefore(card.nextElementSibling, card);
+    }
+    _renumberStages();
+}
+
+function _renumberStages() {
+    var cards = document.querySelectorAll('#stagesContainer .cr-stage-card');
+    cards.forEach(function(card, i) {
+        card.querySelector('.cr-stage-num').textContent = (i + 1);
+        card.querySelector('[title="Move up"]').disabled = (i === 0);
+        card.querySelector('[title="Move down"]').disabled = (i === cards.length - 1);
+    });
+}
+
+function builderCollectStages() {
+    var stages = [];
+    document.querySelectorAll('#stagesContainer .cr-stage-card').forEach(function(card) {
+        var source = _stageSource(card);
+        var filter = {};
+        card.querySelectorAll('.cr-cond-row').forEach(function(row) {
+            var field = row.querySelector('.cr-cond-field').value;
+            var op = row.querySelector('.cr-cond-op').value;
+            var val = row.querySelector('.cr-cond-value').value;
+            if (!field || val === '') { return; }
+            var key = field + _opSuffix(op);
+            if (_fieldType(source, field) === 'numeric' && val[0] !== '$' && !isNaN(Number(val))) {
+                filter[key] = Number(val);
+            } else {
+                filter[key] = val;
+            }
+        });
+        var gb = card.querySelector('.cr-stage-groupby').value;
+        if (gb) { filter.group_by = gb; }
+        stages.push({
+            name: card.querySelector('.cr-stage-name').value || ('Stage ' + (stages.length + 1)),
+            source: source,
+            filter: filter,
+            threshold: parseInt(card.querySelector('.cr-stage-threshold').value, 10) || 1,
+            window: parseInt(card.querySelector('.cr-stage-window').value, 10) || 300,
+        });
+    });
+    return stages;
+}
+
+function builderSyncToJson() {
+    document.getElementById('ruleStagesJson').value =
+        JSON.stringify(builderCollectStages(), null, 2);
+    showToast('JSON updated from builder', 'success');
+}
+
+function builderApplyJson() {
+    var txt = document.getElementById('ruleStagesJson').value.trim();
+    if (!txt) { showToast('JSON box is empty', 'error'); return; }
+    var stages;
+    try { stages = JSON.parse(txt); }
+    catch (e) { showToast('Invalid JSON: ' + e.message, 'error'); return; }
+    if (!Array.isArray(stages) || !stages.length) {
+        showToast('JSON must be a non-empty array of stages', 'error'); return;
+    }
+    document.getElementById('stagesContainer').innerHTML = '';
+    stages.forEach(function(s) { builderAddStage(s); });
+    showToast('Builder rebuilt from JSON', 'success');
+}
+
+function builderValidate() {
+    var stages = builderCollectStages();
+    if (!stages.length) { return 'Add at least one stage.'; }
+    for (var i = 0; i < stages.length; i++) {
+        var s = stages[i];
+        if (!s.name.trim()) { return 'Stage ' + (i + 1) + ' needs a name.'; }
+        var conds = Object.keys(s.filter).filter(function(k) { return k !== 'group_by'; });
+        if (!conds.length) { return 'Stage ' + (i + 1) + ' needs at least one condition with a value.'; }
+        if (s.threshold < 1) { return 'Stage ' + (i + 1) + ' threshold must be at least 1.'; }
+        if (s.window < 1) { return 'Stage ' + (i + 1) + ' window must be at least 1 second.'; }
+    }
+    var actionsRaw = document.getElementById('ruleActions').value.trim();
+    if (actionsRaw) {
+        try {
+            if (!Array.isArray(JSON.parse(actionsRaw))) {
+                return 'Response Actions must be a JSON array.';
+            }
+        } catch (e) {
+            return 'Response Actions: invalid JSON — ' + e.message;
+        }
+    }
+    return null;
+}
+
+async function showAddRuleModal() {
+    await _ensureSchema();
+    if (!_corrTemplates.length) { await _loadTemplates(); }
+    _editingRuleId = null;
     document.getElementById('addRuleForm').reset();
+    document.getElementById('addRuleModalTitle').textContent = 'Add Correlation Rule';
+    document.getElementById('addRuleSubmitBtn').textContent = 'Create Rule';
+    document.getElementById('templatePickerGroup').style.display = '';
+    _populateTemplateSelect();
+    document.getElementById('builderError').style.display = 'none';
+    document.getElementById('builderPreview').style.display = 'none';
+    document.getElementById('ruleStagesJson').value = '';
+    document.getElementById('stagesContainer').innerHTML = '';
+    builderAddStage();
     document.getElementById('addRuleModal').classList.add('active');
 }
 
-// ================================================================
-// SUBMIT ADD RULE
-// ================================================================
-async function submitAddRule(e) {
-    e.preventDefault();
-    var stages;
+async function editRule(ruleId) {
+    await _ensureSchema();
     try {
-        stages = JSON.parse(document.getElementById('ruleStages').value);
-    } catch (err) {
-        showToast('Invalid JSON in stages: ' + err.message, 'error');
-        return false;
+        var rules = await (await fetch('/api/correlation/rules/')).json();
+        var rule = rules.filter(function(r) { return r.id === ruleId; })[0];
+        if (!rule) { showToast('Rule not found', 'error'); return; }
+        _editingRuleId = ruleId;
+        document.getElementById('addRuleForm').reset();
+        document.getElementById('addRuleModalTitle').textContent = 'Edit Correlation Rule';
+        document.getElementById('addRuleSubmitBtn').textContent = 'Save Changes';
+        document.getElementById('templatePickerGroup').style.display = 'none';
+        document.getElementById('ruleName').value = rule.name || '';
+        document.getElementById('ruleDesc').value = rule.description || '';
+        document.getElementById('ruleSeverity').value = rule.severity || 'high';
+        document.getElementById('ruleEnabled').value = rule.is_enabled ? 'true' : 'false';
+        document.getElementById('ruleMitreTactic').value = rule.mitre_tactic || '';
+        document.getElementById('ruleMitreTechnique').value = rule.mitre_technique || '';
+        document.getElementById('ruleOrdering').value = rule.ordering || 'sequence';
+        document.getElementById('ruleMatchMode').value = rule.match_mode || 'discrete';
+        document.getElementById('ruleSuppressWindow').value = rule.suppress_window || 3600;
+        document.getElementById('ruleJoinKeys').value = (rule.join_keys || []).join(', ');
+        document.getElementById('ruleActions').value =
+            rule.actions ? JSON.stringify(rule.actions, null, 2) : '';
+        document.getElementById('builderError').style.display = 'none';
+        document.getElementById('builderPreview').style.display = 'none';
+        document.getElementById('ruleStagesJson').value = '';
+        document.getElementById('stagesContainer').innerHTML = '';
+        (rule.stages || []).forEach(function(s) { builderAddStage(s); });
+        if (!document.querySelector('#stagesContainer .cr-stage-card')) { builderAddStage(); }
+        document.getElementById('addRuleModal').classList.add('active');
+    } catch (e) {
+        showToast('Error loading rule: ' + e.message, 'error');
     }
-    var data = {
+}
+
+// ================================================================
+// TEST RULE (dry-run preview)
+// ================================================================
+function _builderCollectRuleData() {
+    var joinRaw = document.getElementById('ruleJoinKeys').value.trim();
+    var joinKeys = joinRaw
+        ? joinRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+        : null;
+    var actionsRaw = document.getElementById('ruleActions').value.trim();
+    var actions = null;
+    if (actionsRaw) {
+        try { actions = JSON.parse(actionsRaw); } catch (e) { actions = null; }
+    }
+    return {
         name: document.getElementById('ruleName').value,
         description: document.getElementById('ruleDesc').value,
         severity: document.getElementById('ruleSeverity').value,
         is_enabled: document.getElementById('ruleEnabled').value === 'true',
         mitre_tactic: document.getElementById('ruleMitreTactic').value || null,
         mitre_technique: document.getElementById('ruleMitreTechnique').value || null,
-        stages: stages,
+        ordering: document.getElementById('ruleOrdering').value,
+        match_mode: document.getElementById('ruleMatchMode').value,
+        suppress_window: parseInt(document.getElementById('ruleSuppressWindow').value, 10) || 3600,
+        join_keys: joinKeys,
+        actions: actions,
+        stages: builderCollectStages(),
     };
+}
+
+function _renderPreview(d) {
+    var h = '<div class="cr-preview-head ' + (d.ok ? 'ok' : 'no') + '">' +
+        (d.ok ? '✓ Rule would match — ' : '✕ Rule would not fire — ') +
+        d.matched_chains + ' chain(s), ≈' + d.estimated_per_hour + '/hour (rough)</div>';
+    if (d.error) { h += '<div class="cr-preview-err">' + _cdEsc(d.error) + '</div>'; }
+    h += '<table class="cr-preview-table"><thead><tr><th>Stage</th><th>Result</th></tr></thead><tbody>';
+    (d.stages || []).forEach(function(s) {
+        var cell = s.error
+            ? '<span class="cr-preview-bad">' + _cdEsc(s.error) + '</span>'
+            : s.result + ' ' + _cdEsc(s.label || '');
+        h += '<tr><td>' + s.index + '. ' + _cdEsc(s.name) + '</td><td>' + cell + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    if (d.sample_matches && d.sample_matches.length) {
+        h += '<div class="cr-preview-samples">Sample entities: ' +
+            d.sample_matches.map(function(m) {
+                return '<code>' + _cdEsc(m.entity) + '</code>';
+            }).join(' ') + '</div>';
+    }
+    return h;
+}
+
+async function builderTestRule() {
+    var errBox = document.getElementById('builderError');
+    var err = builderValidate();
+    if (err) { errBox.textContent = err; errBox.style.display = 'block'; return; }
+    errBox.style.display = 'none';
+
+    var preview = document.getElementById('builderPreview');
+    preview.style.display = 'block';
+    preview.innerHTML = '<div class="cr-preview-loading">Running test against recent logs…</div>';
+
+    var data = _builderCollectRuleData();
+    if (!data.name) { data.name = 'Draft (test)'; }   // name not required to test
     try {
-        var res = await fetch('/api/correlation/rules/', {
+        var res = await fetch('/api/correlation/rules/test', {
             method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        var d = await res.json();
+        if (!res.ok) {
+            var msg = d.detail;
+            if (Array.isArray(msg)) {
+                msg = msg.map(function(x) {
+                    return (x.loc ? x.loc.slice(1).join('.') + ': ' : '') + x.msg;
+                }).join('; ');
+            }
+            preview.innerHTML = '<div class="cr-preview-err">' + (msg || 'Test failed') + '</div>';
+            return;
+        }
+        preview.innerHTML = _renderPreview(d);
+    } catch (e) {
+        preview.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+    }
+}
+
+// ================================================================
+// SUBMIT ADD / EDIT RULE
+// ================================================================
+async function submitAddRule(e) {
+    e.preventDefault();
+    var errBox = document.getElementById('builderError');
+    var err = builderValidate();
+    if (err) { errBox.textContent = err; errBox.style.display = 'block'; return false; }
+    errBox.style.display = 'none';
+
+    var data = _builderCollectRuleData();
+    var editing = _editingRuleId !== null;
+    var url = editing ? '/api/correlation/rules/' + _editingRuleId : '/api/correlation/rules/';
+    try {
+        var res = await fetch(url, {
+            method: editing ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data),
         });
         var result = await res.json();
         if (res.ok) {
-            showToast('Rule created successfully', 'success');
+            showToast(editing ? 'Rule updated' : 'Rule created successfully', 'success');
             closeModal('addRuleModal');
             setTimeout(function() { location.reload(); }, 500);
         } else {
-            showToast(result.detail || 'Failed to create rule', 'error');
+            var msg = result.detail;
+            if (Array.isArray(msg)) {
+                msg = msg.map(function(d) {
+                    return (d.loc ? d.loc.slice(1).join('.') + ': ' : '') + d.msg;
+                }).join('; ');
+            }
+            errBox.textContent = msg || 'Failed to save rule';
+            errBox.style.display = 'block';
         }
-    } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+    } catch (err2) {
+        errBox.textContent = 'Error: ' + err2.message;
+        errBox.style.display = 'block';
     }
     return false;
 }
@@ -1831,6 +3007,7 @@ async function deleteRule(ruleId, name) {
 // SHOW RULE DETAIL (full match dashboard)
 // ================================================================
 var _cdCurrentRuleId = null;
+var _cdCurrentRuleName = null;
 var _cdCurrentHours = 24;
 
 function showRuleDetail(ruleId) {
@@ -1852,12 +3029,44 @@ function _cdChangeTimeRange(hours) {
     _cdFetchAndRender(_cdCurrentRuleId, hours);
 }
 
+// Phase 6: backtest the rule's first stage over the last 7 days.
+async function runBacktest() {
+    var box = document.getElementById('backtestResult');
+    if (!box) { return; }
+    box.innerHTML = '<div class="cr-preview-loading">Backtesting over the last 7 days…</div>';
+    try {
+        var d = await (await fetch('/api/correlation/rules/' + _cdCurrentRuleId +
+                                   '/backtest?days=7')).json();
+        if (d.error) {
+            box.innerHTML = '<div class="cr-preview-err">' + _cdEsc(d.error) + '</div>';
+            return;
+        }
+        var maxV = Math.max.apply(null,
+            d.daily.map(function(x) { return x.would_fire; }).concat([1]));
+        var bars = d.daily.map(function(x) {
+            var bh = Math.max(x.would_fire / maxV * 100, 3);
+            return '<div class="cd-tbar" style="height:' + bh + '%;">' +
+                   '<div class="cd-tbar-tip">' + x.days_ago + 'd ago: ' +
+                   x.would_fire + '</div></div>';
+        }).join('');
+        box.innerHTML =
+            '<div style="font-family:Outfit,sans-serif;font-size:0.78rem;' +
+            'color:var(--cr-text-muted);margin-bottom:0.3rem;">Backtest — stage "' +
+            _cdEsc(d.stage) + '" would have fired for <strong style="color:var(--cr-text);">' +
+            d.total_would_fire + '</strong> entity-windows over ' + d.days + ' days</div>' +
+            '<div class="cd-timeline-bars">' + bars + '</div>';
+    } catch (e) {
+        box.innerHTML = '<div class="cr-preview-err">Error: ' + e.message + '</div>';
+    }
+}
+
 function _cdFetchAndRender(ruleId, hours) {
     fetch('/api/correlation/rules/' + ruleId + '/matches?hours=' + hours)
         .then(function(r) { return r.json(); })
         .then(function(data) {
             var rule = data.rule;
             document.getElementById('detailRuleName').textContent = rule.name;
+            _cdCurrentRuleName = rule.name;
             document.getElementById('detailViewAllMatches').style.display = data.match_count > 0 ? 'inline-flex' : 'none';
 
             var html = '';
@@ -1868,10 +3077,43 @@ function _cdFetchAndRender(ruleId, hours) {
             html += '<span class="cd-status-tag ' + (rule.is_enabled ? 'enabled' : 'disabled') + '">' + (rule.is_enabled ? 'Enabled' : 'Disabled') + '</span>';
             if (rule.mitre_tactic) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_tactic) + '</span>';
             if (rule.mitre_technique) html += '<span class="cr-mitre-tag">' + _cdEsc(rule.mitre_technique) + '</span>';
+            // Phase 1: match mode / suppression state
+            var _mm = rule.match_mode || 'discrete';
+            var _sw = rule.suppress_window || 3600;
+            var _swLabel = _sw >= 3600 ? (Math.round(_sw / 3600) + 'h') : (Math.round(_sw / 60) + 'm');
+            var _tagStyle = 'display:inline-block;padding:0.2rem 0.55rem;border-radius:0.4rem;font-size:0.68rem;font-weight:600;font-family:Outfit,sans-serif;';
+            if (_mm === 'recurring') {
+                html += '<span style="' + _tagStyle + 'background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.35);" title="Records every evaluation while the condition holds">Recurring monitor</span>';
+            } else {
+                html += '<span style="' + _tagStyle + 'background:rgba(59,130,246,0.12);color:#93c5fd;border:1px solid rgba(59,130,246,0.3);" title="Records each attack chain at most once per suppression window">Discrete &middot; suppress ' + _swLabel + '</span>';
+            }
+            if (rule.version) html += '<span style="' + _tagStyle + 'background:rgba(148,163,184,0.12);color:var(--cr-text-muted);border:1px solid rgba(148,163,184,0.25);">v' + rule.version + '</span>';
             html += '</div>';
 
             // Description
             html += '<p class="cd-desc">' + _cdEsc(rule.description || 'No description provided.') + '</p>';
+
+            // Phase 6: attack-chain visualization — the rule's stages as a
+            // left-to-right kill chain.
+            if (rule.stages && rule.stages.length) {
+                html += '<div class="cd-chain">';
+                rule.stages.forEach(function(s, i) {
+                    if (i > 0) {
+                        html += '<div class="cd-chain-arrow">&#9656;</div>';
+                    }
+                    var win = s.window || 300;
+                    var winLabel = win >= 3600 ? (Math.round(win / 3600) + 'h')
+                                 : win >= 60 ? (Math.round(win / 60) + 'm')
+                                 : (win + 's');
+                    html += '<div class="cd-chain-node">' +
+                        '<div class="cd-chain-num">' + (i + 1) + '</div>' +
+                        '<div class="cd-chain-name">' + _cdEsc(s.name || ('Stage ' + (i + 1))) + '</div>' +
+                        '<div class="cd-chain-meta">' + (s.threshold || 1) + '+ events &middot; ' +
+                            winLabel + ' &middot; ' + _cdEsc(s.source || 'syslogs') + '</div>' +
+                        '</div>';
+                });
+                html += '</div>';
+            }
 
             // Time range selector
             html += '<div class="cd-time-range">';
@@ -1879,7 +3121,9 @@ function _cdFetchAndRender(ruleId, hours) {
                 var label = h === 168 ? '7d' : h + 'h';
                 html += '<button class="cd-time-pill' + (h === hours ? ' active' : '') + '" data-hours="' + h + '" onclick="_cdChangeTimeRange(' + h + ')">' + label + '</button>';
             });
+            html += '<button class="cd-time-pill" style="margin-left:auto;" onclick="runBacktest()">&#9202; Backtest 7d</button>';
             html += '</div>';
+            html += '<div id="backtestResult" style="margin-bottom:0.75rem;"></div>';
 
             // Summary cards
             html += '<div class="cd-summary">';
@@ -1888,6 +3132,33 @@ function _cdFetchAndRender(ruleId, hours) {
             html += '<div class="cd-summary-card"><div class="cd-summary-val" style="color:white;">' + data.top_keys.length + '</div><div class="cd-summary-label">Unique Keys</div></div>';
             html += '</div>';
 
+            // Phase 6: Rule Health scorecard
+            if (data.health) {
+                var hh = data.health;
+                var hc = {dormant: '#94a3b8', healthy: '#4ade80', noisy: '#fbbf24',
+                          'very noisy': '#f87171', unknown: '#94a3b8'}[hh.status] || '#94a3b8';
+                html += '<div class="cd-section-title">Rule Health</div>';
+                html += '<div class="cd-health">';
+                html += '<span class="cd-health-badge" style="color:' + hc + ';border-color:' + hc + '66;background:' + hc + '1f;">' + hh.status + '</span>';
+                html += '<span class="cd-health-stat"><strong>' + hh.matches_7d + '</strong> matches / 7d</span>';
+                html += '<span class="cd-health-stat"><strong>' + hh.matches_30d + '</strong> / 30d</span>';
+                html += '<span class="cd-health-stat">rule <strong>v' + hh.version + '</strong></span>';
+                if (hh.last_modified) {
+                    html += '<span class="cd-health-stat">edited ' + _cdEsc(window.fmtDate(hh.last_modified)) + '</span>';
+                }
+                html += '</div>';
+                if (hh.daily && hh.daily.length) {
+                    var maxD = Math.max.apply(null, hh.daily.map(function(d) { return d.count; }).concat([1]));
+                    html += '<div class="cd-timeline-bars" style="margin-top:0.55rem;">';
+                    hh.daily.forEach(function(d) {
+                        var bh = Math.max(d.count / maxD * 100, 3);
+                        html += '<div class="cd-tbar" style="height:' + bh + '%;">' +
+                                '<div class="cd-tbar-tip">' + d.day.slice(5) + ': ' + d.count + '</div></div>';
+                    });
+                    html += '</div>';
+                }
+            }
+
             // Top Matched IPs/Keys
             if (data.top_keys.length > 0) {
                 html += '<div class="cd-section-title">Top Matched IPs / Keys</div>';
@@ -1895,8 +3166,10 @@ function _cdFetchAndRender(ruleId, hours) {
                 html += '<th>Key Value</th><th>Matches</th><th>Events</th><th>Last Seen</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 data.top_keys.forEach(function(k) {
-                    var ts = k.last_seen ? k.last_seen.replace('T', ' ').slice(0, 19) : '—';
-                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(k.key_value) + ',dstip:' + encodeURIComponent(k.key_value) + '&time_range=' + (hours <= 6 ? hours + 'h' : '24h');
+                    var ts = k.last_seen ? window.fmtTime(k.last_seen) : '—';
+                    // Rule-aware drill-down (stage filter + entity + match window),
+                    // computed server-side; falls back to a plain entity search.
+                    var logUrl = k.log_url || ('/logs/?srcip=' + encodeURIComponent(k.key_value));
                     html += '<tr>';
                     html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(k.key_value) + '</a></td>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + k.match_count + '</span></td>';
@@ -1927,17 +3200,27 @@ function _cdFetchAndRender(ruleId, hours) {
             if (data.recent_matches.length > 0) {
                 html += '<div class="cd-section-title">Recent Matches (' + data.recent_matches.length + ')</div>';
                 html += '<div class="cd-table-wrap"><table class="cd-table"><thead><tr>';
-                html += '<th>Time</th><th>Key</th><th>Stages</th><th>Events</th><th>Actions</th>';
+                html += '<th>Recorded</th><th>Entity</th><th>Stages</th><th>Events</th><th>Evidence Window</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 data.recent_matches.forEach(function(m) {
-                    var ts = m.timestamp ? m.timestamp.replace('T', ' ').slice(0, 19) : '—';
+                    var ts = m.timestamp ? window.fmtTime(m.timestamp) : '—';
                     var pct = m.total_stages ? Math.round(m.stages_matched / m.total_stages * 100) : 0;
-                    var logUrl = '/logs/?q=srcip:' + encodeURIComponent(m.key_value) + ',dstip:' + encodeURIComponent(m.key_value) + '&time_range=1h';
+                    // Rule-aware drill-down: stage filter + entity + the match's
+                    // own evidence window (server-computed in m.log_url).
+                    var logUrl = m.log_url || ('/logs/?srcip=' + encodeURIComponent(m.key_value || m.entity_value || ''));
+                    // Phase 1: event-chain evidence window (first -> last event)
+                    var evid = '—';
+                    var _t = function(s) { return window.fmtTime(s, {year: undefined, month: undefined, day: undefined}) || s; };
+                    if (m.first_seen && m.last_seen && String(m.first_seen).indexOf('1970') !== 0) {
+                        evid = _t(m.first_seen) + ' → ' + _t(m.last_seen);
+                    }
+                    var entityLabel = (m.entity_type && m.entity_type !== '' ? m.entity_type + ': ' : '') + (m.entity_value || m.key_value || '—');
                     html += '<tr>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);">' + ts + '</span></td>';
-                    html += '<td><a href="' + logUrl + '" class="cd-ip-link">' + _cdEsc(m.key_value || '—') + '</a></td>';
+                    html += '<td><a href="' + logUrl + '" class="cd-ip-link" title="' + _cdEsc(entityLabel) + '">' + _cdEsc(m.entity_value || m.key_value || '—') + '</a></td>';
                     html += '<td><div class="cd-stage-mini"><span class="cd-stage-mini-text">' + m.stages_matched + '/' + m.total_stages + '</span><div class="cd-stage-mini-bar"><div class="cd-stage-mini-fill" style="width:' + pct + '%;"></div></div></div></td>';
                     html += '<td><span style="font-family:JetBrains Mono,monospace;font-weight:600;">' + m.total_events + '</span></td>';
+                    html += '<td><span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--cr-text-muted);" title="Earliest to latest matched event">' + evid + '</span></td>';
                     html += '<td><a href="' + logUrl + '" class="cd-logs-link"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Logs</a></td>';
                     html += '</tr>';
                 });
@@ -1979,5 +3262,22 @@ document.querySelectorAll('.cr-modal-overlay').forEach(function(el) {
         if (e.target === this) this.classList.remove('active');
     });
 });
+
+// ================================================================
+// MITRE GAP -> RULE (Phase 6): ?technique=&tactic= opens the builder
+// pre-seeded with the technique, e.g. from the ATT&CK coverage map.
+// ================================================================
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var tech = params.get('technique');
+    if (!tech) { return; }
+    var tactic = params.get('tactic') || '';
+    showAddRuleModal().then(function() {
+        document.getElementById('ruleMitreTactic').value = tactic;
+        document.getElementById('ruleMitreTechnique').value = tech;
+        document.getElementById('ruleName').value = tech + ' — detection rule';
+        showToast('New rule for ' + tech + ' — pick a template or build the stages', 'success');
+    });
+})();
 </script>
 {% endblock %}

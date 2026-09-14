@@ -536,7 +536,7 @@
     </div>
     <div class="info-card">
         <div class="label">Created</div>
-        <div class="value">{{ edl.created_at.strftime('%Y-%m-%d') }}</div>
+        <div class="value">{{ edl.created_at | localdt('%Y-%m-%d') }}</div>
     </div>
     <div class="info-card">
         <div class="label">Last Updated</div>
@@ -633,8 +633,8 @@
                         <span class="status-dot inactive" title="Inactive"></span>
                         {% endif %}
                     </td>
-                    <td class="date-cell">{{ entry.expires_at.strftime('%Y-%m-%d') if entry.expires_at else '-' }}</td>
-                    <td class="date-cell">{{ entry.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td class="date-cell">{{ (entry.expires_at | localdt('%Y-%m-%d')) if entry.expires_at else '-' }}</td>
+                    <td class="date-cell">{{ entry.created_at | localdt('%Y-%m-%d') }}</td>
                     <td class="actions-cell">
                         <button class="btn btn-sm" style="background: var(--border);"
                                 onclick="openEditModal({{ entry.id }}, '{{ entry.value|e }}', '{{ (entry.description or '')|e }}', {{ 'true' if entry.is_active else 'false' }}, '{{ entry.expires_at.strftime('%Y-%m-%dT%H:%M') if entry.expires_at else '' }}')">

@@ -58,7 +58,7 @@
             <span class="type-badge">{{ channel.channel_type }}</span>
             <span>{{ 'Enabled' if channel.is_enabled else 'Disabled' }}</span>
             {% if channel.last_sent_at %}
-            <span>Last sent: {{ channel.last_sent_at.strftime('%m/%d %H:%M') }}</span>
+            <span>Last sent: {{ channel.last_sent_at | localdt('%m/%d %H:%M') }}</span>
             {% endif %}
         </div>
     </div>

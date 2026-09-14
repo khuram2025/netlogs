@@ -22,8 +22,48 @@ from .routing_parser import RoutingTableParser, ParsedRoute
 logger = logging.getLogger(__name__)
 
 
+def _scrub_for_pg_text(s):
+    """Strip characters Postgres TEXT cannot store.
+
+    Postgres rejects strings containing the NUL byte (0x00) — common in raw
+    SSH/terminal output — with `CharacterNotInRepertoireError`. Also drop the
+    other C0 control characters except CR/LF/TAB which are legitimate."""
+    if s is None:
+        return None
+    if not isinstance(s, str):
+        try:
+            s = str(s)
+        except Exception:
+            return None
+    # Remove NUL and other forbidden control bytes; keep \t \n \r.
+    return s.translate({i: None for i in range(0x20) if i not in (0x09, 0x0A, 0x0D)})
+
+
 class RoutingService:
     """Service for collecting and managing routing tables."""
+
+    @staticmethod
+    def _fetch_routes_via_fortinet_api(host, credential, vdom):
+        """Synchronous helper run in a thread to keep httpx off the event loop.
+
+        Returns (success, message, routes, duration_ms, raw_str)."""
+        import time as _time
+        from .fortinet_api_service import FortinetAPIClient, FortinetAPIError
+        client = FortinetAPIClient(
+            host=str(host), token=credential.password,
+            port=credential.port or 443,
+        )
+        t0 = _time.time()
+        try:
+            routes = client.routing_table(vdom=vdom)
+            ms = int((_time.time() - t0) * 1000)
+            return True, f"Fetched {len(routes)} routes", routes, ms, str([r.raw_line for r in routes[:5]])
+        except FortinetAPIError as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"FortiGate API: {e}", [], ms, ""
+        except Exception as e:
+            ms = int((_time.time() - t0) * 1000)
+            return False, f"{type(e).__name__}: {e}", [], ms, ""
 
     @classmethod
     async def fetch_routing_table(
@@ -44,7 +84,9 @@ class RoutingService:
             vdom: Optional VDOM name for Fortinet devices
         """
         vdom_display = f" (VDOM: {vdom})" if vdom else ""
-        ssh_host = device.ip_address
+        # device.ip_address is a Postgres INET → IPv4Address; coerce to str
+        # so paramiko/socket.getaddrinfo accept it.
+        ssh_host = str(device.ip_address)
         ssh_host_result = await db.execute(
             select(DeviceSshSettings.ssh_host)
             .where(DeviceSshSettings.device_id == device.id)
@@ -52,20 +94,80 @@ class RoutingService:
         )
         ssh_host_override = ssh_host_result.scalar_one_or_none()
         if ssh_host_override:
-            ssh_host = ssh_host_override.strip() or ssh_host
+            override = str(ssh_host_override).strip()
+            if override:
+                ssh_host = override
 
-        ssh_display = ssh_host if ssh_host != device.ip_address else device.ip_address
-        logger.info(f"Fetching routing table for device {device.ip_address} via {ssh_display}{vdom_display}")
+        ssh_display = ssh_host if ssh_host != str(device.ip_address) else device.ip_address
+        transport = (credential.credential_type or "SSH").upper()
+        logger.info(
+            f"Fetching routing table for device {device.ip_address} "
+            f"via {ssh_display}{vdom_display} [{transport}]"
+        )
 
-        # Get routing table via SSH
+        # ── REST API fast-path (FortiGate today; PAN-OS XML API later) ──
+        if transport == "API" and device.parser == ParserType.FORTINET:
+            api_result = await asyncio.to_thread(
+                cls._fetch_routes_via_fortinet_api,
+                ssh_host, credential, vdom,
+            )
+            success, message, routes, duration_ms, raw = api_result
+            credential.last_used = datetime.utcnow()
+            if not success:
+                snap = RoutingTableSnapshot(
+                    device_id=device.id, vdom=vdom,
+                    raw_output=_scrub_for_pg_text(raw) or "",
+                    route_count=0, success=False,
+                    error_message=_scrub_for_pg_text(message),
+                    fetch_duration_ms=duration_ms,
+                )
+                db.add(snap); await db.commit()
+                return False, message, snap
+            credential.last_success = datetime.utcnow()
+            snap = RoutingTableSnapshot(
+                device_id=device.id, vdom=vdom,
+                raw_output=_scrub_for_pg_text(raw),
+                route_count=len(routes), success=True,
+                fetch_duration_ms=duration_ms,
+            )
+            db.add(snap); await db.flush()
+            for r in routes:
+                db.add(RoutingEntry(
+                    device_id=device.id, snapshot_id=snap.id,
+                    route_type=r.route_type, is_default=r.is_default,
+                    network=r.network, prefix_length=r.prefix_length,
+                    next_hop=r.next_hop, interface=r.interface,
+                    tunnel_name=r.tunnel_name, admin_distance=r.admin_distance,
+                    metric=r.metric, preference=r.preference, age=r.age,
+                    vdom=vdom, vrf=r.vrf,
+                    is_recursive=r.is_recursive, recursive_via=r.recursive_via,
+                    raw_line=_scrub_for_pg_text(r.raw_line),
+                ))
+            await cls._detect_changes(device.id, snap.id, routes, db)
+            await db.commit(); await db.refresh(snap)
+            return True, f"Fetched {len(routes)} routes via API", snap
+
+        # ── SSH fallback ─────────────────────────────────────────────
+        # Get routing table via SSH (vendor-aware)
         if device.parser == ParserType.FORTINET:
             result = await asyncio.to_thread(
                 SSHService.get_fortinet_routing_table,
-                host=ssh_host,
+                host=str(ssh_host),
                 username=credential.username,
                 password=credential.password,
                 port=credential.port,
                 vdom=vdom,
+            )
+        elif device.parser == ParserType.PALOALTO:
+            # PAN-OS calls them "virtual routers"; reuse the vdom slot in the
+            # request signature so existing per-VR fetch code paths still work.
+            result = await asyncio.to_thread(
+                SSHService.get_paloalto_routing_table,
+                host=str(ssh_host),
+                username=credential.username,
+                password=credential.password,
+                port=credential.port,
+                virtual_router=vdom,
             )
         else:
             return False, f"Unsupported device type: {device.parser}", None
@@ -78,10 +180,10 @@ class RoutingService:
             snapshot = RoutingTableSnapshot(
                 device_id=device.id,
                 vdom=vdom,
-                raw_output=result.output or "",
+                raw_output=_scrub_for_pg_text(result.output) or "",
                 route_count=0,
                 success=False,
-                error_message=result.error,
+                error_message=_scrub_for_pg_text(result.error),
                 fetch_duration_ms=result.duration_ms
             )
             db.add(snapshot)
@@ -94,11 +196,13 @@ class RoutingService:
         # Parse the routing table
         routes = RoutingTableParser.parse(result.output, device.parser)
 
-        # Create snapshot
+        # Create snapshot. raw_output goes through _scrub_for_pg_text because
+        # terminal capture often contains NUL/control bytes that Postgres TEXT
+        # rejects (CharacterNotInRepertoireError).
         snapshot = RoutingTableSnapshot(
             device_id=device.id,
             vdom=vdom,
-            raw_output=result.output,
+            raw_output=_scrub_for_pg_text(result.output),
             route_count=len(routes),
             success=True,
             fetch_duration_ms=result.duration_ms
@@ -126,7 +230,7 @@ class RoutingService:
                 vrf=parsed_route.vrf,
                 is_recursive=parsed_route.is_recursive,
                 recursive_via=parsed_route.recursive_via,
-                raw_line=parsed_route.raw_line
+                raw_line=_scrub_for_pg_text(parsed_route.raw_line),
             )
             db.add(entry)
 

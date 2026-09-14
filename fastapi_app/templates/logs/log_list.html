@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Zentryc - Log Viewer{% endblock %}
+{% block title %}ZenShield - Log Viewer{% endblock %}
 
 {% block extra_css %}
     <style>
@@ -194,7 +194,11 @@
             align-items: center;
             gap: 6px;
             flex-shrink: 0;
-            overflow: hidden;
+            /* visible, not hidden — the suggestion dropdown hangs below the bar
+               and would otherwise be clipped away */
+            overflow: visible;
+            position: relative;
+            z-index: 200;
         }
         .nql-bar .nql-label {
             font-size: 10px;
@@ -207,24 +211,84 @@
             background: var(--accent-cyan-dim);
             border-radius: var(--radius-sm);
         }
+        .nql-input-wrap {
+            position: relative;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            min-width: 240px;
+            background: var(--bg-deep);
+            border-radius: var(--radius-sm);
+        }
+        .nql-search-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            width: 13px; height: 13px; color: var(--text-muted);
+            pointer-events: none; z-index: 3;
+        }
         .nql-bar .nql-input {
             flex: 1;
-            min-width: 180px;
-            height: 30px;
-            padding: 0 10px;
-            background: var(--bg-deep);
+            width: 100%;
+            min-width: 0;
+            height: 34px;
+            box-sizing: border-box;
+            padding: 0 56px 0 30px;
+            background: transparent;
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
-            color: var(--accent-cyan);
+            /* The text itself is painted by .nql-hl underneath (syntax colours);
+               the input only shows its caret and selection. */
+            color: transparent;
+            caret-color: var(--accent-cyan);
             font-family: var(--font-mono);
             font-size: 12px;
-            transition: all 0.15s ease;
+            letter-spacing: 0;
+            position: relative;
+            z-index: 2;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
+        .nql-bar .nql-input::selection { background: rgba(56, 189, 248, 0.35); color: transparent; }
         .nql-bar .nql-input:focus {
             outline: none;
             border-color: var(--accent-cyan);
             box-shadow: 0 0 0 2px var(--accent-cyan-dim);
         }
+        .nql-bar .nql-run-btn { height: 34px; }
+        .nql-bar .nql-run-btn svg { width: 13px; height: 13px; }
+        .nql-hl {
+            position: absolute; inset: 0;
+            box-sizing: border-box;
+            padding: 0 56px 0 30px;
+            border: 1px solid transparent;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0;
+            line-height: 32px;
+            white-space: pre;
+            overflow: hidden;
+            pointer-events: none;
+            color: var(--text-primary);
+            z-index: 1;
+        }
+        .nql-hl .t-field { color: #7dd3fc; }
+        .nql-hl .t-op    { color: var(--text-muted); }
+        .nql-hl .t-val   { color: #e2e8f0; }
+        .nql-hl .t-str   { color: #fbbf24; }
+        .nql-hl .t-kw    { color: #fb923c; font-weight: 700; }
+        .nql-hl .t-pipe,
+        .nql-hl .t-cmd   { color: #c4b5fd; font-weight: 700; }
+        .nql-hl .t-paren { color: #94a3b8; font-weight: 700; }
+        .nql-hl .t-neg   { color: #f87171; font-weight: 700; }
+        .nql-hl .t-text  { color: #a5f3fc; }
+        .nql-clear-btn {
+            position: absolute; right: 30px; top: 50%; transform: translateY(-50%);
+            width: 18px; height: 18px; padding: 0;
+            border: none; border-radius: 50%;
+            background: var(--bg-elevated); color: var(--text-muted);
+            font-size: 13px; line-height: 1; cursor: pointer; z-index: 3;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .nql-clear-btn:hover { color: var(--text-bright); background: var(--bg-hover); }
+        .nql-clear-btn[hidden] { display: none; }
         .nql-bar .nql-input::placeholder {
             color: var(--text-ghost);
             font-family: var(--font-mono);
@@ -258,6 +322,9 @@
             color: var(--text-muted);
             white-space: nowrap;
             min-width: 60px;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .nql-bar .nql-status.error { color: var(--accent-red); }
         .nql-bar .nql-status.success { color: var(--accent-green); }
@@ -289,129 +356,397 @@
         }
         .nql-autocomplete {
             position: absolute;
-            top: 100%;
+            top: calc(100% + 4px);
             left: 0;
             right: 0;
             background: var(--bg-elevated);
             border: 1px solid var(--border-default);
-            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-            max-height: 200px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+            min-width: min(520px, 60vw);   /* descriptions stay readable on narrow bars */
+            max-width: 92vw;
+            max-height: 380px;
             overflow-y: auto;
-            z-index: 100;
+            overscroll-behavior: contain;
+            z-index: 300;
             display: none;
         }
         .nql-autocomplete.visible { display: block; }
-        .nql-autocomplete-item {
-            padding: 6px 12px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--text-primary);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-        }
-        .nql-autocomplete-item:hover, .nql-autocomplete-item.selected {
-            background: var(--bg-hover);
-        }
-        .nql-autocomplete-item .nql-ac-type {
-            color: var(--text-muted);
-            font-size: 10px;
-        }
-        /* NQL results overlay */
-        .nql-results-panel {
-            display: none;
-            background: var(--bg-surface);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            margin: 12px 20px;
-            overflow: hidden;
-        }
-        .nql-results-panel.visible { display: block; }
-        .nql-results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .nql-results-header .nql-results-info {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-        .nql-results-header .nql-results-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 16px;
-            padding: 2px 6px;
-        }
-        .nql-results-body {
-            max-height: 500px;
-            overflow: auto;
-        }
-        .nql-results-body table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            font-family: var(--font-mono);
-        }
-        .nql-results-body th {
+        .nql-ac-group {
             position: sticky;
             top: 0;
             background: var(--bg-elevated);
-            padding: 6px 10px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 10px;
+            padding: 6px 12px 3px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid var(--border-default);
-        }
-        .nql-results-body td {
-            padding: 5px 10px;
+            color: var(--text-muted);
             border-bottom: 1px solid var(--border-subtle);
+            z-index: 1;
+        }
+        .nql-autocomplete-item {
+            padding: 5px 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
             color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-left: 2px solid transparent;
+        }
+        .nql-autocomplete-item:hover, .nql-autocomplete-item.selected {
+            background: var(--bg-hover);
+            border-left-color: var(--accent-cyan);
+        }
+        .nql-ac-label {
+            color: var(--text-bright);
             white-space: nowrap;
-            max-width: 300px;
+            flex-shrink: 0;
+            max-width: 62%;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .nql-results-body tr:hover td { background: var(--bg-hover); }
+        .nql-ac-badge.t-recent  { color: var(--text-secondary); }
+        .nql-ac-label .nql-ac-hit { color: var(--accent-cyan); font-weight: 700; }
+        .nql-ac-detail {
+            color: var(--text-muted);
+            font-family: var(--font-sans, inherit);
+            font-size: 11px;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .nql-ac-badge {
+            flex-shrink: 0;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: var(--bg-deep);
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+        }
+        .nql-ac-badge.t-ip      { color: #38bdf8; border-color: rgba(56,189,248,.35); }
+        .nql-ac-badge.t-port,
+        .nql-ac-badge.t-number,
+        .nql-ac-badge.t-bytes,
+        .nql-ac-badge.t-duration{ color: #a78bfa; border-color: rgba(167,139,250,.35); }
+        .nql-ac-badge.t-enum    { color: #fbbf24; border-color: rgba(251,191,36,.35); }
+        .nql-ac-badge.t-text    { color: #f472b6; border-color: rgba(244,114,182,.35); }
+        .nql-ac-badge.t-value   { color: var(--accent-green); border-color: rgba(34,197,94,.35); }
+        .nql-ac-badge.t-operator,
+        .nql-ac-badge.t-keyword { color: #fb923c; border-color: rgba(251,146,60,.35); }
+        .nql-ac-badge.t-command,
+        .nql-ac-badge.t-function{ color: var(--accent-cyan); border-color: rgba(56,189,248,.35); }
+        .nql-ac-count {
+            flex-shrink: 0;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        .nql-ac-empty {
+            padding: 10px 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .nql-ac-footer {
+            position: sticky;
+            bottom: 0;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 4px 12px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border-subtle);
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .nql-ac-footer kbd {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            padding: 0 4px;
+            border: 1px solid var(--border-default);
+            border-radius: 3px;
+            background: var(--bg-deep);
+            color: var(--text-secondary);
+        }
+        .nql-ac-loading {
+            position: absolute;
+            right: 8px;
+            z-index: 3;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 11px; height: 11px;
+            border: 2px solid var(--border-default);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: nqlspin .7s linear infinite;
+            display: none;
+            pointer-events: none;
+        }
+        .nql-ac-loading.on { display: block; }
+        @keyframes nqlspin { to { transform: translateY(-50%) rotate(360deg); } }
+        .nql-help-btn {
+            height: 30px;
+            padding: 0 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .nql-help-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan); }
+        /* NQL syntax-error banner (under the search bar) */
+        .nql-error-banner {
+            display: flex; align-items: flex-start; gap: 8px;
+            padding: 6px 16px 6px 14px;
+            background: rgba(239, 68, 68, 0.08);
+            border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fca5a5; font-size: 11.5px; flex-shrink: 0;
+        }
+        .nql-error-banner svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+        .nql-error-banner code { font-family: var(--font-mono); color: var(--text-secondary); }
+        .nql-error-banner .nql-error-eff { margin-left: auto; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+
+        /* NQL aggregate (| stats) result table — replaces the log table in place */
+        .nql-agg-strip {
+            display: flex; align-items: center; gap: 10px;
+            height: 36px; box-sizing: border-box; padding: 0 14px;
+            font-size: 11px; color: var(--text-secondary);
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle);
+            position: sticky; top: 0; z-index: 11;
+        }
+        .nql-agg-strip strong { color: var(--text-bright); font-family: var(--font-mono); font-weight: 600; }
+        .nql-agg-strip-title {
+            font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+            color: var(--accent-cyan); padding: 2px 7px; background: var(--accent-cyan-dim);
+            border-radius: var(--radius-sm);
+        }
+        .nql-agg-strip-spacer { flex: 1; }
+        .nql-strip-btn {
+            height: 24px; padding: 0 10px; font-size: 11px;
+            background: var(--bg-deep); border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .nql-strip-btn svg { width: 11px; height: 11px; }
+        .nql-strip-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan); }
+        .nql-agg thead { top: 36px; }
+        .nql-agg th.num, .nql-agg td.num { text-align: right; }
+        .nql-agg .nql-rank { width: 44px; color: var(--text-ghost); font-family: var(--font-mono); font-size: 11px; text-align: right; }
+        .nql-agg td { font-family: var(--font-mono); font-size: 12px; }
+        .nql-drill { cursor: pointer; color: var(--text-primary); border-bottom: 1px dotted transparent; }
+        .nql-drill:hover { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+        .nql-bar-cell { position: relative; }
+        .nql-bar-fill {
+            position: absolute; right: 12px; top: 28%; height: 44%;
+            max-width: calc(100% - 24px);
+            background: var(--accent-cyan-dim); border-radius: 2px; pointer-events: none;
+        }
+        .nql-num { position: relative; color: var(--text-bright); font-weight: 600; }
+        .nql-row-actions { width: 40px; }
+        .nql-empty-error p { max-width: 560px; }
+        .nql-empty-hint code { font-family: var(--font-mono); color: var(--accent-cyan); }
 
         /* ===== SEARCH TOOLBAR ===== */
         .toolbar {
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border-subtle);
-            padding: 4px 16px;
+            padding: 8px 16px;
             display: flex;
-            align-items: flex-end;
+            flex-direction: column;
             gap: 8px;
             flex-shrink: 0;
         }
 
-        .search-group {
+        .toolbar-row {
             display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .toolbar-filters {
+            flex: 1;
+            flex-wrap: wrap;
+            row-gap: 6px;
+        }
+
+        .toolbar-actions {
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            row-gap: 6px;
+        }
+
+        .search-field .search-input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            .toolbar-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .toolbar-right {
+                margin-left: 0;
+                justify-content: flex-end;
+            }
+        }
+
+        /* ===== FACET LIST (sidebar Top Values) ===== */
+        .facet-field-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .facet-field-btn {
+            padding: 3px 2px;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: var(--bg-deep);
+            border: 1px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .facet-field-btn:hover {
+            color: var(--text-secondary);
+            border-color: var(--border-default);
+        }
+        .facet-field-btn.active {
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+        .facet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            max-height: 168px;
+            overflow-y: auto;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            background: var(--bg-deep);
+        }
+        .facet-item {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr auto;
             align-items: center;
             gap: 6px;
-            flex: 1;
+            padding: 3px 6px;
+            min-height: 22px;
+            cursor: pointer;
+            overflow: hidden;
+            font-size: 10px;
+        }
+        .facet-item + .facet-item { border-top: 1px solid var(--border-subtle); }
+        .facet-item:hover { background: var(--bg-hover); }
+        .facet-bar {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            z-index: 0;
+            background: var(--accent-cyan-dim);
+            opacity: 0.55;
+        }
+        .facet-val {
+            position: relative;
+            z-index: 1;
             min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 10px;
+        }
+        .facet-cnt {
+            position: relative;
+            z-index: 1;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            color: var(--text-muted);
+            background: var(--bg-surface);
+            padding: 1px 5px;
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+        .facet-empty, .facet-loading {
+            color: var(--text-ghost);
+            font-size: 10px;
+            padding: 10px 6px;
+            text-align: center;
         }
 
         .search-field {
             display: flex;
             flex-direction: column;
-            gap: 1px;
-            flex: 1;
-            min-width: 60px;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .search-field.ip {
+            flex: 1 1 130px;
+            max-width: 180px;
+        }
+
+        .search-field.port,
+        .search-field.protocol {
+            flex: 0 1 92px;
+            max-width: 100px;
+        }
+
+        .search-field.app {
+            flex: 1 1 130px;
+            max-width: 180px;
         }
 
         .search-field.narrow {
-            max-width: 80px;
-            flex: 0 1 80px;
+            max-width: 88px;
+        }
+
+        .search-field.scope { flex: 0 0 auto; }
+
+        .scope-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 28px;
+            padding: 0 10px 0 8px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .scope-check:hover { border-color: var(--border-emphasis); color: var(--text-primary); }
+        .scope-check input { accent-color: var(--accent-purple); margin: 0; cursor: pointer; }
+        .scope-check svg { width: 13px; height: 13px; flex-shrink: 0; }
+        .scope-check.active {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: var(--accent-purple);
+            color: var(--accent-purple);
         }
 
         .search-label {
@@ -449,7 +784,8 @@
         .search-actions {
             display: flex;
             gap: 6px;
-            padding-top: 12px;
+            flex-shrink: 0;
+            align-items: center;
         }
 
         .btn {
@@ -507,11 +843,12 @@
         }
 
         .toolbar-right {
-            margin-left: auto;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         /* ===== STATS BAR (inline in toolbar) ===== */
@@ -635,6 +972,102 @@
         .filter-chip-remove svg {
             width: 10px;
             height: 10px;
+        }
+
+        .filter-chip.exclude {
+            background: var(--accent-red-dim);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: var(--accent-red);
+        }
+
+        .filter-chip.exclude .filter-chip-remove,
+        .filter-chip.exclude .filter-chip-toggle {
+            color: var(--accent-red);
+        }
+
+        .filter-chip.exclude .filter-chip-remove:hover,
+        .filter-chip.exclude .filter-chip-toggle:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        .filter-chip-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 16px;
+            padding: 0 4px;
+            background: transparent;
+            border: 1px solid currentColor;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            color: inherit;
+            opacity: 0.75;
+            transition: all 0.15s ease;
+        }
+
+        .filter-chip-toggle:hover,
+        .filter-chip-toggle.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .search-label-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            min-height: 16px;
+        }
+
+        .search-label-row .search-label {
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .label-spacer {
+            width: 28px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .exclude-toggle {
+            padding: 0 5px;
+            height: 14px;
+            min-width: 28px;
+            border: 1px solid var(--border-default);
+            border-radius: 7px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            line-height: 1;
+            flex-shrink: 0;
+            transition: all 0.15s ease;
+        }
+
+        .exclude-toggle:hover {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .exclude-toggle.active {
+            background: var(--accent-red-dim);
+            border-color: rgba(239, 68, 68, 0.45);
+            color: var(--accent-red);
+        }
+
+        .search-input.exclude-active {
+            border-color: rgba(239, 68, 68, 0.55);
+            box-shadow: 0 0 0 2px var(--accent-red-dim);
         }
 
         /* ===== TABLE CONTAINER ===== */
@@ -1839,195 +2272,157 @@
 
         /* ===== SIDEBAR (Right Panel) ===== */
         #filterSidebar {
-            width: 260px;
-            height: auto;
+            width: 248px;
+            min-width: 248px;
+            height: 100%;
             background: var(--bg-surface);
-            border-left: 1px solid var(--border-subtle);
+            border-left: 1px solid var(--border-default);
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         .sidebar-header {
-            padding: 14px 16px;
+            padding: 8px 10px;
             border-bottom: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
+            background: var(--bg-elevated);
+        }
+
+        .sidebar-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
         }
 
         .sidebar-title {
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
             color: var(--text-primary);
         }
 
+        .sidebar-subtitle {
+            font-size: 9px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .sidebar-close {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             cursor: pointer;
             color: var(--text-muted);
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: var(--radius-sm);
+            flex-shrink: 0;
         }
 
         .sidebar-close:hover {
             background: var(--bg-hover);
+            border-color: var(--border-default);
             color: var(--text-secondary);
         }
 
-        .sidebar-close svg {
-            width: 14px;
-            height: 14px;
+        .sidebar-close svg { width: 12px; height: 12px; }
+
+        .sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .sidebar-section {
             border-bottom: 1px solid var(--border-subtle);
         }
 
-        .sidebar-section.collapsed .sidebar-section-content {
-            display: none;
-        }
+        .sidebar-section.collapsed .sidebar-section-content { display: none; }
+        .sidebar-section.collapsed .sidebar-section-chevron { transform: rotate(-90deg); }
 
         .sidebar-section-header {
+            width: 100%;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
+            gap: 6px;
+            padding: 7px 10px;
             cursor: pointer;
-            transition: background 0.15s ease;
+            transition: background 0.12s ease;
+            background: transparent;
+            border: none;
+            color: inherit;
+            text-align: left;
         }
 
-        .sidebar-section-header:hover {
-            background: var(--bg-hover);
+        .sidebar-section-header:hover { background: var(--bg-hover); }
+
+        .sidebar-section-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .sidebar-section-chevron {
+            width: 10px;
+            height: 10px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
         }
 
         .sidebar-section-title {
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.06em;
             color: var(--text-secondary);
         }
 
-        .sidebar-section-icon {
-            width: 14px;
-            height: 14px;
-            color: var(--text-muted);
-            transition: transform 0.2s ease;
-        }
-
-        .sidebar-section.collapsed .sidebar-section-icon {
-            transform: rotate(-90deg);
+        .sidebar-section-meta {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            background: var(--accent-cyan-dim);
+            padding: 1px 6px;
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .sidebar-section-content {
-            padding: 4px 8px 12px;
+            padding: 0 10px 8px;
         }
 
-        .sidebar-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--text-secondary);
-            transition: all 0.15s ease;
+        .sidebar-section-content.compact-grid {
+            display: grid;
+            gap: 6px;
         }
 
-        .sidebar-item:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .sidebar-item-count {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            color: var(--text-muted);
-            background: var(--bg-elevated);
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-        }
-
-        /* Time Range Inputs in Sidebar */
-        .time-inputs {
-            padding: 8px 12px;
-        }
-
-        .time-input-group {
-            margin-bottom: 10px;
-        }
+        .time-input-group { margin-bottom: 6px; }
+        .time-input-group:last-of-type { margin-bottom: 0; }
 
         .time-input-label {
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--text-muted);
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             display: block;
-        }
-
-        .time-input {
-            width: 100%;
-            height: 30px;
-            padding: 0 8px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 11px;
-        }
-
-        .time-input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-        }
-
-        .apply-time-btn {
-            width: 100%;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            margin-top: 4px;
-        }
-
-        .apply-time-btn:hover:not(:disabled) {
-            background: #2563eb;
-        }
-
-        .apply-time-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Static section header (non-collapsible) */
-        .sidebar-section-header-static {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-
-        /* Time Range Redesign */
-        .time-range-redesign {
-            padding: 8px 12px;
         }
 
         .calendar-input-wrapper {
@@ -2038,127 +2433,85 @@
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: border-color 0.12s ease;
         }
 
-        .calendar-input-wrapper:hover {
-            border-color: var(--border-emphasis);
-        }
-
+        .calendar-input-wrapper:hover { border-color: var(--border-emphasis); }
         .calendar-input-wrapper:focus-within {
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
         }
 
         .calendar-icon {
             position: absolute;
-            left: 10px;
-            width: 16px;
-            height: 16px;
+            left: 7px;
+            width: 12px;
+            height: 12px;
             color: var(--text-muted);
             pointer-events: none;
         }
 
         .calendar-input {
             width: 100%;
-            height: 36px;
-            padding: 0 10px 0 34px;
+            height: 26px;
+            padding: 0 8px 0 24px;
             background: transparent;
             border: none;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 10px;
             font-family: var(--font-mono);
             cursor: pointer;
         }
 
-        .calendar-input:focus {
-            outline: none;
-        }
-
+        .calendar-input:focus { outline: none; }
         .calendar-input::-webkit-calendar-picker-indicator {
             filter: invert(0.7);
             cursor: pointer;
-            padding: 4px;
-            border-radius: 4px;
+            padding: 2px;
         }
 
-        .calendar-input::-webkit-calendar-picker-indicator:hover {
-            background: var(--bg-hover);
-        }
-
-        /* Device Dropdown */
-        .filter-dropdown-wrapper {
-            position: relative;
-            padding: 0 12px;
-        }
-
-        .filter-dropdown {
+        .apply-time-btn {
             width: 100%;
-            height: 38px;
-            padding: 0 32px 0 12px;
-            background: var(--bg-deep);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 12px;
-            font-family: var(--font-sans);
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            transition: all 0.15s ease;
-        }
-
-        .filter-dropdown:hover {
-            border-color: var(--border-emphasis);
-        }
-
-        .filter-dropdown:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
-        }
-
-        .filter-dropdown option {
-            background: var(--bg-surface);
-            color: var(--text-primary);
-            padding: 8px;
-        }
-
-        .dropdown-arrow {
-            position: absolute;
-            right: 22px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 14px;
-            height: 14px;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        /* Action Filter Buttons */
-        .action-filter-group {
-            display: flex;
-            gap: 6px;
-            padding: 0 12px;
-        }
-
-        .action-filter-btn {
-            flex: 1;
+            height: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 4px;
-            height: 34px;
-            padding: 0 10px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .apply-time-btn:hover:not(:disabled) { background: #2563eb; }
+        .apply-time-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .apply-time-btn svg { width: 11px; height: 11px; }
+
+        .action-filter-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+
+        .action-filter-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            height: 26px;
+            padding: 0 4px;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--text-secondary);
-            font-size: 11px;
-            font-weight: 500;
+            font-size: 10px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: all 0.12s ease;
         }
 
         .action-filter-btn:hover {
@@ -2185,87 +2538,111 @@
             color: var(--accent-red);
         }
 
-        .action-filter-btn svg {
-            flex-shrink: 0;
-        }
+        .action-filter-btn svg { width: 9px; height: 9px; flex-shrink: 0; }
 
-        /* Sidebar Filter Inputs */
-        .sidebar-filter-group {
-            margin-bottom: 12px;
-        }
 
-        .sidebar-filter-group.half {
-            flex: 1;
-            min-width: 0;
-        }
+        .sidebar-filter-group { margin-bottom: 0; }
+        .sidebar-filter-group.half { flex: 1; min-width: 0; }
 
         .sidebar-filter-row {
-            display: flex;
-            gap: 8px;
-            padding: 0 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
         }
 
         .sidebar-filter-label {
             display: block;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.05em;
             color: var(--text-muted);
-            margin-bottom: 6px;
-            padding-left: 2px;
+            margin-bottom: 3px;
         }
 
         .sidebar-filter-input {
             width: 100%;
-            height: 34px;
-            padding: 0 10px;
+            height: 26px;
+            padding: 0 8px;
+            box-sizing: border-box;
             background: var(--bg-deep);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 11px;
             font-family: var(--font-mono);
-            transition: all 0.15s ease;
+            transition: border-color 0.12s ease;
         }
 
         .sidebar-filter-input:focus {
             outline: none;
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px var(--accent-cyan-dim);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
         }
 
         .sidebar-filter-input::placeholder {
             color: var(--text-ghost);
             font-family: var(--font-sans);
+            font-size: 10px;
         }
 
         .sidebar-filter-input.threat-input:focus {
             border-color: var(--accent-red);
-            box-shadow: 0 0 0 2px var(--accent-red-dim);
+            box-shadow: 0 0 0 1px var(--accent-red-dim);
         }
 
-        /* Sidebar section icon on left */
-        .sidebar-section-icon-left {
-            color: var(--text-muted);
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
+        .filter-dropdown-wrapper { position: relative; }
 
-        /* Sidebar footer with buttons */
-        .sidebar-footer {
-            padding: 16px;
-            border-top: 1px solid var(--border-default);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: auto;
-        }
-
-        .btn-full {
+        .filter-dropdown {
             width: 100%;
-            justify-content: center;
+            height: 26px;
+            padding: 0 24px 0 8px;
+            box-sizing: border-box;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 10px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            appearance: none;
         }
+
+        .filter-dropdown:hover { border-color: var(--border-emphasis); }
+        .filter-dropdown:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 1px var(--accent-cyan-dim);
+        }
+
+        .dropdown-arrow {
+            position: absolute;
+            right: 7px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 11px;
+            height: 11px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .sidebar-footer {
+            padding: 8px 10px;
+            border-top: 1px solid var(--border-default);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            flex-shrink: 0;
+            background: var(--bg-elevated);
+        }
+
+        .sidebar-footer .btn {
+            height: 28px;
+            font-size: 11px;
+            padding: 0 8px;
+        }
+
+        .btn-full { width: 100%; justify-content: center; }
 
         /* Filter chip variants */
         .filter-chip.threat {
@@ -2676,6 +3053,89 @@
             height: 12px;
         }
 
+        /* ── Tier-1 aggregate enhancements ─────────────────────────── */
+        .anomaly-chip {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 44px; padding: 2px 6px; border-radius: 4px;
+            font-size: 10px; font-weight: 700; letter-spacing: .04em;
+            font-family: var(--font-mono);
+        }
+        .anomaly-new      { background:#0f766e; color:#a7f3d0; border:1px solid #14b8a6; }
+        .anomaly-spike    { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; animation: anomaly-pulse 1.6s ease-in-out infinite; }
+        .anomaly-growing  { background:#1e3a8a; color:#bfdbfe; border:1px solid #3b82f6; min-width:24px; }
+        .anomaly-shrinking{ background:#3f3f46; color:#d4d4d8; border:1px solid #6b7280; min-width:24px; }
+        .anomaly-gone     { background:#3f3f46; color:#a1a1aa; border:1px dashed #6b7280; opacity:.7; }
+        .anomaly-steady   { background:transparent; color:#475569; border:1px solid transparent; min-width:18px; }
+        @keyframes anomaly-pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.55); }
+            50%     { box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+        }
+        .anomaly-row-spike td { background: rgba(127,29,29,.08); }
+        .anomaly-row-new   td { background: rgba(15,118,110,.05); }
+        .anomaly-row-gone  td { opacity: .55; font-style: italic; }
+
+        .compare-banner {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem;
+            margin: 0 0 0.75rem 0; padding: 0.6rem 0.85rem;
+            background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b);
+            border-left: 3px solid #06b6d4;
+            border-radius: 6px;
+        }
+        .compare-banner-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.75rem; flex: 1 1 280px; }
+        .compare-banner-headline strong { color: var(--text, #e2e8f0); font-size: 0.88rem; }
+        .compare-banner-total { color: var(--text-muted, #94a3b8); font-size: 0.82rem; font-family: var(--font-mono); }
+        .compare-banner-total b { color: var(--text, #e2e8f0); font-weight: 600; }
+        .compare-banner-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .compare-banner-chips .anomaly-chip { font-size: 11px; padding: 2px 8px; min-width: auto; }
+
+        .event-count-prior {
+            background: var(--bg-elev-2, #1e293b); color: var(--text-muted, #94a3b8);
+        }
+        .delta-cell { font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+        .delta-up   { color: #fca5a5; }
+        .delta-down { color: #86efac; }
+        .delta-na   { color: var(--text-muted, #94a3b8); }
+
+        .row-actions { display: inline-flex; gap: 4px; }
+        .row-act {
+            display:inline-flex; align-items:center; justify-content:center;
+            width: 22px; height: 22px; border-radius: 4px;
+            font-size: 13px; line-height: 1; cursor: pointer;
+            background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b);
+            color: var(--text-muted, #94a3b8); text-decoration: none;
+        }
+        .row-act:hover { color: var(--text, #e2e8f0); border-color: #334155; transform: translateY(-1px); }
+        .row-act-learn:hover  { border-color:#06b6d4; color:#67e8f9; }
+        .row-act-lookup:hover { border-color:#3b82f6; color:#93c5fd; }
+        .row-act-block:hover  { border-color:#ef4444; color:#fca5a5; }
+
+        .live-mode-active #liveModeBtn { background:#7f1d1d; color:#fecaca; border-color:#ef4444; }
+        .live-mode-active #liveModeBtn::before { content:''; display:inline-block; width:6px; height:6px; border-radius:50%; background:#ef4444; margin-right:4px; animation: live-blink 1.2s linear infinite; }
+        @keyframes live-blink { 50% { opacity: .25; } }
+
+        /* Block-source modal */
+        .lm-modal-backdrop {
+            position: fixed; inset: 0; background: rgba(2,6,23,.7);
+            display: none; align-items: center; justify-content: center; z-index: 9999;
+        }
+        .lm-modal-backdrop.show { display:flex; }
+        .lm-modal {
+            width: min(520px, 92vw); background: var(--bg-elev-1, #0f172a);
+            border: 1px solid var(--border-default, #1e293b); border-radius: 10px;
+            padding: 1rem 1.25rem;
+        }
+        .lm-modal h3 { margin:0 0 .35rem 0; font-size:1rem; }
+        .lm-modal label { display:block; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted,#94a3b8); margin:.6rem 0 .25rem; }
+        .lm-modal textarea, .lm-modal input, .lm-modal select {
+            width:100%; padding:.45rem .55rem; background:var(--bg-base,#020617);
+            color:var(--text,#e2e8f0); border:1px solid var(--border-default,#1e293b); border-radius:6px;
+            font-family: var(--font-mono); font-size: 12px;
+        }
+        .lm-modal-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.85rem; }
+        .lm-modal-actions .btn { padding:.45rem .9rem; }
+
         .device-count {
             font-family: var(--font-mono);
             font-size: 12px;
@@ -2767,55 +3227,100 @@
             <!-- NQL Query Bar + Stats -->
             <div class="nql-bar">
                 <span class="nql-label">NQL</span>
-                <div style="position:relative;flex:1;display:flex;align-items:center;">
-                    <input type="text" id="nqlInput" class="nql-input"
-                        placeholder='srcip:10.0.0.0/8 AND action:deny | stats count by srcip | sort -count | limit 20'
-                        autocomplete="off" spellcheck="false">
-                    <div id="nqlAutocomplete" class="nql-autocomplete"></div>
+                <div class="nql-input-wrap">
+                    <svg class="nql-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <div id="nqlHl" class="nql-hl" aria-hidden="true"></div>
+                    <input type="text" id="nqlInput" name="q" class="nql-input{% if nql_error %} nql-error{% endif %}"
+                        value="{{ current_q or '' }}"
+                        placeholder='Search logs — e.g. srcip:10.0.0.0/8 action:deny | stats count by dstip'
+                        autocomplete="off" spellcheck="false" autocapitalize="off" role="combobox"
+                        aria-autocomplete="list" aria-expanded="false" aria-controls="nqlAutocomplete">
+                    <button type="button" class="nql-clear-btn" id="nqlClearBtn" title="Clear query" onclick="clearNQL()" {% if not current_q %}hidden{% endif %}>&times;</button>
+                    <div id="nqlAcLoading" class="nql-ac-loading"></div>
+                    <div id="nqlAutocomplete" class="nql-autocomplete" role="listbox"></div>
                 </div>
-                <button type="button" class="nql-run-btn" onclick="runNQL()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Run
+                <button type="button" class="nql-run-btn" onclick="runNQL()" title="Run search (Enter)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Search
                 </button>
-                <span id="nqlStatus" class="nql-status"></span>
+                <button type="button" class="nql-help-btn" onclick="toggleNQLHelp()" title="Searchable fields &amp; syntax reference">? Fields</button>
+                <span id="nqlStatus" class="nql-status{% if nql_error %} error{% elif current_q %} success{% endif %}">{% if nql_error %}Syntax error{% elif current_q %}{{ nql_elapsed_ms }} ms{% endif %}</span>
                 <div class="nql-divider"></div>
-                <div class="nql-stats">
-                    <span class="nql-stat"><span class="nql-stat-val">{{ total | format_number }}</span> {% if is_aggregate %}groups{% else %}logs{% endif %}</span>
+                <div class="nql-stats" role="status" aria-live="polite">
+                    <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate or nql_mode == 'aggregate' %}groups{% else %}logs{% endif %}</span>
                     <span class="nql-stat-sep"></span>
                     <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
                 </div>
             </div>
 
-            <!-- NQL Results Panel (for aggregate queries) -->
-            <div id="nqlResults" class="nql-results-panel"></div>
+            {% if nql_error %}
+            <div class="nql-error-banner" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                <span>{{ nql_error }}</span>
+                {% if nql_effective_query and nql_effective_query != current_q %}
+                <span class="nql-error-eff" title="{{ nql_effective_query }}">effective query: <code>{{ nql_effective_query }}</code></span>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <!-- Search Toolbar -->
             <div class="toolbar">
-                <div class="search-group">
-                    <div class="search-field">
-                        <span class="search-label">Source IP</span>
-                        <input type="text" name="srcip" class="search-input" placeholder="192.168.1.1 or /24" value="{{ current_srcip or '' }}">
+                <div class="toolbar-row toolbar-filters">
+                    <div class="search-field scope">
+                        <div class="search-label-row">
+                            <span class="search-label">Scope</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
+                        <label class="scope-check{% if current_scope == 'internet' %} active{% endif %}" title="Internet traffic only — destination is a public IP. Combines with any Src/Dst IP, port, action or policy filter; on its own it shows all internet-bound traffic.">
+                            <input type="checkbox" id="scopeInternet" {% if current_scope == 'internet' %}checked{% endif %} onchange="setFilter('scope', this.checked ? 'internet' : '')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Internet
+                        </label>
                     </div>
-                    <div class="search-field">
-                        <span class="search-label">Destination IP</span>
-                        <input type="text" name="dstip" class="search-input" placeholder="8.8.8.8 or /24" value="{{ current_dstip or '' }}">
+                    <div class="search-field ip">
+                        <div class="search-label-row">
+                            <span class="search-label">Src IP</span>
+                            <button type="button" class="exclude-toggle{% if current_srcip_not|default(false) %} active{% endif %}" id="srcipNotToggle" onclick="toggleExcludeField('srcip')" title="Exclude matching source IPs">NOT</button>
+                        </div>
+                        <input type="text" name="srcip" class="search-input{% if current_srcip_not|default(false) %} exclude-active{% endif %}" placeholder="192.168.1.1 or /24" value="{{ current_srcip or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Src Port</span>
-                        <input type="text" name="srcport" class="search-input" placeholder="Any" value="{{ current_srcport or '' }}">
+                    <div class="search-field ip">
+                        <div class="search-label-row">
+                            <span class="search-label">Dst IP</span>
+                            <button type="button" class="exclude-toggle{% if current_dstip_not|default(false) %} active{% endif %}" id="dstipNotToggle" onclick="toggleExcludeField('dstip')" title="Exclude matching destination IPs">NOT</button>
+                        </div>
+                        <input type="text" name="dstip" class="search-input{% if current_dstip_not|default(false) %} exclude-active{% endif %}" placeholder="8.8.8.8 or /24" value="{{ current_dstip or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Dst Port</span>
-                        <input type="text" name="dstport" class="search-input" placeholder="443" value="{{ current_dstport or '' }}">
+                    <div class="search-field port">
+                        <div class="search-label-row">
+                            <span class="search-label">Src Port</span>
+                            <button type="button" class="exclude-toggle{% if current_srcport_not|default(false) %} active{% endif %}" id="srcportNotToggle" onclick="toggleExcludeField('srcport')" title="Exclude matching source ports">NOT</button>
+                        </div>
+                        <input type="text" name="srcport" class="search-input{% if current_srcport_not|default(false) %} exclude-active{% endif %}" placeholder="Any" value="{{ current_srcport or '' }}">
                     </div>
-                    <div class="search-field narrow">
-                        <span class="search-label">Protocol</span>
+                    <div class="search-field port">
+                        <div class="search-label-row">
+                            <span class="search-label">Dst Port</span>
+                            <button type="button" class="exclude-toggle{% if current_dstport_not|default(false) %} active{% endif %}" id="dstportNotToggle" onclick="toggleExcludeField('dstport')" title="Exclude matching destination ports">NOT</button>
+                        </div>
+                        <input type="text" name="dstport" class="search-input{% if current_dstport_not|default(false) %} exclude-active{% endif %}" placeholder="443" value="{{ current_dstport or '' }}">
+                    </div>
+                    <div class="search-field protocol">
+                        <div class="search-label-row">
+                            <span class="search-label">Proto</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
                         <input type="text" name="protocol" class="search-input" placeholder="TCP/UDP" value="{{ current_protocol or '' }}">
                     </div>
-                    <div class="search-field">
-                        <span class="search-label">Application</span>
+                    <div class="search-field app">
+                        <div class="search-label-row">
+                            <span class="search-label">App</span>
+                            <span class="label-spacer" aria-hidden="true"></span>
+                        </div>
                         <input type="text" name="application" class="search-input" placeholder="ssl, web-browsing" value="{{ current_application or '' }}">
                     </div>
+                </div>
+                <div class="toolbar-row toolbar-actions">
                     <div class="search-actions">
                         <button type="submit" class="btn btn-primary" onclick="showLoading()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2831,8 +3336,7 @@
                             Clear
                         </button>
                     </div>
-                </div>
-                <div class="toolbar-right">
+                    <div class="toolbar-right">
                     <div class="view-toggle">
                         <button type="button" class="view-pill {% if not is_aggregate %}active{% endif %}" onclick="setViewMode('')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -2890,8 +3394,15 @@
                             </div>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-ghost btn-icon" onclick="location.reload()" title="Refresh">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="btn btn-ghost btn-icon" aria-label="Export current results to CSV" onclick="(function(){var p=new URLSearchParams(window.location.search);p.set('format','csv');window.location.href='/logs/export?'+p.toString();})()" title="Export current results to CSV">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <path d="M7 10l5 5 5-5"/>
+                            <path d="M12 15V3"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-icon" aria-label="Refresh results" onclick="location.reload()" title="Refresh">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                             <path d="M3 3v5h5"/>
                             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
@@ -2899,40 +3410,45 @@
                         </svg>
                     </button>
                 </div>
+                </div>
             </div>
 
             <!-- Stats bar removed — merged into NQL bar above -->
 
             <!-- Active Filters -->
-            {% if current_device or current_severity is not none or current_action or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
+            {% if current_device or current_severity is not none or current_action or current_scope or current_q or current_srcip or current_dstip or current_srcport or current_dstport or current_protocol or current_policyname or current_log_type or current_threat_id or current_application or current_session_end_reason or current_src_zone or current_dst_zone %}
             <div class="active-filters">
                 {% if current_srcip %}
-                <span class="filter-chip">
-                    Src IP: {{ current_srcip }}
+                <span class="filter-chip{% if current_srcip_not|default(false) %} exclude{% endif %}">
+                    {% if current_srcip_not|default(false) %}NOT {% endif %}Src IP: {{ current_srcip }}
+                    <button type="button" class="filter-chip-toggle{% if current_srcip_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('srcip')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('srcip')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_dstip %}
-                <span class="filter-chip">
-                    Dst IP: {{ current_dstip }}
+                <span class="filter-chip{% if current_dstip_not|default(false) %} exclude{% endif %}">
+                    {% if current_dstip_not|default(false) %}NOT {% endif %}Dst IP: {{ current_dstip }}
+                    <button type="button" class="filter-chip-toggle{% if current_dstip_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('dstip')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstip')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_srcport %}
-                <span class="filter-chip">
-                    Src Port: {{ current_srcport }}
+                <span class="filter-chip{% if current_srcport_not|default(false) %} exclude{% endif %}">
+                    {% if current_srcport_not|default(false) %}NOT {% endif %}Src Port: {{ current_srcport }}
+                    <button type="button" class="filter-chip-toggle{% if current_srcport_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('srcport')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('srcport')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </span>
                 {% endif %}
                 {% if current_dstport %}
-                <span class="filter-chip">
-                    Dst Port: {{ current_dstport }}
+                <span class="filter-chip{% if current_dstport_not|default(false) %} exclude{% endif %}">
+                    {% if current_dstport_not|default(false) %}NOT {% endif %}Dst Port: {{ current_dstport }}
+                    <button type="button" class="filter-chip-toggle{% if current_dstport_not|default(false) %} active{% endif %}" onclick="toggleFilterExclude('dstport')" title="Toggle exclude">NOT</button>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('dstport')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -3026,9 +3542,17 @@
                     </button>
                 </span>
                 {% endif %}
+                {% if current_scope %}
+                <span class="filter-chip scope" title="{% if current_scope == 'internet' %}Destination is a public IP{% elif current_scope == 'internal' %}Private source and destination{% else %}Public source to private destination{% endif %}">
+                    Scope: {{ current_scope | capitalize }}
+                    <button type="button" class="filter-chip-remove" onclick="removeFilter('scope')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </span>
+                {% endif %}
                 {% if current_q %}
                 <span class="filter-chip">
-                    Search: "{{ current_q }}"
+                    Query: <code style="font-family:var(--font-mono);">{{ current_q }}</code>
                     <button type="button" class="filter-chip-remove" onclick="removeFilter('q')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -3064,6 +3588,15 @@
                     Export FortiGate Policy
                 </button>
                 <span class="fg-selected-count" id="fgSelectedCount"></span>
+                <div style="width:1px;height:20px;background:var(--border-default);margin:0 4px;"></div>
+                <button type="button" class="group-pill {% if is_compare_mode %}active{% endif %}" id="compareBtn" onclick="toggleCompareMode()" title="Compare event counts to the immediately preceding window of equal length">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><path d="M3 18l6-6-4-4M21 6l-6 6 4 4"/></svg>
+                    Compare vs Prior
+                </button>
+                <button type="button" class="group-pill" id="liveModeBtn" onclick="toggleLiveMode()" title="Auto-refresh aggregate every 30s (only enabled for windows ≤ 1 hour)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px;"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+                    <span id="liveModeLabel">Go Live</span>
+                </button>
             </div>
             {% endif %}
 
@@ -3077,7 +3610,70 @@
                         </div>
 
                         {% if not is_aggregate %}
-                        {% if logs %}
+                        {% if nql_error %}
+                        <div class="empty-state nql-empty-error">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                            <h3>The query could not be run</h3>
+                            <p>{{ nql_error }}</p>
+                            <p class="nql-empty-hint">Example: <code>srcip:10.0.0.0/8 action:deny | stats count by dstip</code> &middot; <a href="#" onclick="toggleNQLHelp();return false;">Field &amp; syntax reference</a></p>
+                        </div>
+                        {% elif nql_mode == 'aggregate' %}
+                        {% if nql_table and nql_table.rows %}
+                        <div class="nql-agg-strip">
+                            <span class="nql-agg-strip-title">Aggregate</span>
+                            <span>grouped by <strong>{{ nql_group_fields | join(', ') if nql_group_fields else '(all)' }}</strong></span>
+                            <span class="nql-stat-sep"></span>
+                            <span><strong>{{ nql_table.rows | length }}</strong> group{{ '' if nql_table.rows | length == 1 else 's' }}</span>
+                            <span class="nql-stat-sep"></span>
+                            <span><strong>{{ nql_elapsed_ms }}</strong> ms</span>
+                            <span class="nql-agg-strip-spacer"></span>
+                            <button type="button" class="nql-strip-btn" onclick="nqlShowLogs()" title="Drop the | stats stage and show the matching log lines">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                                View matching logs
+                            </button>
+                            <button type="button" class="nql-strip-btn" onclick="exportCurrent()" title="Export this aggregate as CSV">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                                Export CSV
+                            </button>
+                        </div>
+                        <table class="agg-table nql-agg">
+                            <thead>
+                                <tr>
+                                    <th class="nql-rank">#</th>
+                                    {% for c in nql_table.columns %}<th class="{{ 'num' if c.numeric else '' }}">{{ c.name }}</th>{% endfor %}
+                                    <th class="nql-row-actions"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in nql_table.rows %}
+                                <tr class="agg-row">
+                                    <td class="nql-rank">{{ loop.index }}</td>
+                                    {% for cell in row %}{% set c = nql_table.columns[loop.index0] %}
+                                    {% if c.is_group %}
+                                    <td><span class="nql-drill" data-field="{{ c.name }}" data-value="{{ cell.raw }}" onclick="nqlDrill(this)" title="Show logs where {{ c.name }} = {{ cell.raw or '(empty)' }}">{{ cell.text or '(empty)' }}</span></td>
+                                    {% elif c.numeric %}
+                                    <td class="num nql-bar-cell"><span class="nql-bar-fill" style="width:{{ cell.pct }}%"></span><span class="nql-num">{{ cell.text }}</span></td>
+                                    {% else %}
+                                    <td>{{ cell.text }}</td>
+                                    {% endif %}
+                                    {% endfor %}
+                                    <td class="nql-row-actions">
+                                        <button type="button" class="drill-btn" title="Show the logs behind this row" onclick="nqlDrillRow(this)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            <h3>No groups matched</h3>
+                            <p>Nothing in this time range matches the filter before <code>|</code>. Widen the range or loosen the filter.</p>
+                        </div>
+                        {% endif %}
+                        {% elif logs %}
                         <table class="log-table">
                             <thead>
                                 <tr>
@@ -3117,7 +3713,11 @@
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td data-col="timestamp">
                                         <span class="timestamp">
-                                            {% if log.get('log_time') %}{{ log.get('log_time') }}{% elif log.get('timestamp') %}{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}--{% endif %}
+                                            {# Show the platform's normalized timestamp, rendered in the app's
+                                               display timezone — consistent with filtering, sorting and
+                                               correlation windows. The device-reported log_time is in the
+                                               device's own (often skewed) clock and stays in the raw detail. #}
+                                            {% if log.get('timestamp') %}{{ log.timestamp | localdt }}{% else %}--{% endif %}
                                         </span>
                                     </td>
                                     <td data-col="action">
@@ -3204,6 +3804,11 @@
                                 <tr class="detail-row" id="detail-{{ loop.index }}"
                                     data-timestamp="{{ log.get('timestamp', '').isoformat() if log.get('timestamp', '') and log.get('timestamp', '').isoformat else log.get('timestamp', '') }}"
                                     data-device="{{ dev_display }}"
+                                    data-srcip="{{ log_srcip or '' }}"
+                                    data-dstip="{{ log_dstip or '' }}"
+                                    data-srcport="{{ log_srcport or '' }}"
+                                    data-dstport="{{ log_dstport or '' }}"
+                                    data-proto="{{ log_proto if log_proto not in (None, '', 0) else '' }}"
                                     data-loaded="false">
                                     <td colspan="99">
                                         <div class="detail-panel-placeholder" id="detail-content-{{ loop.index }}">
@@ -3230,28 +3835,74 @@
                         {% endif %}
                         {% else %}
                         {# ===== AGGREGATE TABLE ===== #}
+                        {% if is_compare_mode and agg_rows %}
+                        {% set _ac = anomaly_counts or {} %}
+                        <div class="compare-banner">
+                            <div class="compare-banner-headline">
+                                <strong>Compare vs prior window</strong>
+                                <span class="compare-banner-total">
+                                    Current: <b>{{ "{:,}".format(current_window_total or 0) }}</b>
+                                    · Prior: <b>{{ "{:,}".format(prior_window_total or 0) }}</b>
+                                    {% if (prior_window_total or 0) > 0 %}
+                                        {% set _delta = ((current_window_total or 0) - (prior_window_total or 0)) / (prior_window_total or 1) * 100.0 %}
+                                        · Δ
+                                        <b class="{% if _delta >= 0 %}delta-up{% else %}delta-down{% endif %}">
+                                            {% if _delta >= 0 %}+{% endif %}{{ "%.1f"|format(_delta) }}%
+                                        </b>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="compare-banner-chips">
+                                {% if _ac.get('NEW', 0) %}<span class="anomaly-chip anomaly-new">NEW · {{ _ac.NEW }}</span>{% endif %}
+                                {% if _ac.get('SPIKE', 0) %}<span class="anomaly-chip anomaly-spike">SPIKE · {{ _ac.SPIKE }}</span>{% endif %}
+                                {% if _ac.get('GROWING', 0) %}<span class="anomaly-chip anomaly-growing" style="min-width:auto;padding:2px 8px;">↑ GROWING · {{ _ac.GROWING }}</span>{% endif %}
+                                {% if _ac.get('SHRINKING', 0) %}<span class="anomaly-chip anomaly-shrinking" style="min-width:auto;padding:2px 8px;">↓ SHRINKING · {{ _ac.SHRINKING }}</span>{% endif %}
+                                {% if _ac.get('GONE', 0) %}<span class="anomaly-chip anomaly-gone">GONE · {{ _ac.GONE }}</span>{% endif %}
+                                {% if _ac.get('STEADY', 0) %}<span class="anomaly-chip anomaly-steady" style="min-width:auto;padding:2px 8px;">STEADY · {{ _ac.STEADY }}</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
                         {% if agg_rows %}
                         <table class="agg-table">
                             <thead>
                                 <tr>
                                     <th style="width:32px;text-align:center;"><input type="checkbox" class="agg-check" id="aggSelectAll" onchange="toggleAllAggRows(this)" title="Select All"></th>
+                                    <th title="Anomaly state vs the immediately preceding window of equal length">!</th>
                                     {% if 'srcip' in group_fields %}<th>Source IP</th>{% endif %}
                                     {% if 'dstip' in group_fields %}<th>Dest IP</th>{% endif %}
                                     {% if 'dstport' in group_fields %}<th>Dst Port</th>{% endif %}
                                     <th>Events</th>
+                                    {% if is_compare_mode %}<th title="Events in the prior window of equal length">Prior</th><th title="Change vs prior window">Δ</th>{% endif %}
                                     <th>First Seen</th>
                                     <th>Last Seen</th>
                                     <th>Action</th>
                                     <th>Policy</th>
                                     <th>Application</th>
                                     <th>Devices</th>
+                                    <th>Actions</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in agg_rows %}
-                                <tr class="agg-row" data-agg-idx="{{ loop.index0 }}">
+                                {% set _state = row.anomaly_state or 'STEADY' %}
+                                <tr class="agg-row anomaly-row-{{ _state | lower }}" data-agg-idx="{{ loop.index0 }}" data-anomaly="{{ _state }}">
                                     <td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="{{ loop.index0 }}" onchange="updateAggSelection()"></td>
+                                    <td>
+                                        {% if _state == 'NEW' %}
+                                            <span class="anomaly-chip anomaly-new" title="Not seen in prior window">NEW</span>
+                                        {% elif _state == 'SPIKE' %}
+                                            <span class="anomaly-chip anomaly-spike" title="≥5× prior window count and well above baseline">SPIKE</span>
+                                        {% elif _state == 'GROWING' and is_compare_mode %}
+                                            <span class="anomaly-chip anomaly-growing" title="Rising vs prior window">↑</span>
+                                        {% elif _state == 'SHRINKING' and is_compare_mode %}
+                                            <span class="anomaly-chip anomaly-shrinking" title="Falling vs prior window">↓</span>
+                                        {% elif _state == 'GONE' %}
+                                            <span class="anomaly-chip anomaly-gone" title="Present in prior window, absent now">GONE</span>
+                                        {% else %}
+                                            <span class="anomaly-chip anomaly-steady" title="No significant change">·</span>
+                                        {% endif %}
+                                    </td>
                                     {% if 'srcip' in group_fields %}
                                     {% if is_subnet_rollup %}
                                     <td>
@@ -3277,8 +3928,20 @@
                                     <td><span class="port-value">{{ row.dstport or '--' }}</span></td>
                                     {% endif %}
                                     <td><span class="event-count-badge">{{ "{:,}".format(row.event_count) }}</span></td>
-                                    <td><span class="agg-timestamp">{{ row.first_seen.strftime('%Y-%m-%d %H:%M:%S') if row.first_seen else '--' }}</span></td>
-                                    <td><span class="agg-timestamp">{{ row.last_seen.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen else '--' }}</span></td>
+                                    {% if is_compare_mode %}
+                                    <td><span class="event-count-badge event-count-prior">{{ "{:,}".format(row.prior_count or 0) }}</span></td>
+                                    <td>
+                                        {% if row.delta_pct is none %}
+                                            <span class="delta-cell delta-na">—</span>
+                                        {% elif row.delta_pct >= 0 %}
+                                            <span class="delta-cell delta-up">+{{ row.delta_pct }}%</span>
+                                        {% else %}
+                                            <span class="delta-cell delta-down">{{ row.delta_pct }}%</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endif %}
+                                    <td><span class="agg-timestamp">{{ (row.first_seen | localdt) if row.first_seen else '--' }}</span></td>
+                                    <td><span class="agg-timestamp">{{ (row.last_seen | localdt) if row.last_seen else '--' }}</span></td>
                                     <td>
                                         {% set agg_action = (row.top_action or '') | lower %}
                                         {% if agg_action in ['deny', 'drop', 'block', 'reject'] %}
@@ -3293,8 +3956,33 @@
                                     <td><span class="agg-mono">{{ row.top_app or '--' }}</span></td>
                                     <td><span class="device-count">{{ row.device_count }}</span></td>
                                     <td>
+                                        {% set act_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
+                                        <div class="row-actions">
+                                            {% if current_device_id and row.top_policy %}
+                                            <a class="row-act row-act-learn"
+                                               href="{{ url_for('device_learning_mode', device_id=current_device_id) }}?policy_name={{ row.top_policy | urlencode }}"
+                                               title="Learning Mode — suggest narrower rules from real traffic for &quot;{{ row.top_policy }}&quot;">🎯</a>
+                                            {% endif %}
+                                            {% if row.dstip and row.dstport %}
+                                            <a class="row-act row-act-lookup"
+                                               href="/policy-lookup/?dstip={{ row.dstip }}&dstport={{ row.dstport }}{% if act_srcip and not is_subnet_rollup %}&srcip={{ act_srcip }}{% endif %}&time_range={{ current_time_range }}"
+                                               title="Policy Lookup — show which rule(s) cover this flow">🔍</a>
+                                            {% endif %}
+                                            {% set src_ips_for_block = (row.sample_ips if is_subnet_rollup and row.sample_ips else ([row.srcip] if row.srcip else [])) %}
+                                            {% if src_ips_for_block %}
+                                            <button type="button" class="row-act row-act-block"
+                                                    data-src-ips="{{ src_ips_for_block | join(',') }}"
+                                                    data-src-subnet="{{ row.src_subnet or '' }}"
+                                                    data-dstip="{{ row.dstip or '' }}"
+                                                    data-dstport="{{ row.dstport or '' }}"
+                                                    onclick="openBlockSourceDialog(this)"
+                                                    title="Add source(s) to a Block EDL">🚫</button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
                                         {% set drill_srcip = row.src_subnet if is_subnet_rollup else row.get('srcip', '') %}
-                                        <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
+                                        <a class="drill-btn" href="?{% if 'srcip' in group_fields and drill_srcip %}srcip={{ drill_srcip }}&{% endif %}{% if 'dstip' in group_fields and row.dstip %}dstip={{ row.dstip }}&{% endif %}{% if 'dstport' in group_fields and row.dstport %}dstport={{ row.dstport }}&{% endif %}time_range={{ current_time_range }}{% if current_device %}&device={{ current_device }}{% endif %}{% if current_action %}&action={{ current_action }}{% endif %}{% if current_scope %}&scope={{ current_scope }}{% endif %}{% if current_policyname %}&policyname={{ current_policyname }}{% endif %}" title="View individual logs">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                                         </a>
                                     </td>
@@ -3318,7 +4006,7 @@
                     {% if logs or agg_rows %}
                     <div class="pagination-bar">
                         <div class="pagination-info">
-                            Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total | format_number }}
+                            Showing {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total] | min }} of {{ total_display if total_display is defined else (total | format_number) }}
                         </div>
                         <div class="pagination-controls">
                             <button type="button" class="page-btn" onclick="goToPage(1)" {% if page <= 1 %}disabled{% endif %}>
@@ -3343,159 +4031,173 @@
                 <!-- Right Sidebar - Advanced Filters -->
                 <aside class="sidebar" id="filterSidebar">
                     <div class="sidebar-header">
-                        <span class="sidebar-title">Advanced Filters</span>
-                        <button type="button" class="sidebar-close" onclick="toggleSidebar()">
+                        <div class="sidebar-header-left">
+                            <span class="sidebar-title">Filters</span>
+                            <span class="sidebar-subtitle">Refine results</span>
+                        </div>
+                        <button type="button" class="sidebar-close" onclick="toggleSidebar()" title="Hide panel">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                     </div>
 
-                    <!-- Time Range -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <span class="sidebar-section-title">Time Range</span>
+                    <div class="sidebar-scroll">
+                        <!-- Top Values -->
+                        <div class="sidebar-section">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Top Values</span>
+                                </span>
+                                <span class="sidebar-section-meta" id="facetFieldMeta">App</span>
+                            </button>
+                            <div class="sidebar-section-content">
+                                <div class="facet-field-grid" role="tablist" aria-label="Facet field">
+                                    <button type="button" class="facet-field-btn active" data-field="application" data-label="App" onclick="selectFacetField('application')">App</button>
+                                    <button type="button" class="facet-field-btn" data-field="action" data-label="Action" onclick="selectFacetField('action')">Action</button>
+                                    <button type="button" class="facet-field-btn" data-field="policyname" data-label="Policy" onclick="selectFacetField('policyname')">Policy</button>
+                                    <button type="button" class="facet-field-btn" data-field="log_type" data-label="Type" onclick="selectFacetField('log_type')">Type</button>
+                                    <button type="button" class="facet-field-btn" data-field="srcip" data-label="Src IP" onclick="selectFacetField('srcip')">Src IP</button>
+                                    <button type="button" class="facet-field-btn" data-field="dstip" data-label="Dst IP" onclick="selectFacetField('dstip')">Dst IP</button>
+                                    <button type="button" class="facet-field-btn" data-field="src_zone" data-label="Src Zone" onclick="selectFacetField('src_zone')">Src Zone</button>
+                                    <button type="button" class="facet-field-btn" data-field="dst_zone" data-label="Dst Zone" onclick="selectFacetField('dst_zone')">Dst Zone</button>
+                                </div>
+                                <div id="facetList" class="facet-list"><div class="facet-empty">—</div></div>
+                            </div>
                         </div>
-                        <div class="sidebar-section-content">
-                            <div class="time-range-redesign">
+
+                        <!-- Time Range -->
+                        <div class="sidebar-section{% if not current_start and not current_end %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Time Range</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
                                 <div class="time-input-group">
-                                    <label class="time-input-label">Start Date & Time</label>
+                                    <label class="time-input-label" for="startDateTime">Start</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                                            <line x1="16" y1="2" x2="16" y2="6"/>
-                                            <line x1="8" y1="2" x2="8" y2="6"/>
-                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                         <input type="datetime-local" id="startDateTime" name="start" class="calendar-input" value="{{ current_start or '' }}" onchange="updateCustomRange()">
                                     </div>
                                 </div>
                                 <div class="time-input-group">
-                                    <label class="time-input-label">End Date & Time</label>
+                                    <label class="time-input-label" for="endDateTime">End</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                                            <line x1="16" y1="2" x2="16" y2="6"/>
-                                            <line x1="8" y1="2" x2="8" y2="6"/>
-                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                         <input type="datetime-local" id="endDateTime" name="end" class="calendar-input" value="{{ current_end or '' }}" onchange="updateCustomRange()">
                                     </div>
                                 </div>
                                 <button type="button" id="applyRangeBtn" class="apply-time-btn" onclick="applyCustomRange()" disabled>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                    Apply Range
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Apply
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Traffic Analysis -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                            </svg>
-                            <span class="sidebar-section-title">Traffic Analysis</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Action</label>
-                                <div class="action-filter-group">
-                                    <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">All</button>
-                                    <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>
-                                        Accept
-                                    </button>
-                                    <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                        Deny
-                                    </button>
+                        <!-- Traffic -->
+                        <div class="sidebar-section">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Traffic</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label">Action</label>
+                                    <div class="action-filter-group">
+                                        <button type="button" class="action-filter-btn {% if not current_action %}active{% endif %}" onclick="setFilter('action', '')">All</button>
+                                        <button type="button" class="action-filter-btn accept {% if current_action == 'accept' %}active{% endif %}" onclick="setFilter('action', 'accept')">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                            Allow
+                                        </button>
+                                        <button type="button" class="action-filter-btn deny {% if current_action == 'deny' %}active{% endif %}" onclick="setFilter('action', 'deny')">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                            Deny
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Session End Reason</label>
-                                <input type="text" name="session_end_reason" class="sidebar-filter-input" placeholder="e.g. aged-out, tcp-fin" value="{{ current_session_end_reason or '' }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Policy & Security -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                            </svg>
-                            <span class="sidebar-section-title">Policy & Security</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Policy/Rule Name</label>
-                                <input type="text" name="policyname" class="sidebar-filter-input" placeholder="e.g. allow-internet" value="{{ current_policyname or '' }}">
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Log Type</label>
-                                <input type="text" name="log_type" class="sidebar-filter-input" placeholder="e.g. TRAFFIC, THREAT" value="{{ current_log_type or '' }}">
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Threat ID</label>
-                                <input type="text" name="threat_id" class="sidebar-filter-input threat-input" placeholder="e.g. 40000, 50000" value="{{ current_threat_id or '' }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Zones & Infrastructure -->
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header-static">
-                            <svg class="sidebar-section-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                            </svg>
-                            <span class="sidebar-section-title">Zones & Infrastructure</span>
-                        </div>
-                        <div class="sidebar-section-content">
-                            <div class="sidebar-filter-row">
-                                <div class="sidebar-filter-group half">
-                                    <label class="sidebar-filter-label">Source Zone</label>
-                                    <input type="text" name="src_zone" class="sidebar-filter-input" placeholder="trust" value="{{ current_src_zone or '' }}">
-                                </div>
-                                <div class="sidebar-filter-group half">
-                                    <label class="sidebar-filter-label">Dest Zone</label>
-                                    <input type="text" name="dst_zone" class="sidebar-filter-input" placeholder="untrust" value="{{ current_dst_zone or '' }}">
-                                </div>
-                            </div>
-                            <div class="sidebar-filter-group">
-                                <label class="sidebar-filter-label">Device</label>
-                                <div class="filter-dropdown-wrapper">
-                                    <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
-                                        <option value="" {% if not current_device %}selected{% endif %}>All Devices</option>
-                                        {% for device in devices %}
-                                        <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="6 9 12 15 18 9"/>
-                                    </svg>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label" for="sessionEndReason">Session End</label>
+                                    <input type="text" id="sessionEndReason" name="session_end_reason" class="sidebar-filter-input" placeholder="aged-out, tcp-fin" value="{{ current_session_end_reason or '' }}">
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Policy & Security -->
+                        <div class="sidebar-section{% if not current_policyname and not current_log_type and not current_threat_id %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Policy</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-row">
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Rule</label>
+                                        <input type="text" name="policyname" class="sidebar-filter-input" placeholder="allow-internet" value="{{ current_policyname or '' }}">
+                                    </div>
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Log Type</label>
+                                        <input type="text" name="log_type" class="sidebar-filter-input" placeholder="TRAFFIC" value="{{ current_log_type or '' }}">
+                                    </div>
+                                </div>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label">Threat ID</label>
+                                    <input type="text" name="threat_id" class="sidebar-filter-input threat-input" placeholder="40000" value="{{ current_threat_id or '' }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Infrastructure -->
+                        <div class="sidebar-section{% if not current_src_zone and not current_dst_zone and not current_device %} collapsed{% endif %}">
+                            <button type="button" class="sidebar-section-header" onclick="toggleSection(this)">
+                                <span class="sidebar-section-header-left">
+                                    <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                    <span class="sidebar-section-title">Infrastructure</span>
+                                </span>
+                            </button>
+                            <div class="sidebar-section-content compact-grid">
+                                <div class="sidebar-filter-row">
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Src Zone</label>
+                                        <input type="text" name="src_zone" class="sidebar-filter-input" placeholder="trust" value="{{ current_src_zone or '' }}">
+                                    </div>
+                                    <div class="sidebar-filter-group half">
+                                        <label class="sidebar-filter-label">Dst Zone</label>
+                                        <input type="text" name="dst_zone" class="sidebar-filter-input" placeholder="untrust" value="{{ current_dst_zone or '' }}">
+                                    </div>
+                                </div>
+                                <div class="sidebar-filter-group">
+                                    <label class="sidebar-filter-label" for="deviceSelect">Device</label>
+                                    <div class="filter-dropdown-wrapper">
+                                        <select id="deviceSelect" class="filter-dropdown" onchange="filterByDevice(this.value)">
+                                            <option value="" {% if not current_device %}selected{% endif %}>All devices</option>
+                                            {% for device in devices %}
+                                            <option value="{{ device }}" {% if current_device == device %}selected{% endif %}>{{ device }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Apply Filters Button -->
                     <div class="sidebar-footer">
                         <button type="submit" class="btn btn-primary btn-full" onclick="showLoading()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                            </svg>
-                            Apply Filters
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                            Apply
                         </button>
                         <button type="button" class="btn btn-ghost btn-full" onclick="clearFilters()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                <path d="M18 6 6 18M6 6l12 12"/>
-                            </svg>
-                            Clear All
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            Clear
                         </button>
                     </div>
                 </aside>
@@ -3508,11 +4210,17 @@
     <input type="hidden" name="device" id="hiddenDevice" value="{{ current_device or '' }}">
     <input type="hidden" name="severity" id="hiddenSeverity" value="{{ current_severity or '' }}">
     <input type="hidden" name="action" id="hiddenAction" value="{{ current_action or '' }}">
+    <input type="hidden" name="scope" id="hiddenScope" value="{{ current_scope or '' }}">
     <input type="hidden" name="time_range" id="hiddenTimeRange" value="{{ current_time_range or '1h' }}">
     <input type="hidden" name="per_page" value="{{ per_page }}">
     <input type="hidden" name="view" id="hiddenView" value="{{ current_view or '' }}">
     <input type="hidden" name="group_by" id="hiddenGroupBy" value="{{ current_group_by or 'srcip,dstip,dstport' }}">
     <input type="hidden" name="subnet_rollup" id="hiddenSubnetRollup" value="{{ '1' if is_subnet_rollup else '' }}">
+    <input type="hidden" name="compare" id="hiddenCompare" value="{{ '1' if is_compare_mode else '' }}">
+    <input type="hidden" name="srcip_not" id="hiddenSrcipNot" value="{{ '1' if current_srcip_not|default(false) else '' }}">
+    <input type="hidden" name="dstip_not" id="hiddenDstipNot" value="{{ '1' if current_dstip_not|default(false) else '' }}">
+    <input type="hidden" name="srcport_not" id="hiddenSrcportNot" value="{{ '1' if current_srcport_not|default(false) else '' }}">
+    <input type="hidden" name="dstport_not" id="hiddenDstportNot" value="{{ '1' if current_dstport_not|default(false) else '' }}">
     </form>
 
     <script>
@@ -3561,6 +4269,13 @@
             document.head.appendChild(this._styleEl);
             this._buildChooserUI();
             this.apply();
+            // Re-scale columns when the table wrapper resizes (e.g., the
+            // Advanced Filters panel toggles open/closed).
+            const wrapper = document.querySelector('.table-wrapper');
+            if (wrapper && typeof ResizeObserver !== 'undefined') {
+                this._ro = new ResizeObserver(() => this.apply());
+                this._ro.observe(wrapper);
+            }
         }
 
         _load() {
@@ -3577,12 +4292,32 @@
 
         apply() {
             const visible = new Set(this.columns.visible);
+            // Scale visible widths so they fill the wrapper. Setting widths in
+            // explicit pixels (instead of relying on the browser to distribute
+            // leftover space) keeps columns stable when the detail row's
+            // colspan cell becomes visible on expand.
+            const wrapper = document.querySelector('.table-wrapper');
+            const wrapperW = wrapper ? wrapper.clientWidth : 0;
+            // _expand has a fixed CSS width and lives outside COLUMN_DEFS, so
+            // subtract its width from the available space before scaling.
+            const FIXED_COLS_WIDTH = 40;
+            let totalDeclared = 0;
+            for (const col of COLUMN_DEFS) {
+                if (visible.has(col.id)) {
+                    totalDeclared += this.columns.widths[col.id] || col.defaultWidth;
+                }
+            }
+            const available = wrapperW - FIXED_COLS_WIDTH;
+            const scale = (available > 0 && totalDeclared > 0 && available > totalDeclared)
+                ? available / totalDeclared : 1;
+
             let css = '';
             for (const col of COLUMN_DEFS) {
                 if (!visible.has(col.id)) {
                     css += `[data-col="${col.id}"] { display: none !important; }\n`;
                 } else {
-                    const w = this.columns.widths[col.id] || col.defaultWidth;
+                    const declared = this.columns.widths[col.id] || col.defaultWidth;
+                    const w = Math.round(declared * scale);
                     css += `.log-table [data-col="${col.id}"] { width: ${w}px; min-width: ${Math.min(w, 60)}px; }\n`;
                 }
             }
@@ -3744,8 +4479,13 @@
                     const timestamp = detailRow.dataset.timestamp;
                     const device = detailRow.dataset.device;
                     const container = document.getElementById(`detail-content-${index}`);
+                    const params = new URLSearchParams({ timestamp, device, index });
+                    ['srcip', 'dstip', 'srcport', 'dstport', 'proto'].forEach(k => {
+                        const v = detailRow.dataset[k];
+                        if (v) params.set(k, v);
+                    });
                     try {
-                        const resp = await fetch(`/logs/detail-panel?timestamp=${encodeURIComponent(timestamp)}&device=${encodeURIComponent(device)}&index=${index}`);
+                        const resp = await fetch(`/logs/detail-panel?${params.toString()}`);
                         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                         container.innerHTML = await resp.text();
                         detailRow.dataset.loaded = 'true';
@@ -3814,6 +4554,37 @@
         }
 
         // Filter functions
+        const EXCLUDABLE_FILTERS = ['srcip', 'dstip', 'srcport', 'dstport'];
+
+        function excludeHiddenId(name) {
+            return 'hidden' + name.charAt(0).toUpperCase() + name.slice(1) + 'Not';
+        }
+
+        function syncExcludeUI(name) {
+            const hidden = document.getElementById(excludeHiddenId(name));
+            const toggle = document.getElementById(name + 'NotToggle');
+            const input = document.querySelector(`input[name="${name}"]`);
+            const isExclude = hidden && hidden.value === '1';
+            if (toggle) toggle.classList.toggle('active', !!isExclude);
+            if (input) input.classList.toggle('exclude-active', !!isExclude);
+        }
+
+        function toggleExcludeField(name) {
+            if (!EXCLUDABLE_FILTERS.includes(name)) return;
+            const hidden = document.getElementById(excludeHiddenId(name));
+            if (!hidden) return;
+            hidden.value = hidden.value === '1' ? '' : '1';
+            syncExcludeUI(name);
+        }
+
+        function toggleFilterExclude(name) {
+            if (!EXCLUDABLE_FILTERS.includes(name)) return;
+            toggleExcludeField(name);
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
         function setFilter(name, value) {
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
             if (hiddenInput) {
@@ -3829,6 +4600,9 @@
             if (input) input.value = '';
             const hiddenInput = document.getElementById('hidden' + name.charAt(0).toUpperCase() + name.slice(1));
             if (hiddenInput) hiddenInput.value = '';
+            const excludeHidden = document.getElementById(excludeHiddenId(name));
+            if (excludeHidden) excludeHidden.value = '';
+            syncExcludeUI(name);
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
@@ -3837,10 +4611,21 @@
         function clearFilters() {
             // Clear all text inputs in toolbar and sidebar
             document.querySelectorAll('.search-input, .sidebar-filter-input').forEach(input => input.value = '');
+            EXCLUDABLE_FILTERS.forEach(name => {
+                const excludeHidden = document.getElementById(excludeHiddenId(name));
+                if (excludeHidden) excludeHidden.value = '';
+                syncExcludeUI(name);
+            });
+            // Clear the NQL bar
+            const nq = document.getElementById('nqlInput');
+            if (nq) nq.value = '';
             // Clear hidden inputs
             document.getElementById('hiddenDevice').value = '';
             document.getElementById('hiddenSeverity').value = '';
             document.getElementById('hiddenAction').value = '';
+            document.getElementById('hiddenScope').value = '';
+            const scopeBox = document.getElementById('scopeInternet');
+            if (scopeBox) scopeBox.checked = false;
             document.getElementById('hiddenPageInput').value = 1;
             document.getElementById('hiddenView').value = '';
             document.getElementById('hiddenGroupBy').value = 'srcip,dstip,dstport';
@@ -3867,6 +4652,164 @@
             document.getElementById('hiddenPageInput').value = 1;
             showLoading();
             document.getElementById('filterForm').submit();
+        }
+
+        // Toggle compare-vs-prior-window mode
+        function toggleCompareMode() {
+            const input = document.getElementById('hiddenCompare');
+            if (!input) return;
+            input.value = input.value === '1' ? '' : '1';
+            document.getElementById('hiddenPageInput').value = 1;
+            showLoading();
+            document.getElementById('filterForm').submit();
+        }
+
+        // Live mode — auto-refresh aggregate every 30s for short windows.
+        // Persists across reloads via sessionStorage; restores scroll.
+        const LIVE_KEY = 'zentryc_logs_live_mode';
+        const LIVE_SCROLL_KEY = 'zentryc_logs_live_scroll';
+        let _liveTimer = null;
+        function liveModeAllowed() {
+            const tr = (document.getElementById('hiddenTimeRange') || {}).value || '';
+            // Allow ≤ 1h windows. Anything longer makes a 30s refresh ~useless.
+            return /^(\d+m|1h)$/.test(tr);
+        }
+        function setLiveMode(on) {
+            const btn = document.getElementById('liveModeBtn');
+            const lbl = document.getElementById('liveModeLabel');
+            if (on && !liveModeAllowed()) {
+                alert('Live mode is only enabled for time ranges ≤ 1 hour. Pick 1m / 5m / 1h first.');
+                return;
+            }
+            if (on) {
+                sessionStorage.setItem(LIVE_KEY, '1');
+                document.body.classList.add('live-mode-active');
+                if (lbl) lbl.textContent = 'Live (30s)';
+                _liveTimer = setInterval(() => {
+                    sessionStorage.setItem(LIVE_SCROLL_KEY,
+                        String(window.scrollY || document.documentElement.scrollTop || 0));
+                    window.location.reload();
+                }, 30000);
+            } else {
+                sessionStorage.removeItem(LIVE_KEY);
+                document.body.classList.remove('live-mode-active');
+                if (lbl) lbl.textContent = 'Go Live';
+                if (_liveTimer) clearInterval(_liveTimer);
+                _liveTimer = null;
+            }
+        }
+        function toggleLiveMode() {
+            setLiveMode(sessionStorage.getItem(LIVE_KEY) !== '1');
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            // Restore previous scroll if we just auto-reloaded
+            const sy = sessionStorage.getItem(LIVE_SCROLL_KEY);
+            if (sy) {
+                window.scrollTo(0, parseInt(sy, 10) || 0);
+                sessionStorage.removeItem(LIVE_SCROLL_KEY);
+            }
+            if (sessionStorage.getItem(LIVE_KEY) === '1' && liveModeAllowed()) {
+                setLiveMode(true);
+            } else if (sessionStorage.getItem(LIVE_KEY) === '1') {
+                // Window changed away from a supported range — auto-disable.
+                sessionStorage.removeItem(LIVE_KEY);
+            }
+        });
+
+        // ── Block-source dialog ─────────────────────────────────────
+        function openBlockSourceDialog(btn) {
+            const ips = (btn.dataset.srcIps || '').split(',').map(s => s.trim()).filter(Boolean);
+            const subnet = btn.dataset.srcSubnet || '';
+            const dstip = btn.dataset.dstip || '';
+            const dstport = btn.dataset.dstport || '';
+            const desc = `auto-blocked from logs aggregate (→ ${dstip}:${dstport})`;
+            const initial = subnet ? [subnet] : ips;
+
+            let modal = document.getElementById('blockSrcModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'blockSrcModal';
+                modal.className = 'lm-modal-backdrop';
+                modal.innerHTML = `
+                    <div class="lm-modal" role="dialog" aria-modal="true">
+                        <h3>Add source(s) to a Block EDL</h3>
+                        <div style="font-size:.82rem;color:var(--text-muted,#94a3b8);">
+                            Select an EDL list (type IP) and review the values.
+                        </div>
+                        <label for="blockEdlSelect">EDL list</label>
+                        <select id="blockEdlSelect"><option value="">Loading…</option></select>
+                        <label for="blockEdlValues">Values</label>
+                        <textarea id="blockEdlValues" rows="6"></textarea>
+                        <label for="blockEdlDesc">Description (optional)</label>
+                        <input type="text" id="blockEdlDesc">
+                        <div id="blockEdlMsg" style="margin-top:.5rem;font-size:.82rem;"></div>
+                        <div class="lm-modal-actions">
+                            <button class="btn btn-secondary" type="button" onclick="closeBlockSourceDialog()">Cancel</button>
+                            <button class="btn btn-primary" type="button" id="blockEdlSubmit">Add to EDL</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeBlockSourceDialog();
+                });
+            }
+
+            modal.querySelector('#blockEdlValues').value = initial.join('\n');
+            modal.querySelector('#blockEdlDesc').value = desc;
+            modal.querySelector('#blockEdlMsg').textContent = '';
+            modal.classList.add('show');
+
+            // Load IP-typed EDLs
+            const sel = modal.querySelector('#blockEdlSelect');
+            sel.innerHTML = '<option value="">Loading…</option>';
+            fetch('/api/edl/?list_type=IP', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(lists => {
+                    if (!Array.isArray(lists) || !lists.length) {
+                        sel.innerHTML = '<option value="">No IP EDL lists — create one in EDL section</option>';
+                        return;
+                    }
+                    sel.innerHTML = lists.map(l =>
+                        `<option value="${l.id}">${l.name} (${l.active_entry_count} active)</option>`
+                    ).join('');
+                })
+                .catch(e => { sel.innerHTML = `<option value="">Failed: ${e}</option>`; });
+
+            modal.querySelector('#blockEdlSubmit').onclick = async () => {
+                const edlId = sel.value;
+                const values = modal.querySelector('#blockEdlValues').value
+                    .split('\n').map(s => s.trim()).filter(Boolean);
+                const description = modal.querySelector('#blockEdlDesc').value.trim();
+                const msg = modal.querySelector('#blockEdlMsg');
+                if (!edlId) { msg.textContent = 'Pick an EDL list.'; msg.style.color = '#fca5a5'; return; }
+                if (!values.length) { msg.textContent = 'No values to add.'; msg.style.color = '#fca5a5'; return; }
+                msg.textContent = 'Adding…'; msg.style.color = '';
+                try {
+                    const headers = { 'Content-Type': 'application/json' };
+                    // CSRF middleware: base.html patches fetch() to inject the token,
+                    // so no manual header here. Pass JSON body directly.
+                    const r = await fetch(`/api/edl/${edlId}/entries/bulk-add/`, {
+                        method: 'POST', credentials: 'same-origin', headers,
+                        body: JSON.stringify({ values, description }),
+                    });
+                    const j = await r.json();
+                    if (!r.ok || !j.success) {
+                        msg.textContent = `Failed: ${j.error || r.status}`;
+                        msg.style.color = '#fca5a5';
+                        return;
+                    }
+                    msg.style.color = '#86efac';
+                    msg.textContent = `Added ${j.added}, skipped ${j.skipped_duplicate} duplicate(s), ${(j.skipped_invalid||[]).length} invalid.`;
+                    setTimeout(closeBlockSourceDialog, 1400);
+                } catch (e) {
+                    msg.textContent = `Error: ${e.message || e}`;
+                    msg.style.color = '#fca5a5';
+                }
+            };
+        }
+        function closeBlockSourceDialog() {
+            const m = document.getElementById('blockSrcModal');
+            if (m) m.classList.remove('show');
         }
 
         // Toggle group-by field (multi-select, at least one must remain)
@@ -3932,7 +4875,8 @@
 
         // Sidebar
         function toggleSection(header) {
-            header.closest('.sidebar-section').classList.toggle('collapsed');
+            const section = header.closest('.sidebar-section');
+            if (section) section.classList.toggle('collapsed');
         }
 
         function toggleSidebar() {
@@ -4174,7 +5118,7 @@
     function getCurrentFilters() {
         const form = document.getElementById('filterForm');
         const params = {};
-        const fields = ['srcip', 'dstip', 'srcport', 'dstport', 'protocol', 'application',
+        const fields = ['srcip', 'dstip', 'srcport', 'dstport', 'srcip_not', 'dstip_not', 'srcport_not', 'dstport_not', 'protocol', 'application',
                         'device', 'severity', 'action', 'time_range', 'per_page', 'q',
                         'session_end_reason', 'policyname', 'log_type', 'threat_id', 'src_zone', 'dst_zone',
                         'start', 'end'];
@@ -4239,132 +5183,242 @@
     // ============================
     // NQL Query Language
     // ============================
-    const NQL_FIELDS = [
-        { name: 'srcip', type: 'ip', desc: 'Source IP' },
-        { name: 'dstip', type: 'ip', desc: 'Destination IP' },
-        { name: 'srcport', type: 'number', desc: 'Source port' },
-        { name: 'dstport', type: 'number', desc: 'Destination port' },
-        { name: 'proto', type: 'string', desc: 'Protocol number' },
-        { name: 'action', type: 'string', desc: 'Firewall action' },
-        { name: 'severity', type: 'number', desc: 'Severity (0-7)' },
-        { name: 'device', type: 'ip', desc: 'Device IP' },
-        { name: 'policyname', type: 'string', desc: 'Policy name' },
-        { name: 'log_type', type: 'string', desc: 'Log type' },
-        { name: 'application', type: 'string', desc: 'Application' },
-        { name: 'src_zone', type: 'string', desc: 'Source zone' },
-        { name: 'dst_zone', type: 'string', desc: 'Destination zone' },
-        { name: 'session_end_reason', type: 'string', desc: 'Session end reason' },
-        { name: 'threat_id', type: 'string', desc: 'Threat ID' },
-        { name: 'message', type: 'text', desc: 'Log message' },
-    ];
-
+    // Generic, context-aware search. The server decides what the cursor is
+    // sitting on (field name / value / operator / pipeline stage) and returns
+    // the matching completions — including live values counted from ClickHouse —
+    // so every field any parser emits is searchable without a frontend change.
     const nqlInput = document.getElementById('nqlInput');
     const nqlStatus = document.getElementById('nqlStatus');
     const nqlAutocomplete = document.getElementById('nqlAutocomplete');
+    const nqlAcLoading = document.getElementById('nqlAcLoading');
     let nqlValidateTimer = null;
+    let nqlSuggestTimer = null;
     let nqlSelectedAC = -1;
+    let nqlSuggestSeq = 0;          // drop responses that arrive out of order
+    let nqlItems = [];              // flat list matching the rendered rows
+    let nqlRange = { start: 0, end: 0 };
+    const nqlSuggestCache = new Map();
 
-    // Validate on typing (debounced)
+    function nqlTimeRange() {
+        const activePill = document.querySelector('.time-pill.active');
+        return activePill ? activePill.dataset.range : '1h';
+    }
+
     nqlInput.addEventListener('input', () => {
+        renderHighlight();
         clearTimeout(nqlValidateTimer);
         nqlValidateTimer = setTimeout(() => validateNQL(), 500);
-        showAutocomplete();
+        scheduleAutocomplete();
     });
+    // Keep the coloured mirror aligned with the input as it scrolls.
+    ['scroll', 'keyup', 'click', 'focus', 'blur', 'select'].forEach(ev =>
+        nqlInput.addEventListener(ev, () => { nqlHl.scrollLeft = nqlInput.scrollLeft; }));
 
-    // Run on Enter
+    // Moving the caret changes what we should be completing, even with no edit.
+    nqlInput.addEventListener('click', () => scheduleAutocomplete());
+    nqlInput.addEventListener('focus', () => scheduleAutocomplete());
+
     nqlInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            const ac = nqlAutocomplete;
-            if (ac.classList.contains('visible')) {
-                const selected = ac.querySelector('.selected');
-                if (selected) {
-                    e.preventDefault();
-                    selected.click();
-                    return;
-                }
-            }
+        const open = nqlAutocomplete.classList.contains('visible');
+        if (e.key === 'Enter') {
+            // Enter runs the search. It only picks a suggestion when the user
+            // has explicitly moved onto one (arrow keys / hover).
             e.preventDefault();
+            if (open && nqlSelectedAC >= 0) { applySuggestion(nqlSelectedAC); return; }
             runNQL();
-        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            return;
+        }
+        if (e.key === 'Tab') {
+            if (open && nqlItems.length) {
+                e.preventDefault();
+                applySuggestion(nqlSelectedAC >= 0 ? nqlSelectedAC : 0);
+            }
+            return;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!open) { scheduleAutocomplete(0); return; }
             e.preventDefault();
             navigateAutocomplete(e.key === 'ArrowDown' ? 1 : -1);
-        } else if (e.key === 'Escape') {
+            return;
+        }
+        if (e.key === 'Escape') {
+            if (open) { e.preventDefault(); e.stopPropagation(); hideAutocomplete(); }
+            return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+            scheduleAutocomplete();
+        }
+    });
+
+    nqlInput.addEventListener('blur', () => { setTimeout(hideAutocomplete, 180); });
+
+    function scheduleAutocomplete(delay) {
+        clearTimeout(nqlSuggestTimer);
+        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 130 : delay);
+    }
+
+    async function fetchAutocomplete() {
+        const q = nqlInput.value;
+        const cursor = nqlInput.selectionStart ?? q.length;
+        const range = nqlTimeRange();
+        const key = `${range} ${cursor} ${q}`;
+
+        if (nqlSuggestCache.has(key)) { renderAutocomplete(nqlSuggestCache.get(key)); return; }
+
+        const seq = ++nqlSuggestSeq;
+        nqlAcLoading.classList.add('on');
+        try {
+            const res = await fetch(`/api/nql/suggest?q=${encodeURIComponent(q)}` +
+                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`);
+            if (seq !== nqlSuggestSeq) return;        // a newer keystroke won
+            if (!res.ok) { hideAutocomplete(); return; }
+            const data = await res.json();
+            if (seq !== nqlSuggestSeq) return;
+            nqlSuggestCache.set(key, data);
+            if (nqlSuggestCache.size > 200) nqlSuggestCache.delete(nqlSuggestCache.keys().next().value);
+            renderAutocomplete(data);
+        } catch (e) {
             hideAutocomplete();
-        } else if (e.key === 'Tab') {
-            const ac = nqlAutocomplete;
-            if (ac.classList.contains('visible')) {
-                const selected = ac.querySelector('.selected') || ac.querySelector('.nql-autocomplete-item');
-                if (selected) {
-                    e.preventDefault();
-                    selected.click();
-                }
+        } finally {
+            if (seq === nqlSuggestSeq) nqlAcLoading.classList.remove('on');
+        }
+    }
+
+    function nqlEsc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // Bold the part of the label the user has already typed.
+    function nqlHighlight(label, token) {
+        const safe = nqlEsc(label);
+        if (!token) return safe;
+        const i = label.toLowerCase().indexOf(token.toLowerCase());
+        if (i < 0) return safe;
+        return nqlEsc(label.slice(0, i)) +
+               '<span class="nql-ac-hit">' + nqlEsc(label.slice(i, i + token.length)) + '</span>' +
+               nqlEsc(label.slice(i + token.length));
+    }
+
+    function renderAutocomplete(data) {
+        let list = data.suggestions || [];
+        // Empty bar: offer this browser's recent searches first, like a
+        // firewall's log search history.
+        if (!nqlInput.value.trim() && data.context === 'field') {
+            const rec = nqlRecent().map(q => ({ insert: q, label: q, detail: 'recent search',
+                                                meta: 'recent', group: 'Recent', whole: true }));
+            list = rec.concat(list);
+        }
+        nqlItems = list;
+        nqlRange = { start: data.replace_start, end: data.replace_end };
+
+        if (!list.length) { hideAutocomplete(); return; }
+
+        const token = (data.context === 'value' || data.context === 'field') ? (data.token || '') : '';
+        let html = '';
+        let group = null;
+        list.forEach((s, i) => {
+            if (s.group !== group) {
+                group = s.group;
+                html += `<div class="nql-ac-group">${nqlEsc(group)}</div>`;
             }
-        }
-    });
+            const badge = s.meta ? `<span class="nql-ac-badge t-${nqlEsc(s.meta)}">${nqlEsc(s.meta)}</span>` : '';
+            html += `<div class="nql-autocomplete-item" role="option" data-idx="${i}">` +
+                    `<span class="nql-ac-label">${nqlHighlight(s.label, token)}</span>` +
+                    `<span class="nql-ac-detail">${nqlEsc(s.detail || s.example || '')}</span>` +
+                    badge +
+                    `</div>`;
+        });
+        html += `<div class="nql-ac-footer">` +
+                `<span><kbd>Tab</kbd> complete</span>` +
+                `<span><kbd>&uarr;</kbd><kbd>&darr;</kbd> choose</span>` +
+                `<span><kbd>Enter</kbd> search</span>` +
+                `<span><kbd>Esc</kbd> close</span>` +
+                `</div>`;
+        nqlAutocomplete.innerHTML = html;
 
-    nqlInput.addEventListener('blur', () => {
-        setTimeout(hideAutocomplete, 200);
-    });
+        nqlAutocomplete.querySelectorAll('.nql-autocomplete-item').forEach(el => {
+            // mousedown fires before the input's blur, so the click isn't lost.
+            el.addEventListener('mousedown', (ev) => {
+                ev.preventDefault();
+                applySuggestion(parseInt(el.dataset.idx, 10));
+            });
+            // mousemove, not mouseenter: re-rendering the list under a stationary
+            // pointer fires mouseenter and would silently steal the keyboard
+            // selection mid-typing.
+            el.addEventListener('mousemove', () => setSelected(parseInt(el.dataset.idx, 10), false));
+        });
 
-    function showAutocomplete() {
-        const val = nqlInput.value;
-        const cursorPos = nqlInput.selectionStart;
-        const textBefore = val.substring(0, cursorPos);
-
-        // Get the current "word" being typed
-        const wordMatch = textBefore.match(/(\S+)$/);
-        if (!wordMatch) { hideAutocomplete(); return; }
-        const currentWord = wordMatch[1].toLowerCase();
-
-        // If typing a field name (no colon yet)
-        if (!currentWord.includes(':')) {
-            const matches = NQL_FIELDS.filter(f => f.name.startsWith(currentWord));
-            if (matches.length === 0 || currentWord.length < 1) { hideAutocomplete(); return; }
-
-            nqlAutocomplete.innerHTML = matches.map((f, i) =>
-                `<div class="nql-autocomplete-item${i === 0 ? ' selected' : ''}" onclick="insertAutocomplete('${f.name}:')">
-                    <span>${f.name}:</span>
-                    <span class="nql-ac-type">${f.desc}</span>
-                </div>`
-            ).join('');
-            nqlAutocomplete.classList.add('visible');
-            nqlSelectedAC = 0;
-        } else {
-            hideAutocomplete();
-        }
+        nqlAutocomplete.classList.add('visible');
+        nqlInput.setAttribute('aria-expanded', 'true');
+        nqlSelectedAC = -1;           // nothing chosen until the user moves onto one
     }
 
     function hideAutocomplete() {
         nqlAutocomplete.classList.remove('visible');
+        nqlInput.setAttribute('aria-expanded', 'false');
         nqlSelectedAC = -1;
+        nqlItems = [];
+    }
+
+    function setSelected(idx, scroll = true) {
+        const items = nqlAutocomplete.querySelectorAll('.nql-autocomplete-item');
+        if (!items.length) return;
+        items.forEach(i => i.classList.remove('selected'));
+        if (idx < 0) { nqlSelectedAC = -1; return; }      // back to "nothing chosen"
+        idx = Math.min(items.length - 1, idx);
+        items[idx].classList.add('selected');
+        nqlSelectedAC = idx;
+        if (scroll) items[idx].scrollIntoView({ block: 'nearest' });
     }
 
     function navigateAutocomplete(dir) {
-        const items = nqlAutocomplete.querySelectorAll('.nql-autocomplete-item');
-        if (items.length === 0) return;
-        items.forEach(i => i.classList.remove('selected'));
-        nqlSelectedAC = Math.max(0, Math.min(items.length - 1, nqlSelectedAC + dir));
-        items[nqlSelectedAC].classList.add('selected');
-        items[nqlSelectedAC].scrollIntoView({ block: 'nearest' });
+        setSelected(nqlSelectedAC + dir);
     }
 
-    function insertAutocomplete(text) {
+    function applySuggestion(idx) {
+        const s = nqlItems[idx];
+        if (!s) return;
+        if (s.whole) {                 // a recent search: replace everything and run
+            nqlInput.value = s.insert;
+            renderHighlight();
+            runNQL();
+            return;
+        }
         const val = nqlInput.value;
-        const cursorPos = nqlInput.selectionStart;
-        const textBefore = val.substring(0, cursorPos);
-        const textAfter = val.substring(cursorPos);
-        const wordMatch = textBefore.match(/(\S+)$/);
-        const wordStart = wordMatch ? cursorPos - wordMatch[1].length : cursorPos;
+        const start = Math.max(0, Math.min(val.length, nqlRange.start));
+        const end = Math.max(start, Math.min(val.length, nqlRange.end));
+        const next = val.slice(0, start) + s.insert + val.slice(end);
+        const caret = start + s.insert.length;
 
-        nqlInput.value = val.substring(0, wordStart) + text + textAfter;
+        nqlInput.value = next;
         nqlInput.focus();
-        nqlInput.selectionStart = nqlInput.selectionEnd = wordStart + text.length;
+        nqlInput.setSelectionRange(caret, caret);
+        renderHighlight();
         hideAutocomplete();
+
+        clearTimeout(nqlValidateTimer);
+        nqlValidateTimer = setTimeout(() => validateNQL(), 300);
+        // Completing a field name lands the caret right after the colon —
+        // immediately offer that field's values, the way FortiAnalyzer does.
+        scheduleAutocomplete(0);
+    }
+
+    // A query that ends mid-token (`srcip:`, `dstport:>=`, `... AND`, `(`, `|`)
+    // is being typed, not finished — showing "missing value" there is noise.
+    function nqlLooksUnfinished(q) {
+        return /(?::|:[!<>=~]+|\bAND|\bOR|\bNOT|\(|\||\bby|,)\s*$/i.test(q);
     }
 
     async function validateNQL() {
         const query = nqlInput.value.trim();
         if (!query) {
+            nqlInput.classList.remove('nql-error', 'nql-valid');
+            nqlStatus.textContent = '';
+            nqlStatus.className = 'nql-status';
+            return;
+        }
+        if (nqlLooksUnfinished(query)) {
             nqlInput.classList.remove('nql-error', 'nql-valid');
             nqlStatus.textContent = '';
             nqlStatus.className = 'nql-status';
@@ -4386,6 +5440,7 @@
                 nqlInput.classList.remove('nql-valid');
                 nqlInput.classList.add('nql-error');
                 nqlStatus.textContent = data.error || 'Invalid';
+                nqlStatus.title = data.error || '';
                 nqlStatus.className = 'nql-status error';
             }
         } catch (e) {
@@ -4393,141 +5448,248 @@
         }
     }
 
-    async function runNQL() {
-        const query = nqlInput.value.trim();
-        if (!query) return;
+    // ── Run / navigate ───────────────────────────────────────
+    // The NQL bar IS the search: running it submits the page form, so the real
+    // table below (and the facets, count, export, saved searches) all render
+    // from the same query and time range. `| stats` queries come back as an
+    // aggregate table in the same place.
+    const NQL_RECENT_KEY = 'zentryc_nql_recent';
+    const NQL_HAS_QUERY = {{ 'true' if current_q else 'false' }};
 
-        nqlStatus.textContent = 'Running...';
-        nqlStatus.className = 'nql-status';
-
-        // Get current time range from the time pills
-        const activePill = document.querySelector('.time-pill.active');
-        const timeRange = activePill ? activePill.dataset.range : '1h';
-
+    function nqlRecent() {
+        try { return JSON.parse(localStorage.getItem(NQL_RECENT_KEY) || '[]'); } catch (e) { return []; }
+    }
+    function rememberRecent(q) {
+        if (!q) return;
         try {
-            const res = await fetch('/api/nql/query', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, time_range: timeRange, per_page: 200 }),
-            });
-            const data = await res.json();
+            const list = nqlRecent().filter(x => x !== q);
+            list.unshift(q);
+            localStorage.setItem(NQL_RECENT_KEY, JSON.stringify(list.slice(0, 12)));
+        } catch (e) {}
+    }
 
-            if (!res.ok) {
-                nqlStatus.textContent = data.detail || 'Error';
-                nqlStatus.className = 'nql-status error';
-                nqlInput.classList.add('nql-error');
-                return;
+    // GET forms put every field in the URL. Empty ones (and the CSRF token,
+    // meaningless on a GET) only make links long, so they are dropped at
+    // submit time — the server treats a missing and an empty parameter alike.
+    (function () {
+        const form = document.getElementById('filterForm');
+        const prune = () => form.querySelectorAll('input, select').forEach(el => {
+            if (el.name === 'csrf_token' || (el.name && el.value === '')) el.disabled = true;
+        });
+        form.addEventListener('submit', prune);                 // Search / Apply buttons
+        const nativeSubmit = form.submit.bind(form);            // every script path
+        form.submit = () => { prune(); nativeSubmit(); };
+    })();
+
+    function runNQL() {
+        const query = nqlInput.value.trim();
+        nqlInput.value = query;
+        hideAutocomplete();
+        rememberRecent(query);
+        nqlStatus.textContent = query ? 'Searching…' : '';
+        nqlStatus.className = 'nql-status';
+        document.getElementById('hiddenPageInput').value = 1;
+        showLoading();
+        document.getElementById('filterForm').submit();
+    }
+
+    function clearNQL() {
+        nqlInput.value = '';
+        renderHighlight();
+        hideAutocomplete();
+        if (NQL_HAS_QUERY) { runNQL(); return; }
+        nqlInput.focus();
+    }
+
+    // Split "filter | pipeline" the same way the server does: a pipe preceded
+    // by whitespace (outside quotes) starts a pipeline stage.
+    function nqlSplit(q) {
+        let inQ = false;
+        for (let i = 0; i < q.length; i++) {
+            const ch = q[i];
+            if (ch === '"') inQ = !inQ;
+            else if (ch === '|' && !inQ && (i === 0 || /\s/.test(q[i - 1]))) {
+                return { filter: q.slice(0, i).trim(), pipeline: q.slice(i + 1).trim() };
             }
+        }
+        return { filter: q.trim(), pipeline: '' };
+    }
+    function nqlTerm(field, value) {
+        if (value === '' || value == null) return field + ':""';
+        return field + ':' + (/[\s()"|]/.test(value) ? '"' + value.replace(/"/g, '\\"') + '"' : value);
+    }
+    function nqlAddTerms(filter, terms) {
+        // Parenthesise an OR expression so the new AND-ed terms bind correctly.
+        const base = filter && /\bOR\b/i.test(filter) ? '(' + filter + ')' : filter;
+        return [base].concat(terms).filter(Boolean).join(' ');
+    }
+    // Aggregate drill-down: click a group value -> logs filtered to it.
+    function nqlDrill(el) {
+        const { filter } = nqlSplit(nqlInput.value);
+        nqlInput.value = nqlAddTerms(filter, [nqlTerm(el.dataset.field, el.dataset.value)]);
+        runNQL();
+    }
+    function nqlDrillRow(btn) {
+        const { filter } = nqlSplit(nqlInput.value);
+        const terms = Array.from(btn.closest('tr').querySelectorAll('.nql-drill'))
+            .map(el => nqlTerm(el.dataset.field, el.dataset.value));
+        nqlInput.value = nqlAddTerms(filter, terms);
+        runNQL();
+    }
+    function nqlShowLogs() {
+        nqlInput.value = nqlSplit(nqlInput.value).filter;
+        runNQL();
+    }
+    function exportCurrent() {
+        const p = new URLSearchParams(window.location.search);
+        p.set('format', 'csv');
+        window.location.href = '/logs/export?' + p.toString();
+    }
 
-            nqlInput.classList.remove('nql-error');
-            nqlInput.classList.add('nql-valid');
+    // ── Syntax highlighting ──────────────────────────────────
+    // A coloured mirror of the input sits underneath it; the input's own text
+    // is transparent so only the caret and selection show.
+    const nqlHl = document.getElementById('nqlHl');
+    const nqlClearBtn = document.getElementById('nqlClearBtn');
 
-            if (data.type === 'aggregate') {
-                // Show aggregate results in the NQL results panel
-                showNQLResults(data);
-                nqlStatus.textContent = `${data.rows.length} rows`;
-                nqlStatus.className = 'nql-status success';
-            } else {
-                // Regular log query - show total then reload page with NQL as q param
-                nqlStatus.textContent = `${data.total.toLocaleString()} results`;
-                nqlStatus.className = 'nql-status success';
-                showNQLLogResults(data);
+    function renderHighlight() {
+        nqlHl.innerHTML = nqlColorize(nqlInput.value);
+        nqlHl.scrollLeft = nqlInput.scrollLeft;
+        nqlClearBtn.hidden = !nqlInput.value;
+    }
+
+    function nqlColorize(q) {
+        const span = (cls, t) => '<span class="' + cls + '">' + nqlEsc(t) + '</span>';
+        const STR = /^"(?:[^"\\]|\\.)*(?:"|$)/;
+        let out = '', i = 0, inPipeline = false, m;
+        while (i < q.length) {
+            const rest = q.slice(i);
+            if ((m = /^\s+/.exec(rest)))              { out += nqlEsc(m[0]); i += m[0].length; continue; }
+            if ((m = STR.exec(rest)))                  { out += span('t-str', m[0]); i += m[0].length; continue; }
+            if (rest[0] === '|' && (i === 0 || /\s/.test(q[i - 1]))) {
+                out += span('t-pipe', '|'); i += 1; inPipeline = true; continue;
             }
+            if (rest[0] === '(' || rest[0] === ')') { out += span('t-paren', rest[0]); i += 1; continue; }
+            if (!inPipeline && (m = /^(AND|OR|NOT)(?![\w:])/i.exec(rest))) {
+                out += span('t-kw', m[0]); i += m[0].length; continue;
+            }
+            if (inPipeline && (m = /^(stats|where|sort|limit|by|as|count|sum|avg|min|max|uniqExact|uniq)(?![\w:])/i.exec(rest))) {
+                out += span('t-cmd', m[0]); i += m[0].length; continue;
+            }
+            if (!inPipeline && (m = /^(-?)(\w+)(:)(!=|>=|<=|>|<|=|~)?/.exec(rest))) {
+                out += (m[1] ? span('t-neg', '-') : '') + span('t-field', m[2]) + span('t-op', m[3] + (m[4] || ''));
+                i += m[0].length;
+                const vrest = q.slice(i);
+                const vm = STR.exec(vrest) || /^[^\s()]*/.exec(vrest);
+                if (vm && vm[0]) { out += span(vm[0][0] === '"' ? 't-str' : 't-val', vm[0]); i += vm[0].length; }
+                continue;
+            }
+            if ((m = /^[^\s()"]+/.exec(rest))) { out += span(inPipeline ? 't-val' : 't-text', m[0]); i += m[0].length; continue; }
+            out += nqlEsc(rest[0]); i += 1;
+        }
+        return out;
+    }
+    renderHighlight();
+
+    // "/" anywhere on the page jumps to the search bar (unless typing elsewhere).
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+        const t = e.target, tag = (t.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+        e.preventDefault();
+        nqlInput.focus();
+        nqlInput.setSelectionRange(nqlInput.value.length, nqlInput.value.length);
+    });
+
+
+    // ── Searchable-field reference ───────────────────────────
+    let nqlSchemaCache = null;
+
+    async function toggleNQLHelp() {
+        const modal = document.getElementById('nqlHelpModal');
+        if (modal.style.display === 'flex') { modal.style.display = 'none'; return; }
+        modal.style.display = 'flex';
+        if (nqlSchemaCache) { renderNQLHelp(nqlSchemaCache); return; }
+        const body = document.getElementById('nqlHelpBody');
+        body.innerHTML = '<div style="padding:20px;color:var(--text-muted);">Loading field reference…</div>';
+        try {
+            const res = await fetch('/api/nql/schema');
+            nqlSchemaCache = await res.json();
+            renderNQLHelp(nqlSchemaCache);
         } catch (e) {
-            nqlStatus.textContent = 'Request failed';
-            nqlStatus.className = 'nql-status error';
+            body.innerHTML = '<div style="padding:20px;color:var(--accent-red);">Could not load the field reference.</div>';
         }
     }
 
-    function showNQLResults(data) {
-        const panel = document.getElementById('nqlResults');
-        if (!data.rows || data.rows.length === 0) {
-            panel.innerHTML = `
-                <div class="nql-results-header">
-                    <span class="nql-results-info">No results</span>
-                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
+    function closeNQLHelp() { document.getElementById('nqlHelpModal').style.display = 'none'; }
+
+    function renderNQLHelp(schema) {
+        const cell = (v) => `<td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);">${nqlEsc(v)}</td>`;
+        const mono = (v) => `<td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono);color:var(--accent-cyan);white-space:nowrap;">${nqlEsc(v)}</td>`;
+        let html = '';
+
+        html += `<div style="padding:10px 16px;border-bottom:1px solid var(--border-default);">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">SYNTAX</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;font-size:11px;">
+            ${(schema.operators || []).map(o =>
+                `<div><code style="color:var(--accent-cyan);font-family:var(--font-mono);">${nqlEsc(o.example)}</code>
+                 <span style="color:var(--text-muted);"> — ${nqlEsc(o.description)}</span></div>`).join('')}
+            ${(schema.keywords || []).concat(schema.pipeline || []).map(k =>
+                `<div><code style="color:var(--accent-cyan);font-family:var(--font-mono);">${nqlEsc(k.example)}</code>
+                 <span style="color:var(--text-muted);"> — ${nqlEsc(k.description)}</span></div>`).join('')}
+            </div></div>`;
+
+        Object.keys(schema.groups || {}).forEach(cat => {
+            html += `<div style="padding:10px 16px 0;font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">${nqlEsc(cat)}</div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;margin:4px 0 8px;">`;
+            schema.groups[cat].forEach(f => {
+                const aliases = f.aliases && f.aliases.length ? f.aliases.join(', ') : '';
+                html += `<tr onclick="useNQLField('${nqlEsc(f.name)}')" style="cursor:pointer;">
+                    ${mono(f.name)}${cell(f.type)}${cell(f.description)}
+                    <td style="padding:4px 10px;border-bottom:1px solid var(--border-subtle);color:var(--text-ghost);font-family:var(--font-mono);">${nqlEsc(aliases)}</td>
+                </tr>`;
+            });
+            html += `</table>`;
+        });
+
+        const dyn = schema.dynamic || [];
+        if (dyn.length) {
+            html += `<div style="padding:10px 16px;font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">
+                    Other parsed fields seen in your logs (${dyn.length})</div>
+                <div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:5px;">
+                ${dyn.map(k => `<span onclick="useNQLField('${nqlEsc(k)}')"
+                    style="cursor:pointer;font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:10px;
+                           background:var(--bg-deep);border:1px solid var(--border-subtle);color:var(--text-secondary);"
+                    >${nqlEsc(k)}</span>`).join('')}
                 </div>`;
-            panel.classList.add('visible');
-            return;
         }
-
-        const cols = data.columns || Object.keys(data.rows[0]);
-        let html = `
-            <div class="nql-results-header">
-                <span class="nql-results-info">Aggregate: ${data.rows.length} rows</span>
-                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-            </div>
-            <div class="nql-results-body">
-            <table>
-                <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-                <tbody>`;
-
-        for (const row of data.rows) {
-            html += '<tr>';
-            for (const col of cols) {
-                let val = row[col];
-                if (typeof val === 'number') val = val.toLocaleString();
-                html += `<td>${val ?? ''}</td>`;
-            }
-            html += '</tr>';
-        }
-
-        html += '</tbody></table></div>';
-        panel.innerHTML = html;
-        panel.classList.add('visible');
+        document.getElementById('nqlHelpBody').innerHTML = html;
     }
 
-    function showNQLLogResults(data) {
-        // For non-aggregate queries, show results in the NQL panel
-        const panel = document.getElementById('nqlResults');
-        if (!data.rows || data.rows.length === 0) {
-            panel.innerHTML = `
-                <div class="nql-results-header">
-                    <span class="nql-results-info">No matching logs (total: ${(data.total || 0).toLocaleString()})</span>
-                    <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-                </div>`;
-            panel.classList.add('visible');
-            return;
-        }
-
-        const displayCols = ['timestamp', 'device_ip', 'severity', 'srcip', 'dstip', 'dstport', 'action', 'message'];
-        const sevNames = {0:'Emergency',1:'Alert',2:'Critical',3:'Error',4:'Warning',5:'Notice',6:'Info',7:'Debug'};
-
-        let html = `
-            <div class="nql-results-header">
-                <span class="nql-results-info">${data.total.toLocaleString()} total matches (showing ${data.rows.length})</span>
-                <button class="nql-results-close" onclick="closeNQLResults()">&times;</button>
-            </div>
-            <div class="nql-results-body">
-            <table>
-                <thead><tr>${displayCols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-                <tbody>`;
-
-        for (const row of data.rows) {
-            html += '<tr>';
-            for (const col of displayCols) {
-                let val = row[col] ?? '';
-                if (col === 'timestamp' && val) {
-                    val = val.replace('T', ' ').substring(0, 19);
-                } else if (col === 'severity') {
-                    val = sevNames[val] || val;
-                } else if (col === 'message' && typeof val === 'string' && val.length > 120) {
-                    val = val.substring(0, 120) + '...';
-                }
-                html += `<td>${val}</td>`;
-            }
-            html += '</tr>';
-        }
-
-        html += '</tbody></table></div>';
-        panel.innerHTML = html;
-        panel.classList.add('visible');
-    }
-
-    function closeNQLResults() {
-        document.getElementById('nqlResults').classList.remove('visible');
+    function useNQLField(name) {
+        closeNQLHelp();
+        const sep = nqlInput.value && !/\s$/.test(nqlInput.value) ? ' ' : '';
+        nqlInput.value = nqlInput.value + sep + name + ':';
+        nqlInput.focus();
+        nqlInput.setSelectionRange(nqlInput.value.length, nqlInput.value.length);
+        scheduleAutocomplete(0);
     }
     </script>
+
+    <!-- Searchable-field reference -->
+    <div id="nqlHelpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;
+         align-items:center;justify-content:center;" onclick="if(event.target===this)closeNQLHelp()">
+        <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-sm);
+                    width:min(920px,92vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+                        border-bottom:1px solid var(--border-default);">
+                <strong style="font-size:13px;">Searchable fields &amp; query syntax</strong>
+                <button onclick="closeNQLHelp()" style="background:none;border:none;color:var(--text-muted);
+                        font-size:20px;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <div id="nqlHelpBody" style="overflow:auto;"></div>
+        </div>
+    </div>
 
     {% if is_aggregate %}
     <!-- FortiGate Export Modal -->
@@ -4856,8 +6018,8 @@
             }
 
             html += `<td><span class="event-count-badge">${g.totalEvents.toLocaleString()}</span></td>`;
-            html += `<td><span class="agg-timestamp">${g.firstSeen || '--'}</span></td>`;
-            html += `<td><span class="agg-timestamp">${g.lastSeen || '--'}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.firstSeen ? window.fmtTime(g.firstSeen) : '--'}</span></td>`;
+            html += `<td><span class="agg-timestamp">${g.lastSeen ? window.fmtTime(g.lastSeen) : '--'}</span></td>`;
 
             // Action badge
             const actLower = topAction.toLowerCase();
@@ -5134,4 +6296,69 @@
     }
     </script>
     {% endif %}
+
+    <!-- ===== Log Explorer: Top Values facets ===== -->
+    <script>
+    const FACET_FIELD_LABELS = {
+        application: 'App', action: 'Action', policyname: 'Policy', log_type: 'Type',
+        srcip: 'Src IP', dstip: 'Dst IP', src_zone: 'Src Zone', dst_zone: 'Dst Zone',
+    };
+
+    function getActiveFacetField() {
+        const active = document.querySelector('.facet-field-btn.active');
+        return active ? active.dataset.field : 'application';
+    }
+
+    function selectFacetField(field) {
+        document.querySelectorAll('.facet-field-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.field === field);
+        });
+        const meta = document.getElementById('facetFieldMeta');
+        if (meta) meta.textContent = FACET_FIELD_LABELS[field] || field;
+        loadFacets(field);
+    }
+
+    function _facetParams(field){
+        const u = new URLSearchParams(window.location.search);
+        const keep = ['time_range','start','end','device','severity','q','action','scope','log_type','application',
+                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone'];
+        const p = new URLSearchParams();
+        keep.forEach(k => { const v = u.get(k); if (v) p.set(k, v); });
+        if (!p.get('time_range') && !p.get('start')) p.set('time_range', '{{ current_time_range }}');
+        p.set('field', field); p.set('limit', '10');
+        return p.toString();
+    }
+    function applyFacet(field, value){
+        const p = new URLSearchParams(window.location.search);
+        p.set(field, value); p.set('page', '1');
+        try { showLoading(); } catch(e) {}
+        window.location.search = p.toString();
+    }
+    function loadFacets(forcedField){
+        const list = document.getElementById('facetList');
+        if (!list) return;
+        const field = forcedField || getActiveFacetField();
+        list.innerHTML = '<div class="facet-loading">Loading…</div>';
+        fetch('/api/logs/facets?' + _facetParams(field), {headers:{'Accept':'application/json'}})
+          .then(r => r.json())
+          .then(d => {
+            const vals = (d && d.values) || [];
+            if (!vals.length){ list.innerHTML = '<div class="facet-empty">No values</div>'; return; }
+            const max = vals[0].count || 1;
+            list.innerHTML = vals.map(v => {
+                const pct = Math.max(4, Math.round((v.count / max) * 100));
+                const raw = v.value || '';
+                const esc = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const jsEsc = raw.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                return '<div class="facet-item" onclick="applyFacet(\'' + field + '\', \'' + jsEsc + '\')" title="' + esc + ' · ' + v.count.toLocaleString() + '">' +
+                       '<span class="facet-bar" style="width:' + pct + '%"></span>' +
+                       '<span class="facet-val">' + (esc || '(empty)') + '</span>' +
+                       '<span class="facet-cnt">' + v.count.toLocaleString() + '</span></div>';
+            }).join('');
+          })
+          .catch(() => { list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
+    }
+    if (document.readyState !== 'loading') loadFacets();
+    else document.addEventListener('DOMContentLoaded', () => loadFacets());
+    </script>
 {% endblock %}

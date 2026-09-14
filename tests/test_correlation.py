@@ -1,0 +1,830 @@
+"""
+Unit tests for the Phase 0 correlation engine hardening.
+
+Covers:
+- parse_field_op          — field/operator splitting
+- _resolve_variable       — $stageN.field resolution, fail-closed (P0-8)
+- _build_where_clause     — allow-list, parameter binding, injection rejection
+                            (P0-3 / P0-4 / P0-5 / P0-8)
+- _recent_alert_cutoff    — P0-1 regression (no ValueError near the hour edge)
+- StageSchema /           — P0-6 / P0-7 save-time validation
+  CorrelationRuleCreate
+- compute_coverage_stats  — P0-2 MITRE coverage can never exceed 100%
+"""
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from pydantic import ValidationError
+
+import types
+
+from fastapi_app.core.correlation_fields import (
+    get_source_entities,
+    is_valid_source,
+    parse_field_op,
+    resolve_field,
+)
+from fastapi_app.services.correlation_engine import (
+    StageEvalError,
+    _as_list,
+    _build_where_clause,
+    _entity_type_for_field,
+    _entity_where,
+    _recent_alert_cutoff,
+    _max_severity,
+    _resolve_variable,
+    _rule_join_keys,
+    _rule_risk_contribution,
+    _safe_int,
+    _stage_time_filter,
+    match_fingerprint,
+    preview_correlation_rule,
+    severity_from_risk,
+)
+from fastapi_app.schemas.correlation import (
+    CorrelationRuleCreate,
+    CorrelationRuleUpdate,
+    StageSchema,
+)
+from fastapi_app.api.correlation import compute_coverage_stats
+
+
+# ----------------------------------------------------------------------
+# parse_field_op
+# ----------------------------------------------------------------------
+
+class TestParseFieldOp:
+    def test_plain_field_is_equality(self):
+        assert parse_field_op("action") == ("action", "=")
+
+    def test_gt_suffix(self):
+        assert parse_field_op("dstport_gt") == ("dstport", ">")
+
+    def test_gte_suffix_not_confused_with_gt(self):
+        assert parse_field_op("dstport_gte") == ("dstport", ">=")
+
+    def test_lte_suffix(self):
+        assert parse_field_op("severity_lte") == ("severity", "<=")
+
+    def test_ne_suffix(self):
+        assert parse_field_op("action_ne") == ("action", "!=")
+
+    def test_bare_suffix_not_treated_as_operator(self):
+        # "_gt" with no field name in front stays a plain field
+        assert parse_field_op("_gt") == ("_gt", "=")
+
+
+# ----------------------------------------------------------------------
+# _resolve_variable  (P0-8 fail-closed)
+# ----------------------------------------------------------------------
+
+class TestResolveVariable:
+    def test_resolves_from_prior_stage(self):
+        value, optional = _resolve_variable("$stage1.srcip", {"stage1": {"srcip": "10.0.0.5"}})
+        assert value == "10.0.0.5"
+        assert optional is False
+
+    def test_required_unresolved_raises(self):
+        with pytest.raises(StageEvalError):
+            _resolve_variable("$stage1.srcip", {})
+
+    def test_required_unresolved_with_no_variables_raises(self):
+        with pytest.raises(StageEvalError):
+            _resolve_variable("$stage1.dstip", None)
+
+    def test_optional_unresolved_returns_none(self):
+        value, optional = _resolve_variable("$stage1.srcip?", {})
+        assert value is None
+        assert optional is True
+
+    def test_optional_resolved_returns_value(self):
+        value, optional = _resolve_variable("$stage1.dstip?", {"stage1": {"dstip": "8.8.8.8"}})
+        assert value == "8.8.8.8"
+        assert optional is True
+
+
+# ----------------------------------------------------------------------
+# _build_where_clause  (P0-3 / P0-4 / P0-5 / P0-8)
+# ----------------------------------------------------------------------
+
+class TestBuildWhereClause:
+    def test_simple_equality_is_parameterized(self):
+        where, params = _build_where_clause({"action": "deny"})
+        assert where == "action = {p0:String}"
+        assert params == {"p0": "deny"}
+        # the value must never be inlined into the SQL text
+        assert "deny" not in where
+
+    def test_numeric_field_uses_float_param(self):
+        where, params = _build_where_clause({"dstport_gt": 1024})
+        assert where == "dstport > {p0:Float64}"
+        assert params == {"p0": 1024.0}
+
+    def test_ne_operator(self):
+        where, params = _build_where_clause({"action_ne": "allow"})
+        assert where == "action != {p0:String}"
+        assert params == {"p0": "allow"}
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"totally_not_a_column": "x"})
+
+    def test_sql_injection_in_field_name_rejected(self):
+        # a crafted field name is not in the allow-list -> cannot reach SQL
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"srcip = '' OR 1=1 --": "x"})
+
+    def test_sql_injection_in_value_is_bound_not_inlined(self):
+        payload = "deny'; DROP TABLE syslogs; --"
+        where, params = _build_where_clause({"action": payload})
+        assert payload not in where          # not concatenated into SQL
+        assert params["p0"] == payload       # safely bound as a parameter
+
+    def test_numeric_operator_on_string_field_rejected(self):
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"action_gt": "deny"})
+
+    def test_non_numeric_value_for_numeric_field_rejected(self):
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"dstport": "not-a-number"})
+
+    def test_variable_substitution_is_parameterized(self):
+        where, params = _build_where_clause(
+            {"action": "allow", "srcip": "$stage1.srcip"},
+            {"stage1": {"srcip": "10.1.2.3"}},
+        )
+        assert params["p0"] == "allow"
+        assert params["p1"] == "10.1.2.3"
+        assert "10.1.2.3" not in where
+
+    def test_required_variable_unresolved_fails_closed(self):
+        # P0-8: must NOT silently drop the join condition
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"action": "allow", "srcip": "$stage1.srcip"}, {})
+
+    def test_optional_variable_unresolved_is_skipped(self):
+        where, params = _build_where_clause(
+            {"action": "allow", "srcip": "$stage1.srcip?"}, {}
+        )
+        assert where == "action = {p0:String}"
+        assert params == {"p0": "allow"}
+
+    def test_group_by_threshold_window_keys_ignored(self):
+        where, params = _build_where_clause(
+            {"action": "deny", "group_by": "srcip", "threshold": 10, "window": 300}
+        )
+        assert where == "action = {p0:String}"
+
+    def test_empty_filter_yields_true(self):
+        where, params = _build_where_clause({})
+        assert where == "1=1"
+        assert params == {}
+
+    def test_unknown_source_rejected(self):
+        with pytest.raises(StageEvalError):
+            _build_where_clause({"action": "deny"}, source="nonexistent")
+
+
+# ----------------------------------------------------------------------
+# _recent_alert_cutoff  (P0-1 regression)
+# ----------------------------------------------------------------------
+
+class TestRecentAlertCutoff:
+    def test_returns_five_minutes_ago(self):
+        before = datetime.now(timezone.utc) - timedelta(minutes=5)
+        cutoff = _recent_alert_cutoff()
+        after = datetime.now(timezone.utc) - timedelta(minutes=5)
+        assert before <= cutoff <= after
+
+    def test_is_timezone_aware(self):
+        assert _recent_alert_cutoff().tzinfo is not None
+
+    def test_custom_window(self):
+        delta = datetime.now(timezone.utc) - _recent_alert_cutoff(minutes=15)
+        assert timedelta(minutes=14) < delta < timedelta(minutes=16)
+
+
+# ----------------------------------------------------------------------
+# StageSchema / CorrelationRuleCreate  (P0-6 / P0-7)
+# ----------------------------------------------------------------------
+
+VALID_STAGE = {
+    "name": "Port Scan",
+    "filter": {"action": "deny", "group_by": "srcip"},
+    "threshold": 10,
+    "window": 300,
+}
+
+
+class TestStageSchema:
+    def test_valid_stage(self):
+        stage = StageSchema(**VALID_STAGE)
+        assert stage.name == "Port Scan"
+        assert stage.source == "syslogs"
+
+    def test_unknown_filter_field_rejected(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"bogus_field": "y"})
+
+    def test_unknown_group_by_rejected(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"action": "deny", "group_by": "bogus"})
+
+    def test_numeric_op_on_string_field_rejected(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"action_gt": "deny"})
+
+    def test_non_numeric_value_for_numeric_field_rejected(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"dstport": "abc"})
+
+    def test_threshold_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"action": "deny"}, threshold=0)
+
+    def test_window_upper_bound(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", filter={"action": "deny"}, window=999_999_999)
+
+    def test_unknown_source_rejected(self):
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", source="splunk", filter={"action": "deny"})
+
+    def test_variable_value_skips_type_check(self):
+        stage = StageSchema(name="x", filter={"srcip": "$stage1.srcip"})
+        assert stage.filter["srcip"] == "$stage1.srcip"
+
+
+class TestCorrelationRuleCreate:
+    def test_valid_rule(self):
+        rule = CorrelationRuleCreate(name="Test Rule", stages=[VALID_STAGE])
+        assert rule.severity == "high"
+        assert rule.is_enabled is True
+        assert len(rule.stages) == 1
+
+    def test_empty_stages_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="Test", stages=[])
+
+    def test_invalid_severity_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="Test", severity="apocalyptic", stages=[VALID_STAGE])
+
+    def test_blank_name_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="", stages=[VALID_STAGE])
+
+    def test_too_many_stages_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="Test", stages=[VALID_STAGE] * 11)
+
+    def test_malformed_stage_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="Test", stages=[{"name": "s", "filter": {"bad": "v"}}])
+
+
+class TestCorrelationRuleUpdate:
+    def test_partial_update_allowed(self):
+        upd = CorrelationRuleUpdate(severity="critical")
+        assert upd.model_dump(exclude_unset=True) == {"severity": "critical"}
+
+    def test_invalid_severity_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleUpdate(severity="bogus")
+
+    def test_invalid_stage_in_update_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleUpdate(stages=[{"name": "x", "filter": {"bad": "y"}}])
+
+    def test_empty_update_is_valid(self):
+        # an empty update validates; the endpoint rejects "no fields" separately
+        assert CorrelationRuleUpdate().model_dump(exclude_unset=True) == {}
+
+
+# ----------------------------------------------------------------------
+# compute_coverage_stats  (P0-2)
+# ----------------------------------------------------------------------
+
+class TestComputeCoverageStats:
+    def test_empty_coverage_is_zero_percent(self):
+        stats, total, covered, detectable, pct = compute_coverage_stats({})
+        assert covered == 0
+        assert pct == 0
+        assert total > 0          # the technique catalog is non-empty
+        assert detectable > 0
+
+    def test_pct_never_exceeds_100_with_all_techniques_mapped(self):
+        # Map EVERY technique id, including non-detectable ones. The old bug
+        # counted those in the numerator over a detectable-only denominator,
+        # inflating the percentage past 100. The fix keeps covered a subset
+        # of detectable.
+        from fastapi_app.core.mitre_attack import TECHNIQUES
+        all_ids = {}
+        for techs in TECHNIQUES.values():
+            for t in techs:
+                all_ids[t["id"].split(" ")[0]] = [{"name": "x"}]
+        stats, total, covered, detectable, pct = compute_coverage_stats(all_ids)
+        assert covered <= detectable
+        assert pct <= 100
+        for tactic in stats:
+            assert tactic["covered"] <= tactic["detectable"]
+            assert tactic["pct"] <= 100
+
+    def test_covered_is_subset_of_detectable(self):
+        stats, total, covered, detectable, pct = compute_coverage_stats(
+            {"T1595": [{"name": "scan rule"}]}
+        )
+        assert 0 <= covered <= detectable
+
+
+# ======================================================================
+# PHASE 1 — Match identity, fingerprint, suppression
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# match_fingerprint  (P1-2)
+# ----------------------------------------------------------------------
+
+class TestMatchFingerprint:
+    def test_is_deterministic(self):
+        a = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        b = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        assert a == b
+
+    def test_is_a_sha1_hex_digest(self):
+        fp = match_fingerprint(1, 1, "ip", "10.0.0.5")
+        assert len(fp) == 40
+        int(fp, 16)  # must be valid hex
+
+    def test_different_entity_differs(self):
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(1, 1, "ip", "10.0.0.6")
+
+    def test_different_rule_differs(self):
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(2, 1, "ip", "10.0.0.5")
+
+    def test_different_version_differs(self):
+        # a rule edit (version bump) must reset the fingerprint so
+        # suppression does not carry across rule definitions
+        assert match_fingerprint(1, 1, "ip", "10.0.0.5") != \
+               match_fingerprint(1, 2, "ip", "10.0.0.5")
+
+    def test_different_entity_type_differs(self):
+        assert match_fingerprint(1, 1, "ip", "x") != \
+               match_fingerprint(1, 1, "user", "x")
+
+
+# ----------------------------------------------------------------------
+# _entity_type_for_field  (P1-1)
+# ----------------------------------------------------------------------
+
+class TestEntityTypeForField:
+    def test_ip_fields(self):
+        assert _entity_type_for_field("srcip") == "ip"
+        assert _entity_type_for_field("dstip") == "ip"
+        assert _entity_type_for_field("device_ip") == "ip"
+
+    def test_unknown_field_returns_field_name(self):
+        assert _entity_type_for_field("policyname") == "policyname"
+
+    def test_none_returns_none_literal(self):
+        assert _entity_type_for_field(None) == "none"
+        assert _entity_type_for_field("") == "none"
+
+
+# ----------------------------------------------------------------------
+# Phase 1 schema fields — match_mode / suppress_window  (P1-4 / P1-6)
+# ----------------------------------------------------------------------
+
+class TestPhase1RuleSchema:
+    def test_defaults_are_discrete_and_one_hour(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE])
+        assert rule.match_mode == "discrete"
+        assert rule.suppress_window == 3600
+
+    def test_recurring_mode_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], match_mode="recurring")
+        assert rule.match_mode == "recurring"
+
+    def test_invalid_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], match_mode="sometimes")
+
+    def test_suppress_window_lower_bound(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], suppress_window=10)
+
+    def test_suppress_window_upper_bound(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], suppress_window=999_999_999)
+
+    def test_update_accepts_mode_and_window(self):
+        upd = CorrelationRuleUpdate(match_mode="recurring", suppress_window=7200)
+        data = upd.model_dump(exclude_unset=True)
+        assert data == {"match_mode": "recurring", "suppress_window": 7200}
+
+
+# ======================================================================
+# PHASE 2 — True sequence engine
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# _as_list / _safe_int
+# ----------------------------------------------------------------------
+
+class TestAsList:
+    def test_none_and_empty(self):
+        assert _as_list(None) == []
+        assert _as_list("") == []
+
+    def test_scalar_wrapped(self):
+        assert _as_list("srcip") == ["srcip"]
+
+    def test_list_passthrough(self):
+        assert _as_list(["srcip", "dstip"]) == ["srcip", "dstip"]
+
+
+class TestSafeInt:
+    def test_valid(self):
+        assert _safe_int("300", "window") == 300
+        assert _safe_int(10, "threshold") == 10
+
+    def test_invalid_raises(self):
+        with pytest.raises(StageEvalError):
+            _safe_int("not-a-number", "window")
+
+
+# ----------------------------------------------------------------------
+# _stage_time_filter  (P2-3 / P2-4 — temporal anchoring)
+# ----------------------------------------------------------------------
+
+class TestStageTimeFilter:
+    def test_trailing_window_without_anchor(self):
+        sql, params = _stage_time_filter(300, anchor=None)
+        assert sql == "timestamp > now() - INTERVAL 300 SECOND"
+        assert params == {}
+
+    def test_anchored_window_for_sequence(self):
+        anchor = datetime(2026, 5, 20, 12, 0, 0)
+        sql, params = _stage_time_filter(600, anchor=anchor)
+        # anchored window proves stage B follows stage A
+        assert "timestamp > {_anchor:DateTime64(3)}" in sql
+        assert "+ INTERVAL 600 SECOND" in sql
+        assert params == {"_anchor": anchor}
+
+    def test_bad_window_raises(self):
+        with pytest.raises(StageEvalError):
+            _stage_time_filter("xyz")
+
+
+# ----------------------------------------------------------------------
+# _entity_where  (P2-6 / P2-7 — first-class joins)
+# ----------------------------------------------------------------------
+
+class TestEntityWhere:
+    def test_single_string_field(self):
+        sql, params = _entity_where({"srcip": "10.0.0.5"}, "syslogs")
+        assert sql == "srcip = {e0:String}"
+        assert params == {"e0": "10.0.0.5"}
+
+    def test_numeric_field_binds_float(self):
+        sql, params = _entity_where({"dstport": 443}, "syslogs")
+        assert sql == "dstport = {e0:Float64}"
+        assert params == {"e0": 443.0}
+
+    def test_ip_field_wrapped(self):
+        sql, params = _entity_where({"device_ip": "10.1.1.1"}, "syslogs")
+        assert "toIPv4({e0:String})" in sql
+
+    def test_composite_join(self):
+        sql, params = _entity_where({"srcip": "10.0.0.5", "dstip": "8.8.8.8"}, "syslogs")
+        assert sql == "srcip = {e0:String} AND dstip = {e1:String}"
+        assert params == {"e0": "10.0.0.5", "e1": "8.8.8.8"}
+
+    def test_empty_entity_is_true(self):
+        sql, params = _entity_where({}, "syslogs")
+        assert sql == "1=1"
+        assert params == {}
+
+
+# ----------------------------------------------------------------------
+# _rule_join_keys
+# ----------------------------------------------------------------------
+
+class TestRuleJoinKeys:
+    def test_explicit_join_keys_win(self):
+        rule = types.SimpleNamespace(join_keys=["srcip", "dstip"])
+        stages = [{"filter": {"group_by": "policyname"}}]
+        assert _rule_join_keys(rule, stages) == ["srcip", "dstip"]
+
+    def test_falls_back_to_stage1_group_by(self):
+        rule = types.SimpleNamespace(join_keys=None)
+        stages = [{"filter": {"action": "deny", "group_by": "srcip"}}]
+        assert _rule_join_keys(rule, stages) == ["srcip"]
+
+    def test_no_join_keys_and_no_group_by(self):
+        rule = types.SimpleNamespace(join_keys=None)
+        stages = [{"filter": {"action": "deny"}}]
+        assert _rule_join_keys(rule, stages) == []
+
+
+# ----------------------------------------------------------------------
+# Phase 2 schema — ordering / join_keys  (P2-1 / P2-2)
+# ----------------------------------------------------------------------
+
+class TestPhase2RuleSchema:
+    def test_ordering_defaults_to_sequence(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE])
+        assert rule.ordering == "sequence"
+
+    def test_any_order_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], ordering="any_order")
+        assert rule.ordering == "any_order"
+
+    def test_invalid_ordering_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], ordering="backwards")
+
+    def test_valid_join_keys_accepted(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE],
+                                     join_keys=["srcip", "dstip"])
+        assert rule.join_keys == ["srcip", "dstip"]
+
+    def test_invalid_join_key_rejected(self):
+        with pytest.raises(ValidationError):
+            CorrelationRuleCreate(name="R", stages=[VALID_STAGE], join_keys=["not_a_field"])
+
+    def test_composite_match_fingerprint(self):
+        # composite entity values are joined with "|"
+        fp1 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.8")
+        fp2 = match_fingerprint(1, 1, "composite", "10.0.0.5|8.8.8.9")
+        assert fp1 != fp2
+
+
+# ======================================================================
+# PHASE 3 — preview / dry-run
+# ======================================================================
+
+class TestPreviewCorrelationRule:
+    """preview_correlation_rule must dry-run without persisting and return a
+    stable diagnostic shape. (Stage execution itself needs ClickHouse and is
+    covered by integration verification.)"""
+
+    def test_no_stages_returns_error(self):
+        rule = types.SimpleNamespace(stages=[], name="Empty", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        assert d["ok"] is False
+        assert d["error"] == "Rule has no stages."
+        assert d["matched_chains"] == 0
+
+    def test_none_stages_returns_error(self):
+        rule = types.SimpleNamespace(stages=None, name="Empty", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        assert d["ok"] is False
+        assert d["error"]
+
+    def test_diag_has_expected_keys(self):
+        rule = types.SimpleNamespace(stages=[], name="x", ordering="sequence")
+        d = preview_correlation_rule(rule)
+        for key in ("ok", "matched_chains", "stages", "sample_matches",
+                    "estimated_per_hour", "error"):
+            assert key in d
+
+
+# ======================================================================
+# PHASE 4 — Source registry & canonical entity model
+# ======================================================================
+
+class TestSourceRegistry:
+    def test_new_sources_registered(self):
+        for src in ("syslogs", "dns_logs", "url_logs", "ioc_matches",
+                    "audit_logs", "pa_threat_logs", "correlation_matches"):
+            assert is_valid_source(src), f"{src} should be registered"
+
+    def test_unknown_source_invalid(self):
+        assert not is_valid_source("nonexistent_table")
+
+    def test_resolve_native_field(self):
+        # a native column resolves to itself
+        assert resolve_field("syslogs", "srcip") == "srcip"
+
+    def test_resolve_canonical_entity_per_source(self):
+        # the same canonical entity maps to each source's own column
+        assert resolve_field("syslogs", "ip") == "srcip"
+        assert resolve_field("dns_logs", "ip") == "src_ip"
+        assert resolve_field("audit_logs", "ip") == "ip_address"
+        assert resolve_field("ioc_matches", "ip") == "srcip"
+
+    def test_resolve_unknown_key_returns_none(self):
+        assert resolve_field("syslogs", "totally_bogus") is None
+
+    def test_resolve_in_unknown_source_returns_none(self):
+        assert resolve_field("no_such_source", "ip") is None
+
+    def test_sources_expose_entities(self):
+        assert "ip" in get_source_entities("syslogs")
+        assert "domain" in get_source_entities("dns_logs")
+        assert "user" in get_source_entities("audit_logs")
+
+
+class TestCrossSourceEntityWhere:
+    def test_canonical_ip_resolves_to_dns_column(self):
+        # the join key "ip" must bind dns_logs' own src_ip column
+        sql, params = _entity_where({"ip": "10.0.0.9"}, "dns_logs")
+        assert sql == "src_ip = {e0:String}"
+        assert params == {"e0": "10.0.0.9"}
+
+    def test_canonical_ip_resolves_to_audit_column(self):
+        sql, params = _entity_where({"ip": "10.0.0.9"}, "audit_logs")
+        assert sql == "ip_address = {e0:String}"
+
+    def test_native_field_still_works(self):
+        sql, params = _entity_where({"srcip": "10.0.0.9"}, "syslogs")
+        assert sql == "srcip = {e0:String}"
+
+    def test_unmappable_key_raises(self):
+        with pytest.raises(StageEvalError):
+            _entity_where({"domain": "x"}, "syslogs")  # syslogs has no domain entity
+
+
+class TestMultiSourceStageSchema:
+    def test_dns_source_stage_valid(self):
+        stage = StageSchema(name="DNS", source="dns_logs",
+                            filter={"qname": "evil.example.com"})
+        assert stage.source == "dns_logs"
+
+    def test_canonical_entity_group_by_valid(self):
+        # "ip" is a canonical entity for syslogs even though no column is named "ip"
+        stage = StageSchema(name="x", filter={"action": "deny", "group_by": "ip"})
+        assert stage.filter["group_by"] == "ip"
+
+    def test_wrong_source_field_rejected(self):
+        # qname belongs to dns_logs, not syslogs
+        with pytest.raises(ValidationError):
+            StageSchema(name="x", source="syslogs", filter={"qname": "x"})
+
+    def test_join_keys_accept_canonical_entity(self):
+        rule = CorrelationRuleCreate(name="R", stages=[VALID_STAGE], join_keys=["ip"])
+        assert rule.join_keys == ["ip"]
+
+
+# ======================================================================
+# PHASE 5 — risk scoring & incidents
+# ======================================================================
+
+class TestSeverityFromRisk:
+    def test_critical_threshold(self):
+        assert severity_from_risk(200) == "critical"
+        assert severity_from_risk(500) == "critical"
+
+    def test_high_threshold(self):
+        assert severity_from_risk(100) == "high"
+        assert severity_from_risk(199) == "high"
+
+    def test_medium_threshold(self):
+        assert severity_from_risk(40) == "medium"
+        assert severity_from_risk(99) == "medium"
+
+    def test_low(self):
+        assert severity_from_risk(0) == "low"
+        assert severity_from_risk(39) == "low"
+
+
+class TestMaxSeverity:
+    def test_picks_higher(self):
+        assert _max_severity("high", "critical") == "critical"
+        assert _max_severity("critical", "low") == "critical"
+        assert _max_severity("medium", "high") == "high"
+
+    def test_equal(self):
+        assert _max_severity("high", "high") == "high"
+
+
+class TestRuleRiskContribution:
+    def test_explicit_risk_score_used(self):
+        rule = types.SimpleNamespace(risk_score=75, severity="low")
+        assert _rule_risk_contribution(rule) == 75
+
+    def test_zero_risk_score_derives_from_severity(self):
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="critical")) == 100
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="high")) == 50
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="medium")) == 20
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="low")) == 5
+
+    def test_unknown_severity_falls_back(self):
+        assert _rule_risk_contribution(types.SimpleNamespace(risk_score=0, severity="weird")) == 20
+
+
+# ======================================================================
+# PHASE 6 — rule template library
+# ======================================================================
+
+class TestCorrelationTemplates:
+    def test_library_is_populated(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        assert len(TEMPLATES) >= 10
+
+    def test_template_ids_unique(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        ids = [t["id"] for t in TEMPLATES]
+        assert len(ids) == len(set(ids))
+
+    def test_templates_have_required_keys(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            for key in ("id", "name", "description", "category",
+                        "required_sources", "rule"):
+                assert key in t, f"template {t.get('id')} missing '{key}'"
+
+    def test_required_sources_are_real(self):
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            for src in t["required_sources"]:
+                assert is_valid_source(src), \
+                    f"template {t['id']} references unknown source '{src}'"
+
+    def test_every_template_is_a_valid_rule(self):
+        # each template's rule body must pass create-rule validation
+        from fastapi_app.core.correlation_templates import TEMPLATES
+        for t in TEMPLATES:
+            payload = CorrelationRuleCreate(name=t["name"], **dict(t["rule"]))
+            assert len(payload.stages) >= 1, f"template {t['id']} has no stages"
+
+
+# ======================================================================
+# PHASE 6 — Sigma import
+# ======================================================================
+
+_SIGMA_YAML = """
+title: Suspicious Outbound Connection
+description: A test Sigma rule
+level: high
+tags:
+  - attack.t1071
+  - attack.command_and_control
+detection:
+  selection:
+    action: deny
+    dst_port: 4444
+  condition: selection
+"""
+
+
+class TestSigmaImport:
+    def test_parses_basic_sigma(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, warnings = parse_sigma(_SIGMA_YAML)
+        assert rule["name"] == "Suspicious Outbound Connection"
+        assert rule["severity"] == "high"
+        assert rule["mitre_technique"] == "T1071"
+        assert len(rule["stages"]) == 1
+
+    def test_field_name_mapped(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, _ = parse_sigma(_SIGMA_YAML)
+        # Sigma's dst_port maps to the syslogs column dstport
+        assert "dstport" in rule["stages"][0]["filter"]
+        assert rule["stages"][0]["filter"]["action"] == "deny"
+
+    def test_imported_rule_validates(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        rule, _ = parse_sigma(_SIGMA_YAML)
+        payload = CorrelationRuleCreate(**dict(rule))
+        assert len(payload.stages) == 1
+
+    def test_invalid_yaml_raises(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        with pytest.raises(ValueError):
+            parse_sigma("just a plain string")
+
+    def test_no_detection_raises(self):
+        from fastapi_app.core.sigma_import import parse_sigma
+        with pytest.raises(ValueError):
+            parse_sigma("title: X\ndescription: Y\n")
+
+
+# ======================================================================
+# PHASE 6 — anomaly stages
+# ======================================================================
+
+class TestAnomalyStage:
+    def test_anomaly_config_accepted_by_schema(self):
+        s = StageSchema(name="Volume Spike",
+                        filter={"action": "deny", "group_by": "srcip"},
+                        anomaly={"baseline_windows": 6, "multiplier": 3, "min_count": 50})
+        assert s.anomaly["multiplier"] == 3
+
+    def test_anomaly_rule_validates(self):
+        rule = CorrelationRuleCreate(name="Anomalous Volume", stages=[{
+            "name": "Volume Spike",
+            "filter": {"action": "deny", "group_by": "srcip"},
+            "threshold": 1, "window": 300,
+            "anomaly": {"baseline_windows": 6, "multiplier": 3.0, "min_count": 50},
+        }])
+        assert rule.stages[0].anomaly is not None
+
+    def test_stage_without_anomaly_has_none(self):
+        s = StageSchema(name="x", filter={"action": "deny"})
+        assert s.anomaly is None
