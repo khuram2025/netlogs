@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Zentryc Design Tokens */
+/* ZenShield Design Tokens */
 @theme {
   --color-bg: #0f172a;
   --color-card: #1e293b;
@@ -19,7 +19,7 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Zentryc component classes */
+/* ZenShield component classes */
 .z-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);

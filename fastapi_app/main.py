@@ -132,7 +132,8 @@ async def lifespan(app: FastAPI):
         await init_db()
         logger.info("PostgreSQL database initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize PostgreSQL: {e}")
+        logger.error("PostgreSQL initialization failed; refusing a partially migrated application")
+        raise
 
     # Load the app-wide display timezone into the in-process cache
     try:
@@ -154,13 +155,6 @@ async def lifespan(app: FastAPI):
             logger.warning("Redis connection established but health check failed")
     except Exception as e:
         logger.warning(f"Redis connection failed (non-fatal): {e}")
-
-    # Run Alembic migrations (stamp if fresh install, upgrade if pending)
-    try:
-        from .db.migrate import run_pg_migrations
-        await run_pg_migrations()
-    except Exception as e:
-        logger.warning(f"Alembic migration check: {e}")
 
     # Initialize ClickHouse tables
     try:
@@ -203,6 +197,9 @@ async def lifespan(app: FastAPI):
     from .api.dns_service import initialize as initialize_dns
     await initialize_dns()
 
+    from .services.correlation_engine import ensure_correlation_matches_table
+    ensure_correlation_matches_table()
+
     # Run ClickHouse migrations
     try:
         from .db.clickhouse_migrations.runner import run_clickhouse_migrations
@@ -210,7 +207,8 @@ async def lifespan(app: FastAPI):
         if applied:
             logger.info(f"Applied {applied} ClickHouse migration(s)")
     except Exception as e:
-        logger.warning(f"ClickHouse migration check: {e}")
+        logger.error("ClickHouse migration failed; startup aborted")
+        raise
 
     # Initialize ClickHouse audit logs table
     try:

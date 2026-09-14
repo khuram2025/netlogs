@@ -40,7 +40,8 @@ def test_quoted_values_with_spaces_and_pipes():
 
 
 def test_ip_shapes():
-    assert where("srcip:10.0.0.0/8") == "startsWith(srcip, '10.')"
+    assert "srcip_v4" in where("srcip:10.0.0.0/8")
+    assert "IPv4CIDRToRange" in where("srcip:10.0.0.0/8")
     assert "srcip_v4" in where("srcip:10.0.0.0/12")
     assert where("dstip:192.168.1.*") == "dstip LIKE '192.168.1.%'"
     assert where("srcip:1.2.3.4,5.6.7.8") == "(srcip = '1.2.3.4' OR srcip = '5.6.7.8')"
@@ -134,7 +135,7 @@ def test_compose_preserves_or_precedence_and_pipeline():
 def test_compile_filter_ignores_pipeline_and_extracts_cheap_prewhere():
     w, pw = compile_filter("(srcip:10.0.0.0/8 OR srcip:192.168.0.0/16) action:deny appcat:~video timeout -dstport:443 | stats count by srcip")
     assert "count()" not in w
-    assert set(pw) == {"(startsWith(srcip, '10.') OR startsWith(srcip, '192.168.'))",
+    assert set(pw) == {"(" + where("srcip:10.0.0.0/8") + " OR " + where("srcip:192.168.0.0/16") + ")",
                        "action = 'deny'", "dstport != 443"}
     # heavy columns never reach PREWHERE
     assert not any("parsed_data" in c or "message" in c for c in pw)

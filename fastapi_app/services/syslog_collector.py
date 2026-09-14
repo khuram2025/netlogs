@@ -1285,6 +1285,11 @@ class SyslogCollector:
         """Log performance metrics periodically."""
         while self._running:
             await asyncio.sleep(self.config.metrics_interval)
+            try:
+                from ..core.app_settings import load_default_source_timezone
+                await load_default_source_timezone()
+            except Exception:
+                logger.warning("Could not refresh the default source timezone; keeping the last value")
             report = self.metrics.get_report()
             cache_stats = self.device_cache.get_stats()
 
@@ -1337,6 +1342,9 @@ class SyslogCollector:
             logger.info("IOC matcher cache loaded")
         except Exception as e:
             logger.warning(f"IOC cache initial load warning: {e}")
+
+        from ..core.app_settings import load_default_source_timezone
+        await load_default_source_timezone()
 
         # Pre-load all devices into cache
         try:

@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Frontend - build CSS/JS assets with Vite
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS frontend
+FROM node:22-alpine AS frontend
 
 WORKDIR /build
 COPY package.json package-lock.json ./
@@ -27,13 +27,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-COPY fastapi_app/requirements.txt .
+COPY appliance/requirements.lock requirements.txt
 
 # Pin bcrypt for passlib compatibility
-RUN pip install --no-cache-dir wheel && \
-    pip wheel --no-cache-dir --wheel-dir /build/wheels \
-    -r requirements.txt \
-    bcrypt==4.0.1
+RUN pip download --require-hashes --no-deps --dest /build/wheels -r requirements.txt
 
 # ---------------------------------------------------------------------------
 # Stage 3: Runtime - minimal image with only what's needed
@@ -54,8 +51,11 @@ WORKDIR /app
 
 # Install Python packages from wheels
 COPY --from=builder /build/wheels /tmp/wheels
-RUN pip install --no-cache-dir /tmp/wheels/*.whl && \
+RUN pip install --upgrade --no-cache-dir pip==26.2.1 && pip install --no-cache-dir /tmp/wheels/*.whl && \
     rm -rf /tmp/wheels
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/zenshield-browsers
+RUN python -m playwright install --with-deps chromium --only-shell && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
 COPY fastapi_app/ ./fastapi_app/
@@ -63,7 +63,10 @@ COPY fastapi_app/ ./fastapi_app/
 # Copy built frontend assets from Stage 1
 COPY --from=frontend /build/fastapi_app/static/dist/ ./fastapi_app/static/dist/
 
-COPY run_fastapi.py run_syslog.py ./
+COPY run_fastapi.py run_syslog.py zenshield_reset_password.py alembic.ini ./
+COPY appliance/dns-agent-release/ /app/dns-agent/
+COPY appliance/dns-agent/README.md /app/dns-agent/README.md
+ENV ZENSHIELD_APPLIANCE=1
 
 # Copy static files (favicon, etc.)
 COPY static/favicon.svg ./static/favicon.svg
@@ -83,3 +86,7 @@ EXPOSE 514/udp
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["web"]
+
+ARG ZENSHIELD_VERSION=0.4.0
+ARG SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.title="ZenShield" org.opencontainers.image.version="${ZENSHIELD_VERSION}" org.opencontainers.image.revision="${SOURCE_COMMIT}"

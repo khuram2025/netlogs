@@ -44,7 +44,7 @@ class ClickHouseClient:
             compress=True,
             settings={
                 'async_insert': 1,
-                'wait_for_async_insert': 0,
+                'wait_for_async_insert': 1,  # Confirm persistence before reads, retries or scratch-table cleanup
                 'async_insert_max_data_size': 10000000,  # 10MB
                 'async_insert_busy_timeout_ms': 2000,
             }
@@ -171,10 +171,42 @@ class ClickHouseClient:
         try:
             client.command(create_table_query)
             client.command("ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_time String DEFAULT '' CODEC(ZSTD(1))")
+            cls.ensure_analytics_columns()
             logger.info("ClickHouse table 'syslogs' created/verified")
         except Exception as e:
             logger.warning(f"Table creation issue (may already exist): {e}")
             cls._migrate_table()
+            cls.ensure_analytics_columns()
+
+    @classmethod
+    def ensure_analytics_columns(cls):
+        """Version the typed fields required by upstream NQL/traffic analytics.
+
+        DEFAULT expressions expose historical parsed maps without rewriting log
+        rows and populate typed values on new inserts. These fields previously
+        existed only on the upstream development database, not in its DDL.
+        """
+        client = cls.get_client()
+        mappings = {
+            'session_id': ('UInt64', ['sessionid', 'session_id']),
+            'sent_bytes': ('UInt64', ['sentbyte', 'bytes_sent', 'sent_bytes']),
+            'recv_bytes': ('UInt64', ['rcvdbyte', 'bytes_recv', 'recv_bytes']),
+            'duration': ('UInt64', ['duration', 'elapsed']),
+            'src_user': ('String', ['user', 'srcuser', 'src_user']),
+            'service': ('String', ['service']),
+            'src_country': ('String', ['srccountry', 'src_location']),
+            'dst_country': ('String', ['dstcountry', 'dst_location']),
+            'src_intf': ('String', ['srcintf', 'inbound_if']),
+            'dst_intf': ('String', ['dstintf', 'outbound_if']),
+        }
+        for name, (kind, keys) in mappings.items():
+            values = ", ".join("nullIf(parsed_data['" + key + "'], '')" for key in keys)
+            expression = "coalesce(" + values + ", '')"
+            if kind == 'UInt64': expression = 'toUInt64OrZero(' + expression + ')'
+            client.command(f'ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS {name} {kind} DEFAULT {expression} CODEC(ZSTD(1))')
+        for name in ('srcip', 'dstip'):
+            client.command(f'ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS {name}_v4 IPv4 DEFAULT toIPv4OrDefault({name})')
+            client.command(f'ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_{name}_v4 {name}_v4 TYPE minmax GRANULARITY 4')
 
     @classmethod
     def _migrate_table(cls) -> None:

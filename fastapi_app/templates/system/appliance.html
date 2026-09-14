@@ -113,6 +113,7 @@ ZenShield(config)# commit</pre><small>Use <code>setup</code> for guided configur
  $('licence-registration').onsubmit=e=>{e.preventDefault();perform(async()=>{try{renderLicence(await api('licences.claim',{registration_code:$('licence-code').value}));message('Subscription applied and licence synchronized.');}finally{$('licence-code').value='';}});};
  $('commit-plan').onclick=()=>perform(async()=>{$('commit-plan').disabled=true;try{const job=await api('storage.commit',{token:plan.token,confirmation:$('confirmation').value});$('plan-dialog').close();message('Storage operation started. Progress appears below; services may reconnect during migration.');await refresh();}finally{$('commit-plan').disabled=false;}});
  setInterval(()=>{if(state?.network_pending){$('countdown').textContent=Math.max(0,Math.ceil(state.network_pending.deadline-Date.now()/1000))+' seconds remain. Keep the change only after verifying connectivity.';}},1000);
+ const requestedTab=location.hash.slice(1); const initialTab=[...document.querySelectorAll("[data-tab]")].find(b=>b.dataset.tab===requestedTab); if(initialTab)initialTab.click();
  refresh();setInterval(refresh,10000);
 })();
 </script>

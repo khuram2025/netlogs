@@ -134,7 +134,7 @@ async def _load_attestations(db, device_id: int, *, embed_proofs: bool = False) 
         .where(ComplianceAttestation.device_id == device_id)
     )).scalars().all()
     out: dict = {}
-    static_root = _Path(__file__).resolve().parent.parent / "static"
+    from .compliance import proof_file, get_proof_url
     for r in rows:
         entry = {
             "status":            r.status,
@@ -142,13 +142,13 @@ async def _load_attestations(db, device_id: int, *, embed_proofs: bool = False) 
             "notes":             r.notes,
             "reviewed_by":       r.reviewed_by,
             "reviewed_at":       r.reviewed_at.isoformat() if r.reviewed_at else None,
-            "proof_url":         f"/static/{r.proof_path}" if r.proof_path else None,
+            "proof_url":         get_proof_url(r.proof_path) if r.proof_path else None,
             "proof_filename":    r.proof_filename,
             "proof_mimetype":    r.proof_mimetype,
         }
         if embed_proofs and r.proof_path:
             try:
-                f = static_root / r.proof_path
+                f = proof_file(r.proof_path)
                 if f.is_file():
                     b = f.read_bytes()
                     mime = r.proof_mimetype or "image/png"

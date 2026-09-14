@@ -14,7 +14,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from .database import async_session_maker
+from .database import async_session_maker, engine, Base
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _run_alembic(*args: str) -> None:
         cwd=PROJECT_DIR,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=300,
     )
     if result.returncode != 0:
         logger.error(f"Alembic command failed: {result.stderr}")
@@ -61,12 +61,17 @@ async def run_pg_migrations() -> None:
     - If alembic_version exists, runs upgrade head to apply pending migrations.
     """
     has_table = await _has_alembic_table()
-
     if not has_table:
-        logger.info("No alembic_version table — stamping baseline revision")
-        _run_alembic("stamp", "head")
-        return
-
-    logger.info("Checking for pending PostgreSQL migrations...")
+        async with engine.begin() as conn:
+            existing = (await conn.execute(text("SELECT to_regclass('public.devices_device')"))).scalar()
+            if not existing:
+                # A genuinely empty database can be created at the current schema.
+                await conn.run_sync(Base.metadata.create_all)
+            else:
+                # Pre-Alembic ZenShield already has the baseline tables. Preserve
+                # their types/data; the historical e9 migration drops Django tables.
+                from ..models.llm_config import LLMConfig
+                await conn.run_sync(lambda sync: LLMConfig.__table__.create(sync, checkfirst=True))
+        _run_alembic("stamp", "e9a05a29e536" if existing else "head")
     _run_alembic("upgrade", "head")
     logger.info("PostgreSQL migrations up to date")

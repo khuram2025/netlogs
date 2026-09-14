@@ -4,7 +4,7 @@ set -e
 MODE="${1:-web}"
 
 echo "============================================"
-echo " Zentryc SOAR/SIEM Platform"
+echo " ZenShield Security Appliance"
 echo " Mode: ${MODE}"
 echo "============================================"
 

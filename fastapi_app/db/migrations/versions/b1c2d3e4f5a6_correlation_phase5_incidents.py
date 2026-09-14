@@ -11,7 +11,7 @@ Create Date: 2026-05-20 15:10:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
+from fastapi_app.db.migration_ops import op
 import sqlalchemy as sa
 
 

@@ -38,5 +38,6 @@ def upgrade(client):
             client.command(stmt.strip())
         except Exception as e:
             # ADD COLUMN IF NOT EXISTS is safe; only surface other errors.
-            logger.warning(f"syslogs.ingest_time migration step skipped: {e}")
+            logger.error("syslogs.ingest_time migration failed")
+            raise
     logger.info("syslogs.ingest_time column ensured in ClickHouse")

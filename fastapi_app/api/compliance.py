@@ -48,13 +48,30 @@ from ..models.device import Device
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+from ..core.permissions import require_min_role
+router = APIRouter(dependencies=[Depends(require_min_role("ANALYST"))])
 
-# Proof uploads land under ``fastapi_app/static/uploads/attestations/{device_id}/``
-# Using the static tree means they're already served by the app's static
-# file mount — no separate handler needed.
-_UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "static" / "uploads" / "attestations"
-_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+# Proofs are authenticated and persisted with application credentials/backups.
+_UPLOAD_ROOT = Path(os.environ.get("ZENSHIELD_PROOF_ROOT", "/app/data/credentials/attestations"))
+
+def proof_file(relative_path: str) -> Path:
+    prefix = "uploads/attestations/"
+    if not relative_path.startswith(prefix):
+        raise HTTPException(404, "Proof not found")
+    file = (_UPLOAD_ROOT / relative_path[len(prefix):]).resolve()
+    if not file.is_relative_to(_UPLOAD_ROOT.resolve()):
+        raise HTTPException(404, "Proof not found")
+    return file
+
+def get_proof_url(relative_path: str) -> str:
+    return "/api/compliance/proofs/" + relative_path.removeprefix("uploads/attestations/")
+
+@router.get('/compliance/proofs/{device_id}/{filename}')
+async def read_proof(device_id: int, filename: str):
+    file = proof_file(f"uploads/attestations/{device_id}/{filename}")
+    if not file.is_file():
+        raise HTTPException(404, "Proof not found")
+    return FileResponse(file, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 # Accepted MIME types for proof uploads. Deliberately narrow — a PDF
 # or stray exec would waste a Policy Lookup screenshot slot.
@@ -93,7 +110,7 @@ def _serialise(a: ComplianceAttestation, *, request: Optional[Request] = None) -
     proof_url = None
     if a.proof_path:
         # proof_path is stored relative to /static — prepend the mount.
-        proof_url = f"/static/{a.proof_path}"
+        proof_url = get_proof_url(a.proof_path)
     return {
         "id": a.id,
         "device_id": a.device_id,
@@ -320,7 +337,7 @@ def _unlink_proof(relative_path: Optional[str]) -> None:
     if not relative_path:
         return
     try:
-        full = Path(__file__).resolve().parent.parent / "static" / relative_path
+        full = proof_file(relative_path)
         if full.is_file():
             os.unlink(full)
     except OSError as e:

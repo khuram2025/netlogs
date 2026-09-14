@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import String, Integer, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 import base64
 import os
 import logging
@@ -16,53 +16,42 @@ from ..db.database import Base
 
 logger = logging.getLogger(__name__)
 
-# Key file path - stored in app directory for persistence
-_KEY_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.credential_key')
-
-# Encryption key - cached after first load
+# Appliance keys live in the persistent credentials volume, never in source/images.
+from pathlib import Path
+_KEY_FILE_PATH = os.environ.get('CREDENTIAL_KEY_FILE', '/app/data/credentials/device-credentials.key')
+_LEGACY_KEY_FILE = Path(_KEY_FILE_PATH).with_name('legacy-device-credentials.key')
 _ENCRYPTION_KEY = None
 
 
 def _load_or_create_key() -> str:
-    """
-    Load encryption key from environment variable or key file.
-    If neither exists, generate a new key and save it to the key file.
-    This ensures the key persists across application restarts.
-    """
-    # Priority 1: Environment variable (most secure for production)
     env_key = os.environ.get('CREDENTIAL_ENCRYPTION_KEY')
     if env_key:
-        logger.info("Using encryption key from CREDENTIAL_ENCRYPTION_KEY environment variable")
         return env_key
-
-    # Priority 2: Key file (for development/persistence without env var)
-    if os.path.exists(_KEY_FILE_PATH):
-        try:
-            with open(_KEY_FILE_PATH, 'r') as f:
-                key = f.read().strip()
-                if key:
-                    logger.info(f"Loaded encryption key from {_KEY_FILE_PATH}")
-                    return key
-        except Exception as e:
-            logger.warning(f"Failed to read key file: {e}")
-
-    # Priority 3: Generate new key and save to file
-    logger.warning(
-        "No CREDENTIAL_ENCRYPTION_KEY environment variable set. "
-        f"Generating new key and saving to {_KEY_FILE_PATH}. "
-        "For production, set CREDENTIAL_ENCRYPTION_KEY environment variable."
-    )
-    new_key = Fernet.generate_key().decode()
+    path = Path(_KEY_FILE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(_KEY_FILE_PATH, 'w') as f:
-            f.write(new_key)
-        # Set restrictive permissions (owner read/write only)
-        os.chmod(_KEY_FILE_PATH, 0o600)
-        logger.info(f"Generated and saved new encryption key to {_KEY_FILE_PATH}")
-    except Exception as e:
-        logger.error(f"Failed to save key file: {e}. Key will not persist across restarts!")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return path.read_text().strip()
+    with os.fdopen(fd, 'w') as stream:
+        stream.write(Fernet.generate_key().decode()); stream.flush(); os.fsync(stream.fileno())
+    return path.read_text().strip()
 
-    return new_key
+
+async def rotate_legacy_credentials(session_factory):
+    if not _LEGACY_KEY_FILE.exists():
+        return
+    from sqlalchemy import select
+    new = Fernet(_load_or_create_key().encode())
+    old = Fernet(_LEGACY_KEY_FILE.read_bytes().strip())
+    combined = MultiFernet([new, old])
+    async with session_factory() as session:
+        rows = (await session.execute(select(DeviceCredential))).scalars().all()
+        for row in rows:
+            row._password = new.encrypt(combined.decrypt(row._password.encode())).decode()
+        await session.commit()
+    _LEGACY_KEY_FILE.unlink()
+    logger.info('Legacy device credentials migrated to a persistent appliance-specific key')
 
 
 def get_cipher():
@@ -77,7 +66,7 @@ def get_cipher():
         # Generate a consistent key from the provided value using SHA-256
         import hashlib
         key = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
-    return Fernet(key)
+    return MultiFernet([Fernet(key), Fernet(_LEGACY_KEY_FILE.read_bytes().strip())]) if _LEGACY_KEY_FILE.exists() else Fernet(key)
 
 
 class CredentialType:

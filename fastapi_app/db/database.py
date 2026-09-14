@@ -86,10 +86,16 @@ async def init_db() -> None:
     from ..models import address_object  # noqa: F401
     from ..models import system_settings  # noqa: F401
     from ..models import llm_config  # noqa: F401
-    from ..models import url_clean  # noqa: F401
+    from ..models import url_clean, firewall_policy, compliance_attestation  # noqa: F401
+
+    from .migrate import run_pg_migrations
+    await run_pg_migrations()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    from ..models.credential import rotate_legacy_credentials
+    await rotate_legacy_credentials(async_session_maker)
 
     # Create default admin user if no users exist
     await _create_default_admin()

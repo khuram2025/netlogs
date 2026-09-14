@@ -4,9 +4,11 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 ROOT=Path(__file__).resolve().parents[1]
 import argparse
 parser=argparse.ArgumentParser(description='Build a signed native installer pinned to a verified appliance release')
-parser.add_argument('--release-package')
+parser.add_argument('--release-package', required=True)
+parser.add_argument('--private-key', type=Path, default=ROOT/'private/zenshield-release.key')
+parser.add_argument('--output-dir', type=Path, default=ROOT/'private/native-installer')
 args=parser.parse_args()
-out=ROOT/'private/native-installer';out.mkdir(exist_ok=True)
+out=args.output_dir;out.mkdir(parents=True,exist_ok=True)
 release={'version':'0.3.3','min_version':'0.2.0','sha256':'ac7140c9f8f1b4293c70ef544f964a278ab6e8da62044997b8e31237f6590904','url':'https://zentryc.com/downloads/zenshield/0.3.3/ZenShield-0.3.3.zup','dependency_images':{
  'postgres':'postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685',
  'clickhouse':'clickhouse/clickhouse-server@sha256:87e0a5b72f5465b18eacca7c76850e7ff551c9795c50e451f5646299e5e24146',
@@ -91,7 +93,7 @@ WantedBy=multi-user.target
     target=out/name
     if not target.exists():bundle.replace(target)
     else:bundle.unlink()
-    key=load_pem_private_key((ROOT/'private/zenshield-release.key').read_bytes(),password=None)
+    key=load_pem_private_key(args.private_key.read_bytes(),password=None)
     (out/(name+'.sig')).write_bytes(key.sign(data))
     public=(ROOT/'appliance/ota-release.pub').read_text().strip()
     script='''#!/bin/bash

@@ -760,7 +760,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
 class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
 
+def preserve_legacy_credential_key():
+    """Carry an old image's credential key into its backed-up persistent volume.
+
+    During signed OTA this runs after backup and before the old web container
+    is replaced. The application rotates encrypted records to a unique key.
+    No key is logged or included in an image/release.
+    """
+    import io, tarfile, base64
+    result = subprocess.run(['docker', 'inspect', 'zensheild-web-1'], capture_output=True)
+    if result.returncode:
+        return  # Fresh installation, before the first container exists.
+    info = json.loads(result.stdout)[0]
+    mount = next((m for m in info['Mounts'] if m['Destination'] == '/app/data/credentials'), None)
+    if not mount:
+        return
+    directory = Path(mount['Source'])
+    if (directory / 'device-credentials.key').exists() or (directory / 'legacy-device-credentials.key').exists():
+        return
+    copied = subprocess.run(['docker', 'cp', 'zensheild-web-1:/app/fastapi_app/.credential_key', '-'], capture_output=True)
+    if copied.returncode:
+        return  # New images never contain an embedded key.
+    with tarfile.open(fileobj=io.BytesIO(copied.stdout)) as archive:
+        files = [m for m in archive.getmembers() if m.isfile()]
+        if len(files) != 1 or files[0].size > 128:
+            raise Rejected('Invalid legacy credential key export')
+        key = archive.extractfile(files[0]).read().strip()
+    if len(key) != 44 or len(base64.urlsafe_b64decode(key)) != 32:
+        raise Rejected('Invalid legacy credential key')
+    target = directory / 'legacy-device-credentials.key'
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'wb') as stream:
+        stream.write(key); stream.flush(); os.fsync(stream.fileno())
+    os.chown(target, 1000, 1000)
+
 def main():
+    preserve_legacy_credential_key()
     os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True)
     if len(sys.argv) > 1:

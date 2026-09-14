@@ -20,7 +20,7 @@ echarts.use([
   CanvasRenderer,
 ])
 
-// Zentryc dark theme
+// ZenShield dark theme
 const zentrycTheme = {
   color: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'],
   backgroundColor: 'transparent',

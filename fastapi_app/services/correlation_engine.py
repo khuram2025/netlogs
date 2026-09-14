@@ -1393,26 +1393,9 @@ async def seed_correlation_rules():
                 db.add(rule)
                 added += 1
 
-        # ── Remove the first-generation rules ────────────────────────
-        # Superseded by the redesigned ruleset above and deleted outright.
-        # Recorded matches live in ClickHouse (no foreign key) and keep
-        # their rule_name snapshot, so detection history is unaffected.
-        deprecated = [
-            "Reconnaissance then Access",
-            "Brute Force then Login",
-            "Multi-Firewall Scan",
-            "Denied then Allowed - Same Source",
-            "High Volume Outbound Traffic",
-            "Threat-Intel Source then Firewall Denials",
-            "Suspicious DNS then Outbound Connection",
-            "PA Threat Alert then Firewall Allow",
-        ]
-        result = await db.execute(
-            delete(CorrelationRule).where(CorrelationRule.name.in_(deprecated))
-        )
-        removed = result.rowcount or 0
-
-        if added or removed:
+        # Appliance upgrades preserve existing rules, including locally edited
+        # rules that happen to share a retired built-in name. Administrators can
+        # disable them after reviewing the new ruleset.
+        if added:
             await db.commit()
-            logger.info(
-                f"Correlation rules: seeded {added}, removed {removed}")
+            logger.info(f"Correlation rules: seeded {added}; existing rules retained")

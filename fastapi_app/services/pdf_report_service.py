@@ -46,9 +46,10 @@ async def render_html_to_pdf(
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(args=["--no-sandbox"])
+        browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
         try:
-            page = await browser.new_page()
+            page = await browser.new_page(java_script_enabled=False)
+            await page.route("**/*", lambda route: route.abort())
             # ``wait_until='networkidle'`` would block forever on our
             # fully-inline templates because nothing loads; ``load`` is
             # the right signal — the DOM is ready as soon as set_content
