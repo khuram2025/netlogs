@@ -1,0 +1,10 @@
+{
+  "public_launcher_matches_reviewed_source": true,
+  "launcher_lf_only": true,
+  "public_bootstrap_sha256": "1f08dc92ec84d40c8cc9cd9d4445acd657b78d36e3300f515c77555931c68314",
+  "ed25519_signature_verified": true,
+  "tampered_bootstrap_rejected": true,
+  "public_resource_policy_tests_passed": true,
+  "public_download_recovery_tests_passed": true,
+  "release": "0.3.4"
+}

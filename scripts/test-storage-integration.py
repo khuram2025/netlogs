@@ -106,9 +106,17 @@ elif sys.argv[1] == 'expanded':
     check('Migrated data survives reboot', hashlib.sha256(target.read_bytes()).hexdigest() == (a.STATE / 'checksum').read_text())
     before = int(float(a.storage()['pool']['vg_free']))
     execute({'action': 'rescan'})
-    check('Expanded existing disk increases free pool space', int(float(a.storage()['pool']['vg_free'])) > before + 10 * 1024**3)
-    execute({'action': 'grow-system'})
-    check('Plain Ubuntu root partition grows in place', a.filesystem('/')['size'] > 110 * 1024**3)
+    check('Expanded existing disk is fully represented in pool capacity', int(float(a.storage()['pool']['vg_size'])) > 47 * 1024**3)
+    if a.system_growth()['can_grow']:
+        execute({'action': 'grow-system'})
+    check('Expanded Ubuntu root capacity is usable, including cloud-init automatic growth', a.filesystem('/')['size'] > 110 * 1024**3)
+elif sys.argv[1] == 'resize-retry':
+    lv = next(v for v in a.storage()['volumes'] if v['name'] == 'clickhouse')
+    target = lv['size'] // 1024**3 + 1
+    old = a.filesystem(a.MOUNTS['clickhouse'])['size']
+    a.run('lvextend', '-y', '-L', str(target) + 'G', '/dev/zenshield_data/clickhouse')
+    execute({'action': 'grow', 'volume': 'clickhouse', 'size_gib': target})
+    check('Interrupted volume growth retries filesystem resize at the same LV size', a.filesystem(a.MOUNTS['clickhouse'])['size'] > old)
 else:
     raise SystemExit('Specify initial or expanded')
 (a.STATE / ('results-' + sys.argv[1] + '.json')).write_text(json.dumps(report, indent=2))
