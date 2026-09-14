@@ -37,6 +37,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'devices/dns_sources.html' %}
 <!-- Storage Dashboard -->
 <div class="card">
     <h3 style="margin-bottom: 1rem;">Storage Overview</h3>
@@ -81,7 +82,7 @@
                 <th>Retention</th>
                 <th>Last Log</th>
                 <th>Log Count</th>
-                <th>Storage</th>
+                <th title="Estimated uncompressed storage for events in the last 24 hours">Storage (24h estimate)</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -146,7 +147,8 @@
 <script>
 // Auto-refresh every 30 seconds
 setTimeout(function() {
-    location.reload();
+    // Source health refreshes independently; do not discard an enrollment credential or active form.
+    if (!document.querySelector("#dns-sources details[open]") && !["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName)) location.reload();
 }, 30000);
 </script>
 {% endblock %}

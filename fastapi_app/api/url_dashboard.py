@@ -123,7 +123,7 @@ async def _sc_where() -> str:
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def url_analytics_page(request: Request):
     ctx = _base_context(request)
-    return templates.TemplateResponse("dashboards/url_analytics.html", ctx)
+    return templates.TemplateResponse(request, "dashboards/url_analytics.html", ctx)
 
 
 # ── Summary Stats ────────────────────────────────────────────────────

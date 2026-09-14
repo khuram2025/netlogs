@@ -100,7 +100,7 @@ async def edl_list_page(
     total_entries = sum(edl.entry_count for edl in lists)
     active_lists = sum(1 for edl in lists if edl.is_active)
 
-    return templates.TemplateResponse("edl/edl_list.html", {
+    return templates.TemplateResponse(request, "edl/edl_list.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -116,7 +116,7 @@ async def edl_list_page(
 @router.get("/edl/new/", response_class=HTMLResponse, name="edl_create_page")
 async def edl_create_page(request: Request):
     """Display form to create a new EDL list."""
-    return templates.TemplateResponse("edl/edl_form.html", {
+    return templates.TemplateResponse(request, "edl/edl_form.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -140,7 +140,7 @@ async def edl_create(
     # Check for duplicate name
     existing = await db.execute(select(EDLList).where(EDLList.name == name.strip()))
     if existing.scalar_one_or_none():
-        return templates.TemplateResponse("edl/edl_form.html", {
+        return templates.TemplateResponse(request, "edl/edl_form.html", {
             "request": request,
             "current_user": getattr(request.state, "current_user", None),
             "unread_alert_count": 0,
@@ -215,7 +215,7 @@ async def edl_detail_page(
     if edl.access_token:
         feed_url += f"?token={edl.access_token}"
 
-    return templates.TemplateResponse("edl/edl_detail.html", {
+    return templates.TemplateResponse(request, "edl/edl_detail.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -245,7 +245,7 @@ async def edl_edit_page(
     if not edl:
         raise HTTPException(status_code=404, detail="EDL list not found")
 
-    return templates.TemplateResponse("edl/edl_form.html", {
+    return templates.TemplateResponse(request, "edl/edl_form.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -277,7 +277,7 @@ async def edl_update(
     if name.strip() != edl.name:
         existing = await db.execute(select(EDLList).where(EDLList.name == name.strip()))
         if existing.scalar_one_or_none():
-            return templates.TemplateResponse("edl/edl_form.html", {
+            return templates.TemplateResponse(request, "edl/edl_form.html", {
                 "request": request,
                 "current_user": getattr(request.state, "current_user", None),
                 "unread_alert_count": 0,

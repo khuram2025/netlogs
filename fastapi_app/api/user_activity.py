@@ -51,7 +51,7 @@ def _safe(val, default=0):
 async def user_activity_list_page(request: Request):
     """User activity list — shows top active users."""
     ctx = _base_context(request)
-    return templates.TemplateResponse("user_activity/user_list.html", ctx)
+    return templates.TemplateResponse(request, "user_activity/user_list.html", ctx)
 
 
 @router.get("/users/activity/timeline", response_class=HTMLResponse, name="user_activity_timeline",
@@ -59,7 +59,7 @@ async def user_activity_list_page(request: Request):
 async def user_activity_timeline_page(request: Request):
     """Per-user activity timeline page."""
     ctx = _base_context(request)
-    return templates.TemplateResponse("user_activity/timeline.html", ctx)
+    return templates.TemplateResponse(request, "user_activity/timeline.html", ctx)
 
 
 # ============================================================

@@ -43,7 +43,7 @@ async def login_page(
     if user is not None:
         return RedirectResponse(url=next or "/dashboard/", status_code=303)
 
-    return templates.TemplateResponse("auth/login.html", {
+    return templates.TemplateResponse(request, "auth/login.html", {
         "request": request,
         "next_url": next or "/dashboard/",
         "error": error,
@@ -69,7 +69,7 @@ async def login_post(
             resource_type="session", details={"reason": "invalid_credentials"},
             ip_address=request.client.host if request.client else "",
         )
-        return templates.TemplateResponse("auth/login.html", {
+        return templates.TemplateResponse(request, "auth/login.html", {
             "request": request,
             "next_url": next_url,
             "error": "Invalid username or password, or account is locked.",
@@ -77,7 +77,7 @@ async def login_post(
         })
 
     if not user.is_active:
-        return templates.TemplateResponse("auth/login.html", {
+        return templates.TemplateResponse(request, "auth/login.html", {
             "request": request,
             "next_url": next_url,
             "error": "Your account has been deactivated. Contact an administrator.",

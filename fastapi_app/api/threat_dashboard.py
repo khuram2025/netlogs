@@ -34,7 +34,7 @@ def _render(template_name: str, request: Request, context: dict = None):
     ctx = _base_context(request)
     if context:
         ctx.update(context)
-    return templates.TemplateResponse(template_name, ctx)
+    return templates.TemplateResponse(request, template_name, ctx)
 
 
 def _safe(val, default=0):
@@ -986,7 +986,7 @@ async def api_threat_detail(
             dependencies=[Depends(require_min_role("ANALYST"))])
 async def url_dns_logs_page(request: Request):
     """URL filtering & DNS traffic log viewer."""
-    return _render("threats/url_dns_logs.html", request)
+    return _render("threats/url_dns_logs.html" if request.query_params.get("tab") == "url" else "threats/dns_workspace.html", request)
 
 
 # ============================================================

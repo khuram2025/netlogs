@@ -63,7 +63,7 @@ async def api_keys_page(
 
     ctx = _base_context(request)
     ctx["keys"] = keys
-    return templates.TemplateResponse("auth/api_keys.html", ctx)
+    return templates.TemplateResponse(request, "auth/api_keys.html", ctx)
 
 
 # ============================================================

@@ -75,7 +75,7 @@ async def project_list(
         'total_entries': total_entries,
     }
 
-    return templates.TemplateResponse("projects/project_list.html", {
+    return templates.TemplateResponse(request, "projects/project_list.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -90,7 +90,7 @@ async def project_list(
 @router.get("/projects/new/", response_class=HTMLResponse, name="project_new")
 async def project_new(request: Request):
     """Show create project form."""
-    return templates.TemplateResponse("projects/project_form.html", {
+    return templates.TemplateResponse(request, "projects/project_form.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -172,7 +172,7 @@ async def project_detail(
         'active': len([e for e in all_entries if e.is_active]),
     }
 
-    return templates.TemplateResponse("projects/project_detail.html", {
+    return templates.TemplateResponse(request, "projects/project_detail.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -199,7 +199,7 @@ async def project_edit(
     if not project:
         return RedirectResponse(url="/projects/", status_code=303)
 
-    return templates.TemplateResponse("projects/project_form.html", {
+    return templates.TemplateResponse(request, "projects/project_form.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,
@@ -1150,7 +1150,7 @@ async def project_policy_view(
     if vendor.lower() == "paloalto":
         all_cli_parts.append('commit')
 
-    return templates.TemplateResponse("projects/project_policy.html", {
+    return templates.TemplateResponse(request, "projects/project_policy.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,

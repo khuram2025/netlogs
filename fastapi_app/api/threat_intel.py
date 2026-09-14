@@ -40,7 +40,7 @@ def _render(template_name: str, request: Request, context: dict = None):
     ctx = _base_context(request)
     if context:
         ctx.update(context)
-    return templates.TemplateResponse(template_name, ctx)
+    return templates.TemplateResponse(request, template_name, ctx)
 
 
 # ============================================================

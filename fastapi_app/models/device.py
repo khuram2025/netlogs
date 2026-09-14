@@ -29,11 +29,13 @@ class ParserType:
     GENERIC = "GENERIC"
     FORTINET = "FORTINET"
     PALOALTO = "PALOALTO"
+    WINDOWS_DNS = "WINDOWS_DNS"
 
     CHOICES = [
         (GENERIC, "Generic Syslog"),
         (FORTINET, "Fortinet"),
         (PALOALTO, "Palo Alto"),
+        (WINDOWS_DNS, "Windows DNS Server"),
     ]
 
 

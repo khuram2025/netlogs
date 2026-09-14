@@ -911,7 +911,7 @@ async def address_object_list_page(
     fqdns = type_counts.get("fqdn", 0)
     groups = type_counts.get("group", 0)
 
-    return templates.TemplateResponse("address_objects/address_object_list.html", {
+    return templates.TemplateResponse(request, "address_objects/address_object_list.html", {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "unread_alert_count": 0,

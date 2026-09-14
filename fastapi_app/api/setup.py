@@ -35,7 +35,7 @@ async def setup_page(request: Request):
     if not await is_setup_needed():
         return RedirectResponse(url="/auth/login", status_code=303)
 
-    return templates.TemplateResponse("setup/wizard.html", {
+    return templates.TemplateResponse(request, "setup/wizard.html", {
         "request": request,
         "syslog_port": settings.syslog_port,
     })
@@ -61,9 +61,6 @@ async def setup_step1(request: Request):
     new_password = body.new_password
     email = body.email.strip() if body.email else ""
 
-    # Validate current password is the default
-    if current_password != "changeme":
-        return JSONResponse({"error": "Current password is incorrect"}, status_code=400)
 
     async with async_session_maker() as session:
         result = await session.execute(
@@ -72,6 +69,9 @@ async def setup_step1(request: Request):
         admin = result.scalar_one_or_none()
         if not admin:
             return JSONResponse({"error": "Admin user not found"}, status_code=500)
+
+        if not admin.verify_password(current_password):
+            return JSONResponse({"error": "Current password is incorrect"}, status_code=400)
 
         # Update password and email
         admin.set_password(new_password)

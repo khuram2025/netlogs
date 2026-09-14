@@ -1120,7 +1120,7 @@
      ============================================================ -->
 <div class="sys-header">
     <div class="sys-header-left">
-        <h1>System Monitor</h1>
+        <h1>Storage Monitor</h1>
         <span class="status-pill {{ disk_status }}">{{ disk_status }}</span>
     </div>
     <div class="sys-header-right">
@@ -1145,7 +1145,7 @@
 <div class="stat-row">
     <div class="stat-card accent-blue">
         <div class="stat-card-top">
-            <span class="stat-card-label">Disk Usage</span>
+            <span class="stat-card-label">Data Filesystem Usage</span>
             <div class="stat-card-icon blue">
                 <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
             </div>
@@ -1369,7 +1369,7 @@
 <!-- ============================================================
      TAB: STORAGE QUOTA
      ============================================================ -->
-<div class="tab-panel" id="tab-quota">
+<div class="tab-panel" id="tab-quota"><p id="quota-capacity-note">A log quota is a retention setting, not allocated disk space. Available capacity is limited by the data filesystem shown above.</p>
     <div class="quota-grid">
         <!-- Left: Quota Status -->
         <div class="quota-panel">
@@ -1441,7 +1441,7 @@
                     <div class="setting-desc">Maximum allowed storage for syslogs (GB)</div>
                 </div>
                 <div class="setting-input">
-                    <input type="number" id="syslogsMaxSize" min="10" max="10000" step="10" value="600">
+                    <input type="number" id="syslogsMaxSize" min="0.1" step="0.1" value="600">
                 </div>
             </div>
 
@@ -1544,7 +1544,7 @@
 <!-- ============================================================
      TAB: PARTITIONS
      ============================================================ -->
-<div class="tab-panel" id="tab-partitions">
+<div class="tab-panel" id="tab-partitions"><p>Physical disk capacity and mounted filesystem capacity are different. Use <a href="/system/">System → Storage</a> to rescan disks, grow the system filesystem, or extend data volumes.</p>
 
     <!-- ======= PHYSICAL DISKS ======= -->
     <div class="section-divider">
@@ -1580,7 +1580,7 @@
             {% endfor %}
         {% else %}
             <div style="padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
-                Disk information unavailable. Mount host filesystem to enable detection.
+                Host disk information is unavailable. Check appliance services from the console.
             </div>
         {% endif %}
     </div>
@@ -1630,7 +1630,7 @@
     {% else %}
     <div style="padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
         {% if not sys_partitions or not sys_partitions.has_hostfs %}
-        Host filesystem not mounted. Restart the web container to enable partition detection.
+        Host storage service is unavailable. Check appliance services from the console.
         {% else %}
         No mounted partitions detected.
         {% endif %}
@@ -1869,7 +1869,8 @@ function updateQuotaDisplay(data) {
     const q = data.quota, s = data.syslogs;
     document.getElementById('currentSizeDisplay').textContent = q.current_size_gb.toFixed(2);
     document.getElementById('quotaSizeDisplay').textContent = q.max_size_gb.toFixed(0);
-    document.getElementById('freeQuotaDisplay').textContent = q.free_quota_gb.toFixed(2);
+    document.getElementById('freeQuotaDisplay').textContent = Math.max(0, q.free_quota_gb).toFixed(2);
+    const note=document.getElementById('quota-capacity-note'); if(note && data.disk) note.textContent=q.max_size_gb > data.disk.total_gb ? 'The configured log quota exceeds the data filesystem capacity. Lower the quota or expand storage; changing the quota does not add disk space.' : 'A log quota controls retention. It does not allocate disk space; other data shares this filesystem.';
     document.getElementById('totalRowsDisplay').textContent = formatNumber(s.total_rows);
     document.getElementById('topSyslogRows').textContent = formatNumber(s.total_rows);
 
@@ -1908,7 +1909,7 @@ async function saveStorageSettings() {
             min_retention_days: parseInt(document.getElementById('minRetention').value),
             auto_cleanup_enabled: document.getElementById('autoCleanupEnabled').checked
         };
-        if (settings.syslogs_max_size_gb < 10) { showToast('Max size must be at least 10 GB', 'error'); return; }
+        if (!Number.isFinite(settings.syslogs_max_size_gb) || settings.syslogs_max_size_gb <= 0) { showToast('Max size must be a positive number', 'error'); return; }
         if (settings.cleanup_target_percent >= settings.cleanup_trigger_percent) { showToast('Target must be less than trigger %', 'error'); return; }
         const r = await fetch('/api/system/storage-settings/', {
             method: 'POST',

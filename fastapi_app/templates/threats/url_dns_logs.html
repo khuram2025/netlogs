@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
     /* Break out of base .container */
     .container:has(.udl-page) {
@@ -447,7 +446,7 @@
             URL Logs
             <span class="udl-tab-count" id="tab-url-count">-</span>
         </button>
-        <button class="udl-tab" onclick="switchTab('dns')" id="tab-dns">
+        <button class="udl-tab" onclick="location.href='?tab=dns'" id="tab-dns">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             DNS Traffic
             <span class="udl-tab-count" id="tab-dns-count">-</span>

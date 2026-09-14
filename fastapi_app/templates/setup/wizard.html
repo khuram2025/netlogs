@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zentryc — Setup Wizard</title>
+    <title>ZenShield — Setup Wizard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #0f172a;
@@ -757,7 +755,7 @@
                 <div class="form-group">
                     <label class="form-label">Current Password</label>
                     <div class="input-wrapper">
-                        <input id="current-password" type="password" class="form-input" placeholder="Enter current password" value="changeme">
+                        <input id="current-password" type="password" class="form-input" placeholder="Enter current password" value="">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -811,7 +809,7 @@
             <!-- ==================== STEP 2: Notifications ==================== -->
             <div class="step-section" id="step-2">
                 <div class="step-title">Notification Channel</div>
-                <div class="step-desc">Configure how Zentryc sends alert notifications. You can skip this and set it up later.</div>
+                <div class="step-desc">Configure how ZenShield sends alert notifications. You can skip this and set it up later.</div>
 
                 <div id="step2-msg" class="msg-banner"></div>
 
@@ -913,7 +911,7 @@
             <!-- ==================== STEP 3: Syslog Verification ==================== -->
             <div class="step-section" id="step-3">
                 <div class="step-title">Syslog Verification</div>
-                <div class="step-desc">Verify that Zentryc is receiving syslog data from your devices.</div>
+                <div class="step-desc">Verify that ZenShield is receiving syslog data from your devices.</div>
 
                 <div class="syslog-info">
                     <div class="syslog-port">UDP/{{ syslog_port }}</div>
@@ -958,7 +956,7 @@
                             <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
                             <polyline points="22 4 12 14.01 9 11.01"/>
                         </svg>
-                        Launch Zentryc
+                        Launch ZenShield
                     </button>
                 </div>
             </div>

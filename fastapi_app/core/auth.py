@@ -72,26 +72,20 @@ async def is_token_revoked(jti: str) -> bool:
         return not exists  # If key doesn't exist, session was revoked/expired
     except Exception:
         # Fallback: check in-memory
-        return jti in _revoked_tokens_fallback
+        return True  # Authentication fails closed while the session store is unavailable
 
 
 # ============================================================
 # Password complexity
 # ============================================================
-PASSWORD_MIN_LENGTH = 8
-PASSWORD_RULES = "at least 8 characters, with uppercase, lowercase, and a digit"
+PASSWORD_MIN_LENGTH = 5
+PASSWORD_RULES = "at least 5 characters and at most 72 UTF-8 bytes"
 
-
-def validate_password_strength(password: str) -> Optional[str]:
-    """Return an error message if password is too weak, or None if OK."""
-    if len(password) < PASSWORD_MIN_LENGTH:
-        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters."
-    if not re.search(r"[A-Z]", password):
-        return "Password must contain at least one uppercase letter."
-    if not re.search(r"[a-z]", password):
-        return "Password must contain at least one lowercase letter."
-    if not re.search(r"[0-9]", password):
-        return "Password must contain at least one digit."
+def validate_password_strength(password):
+    if len(password) < 5 or len(password.encode()) > 72:
+        return "Password must contain at least 5 characters and at most 72 UTF-8 bytes."
+    if any(c in password for c in '\r\n\x00'):
+        return "Password cannot contain line breaks or NUL."
     return None
 
 # Paths that don't require authentication
@@ -253,7 +247,7 @@ def set_session_cookie(response: Response, token: str, remember_me: bool = False
         max_age=max_age,
         httponly=True,
         samesite="lax",
-        secure=False,   # Allow on HTTP and self-signed HTTPS
+        secure=True,   # Allow on HTTP and self-signed HTTPS
     )
 
 

@@ -135,6 +135,7 @@ class ClickHouseClient:
 
             -- Keep parsed_data Map for all other fields
             parsed_data Map(String, String) CODEC(ZSTD(1)),
+            log_time String DEFAULT '' CODEC(ZSTD(1)),
 
             -- Materialized columns for common queries
             log_date Date MATERIALIZED toDate(timestamp),
@@ -168,6 +169,7 @@ class ClickHouseClient:
 
         try:
             client.command(create_table_query)
+            client.command("ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_time String DEFAULT '' CODEC(ZSTD(1))")
             logger.info("ClickHouse table 'syslogs' created/verified")
         except Exception as e:
             logger.warning(f"Table creation issue (may already exist): {e}")
@@ -178,6 +180,7 @@ class ClickHouseClient:
         """Migrate existing table to add new columns and indexes."""
         client = cls.get_client()
         migrations = [
+            "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS log_time String DEFAULT '' CODEC(ZSTD(1))",
             # Add dedicated columns for key parsed fields
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS srcip String DEFAULT '' CODEC(ZSTD(1))",
             "ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dstip String DEFAULT '' CODEC(ZSTD(1))",

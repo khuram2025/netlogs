@@ -838,20 +838,20 @@ async def get_or_create_device(ip: str, raw_data: bytes = b'') -> Optional[Tuple
                     "ON CONFLICT (ip_address) DO NOTHING"
                 ), {
                     'ip': ip,
-                    'status': DeviceStatus.APPROVED,
+                    'status': DeviceStatus.PENDING,
                     'parser': detected_parser,
                     'retention': 90,
                 })
                 await session.commit()
-                logger.info(f"New device auto-approved: {ip} (parser: {detected_parser})")
-                return (DeviceStatus.APPROVED, detected_parser)
+                logger.info(f"New device awaiting approval: {ip} (parser: {detected_parser})")
+                return (DeviceStatus.PENDING, detected_parser)
 
             return (row.status, row.parser)
     except Exception as e:
         logger.error(f"DB error for device {ip}: {e}")
         # On DB error, still detect parser for this batch
         detected = detect_parser(raw_data)
-        return (DeviceStatus.APPROVED, detected)
+        return None  # Fail closed if device authorization cannot be checked
 
 
 async def batch_update_device_stats(updates: Dict[str, dict]):

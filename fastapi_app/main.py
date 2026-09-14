@@ -53,6 +53,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+        if path == "/api/dns/ingest":
+            return await call_next(request)  # DNS router enforces source-only authentication
 
         # Allow public paths
         if is_public_path(path):
@@ -174,6 +176,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"dns_logs table setup warning: {e}")
 
+    from .api.dns_service import initialize as initialize_dns
+    await initialize_dns()
+
     # Run ClickHouse migrations
     try:
         from .db.clickhouse_migrations.runner import run_clickhouse_migrations
@@ -266,7 +271,7 @@ APP_INFO.labels(version=__version__).set(1)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else settings.allowed_hosts_list,
+    allow_origins=[],  # Appliance UI is same-origin only
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -321,6 +326,8 @@ app.include_router(backup_router)
 app.include_router(llm_config_router)
 
 # Include Palo Alto threat/URL dashboard routes
+from .api.dns_service import router as dns_router
+app.include_router(dns_router)
 app.include_router(threat_dashboard_router)
 
 # Include SiteClean URL noise filtering routes
@@ -353,7 +360,7 @@ for _mod_info in pkgutil.iter_modules(_api_pkg.__path__):
 async def api_root():
     """API root endpoint."""
     return {
-        "message": "Zentryc SOAR/SIEM API",
+        "message": "ZenShield SOAR/SIEM API",
         "version": __version__,
         "endpoints": {
             "devices": "/api/devices/",
@@ -375,3 +382,6 @@ if __name__ == "__main__":
         reload=settings.debug,
         log_level=settings.log_level.lower(),
     )
+
+from .api.appliance import router as appliance_router
+app.include_router(appliance_router)

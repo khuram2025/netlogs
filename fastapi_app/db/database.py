@@ -3,6 +3,7 @@ Database connection management for PostgreSQL using async SQLAlchemy.
 """
 
 import logging
+import os
 from typing import AsyncGenerator, Optional
 from urllib.parse import quote_plus
 from sqlalchemy import select
@@ -118,10 +119,13 @@ async def _create_default_admin() -> None:
                     role=UserRole.ADMIN.value,
                     is_active=True,
                 )
-                admin.set_password("changeme")
+                password = os.environ.get("ZENSHEILD_ADMIN_PASSWORD", "")
+                if len(password) < 5 or len(password.encode()) > 72 or password == "changeme":
+                    raise RuntimeError("ZenSheild requires a unique bootstrap admin password")
+                admin.set_password(password)
                 session.add(admin)
                 await session.commit()
-                logger.info("Default admin user created (admin/changeme)")
+                logger.info("ZenSheild administrator created with deployment-specific credentials")
             else:
                 logger.debug("Admin user already exists, skipping creation")
         except Exception as e:

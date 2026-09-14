@@ -39,6 +39,8 @@ CSRF_EXEMPT_PREFIXES = (
 def _is_csrf_exempt(request: Request) -> bool:
     """Check if a request is exempt from CSRF validation."""
     path = request.url.path
+    if path == "/api/dns/ingest":
+        return True  # No cookie authentication; source credential required by the route
 
     for prefix in CSRF_EXEMPT_PREFIXES:
         if path.startswith(prefix):
@@ -49,7 +51,7 @@ def _is_csrf_exempt(request: Request) -> bool:
         return True
 
     # API key authenticated requests are exempt (machine-to-machine)
-    if request.headers.get("X-API-Key") or request.query_params.get("api_key"):
+    if getattr(request.state, "api_key", None) is not None:
         return True
 
     return False
@@ -86,7 +88,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     except Exception:
                         pass
 
-            if not csrf_token or csrf_token != csrf_cookie:
+            if not csrf_token or not secrets.compare_digest(csrf_token, csrf_cookie):
                 logger.warning(f"CSRF validation failed for {request.method} {request.url.path}")
                 return JSONResponse(
                     status_code=403,
@@ -105,7 +107,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             max_age=8 * 3600,  # 8 hours, matches session
             httponly=False,     # JS must be able to read this
             samesite="lax",
-            secure=False,       # Allow on HTTP and self-signed HTTPS
+            secure=True,       # Allow on HTTP and self-signed HTTPS
             path="/",
         )
 

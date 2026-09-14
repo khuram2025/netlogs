@@ -35,7 +35,7 @@ def _base_context(request: Request) -> dict:
             dependencies=[Depends(require_min_role("ADMIN"))])
 async def url_clean_page(request: Request):
     ctx = _base_context(request)
-    return templates.TemplateResponse("system/url_clean.html", ctx)
+    return templates.TemplateResponse(request, "system/url_clean.html", ctx)
 
 
 # ── CRUD API ─────────────────────────────────────────────────────────

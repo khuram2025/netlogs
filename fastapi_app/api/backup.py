@@ -78,7 +78,7 @@ async def backups_page(request: Request):
     ctx = _base_context(request)
     ctx["backups"] = _list_backups()
     ctx["backup_dir"] = str(BACKUP_DIR)
-    return templates.TemplateResponse("system/backups.html", ctx)
+    return templates.TemplateResponse(request, "system/backups.html", ctx)
 
 
 # =========================================================================

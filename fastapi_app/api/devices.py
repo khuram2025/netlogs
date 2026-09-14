@@ -19,7 +19,14 @@ from ..schemas.device import (
     DeviceStatusUpdate,
 )
 
-router = APIRouter(prefix="/devices", tags=["devices"])
+from ..core.permissions import require_role
+
+async def _authorize_device_operation(request: Request):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        roles = ("ADMIN", "ANALYST") if request.url.path.endswith(("/approve", "/reject")) else ("ADMIN",)
+        await require_role(*roles)(request)
+
+router = APIRouter(prefix="/devices", tags=["devices"], dependencies=[Depends(_authorize_device_operation)])
 
 
 def format_bytes(size: int) -> str:

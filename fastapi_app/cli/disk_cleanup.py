@@ -26,7 +26,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/home/net/zentryc/logs/disk_cleanup.log', mode='a')
+        logging.FileHandler('/app/logs/disk_cleanup.log', mode='a')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -54,16 +54,7 @@ CLICKHOUSE_PASSWORD = os.environ.get('CLICKHOUSE_PASSWORD', 'password')
 CLICKHOUSE_DB = os.environ.get('CLICKHOUSE_DB', 'default')
 
 
-def get_disk_usage(path: str = '/') -> Dict[str, any]:
-    """Get disk usage statistics for the specified path."""
-    total, used, free = shutil.disk_usage(path)
-    usage_percent = (used / total) * 100
-    return {
-        'total_gb': total / (1024**3),
-        'used_gb': used / (1024**3),
-        'free_gb': free / (1024**3),
-        'usage_percent': usage_percent
-    }
+from fastapi_app.api.storage_monitor import get_disk_usage
 
 
 def get_clickhouse_client():
