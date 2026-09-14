@@ -1,0 +1,154 @@
+name: zensheild
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "20m", max-file: "3"}
+x-app-env: &app-env
+  DEBUG: "false"
+  SECRET_KEY: ${SECRET_KEY:?required}
+  ZENSHEILD_ADMIN_PASSWORD: ${ZENSHEILD_ADMIN_PASSWORD:?required}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: zensheild
+  POSTGRES_USER: zensheild
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+  CLICKHOUSE_HOST: clickhouse
+  CLICKHOUSE_PORT: "8123"
+  CLICKHOUSE_DB: default
+  CLICKHOUSE_USER: zensheild
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?required}
+  REDIS_URL: redis://:${REDIS_PASSWORD:?required}@redis:6379/0
+  TZ: Asia/Riyadh
+  LOG_FILE: logs/zensheild.log
+  LOG_FORMAT: json
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zensheild
+      POSTGRES_USER: zensheild
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [backend]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U zensheild -d zensheild]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: zensheild
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?required}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes: [clickhouse-data:/var/lib/clickhouse]
+    networks: [backend]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 6g
+    ulimits:
+      nofile: {soft: 262144, hard: 262144}
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O - http://127.0.0.1:8123/ping | grep -q Ok']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    environment: {REDIS_PASSWORD: '${REDIS_PASSWORD:?required}'}
+    command: [sh, -ec, 'exec valkey-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --maxmemory 512mb --maxmemory-policy noeviction']
+    volumes: [redis-data:/data]
+    networks: [backend]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 768m
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" valkey-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  web:
+    image: zenshield:0.2.0
+    build: ./app
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      WORKERS: "1"
+      FORWARDED_ALLOW_IPS: "*"
+    volumes: [app-logs:/app/logs, app-credentials:/app/data/credentials, /run/zenshield:/run/zenshield:ro]
+    networks: [frontend, backend]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp:size=256M]
+    mem_limit: 3g
+    logging: *logging
+    depends_on:
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, 'http://127.0.0.1:8000/api/health/simple']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+  syslog:
+    image: zenshield:0.2.0
+    restart: unless-stopped
+    command: [syslog]
+    environment:
+      <<: *app-env
+      SYSLOG_PORT: "5514"
+      SYSLOG_WORKERS: "2"
+    ports: ["514:5514/udp"]
+    volumes: [app-logs:/app/logs]
+    networks: [frontend, backend]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp:size=128M]
+    mem_limit: 1536m
+    logging: *logging
+    depends_on:
+      web: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, pgrep -f run_syslog]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes: [./nginx.conf:/etc/nginx/conf.d/default.conf:ro, ./certs:/etc/nginx/certs:ro]
+    networks: [frontend]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    mem_limit: 256m
+    logging: *logging
+    depends_on:
+      web: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, --spider, --no-check-certificate, 'https://127.0.0.1/api/health/simple']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  frontend: {}
+  backend: {internal: true}
+volumes:
+  postgres-data: {}
+  clickhouse-data: {}
+  redis-data: {}
+  app-logs: {}
+  app-credentials: {}
