@@ -46,3 +46,12 @@ node_modules/
 cleanup_logs.py
 verify_*.py
 srv_run.txt
+
+private/
+cred.md
+**/.credential_key
+**/bin/
+**/obj/
+vm/
+exports/
+cache/

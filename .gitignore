@@ -57,3 +57,21 @@ docs/features/tmp.md
 
 # Packer output
 packer/output-*/
+cache/
+private/
+vm/
+exports/
+upstream/
+*.tar.gz
+*.zup
+__pycache__/
+/cred.md
+appliance/dns-agent/bin/
+appliance/dns-agent/obj/
+appliance/dns-agent-release/
+
+**/.credential_key
+*.zup
+*.tar
+private/
+cred.md

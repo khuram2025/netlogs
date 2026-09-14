@@ -1,0 +1,22 @@
+{
+  "portal_url": "https://zentryc.com/ota/zenai/releases/",
+  "origin": "https://zentryc.com",
+  "product_id": "zenai",
+  "product_field": "product",
+  "contract_confirmed": false,
+  "publisher_contract_confirmed": false,
+  "routes": {
+    "register": "/api/v1/appliances/register",
+    "checkin": "/api/v1/appliances/checkin",
+    "check": "/api/v1/updates/check",
+    "report": "/api/v1/updates/report"
+  },
+  "publisher_routes": {
+    "login": "/api/v1/admin/auth/login",
+    "create": "/api/v1/admin/releases/create"
+  },
+  "download_origins": ["https://zentryc.com"],
+  "auto_update": false,
+  "window_start": "02:00",
+  "window_end": "04:00"
+}
