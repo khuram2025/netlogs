@@ -42,4 +42,3 @@ Git merge ancestry preserves all these commits. Feature branches remain availabl
 - A synthetic 100,000-event DNS benchmark produced median queries of 21–23 ms and a summary query of 39.47 ms on the local disposable VM. This measures database queries, not an end-to-end sustained EPS capacity.
 
 Public identifiers and canary acceptance are recorded separately after signed OTA deployment.
-
