@@ -38,6 +38,7 @@ Git merge ancestry preserves all these commits. Feature branches remain availabl
 - 154 upstream correlation/NQL unit tests passed. Two outdated CIDR SQL assertions were updated for the upstream numeric IPv4 implementation; a real ClickHouse CIDR/counter test verifies behavior.
 - 53 upgrade checks and 49 fresh-install checks passed against isolated PostgreSQL, ClickHouse and Redis, including preserved credentials/events, real collector writes, source approval, pages/API filters, compliance proof access, PDF generation and time settings.
 - 40 DNS integration checks passed in each installation path.
+- Real Chromium checks passed for Web Activity, Windows DNS and Log Explorer, with no JavaScript errors or desktop page overflow.
 - 29 installer resource/recovery checks, 11 password-prompt checks and 19 signed OTA package tests passed.
 - A synthetic 100,000-event DNS benchmark produced median queries of 21–23 ms and a summary query of 39.47 ms on the local disposable VM. This measures database queries, not an end-to-end sustained EPS capacity.
 

@@ -4,6 +4,7 @@ from pathlib import Path
 assert Path('/root/ZENSHIELD-NATIVE-INSTALL-TEST').exists()
 root=Path(__file__).resolve().parent
 prefix='zs-merge-test'
+output=root.parent/'test-output';output.mkdir(exist_ok=True);os.chown(output,1000,1000)
 image=sys.argv[1]
 mode=sys.argv[2] if len(sys.argv)>2 else 'upgrade'
 assert mode in ('fresh','upgrade')
@@ -25,11 +26,13 @@ with tempfile.TemporaryDirectory(prefix='zs-merge-env-',dir='/root') as temporar
    time.sleep(1)
   assert pg and ch,'Fixture databases failed to start'
   def app(img,script):
-   run('docker','run','--rm','--network',prefix,'--env-file',str(e),'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','--tmpfs','/tmp:uid=1000,gid=1000,size=512m','--tmpfs','/app/logs:uid=1000,gid=1000','-v',str(credentials)+':/app/data/credentials','-v',str(root)+':/tests:ro','--entrypoint','python',img,'/tests/'+script)
+   run('docker','run','--rm','--network',prefix,'--env-file',str(e),'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','--tmpfs','/tmp:uid=1000,gid=1000,size=512m','--tmpfs','/app/logs:uid=1000,gid=1000','-v',str(credentials)+':/app/data/credentials','-v',str(root)+':/tests:ro','-v',str(output)+':/test-output','--entrypoint','python',img,'/tests/'+script)
   if mode=='upgrade':app('zenshield:0.3.4','seed-merge-baseline.py')
   app(image,'test-merged-appliance.py')
   app(image,'test-dns-integration.py')
-  if mode=='fresh':app(image,'benchmark-dns.py')
+  if mode=='fresh':
+   app(image,'benchmark-dns.py')
+   app(image,'test-browser-merged.py')
   print('PASS isolated',mode,'appliance integration')
  finally:
   for n in names:subprocess.run(['docker','rm','-f','-v',n],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
