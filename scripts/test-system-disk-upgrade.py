@@ -37,6 +37,14 @@ with tempfile.TemporaryDirectory(prefix='zs-system-upgrade-',dir='/root') as tem
         print('Starting real 0.3.4 native-volume fixture',flush=True)
         compose('up','-d','--wait','--wait-timeout','300')
         print('PASS six baseline services healthy with native Docker volumes',flush=True)
+        if '--populated' in sys.argv:
+            seed = """
+from fastapi_app.db.clickhouse import ClickHouseClient
+c=ClickHouseClient.get_client()
+c.command(\"INSERT INTO syslogs (timestamp,device_ip,facility,severity,srcip,dstip,dstport,proto,action,policyname,message,raw,log_type,parsed_data) SELECT now()-toIntervalDay(number%40),toIPv4('198.18.0.10'),1,6,concat('10.0.',toString(intDiv(number%65000,250)),'.',toString(number%250)), '198.18.1.1',443,6,if(number%2=0,'deny','accept'),if(number%3=0,'','fixture-policy'),'migration-fixture','migration-fixture',if(number%10=0,'utm/ips','traffic'),map('level','warning','attack','fixture') FROM numbers(100000)\",settings={'async_insert':0})
+print('PASS populated historical policy, deny, flow and IPS migration fixture')
+"""
+            print(compose('exec','-T','web','python','-c',seed).strip(),flush=True)
         if '--rehearse' in sys.argv:
             import importlib.util
             spec=importlib.util.spec_from_file_location('rehearsal',root/'scripts/rehearse-update.py')
@@ -65,6 +73,20 @@ with tempfile.TemporaryDirectory(prefix='zs-system-upgrade-',dir='/root') as tem
         print('PASS candidate OTA SQL ledger preflight',flush=True)
         compose('up','-d','--wait','--wait-timeout','300')
         print('PASS six candidate services healthy after native-volume upgrade',flush=True)
+        if '--populated' in sys.argv:
+            validate="""
+import json
+from fastapi_app.db.clickhouse import ClickHouseClient
+c=ClickHouseClient.get_client()
+counts={table:c.query('SELECT count() FROM '+table).first_row[0] for table in ('syslogs','forti_utm_events')}
+for table in ('policy_hits_daily','implicit_deny_daily','flow_pairs_daily'):
+ counts[table]=c.query('SELECT sum(hits) FROM '+table).first_row[0]
+assert counts['syslogs']==100000,counts
+assert counts['flow_pairs_daily']==counts['syslogs'],counts
+assert counts['policy_hits_daily']>0 and counts['implicit_deny_daily']>0 and counts['forti_utm_events']>0,counts
+print('PASS populated migration backfill counts '+json.dumps(counts))
+"""
+            print(compose('exec','-T','web','python','-c',validate).strip(),flush=True)
         assert (volume/'device-credentials.key').is_file() and not saved.exists()
         print('PASS legacy credential key rotated on native Docker volume',flush=True)
     except Exception:

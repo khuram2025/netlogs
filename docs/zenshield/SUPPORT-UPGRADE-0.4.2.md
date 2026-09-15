@@ -15,3 +15,17 @@ Share the final JSON report. It identifies the failing operation and available s
 The package is pinned by SHA-256 and checked against the appliance's installed Ed25519 release key. The systemd worker script is also signature-verified. Existing backup, recovery, schema and health checks remain enabled. A failed attempt retains both its diagnostic report and backup; the appliance's normal recovery workflow restores the previous version when verification succeeds.
 
 Validation includes local 0.3.4 startup with pre-existing release backup directories and a controlled candidate failure to exercise diagnostic capture before real rollback. This does not establish the cause of the remote appliance's first failure.
+
+## If the report points to ClickHouse migrations
+
+The remote support report subsequently identified web startup failure at `main.py:206` and migration-runner `runner.py:106`, inside a ClickHouse migration's `upgrade()` call. Schema-ledger verification had already passed. The particular migration and database exception are not yet known; the rollout remains paused.
+
+Use this read-only check to collect the recorded migration version, syslog data size, analytics-table counts and any retained ClickHouse migration error codes:
+
+```bash
+curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/diagnostics/clickhouse-migrations-v1.py | sudo python3 -
+```
+
+It does not install an update or stop services. Queries are bounded and the report excludes event records, query text and raw exception messages. Rollback may have removed the failed candidate's query-log entries; an empty error list does not prove that no error occurred.
+
+An additional local native-volume 0.3.4 → 0.4.2 test with 100,000 historical logs passed, including 66,666 policy hits, 16,667 implicit-deny hits, 100,000 flow-pair hits, and populated IPS history. These results demonstrate the tested dataset; they do not resolve the remote failure.
