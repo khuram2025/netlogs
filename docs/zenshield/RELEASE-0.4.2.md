@@ -1,5 +1,7 @@
 # ZenShield 0.4.2
 
+**OTA rollout paused, 15 September 2026:** the affected remote appliance reported another recovered Docker failure. Local acceptance below remains valid, but the remote failure is unresolved. See the [support upgrade procedure](SUPPORT-UPGRADE-0.4.2.md) for the supervised diagnostic path; do not repeatedly retry the old GUI workflow.
+
 This release improves update recovery and simplifies installation from **System > Updates**. It includes the consolidated application, storage expansion fixes, Windows DNS agent, and upstream analytics from 0.4.1.
 
 ## Changes
@@ -52,7 +54,7 @@ The source tag identifies the runtime build commit. Later documentation and acce
 - The test appliance rebooted and passed the health, Updates, and storage checks again.
 - The primary retained its existing 48,344 DNS events and one syslog record. After the update, it reported 48,744 DNS events, with new receipt timestamps later than update completion. This verifies continued real DNS ingestion after the upgrade.
 - The public installer passed shell syntax, pinned bootstrap checksum, and Ed25519 signature checks. A complete public package download matched the release checksum and passed signed-inventory validation.
-- Full rollout is enabled for eligible appliances. The server confirms that the affected appliance still on 0.3.4 is offered 0.4.2. Installation follows the appliance's existing manual or automatic-update policy; no policy was forced on remote appliances.
+- Full rollout was initially enabled after local acceptance, then paused following the remote failure. No automatic-update policy was forced on remote appliances.
 
 The affected remote appliance's actual installation has not been performed from this workstation. Its successful rehearsal is separate from these two local OTA acceptance runs.
 
