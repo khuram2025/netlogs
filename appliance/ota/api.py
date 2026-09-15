@@ -44,7 +44,9 @@ def dispatch(operation,body):
             c=config();ready(c)
             if operation=='updates.apply':
                 offer=read(STATE/'offer.json')
-                if not offer or body.get('release_id')!=offer['release_id'] or body.get('confirmation')!='INSTALL '+offer['version']:raise ValueError('Confirm the currently offered version')
+                if not offer or body.get('release_id')!=offer['release_id']:raise ValueError('The offered release changed; check for updates again')
+                confirmed=body.get('confirmed') is True and body.get('version')==offer['version']
+                if not confirmed and body.get('confirmation')!='INSTALL '+offer['version']:raise ValueError('Confirm installation of the currently offered version')
                 write(STATE/'request.json',{'release_id':offer['release_id'],'expires':time.time()+300})
             unit='zenshield-update-check' if operation=='updates.check' else 'zenshield-updater'
         run('systemctl','start','--no-block',unit)

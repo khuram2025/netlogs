@@ -32,9 +32,53 @@ def config():return {**DEFAULT,**read(CONFIG,{})}
 def current_version():return (BASE/'.version').read_text().strip() if (BASE/'.version').exists() else '0.2.0'
 def now():return datetime.now(timezone.utc).isoformat()
 
+def failure_summary(args,process):
+    """Return bounded diagnostic categories, never raw commands/logs or secrets."""
+    import re
+    tool=Path(args[0]).name
+    label=tool
+    if tool=='docker' and len(args)>1:
+        if args[1]=='compose':
+            verbs=[v for v in args[2:] if v in ('up','run','exec','stop','ps')]
+            label='docker compose'+(' '+verbs[0] if verbs else '')
+        elif args[1] in ('load','image','inspect','update'):label+=' '+args[1]
+    categories={
+        'disk space exhausted':r'(?i)no space left|disk quota exceeded',
+        'insufficient memory':r'(?i)out of memory|cannot allocate memory|oom[-_ ]kill',
+        'permission denied':r'(?i)permission denied|operation not permitted',
+        'unsupported CPU instruction':r'(?i)illegal instruction|invalid opcode',
+        'missing database column':r'UndefinedColumn|UNKNOWN_IDENTIFIER|NO_SUCH_COLUMN_IN_TABLE',
+        'missing database table':r'UndefinedTable|UNKNOWN_TABLE',
+        'existing database object conflicts with migration':r'DuplicateColumn|DuplicateTable|DuplicateObject',
+        'missing Python dependency':r'ModuleNotFoundError|ImportError',
+        'database connection failed':r'(?i)connection refused|password authentication failed',
+    }
+    observed=(process.stdout or '')+'\n'+(process.stderr or '')
+    details=[]
+    if label in ('docker compose up','docker compose run'):
+        names=['zensheild-'+s+'-1' for s in ('web','syslog','postgres','clickhouse','redis','nginx')]
+        try:
+            inspected=subprocess.run(['docker','inspect',*names],capture_output=True,text=True,timeout=10)
+            containers=json.loads(inspected.stdout) if inspected.returncode==0 else []
+            for item in containers:
+                state=item['State'];name=item['Name'].lstrip('/')
+                if name not in names:continue
+                service=name[len('zensheild-'):-2]
+                unhealthy=state.get('Health',{}).get('Status')=='unhealthy'
+                exited=not state.get('Running')
+                if state.get('OOMKilled'):details.append(service+' was killed for exceeding available memory')
+                elif unhealthy:details.append(service+' failed its health check')
+                elif exited:details.append(service+' exited with code '+str(int(state.get('ExitCode',0))))
+                if unhealthy or exited:
+                    logs=subprocess.run(['docker','logs','--tail','100',name],capture_output=True,text=True,timeout=5)
+                    observed+='\n'+logs.stdout+'\n'+logs.stderr
+        except (OSError,ValueError,KeyError,subprocess.TimeoutExpired):pass
+    details.extend(name for name,pattern in categories.items() if re.search(pattern,observed))
+    return label+' failed (exit '+str(process.returncode)+')'+('; '+('; '.join(dict.fromkeys(details))) if details else '')
+
 def run(*args,timeout=600,input=None):
     p=subprocess.run(args,text=True,input=input,capture_output=True,timeout=timeout)
-    if p.returncode:raise RuntimeError(Path(args[0]).name+' failed (exit '+str(p.returncode)+')')
+    if p.returncode:raise RuntimeError(failure_summary(args,p))
     return p.stdout.strip()
 
 def compose(*args,timeout=600,input=None):

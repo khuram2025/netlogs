@@ -6,8 +6,14 @@ import platform
 import shutil
 import sys
 import tempfile
+import uuid
 from .common import *
 from . import transport,package,transaction
+
+def attempt_transaction(selected,attempt_id):
+    tx=read(STATE/'transaction.json',{})
+    if not selected or tx.get('release_id')!=selected['release_id'] or tx.get('attempt_id')!=attempt_id:return {}
+    return tx
 
 def main():
     parser=argparse.ArgumentParser(description='ZenShield signed appliance updater')
@@ -33,7 +39,6 @@ def main():
         if args.mode=='recover':
             recovered=transaction.recover_incomplete(c['health_timeout'])
             if recovered:
-                import uuid
                 outcome='success' if recovered['phase']=='committed' else 'failed'
                 event=str(uuid.uuid5(uuid.NAMESPACE_URL,recovered['backup']+'/recovered'))
                 transport.queue_report({'release_id':recovered['release_id'],'version':recovered['to_version']},outcome,recovered['from_version'],error='' if outcome=='success' else 'Interrupted installation recovered',recovery=recovered.get('recovery'),event=event)
@@ -45,7 +50,7 @@ def main():
         if pending and pending['phase'] not in ('committed','rolled_back','aborted'):
             raise ValueError('An incomplete transaction requires recovery before another update')
         transport.flush(c)
-        selected=None;old=current_version();tx=None
+        selected=None;old=current_version();tx=None;attempt_id=str(uuid.uuid4())
         try:
             phase('checking')
             if args.mode=='apply-file':
@@ -74,21 +79,20 @@ def main():
                 phase('verifying',release_id=selected['release_id'])
                 manifest=package.verify(archive,PUBLIC_KEY,c['product_id'],old,selected,staging/'verified',c['max_manifest_age_days'])
                 transport.queue_report(selected,'applying',old)
-                tx=transaction.apply(staging/'verified',manifest,selected,c['health_timeout'])
+                tx=transaction.apply(staging/'verified',manifest,selected,c['health_timeout'],attempt_id=attempt_id)
             finally:shutil.rmtree(staging)
             event=transport.queue_report(selected,'success',old)
             write(STATE/'history'/(event+'.json'),{**tx,'status':'success','finished_at':now()})
             tx['reported']=True;transaction.save_tx(tx)
             phase('success',version=current_version(),release_id=selected['release_id'])
         except Exception as exc:
-            tx=read(STATE/'transaction.json',{})
-            if not selected or tx.get('release_id')!=selected['release_id']:tx={}
+            tx=attempt_transaction(selected,attempt_id)
             status='recovery_failed' if tx.get('phase')=='recovery_failed' else 'failed'
             message=str(exc) if isinstance(exc,(ValueError,RuntimeError)) else type(exc).__name__
             phase(status,message=message)
             if selected:
                 event=transport.queue_report(selected,'failed',old,error=message,recovery=tx.get('recovery'))
-                write(STATE/'history'/(event+'.json'),{'status':'failed','release_id':selected['release_id'],'from_version':old,'to_version':selected['version'],'recovery':tx.get('recovery'),'error':message,'finished_at':now()})
+                write(STATE/'history'/(event+'.json'),{'status':'failed','attempt_id':attempt_id,'release_id':selected['release_id'],'from_version':old,'to_version':selected['version'],'recovery':tx.get('recovery'),'failure_phase':tx.get('failure_phase','preflight'),'error':message,'finished_at':now()})
                 if tx and tx.get('phase') in ('rolled_back','aborted'):
                     tx['reported']=True;transaction.save_tx(tx)
             print(message,file=sys.stderr)

@@ -127,12 +127,14 @@ def recover(tx,timeout,systemd=True):
     tx['phase']='rolled_back';tx['recovery']='verified';save_tx(tx)
     maintenance(False)
 
-def apply(stage,manifest,offer,timeout):
-    stage=Path(stage);tx={'release_id':offer['release_id'],'from_version':current_version(),'to_version':manifest['version'],
-       'phase':'preflight','backup':str(STATE/'backups'/manifest['update_id'])}
-    # UUID-only directories: signed manifests still have a constrained recipe.
+def apply(stage,manifest,offer,timeout,attempt_id=None):
     import uuid
     if str(uuid.UUID(manifest['update_id']))!=manifest['update_id']:raise ValueError('Invalid update ID')
+    attempt_id=attempt_id or str(uuid.uuid4())
+    if str(uuid.UUID(attempt_id))!=attempt_id:raise ValueError('Invalid attempt ID')
+    # Every attempt retains its own backup, including retries after a rollback.
+    stage=Path(stage);tx={'attempt_id':attempt_id,'release_id':offer['release_id'],'from_version':current_version(),'to_version':manifest['version'],
+       'phase':'preflight','backup':str(STATE/'backups'/(manifest['update_id']+'.'+attempt_id))}
     backup=Path(tx['backup'])
     if backup.exists():raise ValueError('A transaction with this update ID already exists')
     data=targets();before=metrics()
@@ -185,6 +187,7 @@ def apply(stage,manifest,offer,timeout):
         maintenance(False)
         return tx
     except BaseException:
+        tx['failure_phase']=tx['phase']
         if tx['phase'] in ('mutating','validating'):
             try:recover(tx,timeout)
             except Exception:
