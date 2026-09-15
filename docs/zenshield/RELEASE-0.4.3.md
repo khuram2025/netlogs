@@ -54,3 +54,56 @@ curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/insta
 See [historical analytics operation](ANALYTICS-HISTORY.md) for processing,
 retention, resource limits and recovery details. This is an OTA/native-installer
 release; previously published OVF artifacts are separate downloads.
+
+## Release identity
+
+- Build commit: `a6ad646963261b8a46f999d9d448fdd520713cd8`.
+- Image: `zenshield:0.4.3`, ID `sha256:e479e7ee9ee3bd866cf8f5c0a820895455f3501577b26182c2045ec7b54169fc`.
+- Signed package: 562,780,738 bytes; SHA-256 `afda84a0654dbf65f24fce8a0ad89647cc02211436b09e5f61d92e8c3c02a083`.
+- Native bootstrap: `bootstrap-230fef0ba0a66ad8.tar.gz`; SHA-256 `230fef0ba0a66ad84cf0d834c2b149c38ef322ec11328794e04ec364d7d51be8`.
+
+## Populated upgrade tests
+
+Two isolated six-service upgrades from the real 0.3.4 image passed with
+30,343,398 synthetic historical events each, using the pinned appliance
+dependencies and a 6 GiB ClickHouse container limit. One fixture used wide,
+repeated event payloads; the other used a distinct source IPv4 address per
+event to exercise high-cardinality flow analytics. Synthetic compression is
+not representative of the affected appliance's compressed data size.
+
+Both retained all original events and added 100 live, late-arriving events
+while history was pending. Final totals matched exactly: 30,343,498 raw events
+and flow hits, 20,229,032 policy hits, 5,057,233 implicit-deny hits, and
+3,034,440 FortiGate threat events. Both replayed an interruption after atomic
+batch publication and before checkpointing. The high-cardinality fixture also
+restarted ClickHouse while history remained pending, then finished correctly.
+
+The high-cardinality run recorded a peak backfill query memory use of
+189,777,487 bytes, at most 250,000 written rows per batch, and 492 completed
+batch queries including replay. These figures describe this fixture, not a
+performance guarantee for every appliance. Eleven recovery/confirmation/
+diagnostic tests, 22 OTA/package tests, four connection-readiness tests and
+the Chromium Updates-dialog regression also passed.
+
+## Live OTA acceptance
+
+The disposable appliance downloaded the signed package from Zentryc and
+successfully upgraded through its existing 0.3.4 updater to 0.4.3. The local
+primary independently downloaded and upgraded from 0.4.2 to 0.4.3. Both passed
+six-service health, exact image identity, PostgreSQL and ClickHouse schema,
+registration identity, credential-key preservation and licence synchronization
+checks.
+
+Authenticated HTTP checks passed for the Updates dialog, CSRF protection,
+stale-action rejection and Storage Monitor rendering. Storage checks passed
+for real host filesystem reporting, protected-disk and shrink rejection,
+invalid quota rejection and a completed rescan with a non-replayable token.
+The disposable appliance rebooted and passed those checks again; all four
+empty-history jobs completed successfully.
+
+The primary retained its 53,093 baseline DNS events and one syslog event.
+After installation it reported 53,397 DNS events, with a receipt timestamp
+later than update completion, confirming continued real DNS ingestion.
+
+The original remote appliance was not directly accessible from this
+workstation. Its result remains separate from these local canary results.

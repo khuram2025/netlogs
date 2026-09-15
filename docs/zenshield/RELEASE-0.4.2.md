@@ -1,5 +1,7 @@
 # ZenShield 0.4.2
 
+**Superseded by [ZenShield 0.4.3](https://zentryc.com/downloads/zenshield/0.4.3/Release-Notes.md).** Use the newer release for the historical-analytics startup fix. The 0.4.2 rollout remains paused.
+
 **OTA rollout paused, 15 September 2026:** the affected remote appliance reported another recovered Docker failure. Local acceptance below remains valid, but the remote failure is unresolved. See the [support upgrade procedure](SUPPORT-UPGRADE-0.4.2.md) for the supervised diagnostic path; do not repeatedly retry the old GUI workflow.
 
 This release improves update recovery and simplifies installation from **System > Updates**. It includes the consolidated application, storage expansion fixes, Windows DNS agent, and upstream analytics from 0.4.1.
