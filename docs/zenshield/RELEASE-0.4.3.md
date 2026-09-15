@@ -107,3 +107,15 @@ later than update completion, confirming continued real DNS ingestion.
 
 The original remote appliance was not directly accessible from this
 workstation. Its result remains separate from these local canary results.
+
+## Publication
+
+The public installer passed shell syntax, bootstrap checksum and Ed25519
+signature verification. A complete public OTA package download matched the
+release checksum and passed signed inventory verification. The full 100%
+rollout was enabled after both local canaries succeeded. Zentryc confirmed
+that the affected 0.3.4 appliance is eligible for 0.4.3; its own installation
+has not yet been reported. Automatic-update preferences were preserved.
+
+Source and acceptance documentation are synchronized to GitHub `main`, and
+`zenshield-v0.4.3` identifies the immutable runtime build commit.
