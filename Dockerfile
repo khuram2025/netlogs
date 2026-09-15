@@ -87,6 +87,6 @@ EXPOSE 514/udp
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["web"]
 
-ARG ZENSHIELD_VERSION=0.4.2
+ARG ZENSHIELD_VERSION=0.4.3
 ARG SOURCE_COMMIT=unknown
 LABEL org.opencontainers.image.title="ZenShield" org.opencontainers.image.version="${ZENSHIELD_VERSION}" org.opencontainers.image.revision="${SOURCE_COMMIT}"

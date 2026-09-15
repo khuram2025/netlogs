@@ -213,7 +213,7 @@ def _fortinet_select(hours: int, extra_where: str = "") -> str:
     UNION ALL
     SELECT
         {_select_list(2)}
-    FROM forti_utm_events
+    FROM forti_utm_events_all
     WHERE {window}
     """
 

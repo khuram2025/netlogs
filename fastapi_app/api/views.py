@@ -3856,6 +3856,11 @@ async def system_monitor(request: Request, saved: Optional[str] = Query(None)):
         "timezones": all_timezones(),
         "saved": saved or "",
     }
+    from ..db.analytics_backfill import progress as analytics_progress
+    try:
+        time_ctx['analytics_history'] = await run_in_threadpool(analytics_progress)
+    except Exception:
+        time_ctx['analytics_history'] = []
 
     try:
         # Get disk usage

@@ -44,7 +44,8 @@ def failure_summary(args,process):
         elif args[1] in ('load','image','inspect','update'):label+=' '+args[1]
     categories={
         'disk space exhausted':r'(?i)no space left|disk quota exceeded',
-        'insufficient memory':r'(?i)out of memory|cannot allocate memory|oom[-_ ]kill',
+        'insufficient memory':r'(?i)out of memory|cannot allocate memory|oom[-_ ]kill|MEMORY_LIMIT_EXCEEDED',
+        'database query time limit exceeded':r'TIMEOUT_EXCEEDED|TOO_SLOW',
         'permission denied':r'(?i)permission denied|operation not permitted',
         'unsupported CPU instruction':r'(?i)illegal instruction|invalid opcode',
         'missing database column':r'UndefinedColumn|UNKNOWN_IDENTIFIER|NO_SUCH_COLUMN_IN_TABLE',

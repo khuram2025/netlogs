@@ -505,7 +505,7 @@ class PolicyAnalyticsService:
                 SELECT policyname,
                        sum(hits) AS hits,
                        toString(max(last_seen)) AS last_seen
-                FROM policy_hits_daily
+                FROM policy_hits_daily_all
                 WHERE device_ip = toIPv4('{device_ip}')
                   AND day >= today() - {int(days) - 1}
                 GROUP BY policyname
@@ -675,7 +675,7 @@ class PolicyAnalyticsService:
                         SELECT {case_expr('srcip')} AS src_zone,
                                {case_expr('dstip')} AS dst_zone,
                                sum(hits) AS hits
-                        FROM flow_pairs_daily
+                        FROM flow_pairs_daily_all
                         WHERE device_ip = toIPv4('{device_ip}')
                           AND day >= today() - {days - 1}
                         GROUP BY src_zone, dst_zone
@@ -736,7 +736,7 @@ class PolicyAnalyticsService:
             client = ClickHouseClient.get_client()
             rows = client.query(f"""
                 SELECT lower(policyname) AS pname, day, sum(hits) AS hits
-                FROM policy_hits_daily
+                FROM policy_hits_daily_all
                 WHERE device_ip = toIPv4('{device_ip}')
                   AND day >= today() - {int(days) - 1}
                 GROUP BY pname, day
@@ -775,7 +775,7 @@ class PolicyAnalyticsService:
             client = ClickHouseClient.get_client()
             rows = client.query(f"""
                 SELECT srcip, dstip, dstport, proto, sum(hits) AS hits
-                FROM implicit_deny_daily
+                FROM implicit_deny_daily_all
                 WHERE device_ip = toIPv4('{device_ip}')
                   AND day >= today() - {int(days) - 1}
                 GROUP BY srcip, dstip, dstport, proto

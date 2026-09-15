@@ -5,9 +5,9 @@ Creates three AggregatingMergeTree tables populated by materialized views
 on every INSERT into `syslogs`. Used by PolicyAnalyticsService to answer
 analytics queries in ~5 ms instead of ~90 s on devices with 100 M+ rows.
 
-Backfill from existing syslogs runs at the end of `upgrade()` and is
-idempotent — `INSERT INTO … SELECT` is a no-op on an already-populated
-aggregate since the rows sum cleanly at merge time.
+History is snapshotted during the appliance maintenance window and processed
+in bounded, replay-safe batches after startup. AggregatingMergeTree sums
+duplicates; merge compaction does not make repeated INSERTs idempotent.
 """
 
 import logging
@@ -102,57 +102,9 @@ _STATEMENTS = [
 ]
 
 
-# Backfill from existing syslogs so the aggregates are useful immediately on
-# upgrade. These are idempotent because AggregatingMergeTree sums rows with
-# the same sort-key at merge time — re-running adds duplicates we later
-# compact away, but for a clean migration we guard on an empty-table check.
-_BACKFILLS = [
-    (
-        "policy_hits_daily",
-        """
-        INSERT INTO policy_hits_daily
-        SELECT device_ip, toDate(timestamp) AS day, policyname,
-               count() AS hits, max(toDateTime(timestamp)) AS last_seen
-        FROM syslogs WHERE policyname != ''
-        GROUP BY device_ip, day, policyname
-        """,
-    ),
-    (
-        "implicit_deny_daily",
-        """
-        INSERT INTO implicit_deny_daily
-        SELECT device_ip, toDate(timestamp) AS day, srcip, dstip, dstport, proto,
-               count() AS hits
-        FROM syslogs
-        WHERE lower(action) IN ('deny','drop','block','reject','blocked','reset-both')
-          AND srcip != '' AND (policyname = '' OR policyname = 'implicit deny')
-        GROUP BY device_ip, day, srcip, dstip, dstport, proto
-        """,
-    ),
-    (
-        "flow_pairs_daily",
-        """
-        INSERT INTO flow_pairs_daily
-        SELECT device_ip, toDate(timestamp) AS day, srcip, dstip, count() AS hits
-        FROM syslogs
-        WHERE srcip != '' AND dstip != ''
-          AND match(srcip, '^[0-9.]+$') AND match(dstip, '^[0-9.]+$')
-        GROUP BY device_ip, day, srcip, dstip
-        """,
-    ),
-]
-
-
 def upgrade(client):
+    from fastapi_app.db.analytics_backfill import prepare
+    for target in ('policy_hits_daily', 'implicit_deny_daily', 'flow_pairs_daily'):
+        prepare(client, target)
     for stmt in _STATEMENTS:
         client.command(stmt.strip())
-    for table, sql in _BACKFILLS:
-        try:
-            count = int(list(client.query(f"SELECT count() FROM {table}").result_rows)[0][0])
-        except Exception:
-            count = 0
-        if count == 0:
-            logger.info(f"Backfilling {table} from syslogs…")
-            client.command(sql.strip())
-        else:
-            logger.info(f"Skipping backfill of {table} ({count:,} rows already present)")

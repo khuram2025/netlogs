@@ -58,11 +58,19 @@ def live_data_size(path):
     root=Path(path)
     if not root.is_dir():raise ValueError('Appliance data directory is missing')
     size=root.stat().st_size
+    seen=set()
     def onerror(error):
         if not isinstance(error,FileNotFoundError):raise error
     for directory,dirs,files in os.walk(root,followlinks=False,onerror=onerror):
         for name in dirs+files:
-            try:size+=os.stat(os.path.join(directory,name),follow_symlinks=False).st_size
+            try:
+                info=os.stat(os.path.join(directory,name),follow_symlinks=False)
+                identity=(info.st_dev,info.st_ino)
+                # ClickHouse history snapshots share immutable files. rsync -H
+                # preserves those links, so reserve their bytes only once.
+                if identity not in seen:
+                    size+=info.st_size
+                    seen.add(identity)
             except FileNotFoundError:continue
     if not root.is_dir():raise ValueError('Appliance data directory disappeared')
     return size

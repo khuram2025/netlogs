@@ -1139,6 +1139,25 @@
 <div class="alert alert-error" style="margin-bottom: 1.5rem;">{{ error }}</div>
 {% endif %}
 
+{% if analytics_history %}
+<details class="stat-card" style="margin-bottom:1.5rem">
+    <summary style="cursor:pointer;font-weight:600">Historical analytics processing</summary>
+    <p style="color:var(--text-muted);margin:1rem 0">Live events continue to appear. Historical analytics fill progressively after an upgrade; original logs remain available in Log Explorer. Failed batches retry automatically. Refresh to see current progress.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem">
+    {% for job in analytics_history %}
+        <div><strong>{{ job.name }}</strong><br>
+            <span>{{ 'Previously initialized' if job.status == 'existing' else job.status | capitalize }}</span>
+            {% if job.status != 'existing' %}
+            <span> · {{ job.percent }}%</span>
+            <progress style="display:block;width:100%;margin-top:.5rem" max="100" value="{{ job.percent }}" aria-label="{{ job.name }} history progress"></progress>
+            {% endif %}
+            {% if job.status == 'retrying' %}<small>Retry pending{% if job.error_code %} · database code {{ job.error_code }}{% endif %}</small>{% endif %}
+        </div>
+    {% endfor %}
+    </div>
+</details>
+{% endif %}
+
 <!-- ============================================================
      STAT CARDS ROW
      ============================================================ -->

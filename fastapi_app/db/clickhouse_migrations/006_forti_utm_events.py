@@ -12,19 +12,15 @@ window — ~12 GiB over 7 days, for a few thousand rows.
 
 This creates a small MergeTree with the fields the dashboard needs, already
 mapped onto the pa_threat_logs vocabulary, and a materialized view that fills
-it at insert time. Existing history is backfilled a day at a time, bounded,
-so a slow day is skipped with a warning rather than blocking startup — the
-MV covers everything from now on regardless.
-
-Idempotent — safe to re-run.
+it at insert time. Existing history is snapshotted during maintenance and
+processed by the resumable background worker, without blocking startup or
+silently skipping failed days.
 """
 
 import logging
-from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
-BACKFILL_DAYS = 30   # matches the syslogs TTL
 
 # The SELECT shared by the MV and the backfill. Column names follow
 # pa_threat_logs so the dashboard can UNION ALL without renaming.
@@ -126,43 +122,9 @@ _STATEMENTS = [
 ]
 
 
-def _backfill(client) -> None:
-    """Fill history a day at a time. Each day is bounded; one that cannot finish
-    is logged and skipped (the MV already covers new rows)."""
-    rows = client.query("SELECT count() FROM forti_utm_events").result_rows
-    if rows and rows[0][0] > 0:
-        logger.info(f"Skipping forti_utm_events backfill ({rows[0][0]:,} rows already present)")
-        return
-
-    today = date.today()
-    total = 0
-    for back in range(BACKFILL_DAYS, -1, -1):
-        day = today - timedelta(days=back)
-        sql = (
-            f"INSERT INTO forti_utm_events {_EXTRACT_SELECT} "
-            f"AND toDate(timestamp) = toDate('{day.isoformat()}')"
-        )
-        try:
-            client.command(sql, settings={'max_execution_time': 90})
-            got = client.query(
-                f"SELECT count() FROM forti_utm_events WHERE toDate(timestamp) = toDate('{day.isoformat()}')"
-            ).result_rows[0][0]
-            total += got
-        except Exception as e:
-            logger.warning(f"forti_utm_events backfill skipped {day}: {e}")
-    # Today's rows can arrive twice: through the MV (live since it was created
-    # a moment ago) and through the backfill of today. Rows are byte-identical,
-    # so a deduplicating merge collapses them.
-    try:
-        client.command("OPTIMIZE TABLE forti_utm_events FINAL DEDUPLICATE",
-                       settings={'receive_timeout': 300})
-    except Exception as e:
-        logger.warning(f"forti_utm_events dedupe skipped: {e}")
-    logger.info(f"forti_utm_events backfilled {total:,} rows over {BACKFILL_DAYS + 1} days")
-
-
 def upgrade(client):
+    from fastapi_app.db.analytics_backfill import prepare
+    prepare(client, 'forti_utm_events')
     for stmt in _STATEMENTS:
         client.command(stmt.strip())
-    _backfill(client)
-    logger.info("forti_utm_events table + MV ensured in ClickHouse")
+    logger.info("forti_utm_events schema ready; history is processed after startup")

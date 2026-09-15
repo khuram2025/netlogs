@@ -50,6 +50,20 @@ class RetryAfterRecovery(unittest.TestCase):
             self.assertEqual((data/'events').read_text(),'preserved event')
 
 class FailureDetails(unittest.TestCase):
+    def test_snapshot_hardlinks_are_counted_once_for_backup_space(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            source=root/'source';source.write_bytes(b'x'*1048576)
+            first=tx.live_data_size(root)
+            import os
+            os.link(source,root/'snapshot')
+            self.assertLess(tx.live_data_size(root)-first,8192)
+
+    def test_clickhouse_query_memory_limit_is_sanitized(self):
+        failure=subprocess.CompletedProcess([],1,'','Code: 241 private-value (MEMORY_LIMIT_EXCEEDED)')
+        detail=common.failure_summary(('docker','load'),failure)
+        self.assertIn('insufficient memory',detail)
+        self.assertNotIn('private-value',detail)
     def test_preflight_failure_does_not_inherit_previous_recovery(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(runner,'STATE',Path(tmp)):
             previous={'release_id':'same-release','attempt_id':'previous-attempt','phase':'rolled_back','recovery':'verified'}

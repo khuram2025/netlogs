@@ -490,6 +490,12 @@ def start_scheduler():
         max_instances=1,
     )
 
+    # Runs in APScheduler's thread executor; schema startup never waits for it.
+    from ..db.analytics_backfill import scheduled_batch
+    scheduler.add_job(scheduled_batch, trigger=IntervalTrigger(seconds=10),
+                      id='analytics_history_backfill', name='Restore historical analytics',
+                      replace_existing=True, max_instances=1, coalesce=True)
+
     # Start the scheduler
     if not scheduler.running:
         scheduler.start()
