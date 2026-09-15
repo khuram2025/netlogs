@@ -1,6 +1,6 @@
 # ZenShield installation and command manual
 
-Native release: 0.3.3. Online guide: https://zentryc.com/zenshield/installation/
+Fresh-install baseline: **ZenShield 0.4.3** (15 September 2026). Online guide: https://zentryc.com/zenshield/installation/
 
 ## Supported host
 
@@ -16,6 +16,9 @@ sudo access and an interactive terminal are required.
 Other Ubuntu releases and ARM are not supported by this installation recipe.
 
 ## Install
+
+The public installer installs the signed 0.4.3 OTA release directly. A fresh
+installation does not need an intermediate release or the legacy support helper.
 
 ```bash
 curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/install.sh | sudo bash
@@ -61,6 +64,24 @@ sudo zenshield-setup
 
 Rerunning the installer preserves initialized secrets and data. For future
 application versions, use the updater rather than reinstalling.
+
+## Verify the installation
+
+Run `sudo zenshield`, then:
+
+```text
+show version
+show services
+show ip interface brief
+show storage
+show updates
+```
+
+Confirm version **0.4.3**, healthy services, the expected management address and
+storage capacity. Open **System > Licences** to confirm registration and trial
+status, then send a test event from an approved device and check **Logs**.
+The [0.4.3 release notes](https://zentryc.com/downloads/zenshield/0.4.3/Release-Notes.md)
+describe the release and its validation.
 
 ## CLI commands
 
@@ -112,6 +133,12 @@ Attach a blank data disk, then use System > Storage to review and confirm an
 initialization plan. The appliance pauses services, copies and verifies data,
 and retains the original volumes for recovery.
 
+A large physical system disk can still contain a small root filesystem. Use
+**Rescan attached and expanded disks**, then **Grow system filesystem** for a
+supported layout. Never initialize the operating-system disk as a blank data disk.
+See the [storage manual](https://zentryc.com/downloads/zenshield/ZenShield-Storage.md)
+for supported layouts, recovery and expansion commands.
+
 The GUI supports adding blank disks, rescanning enlarged virtual disks and
 growing ClickHouse or application volumes. Keep all pool disks attached.
 Shrinking or removing allocated disks requires an offline migration. A storage
@@ -127,11 +154,27 @@ show updates
 update install
 ```
 
-An older unregistered appliance can use `update register` with a dedicated token before upgrading. Installation requires the
-exact `INSTALL X.Y.Z` confirmation for the offered version. Updates verify
+In the GUI, choose **Install update**, review the offered version, and choose
+**Install now** or **Cancel**. No typed confirmation phrase is required in the
+0.4.3 GUI. The CLI still requires the exact `INSTALL X.Y.Z` confirmation for the
+offered version. An older unregistered appliance can use `update register` with
+a dedicated token before upgrading. Updates verify
 compatibility, signatures and checksums, and back up datastores before switching
 images. Allow enough free space for a full backup and a maintenance window.
 Automatic installation defaults to off. Offers depend on rollout eligibility.
+
+### Existing appliances with a failed legacy upgrade
+
+An existing 0.3.4 appliance that reports `du failed (exit 1)` before installing
+0.4.3 needs the corrected updater loaded before retrying. Follow the
+[signed support upgrade instructions](https://zentryc.com/downloads/zenshield/0.4.3/SUPPORT-UPGRADE-0.4.3.md).
+This is an upgrade with service downtime and retained backups; do not reinstall
+or delete existing data. The helper accepts versions 0.3.3, 0.3.4, 0.4.0, 0.4.1
+and 0.4.2. It is not needed on a fresh 0.4.3 installation.
+
+After upgrading a populated appliance, historical analytics may continue in
+the background. View **System > Storage Monitor > Historical analytics
+processing**. Fresh installations have no existing history to backfill.
 
 ## Troubleshooting
 
@@ -169,7 +212,7 @@ problem before retrying setup or updates; do not delete active updater backups.
 
 Support and registration: https://zentryc.com/contact/
 
-## Licences and subscription management (0.3.3)
+## Licences and subscription management
 
 Each new installation automatically registers a unique appliance identity with
 Zentryc after setup and receives a 30-day trial: all features, unlimited devices
@@ -200,5 +243,11 @@ data remain available in this release. Offline licence expiry is calculated
 locally; synchronization older than 24 hours is marked stale. Restore DNS,
 accurate time and outbound HTTPS to zentryc.com to reconnect.
 
-The published 0.3.1 OVF remains unchanged and requires an upgrade to 0.3.3 for
-these licensing features. The current native installer includes them.
+## Existing VMware OVF download
+
+The published **0.3.1 OVF is a legacy, unchanged image**, not the 0.4.3 baseline.
+For a new deployment, create an Ubuntu Server 24.04 LTS VM and use the native
+installer above to start directly on 0.4.3 with the current setup, storage,
+licensing and updater features. The legacy image retains its original 16-byte
+password minimum. The 0.4.3 support helper does not accept version 0.3.1.
+See the online installation guide for the legacy OVF download and checksum.

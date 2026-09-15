@@ -2,11 +2,11 @@
 
 ZenShield combines network log collection, DNS analytics, threat intelligence, correlation, reporting and appliance management.
 
-The full application and appliance source now live in this repository. See [the 0.4.1 release and acceptance record](docs/zenshield/RELEASE-0.4.1.md), [integration record](docs/zenshield/INTEGRATION-0.4.0.md), [installation guide](appliance/INSTALLATION.md), [storage guide](appliance/STORAGE.md), and [build guide](docs/zenshield/BUILD.md).
+The full application and appliance source now live in this repository. See [the 0.4.3 release and acceptance record](docs/zenshield/RELEASE-0.4.3.md), [integration record](docs/zenshield/INTEGRATION-0.4.0.md), [installation guide](appliance/INSTALLATION.md), [storage guide](appliance/STORAGE.md), and [build guide](docs/zenshield/BUILD.md).
 
 ## Install on Ubuntu Server
 
-Run the signed installer on Ubuntu Server 24.04 amd64:
+The current fresh-install baseline is **ZenShield 0.4.3**. Run the signed installer on Ubuntu Server 24.04 amd64:
 
 ```sh
 curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/install.sh | sudo bash

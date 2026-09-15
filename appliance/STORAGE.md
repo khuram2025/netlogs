@@ -1,6 +1,6 @@
 # ZenShield storage management
 
-Install the latest signed update from **System → Updates**, then open **System → Storage**. These capabilities are included in ZenShield 0.4.1.
+Install the latest signed update from **System → Updates**, then open **System → Storage**. These capabilities are included in the ZenShield 0.4.3 fresh-install baseline; existing appliances receive them through signed updates.
 
 ## A large system disk with a small filesystem
 

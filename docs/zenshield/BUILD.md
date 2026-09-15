@@ -2,6 +2,8 @@
 
 Use an Ubuntu 24.04 amd64 build/test host with Docker. Build from the consolidated repository; do not apply `scripts/patch-upstream.py` to this already-integrated tree. That script is retained only for the original historical application baseline.
 
+The current published fresh-install baseline is **0.4.3**. Its package and runtime tag are immutable. For a future release, set `VERSION` to a new, unpublished version and update the source version files before building; do not overwrite 0.4.3.
+
 ## DNS agent bundle
 
 The appliance embeds the public agent bundle, never an enrolled agent configuration. With the .NET 10 SDK and Python available:
@@ -17,7 +19,7 @@ The published 1.0.0 agent can also be obtained through an administrator session 
 ## Image and checks
 
 ```sh
-docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" --build-arg ZENSHIELD_VERSION=0.4.1 -t zenshield:0.4.1 .
+docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" --build-arg ZENSHIELD_VERSION="${VERSION:?Set a new unpublished version}" -t "zenshield:$VERSION" .
 python3 scripts/test-ota.py
 python3 scripts/test-native-resources.py
 python3 scripts/test-native-passwords.py
@@ -32,8 +34,8 @@ Run `scripts/run-merged-integration.py IMAGE fresh` and `... IMAGE upgrade` only
 Use the existing independent release key from a private location:
 
 ```sh
-python3 scripts/build-ota.py --version 0.4.1 --min-version 0.2.0 --product-id zenai --private-key /secure/release.key --public-key appliance/ota-release.pub --output /releases/ZenShield-0.4.1.zup --source-commit "$(git rev-parse HEAD)" --include-control --changelog "Consolidated upstream application and ZenShield appliance"
-python3 scripts/build-native-installer.py --release-package /releases/ZenShield-0.4.1.zup --private-key /secure/release.key --output-dir /releases/installer
+python3 scripts/build-ota.py --version "${VERSION:?Set a new unpublished version}" --min-version 0.2.0 --product-id zenai --private-key /secure/release.key --public-key appliance/ota-release.pub --output "/releases/ZenShield-$VERSION.zup" --source-commit "$(git rev-parse HEAD)" --include-control --changelog "Describe the changes in this release"
+python3 scripts/build-native-installer.py --release-package "/releases/ZenShield-$VERSION.zup" --private-key /secure/release.key --output-dir /releases/installer
 ```
 
 The internal product ID remains `zenai` for compatibility with registered ZenShield appliances. Never include the private signing key, `cred.md`, runtime environments, enrolled agent configuration or test/customer data in artifacts.

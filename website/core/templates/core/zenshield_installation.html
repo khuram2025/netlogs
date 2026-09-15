@@ -1,0 +1,107 @@
+{% extends "core/base.html" %}
+{% block content %}
+<section class="page-hero ink-glow"><div class="container">
+  <p class="eyebrow">ZENSHIELD / INSTALLATION GUIDE</p>
+  <h1>Your Ubuntu server.<br>Your ZenShield appliance.</h1>
+  <p class="lead">Install the signed ZenShield 0.4.3 release, choose your administrator passwords, and start collecting security logs inside your own environment.</p>
+  <div class="hero-actions"><a class="btn btn-primary" href="#native-install">Install on Ubuntu</a><a class="btn btn-on-ink" href="#commands">Command reference</a><a class="btn btn-on-ink" href="{% url 'core:zenshield' %}">Product overview</a></div>
+</div></section>
+<section class="section"><div class="container zenshield-manual">
+<style>.zenshield-manual{max-width:1050px}.zenshield-manual h2{margin-top:48px}.zenshield-manual h3{margin-top:28px}.zenshield-manual p,.zenshield-manual li{line-height:1.75}.zenshield-manual pre{background:#0b1827;color:#d9f8f1;padding:22px;border-radius:12px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:20px 0}.zenshield-manual table{width:100%;border-collapse:collapse;margin:20px 0}.zenshield-manual th,.zenshield-manual td{text-align:left;padding:13px;border-bottom:1px solid #dce5eb;vertical-align:top}.zenshield-manual .note{padding:20px;border-left:4px solid #0fac98;background:#f0faf8;border-radius:5px}.zenshield-manual code{overflow-wrap:anywhere}</style>
+<h2>Before you begin</h2>
+<p><a href="/downloads/zenshield/ZenShield-Installation.md" download>Download this manual for offline use</a></p>
+<table><thead><tr><th>Requirement</th><th>Supported configuration</th></tr></thead><tbody>
+<tr><td>Operating system</td><td>Ubuntu Server 24.04 LTS, amd64 / x86-64, running systemd on a server or full virtual machine.</td></tr>
+<tr><td>Compute</td><td>4 logical CPUs and approximately 16 GiB RAM recommended. The native installer warns about lower resources and continues automatically. Size production deployments for event volume and retention.</td></tr>
+<tr><td>Storage</td><td>100 GiB system filesystem with 30 GiB free recommended. The native installer has no CPU, memory or storage minimum gate; no override flag is needed. Actual out-of-memory or disk-full errors can still prevent installation or service startup. Add dedicated data disks for larger log stores.</td></tr>
+<tr><td>Access</td><td>A sudo administrator and an interactive terminal. Keep VM console or out-of-band access available.</td></tr>
+<tr><td>Connectivity</td><td>DNS, accurate time, and outbound HTTPS to Zentryc, Ubuntu repositories, and the container registry. TCP 80/443 and UDP 514 must be available locally.</td></tr>
+</tbody></table>
+<p class="note">Use a clean, dedicated server. The installer does not upgrade Ubuntu, format extra disks, or migrate another application. It checks for an existing appliance, conflicting ports, and existing Docker workloads. Your current IP configuration and existing Ubuntu administrator access are retained.</p>
+<h2 id="native-install">1. Install with one command</h2>
+<p class="note"><strong>Current fresh-install baseline: ZenShield 0.4.3 · 15 September 2026.</strong> New installations use this signed OTA release directly. No intermediate upgrade or support helper is needed.</p>
+<p>Run this command in your Ubuntu terminal. The downloaded launcher verifies the signed bootstrap and the OTA package before installing the application.</p>
+<pre><code>curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/install.sh | sudo bash</code></pre>
+<p>If curl is missing, install it first:</p><pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y curl ca-certificates</code></pre>
+<p>To inspect the launcher and run compatibility checks before installation:</p>
+<pre><code>curl -fsS -A zenshield-installer/1 https://zentryc.com/downloads/zenshield/install.sh -o zenshield-install.sh
+less zenshield-install.sh
+sudo bash zenshield-install.sh --check
+sudo bash zenshield-install.sh</code></pre>
+<p>The installer downloads the released application image, loads it locally, and pulls the database, cache, and proxy images by fixed digest. It configures the management shell, service supervision, update client, firewall rules, bounded container logs, SSH protection for the ZenShield account, and unattended Ubuntu security maintenance without automatic reboot.</p>
+<h2>2. Complete first-time setup</h2>
+<ol><li>Choose the appliance hostname and timezone.</li><li>Set a unique GUI administrator password and a separate console password. The native installer uses ZenShield 0.4.3. Each password must contain at least 5 characters and at most 72 UTF-8 bytes, with no uppercase, number or symbol required; apostrophes, backslashes, NUL and line breaks are not accepted. Input is hidden: no characters or asterisks appear. Spaces are allowed. Enter the same value at <code>Confirm password:</code>; the wizard explains rejected entries.</li><li>Wait for all six services to become healthy.</li><li>The appliance automatically registers with Zentryc and receives a 30-day unrestricted trial. If offline, registration retries automatically after connectivity returns.</li><li>Open the displayed HTTPS management address and sign in as <strong>admin</strong>.</li></ol>
+<p>The instance creates its own database secrets and TLS certificate. Verify the certificate fingerprint shown in the console before trusting it. Replace it with a certificate issued by your organization for your deployment.</p>
+<p>There is no shared default password. If the initial setup is interrupted, resume it with:</p>
+<pre><code>sudo zenshield-setup</code></pre>
+<p>After setup, this command reports that the appliance is already configured. Manage it from the GUI or the ZenShield shell. Rerunning the installer does not reset your data or passwords.</p>
+<h3>Verify your new appliance</h3>
+<p>Run <code>sudo zenshield</code>, then <code>show version</code>, <code>show services</code>, <code>show ip interface brief</code>, <code>show storage</code> and <code>show updates</code>. Confirm version <strong>0.4.3</strong>, healthy services, the expected IP address and storage capacity. Check registration under <strong>System → Licences</strong>, then verify a fresh event from an approved log source. Read the <a href="/downloads/zenshield/0.4.3/Release-Notes.md">0.4.3 release notes</a>.</p>
+<h2 id="commands">3. Use the ZenShield command line</h2>
+<p>From the existing Ubuntu administrator account:</p><pre><code>sudo zenshield</code></pre>
+<p>Or sign in at the VM console as <strong>zenadmin</strong> using the console password chosen during setup. Its login shell is the ZenShield CLI.</p>
+<table><thead><tr><th>Command</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>help</code></td><td>Display the available appliance commands.</td></tr>
+<tr><td><code>show version</code></td><td>Check the installed appliance version.</td></tr>
+<tr><td><code>show ip interface brief</code></td><td>List interfaces and addresses.</td></tr>
+<tr><td><code>show ip route</code></td><td>Inspect routing.</td></tr>
+<tr><td><code>show dns</code></td><td>Check DNS configuration.</td></tr>
+<tr><td><code>show services</code></td><td>Check application, collection, database, cache, and proxy health.</td></tr>
+<tr><td><code>show storage</code></td><td>Inspect disks, data volumes, and capacity.</td></tr>
+<tr><td><code>show updates</code></td><td>Inspect registration, eligible releases, and installation status.</td></tr>
+<tr><td><code>ping 192.0.2.1</code></td><td>Test connectivity; replace the example with your destination.</td></tr>
+<tr><td><code>setup</code></td><td>Open guided appliance configuration.</td></tr>
+<tr><td><code>password gui</code></td><td>Change the GUI administrator password.</td></tr>
+<tr><td><code>password console</code></td><td>Change the ZenShield console password.</td></tr>
+<tr><td><code>expert</code></td><td>Enter Linux maintenance after console-password authentication.</td></tr>
+</tbody></table>
+<h3>Change the management network</h3><p>Use <strong>System → Network</strong>, or stage a change in the CLI:</p>
+<pre><code>configure terminal
+network
+commit
+confirm &lt;token-shown-after-commit&gt;
+end</code></pre>
+<p>Follow the prompts for interface, DHCP or static address, gateway, and DNS. Confirm reachability within 120 seconds; otherwise the watchdog restores the previous network. Use <code>rollback</code> to restore it immediately. A remote session may disconnect when the address changes.</p>
+<h2>4. Connect a log source</h2>
+<ol><li>Point a supported firewall or syslog source at the appliance management address on UDP port 514.</li><li>Open <strong>Devices</strong> in the GUI and review the discovered source.</li><li>Approve the intended device. Events from pending devices are discarded; they are not retained for later approval.</li><li>Send fresh events and verify them under <strong>Logs</strong>. Check source address, timestamp, and parsed fields.</li></ol>
+<p>Keep UDP syslog on a trusted collection network. The appliance databases and cache are not exposed publicly. If immediate application of device approval is needed, run <code>service restart syslog</code> from the ZenShield shell.</p>
+<h2>5. Add and extend storage</h2>
+<p>The native installation starts with Docker-managed data volumes on the system filesystem. In <strong>System → Storage</strong>, select a new blank disk, review the plan and exact confirmation phrase, and initialize the data pool. Migration pauses services, verifies the copy, and retains the original volumes for recovery.</p>
+<p>You can add another blank disk, rescan an expanded virtual disk, and grow the ClickHouse or application volume. No disk is formatted by the one-command installer. Keep every disk belonging to the pool attached. Shrinking or removing allocated disks requires a separate offline migration; LVM pooling does not provide redundancy.</p>
+<p>If the system disk is larger than its filesystem, choose <strong>Rescan attached and expanded disks</strong>, then <strong>Grow system filesystem</strong> for a supported layout. The system disk stays protected from blank-disk initialization. Read the <a href="/downloads/zenshield/ZenShield-Storage.md">storage and expansion manual</a> for supported layouts, commands and recovery guidance.</p>
+<h2>6. Licences and registration</h2>
+<p>New ZenShield 0.4.3 installations automatically register after setup. Open <strong>System → Licences</strong> to see the registration ID, trial or subscription, plan, allowance, expiry, and last synchronization. The default trial lasts 30 days and includes all features with unlimited devices and events. Existing registered installations retain their assigned subscription when upgraded.</p>
+<p>Registration uses a unique device key, a single-use signed challenge, and an appliance-bound signed licence. Repeating registration with the same identity preserves the original trial expiry. Keep the appliance identity in backups; deleting it does not issue a fresh trial for the same virtual hardware. A separate clone needs its own virtual hardware identity.</p>
+<p>In the <a href="https://zentryc.com/ota/fleet/?tab=appliances">fleet Appliances tab</a>, find the appliance by registration ID or management address. In <a href="https://zentryc.com/ota/fleet/?tab=subscriptions">Subscriptions</a>, open its subscription and choose <strong>Edit Subscription</strong>. Set <strong>Extend by days</strong>, change Trial to Subscription, select a plan, or adjust the unlimited allowance. Save Changes. The appliance synchronizes every five minutes; <strong>Refresh licence</strong> applies changes immediately.</p>
+<p>An administrator can reassign the appliance in fleet, or issue a single-use registration code from another ZenShield subscription. Enter that code under System → Licences to transfer the appliance. Codes must belong to an active subscription with an available appliance slot. Publisher passwords are never entered on an appliance.</p>
+<p>Trial expiry or suspension is visibly reported; this release keeps collection and existing data available. Offline appliances retain their verified licence, calculate expiry locally, and show a stale synchronization notice after 24 hours. Restore outbound HTTPS access to zentryc.com, working DNS and accurate time to synchronize again.</p>
+
+<h2>7. Install future updates</h2>
+<p>Registration is automatic after first-time setup. Use <strong>System → Updates</strong> or the commands below. An older unregistered appliance can use <code>update register</code> with a dedicated token from its Zentryc administrator before upgrading.</p>
+<pre><code>update check
+show updates
+update install</code></pre>
+<p>In the GUI, choose <strong>Install update</strong>, review the offered version, and choose <strong>Install now</strong> or <strong>Cancel</strong>. The 0.4.3 GUI does not require a typed phrase. The CLI still requires <code>INSTALL X.Y.Z</code> for the offered version. Updates verify product, compatibility, signature, and checksums, then back up the datastores before switching images. Keep sufficient free space for a complete backup and keep the appliance powered on.</p>
+<p>Automatic installation defaults to off. The GUI can enable installation within a UTC maintenance window. A registration does not guarantee an offer: the server also checks release scope and rollout eligibility.</p>
+<h3>Existing appliance stopped by its older updater</h3>
+<p>If an existing 0.3.4 appliance reports <code>du failed (exit 1)</code> before installing 0.4.3, follow the <a href="/downloads/zenshield/0.4.3/SUPPORT-UPGRADE-0.4.3.md">signed support upgrade instructions</a>. The helper loads the corrected updater before retrying, retains existing backups, and pauses services during installation. It accepts versions 0.3.3, 0.3.4, 0.4.0, 0.4.1 and 0.4.2; it is not needed for a fresh 0.4.3 installation. Do not reinstall or delete data to resolve this error.</p>
+<p>After upgrading an appliance with existing events, historical analytics can continue in the background. View <strong>System → Storage Monitor → Historical analytics processing</strong>. A fresh installation has no previous history to process.</p>
+<h2 id="virtual-appliance">Legacy VMware download · 0.3.1</h2>
+<p>This is the unchanged older image, not the 0.4.3 fresh-install baseline. For a new VM, install Ubuntu Server 24.04 LTS and use the native installer above. For existing deployment workflows, download the ZenShield 0.3.1 OVF package. It includes the descriptor, compressed virtual disk, manifest, checksums, and offline manuals. Allocate 4 vCPUs, 16 GB RAM and a 100 GiB system disk. This 0.3.1 OVF retains its original 16-byte setup minimum; the current native installer uses the 5-character minimum. This package uses EFI, LSI Logic SCSI, VMXNET3 and VMware virtual hardware 19.</p>
+<p><a class="btn btn-primary" href="/downloads/zenshield/0.3.1/ZenShield-0.3.1-OVF.zip" download>Download legacy 0.3.1 OVF · 1.94 GB</a> <a href="/downloads/zenshield/0.3.1/ZenShield-0.3.1-OVF.zip.sha256">SHA256 checksum</a></p>
+<pre><code>553958461d24ad28841384bcb3ddbb8265735cfe0dc2c453ad534431a74c0718</code></pre>
+<ol><li>Verify the ZIP checksum and extract every file into the same folder.</li><li>In VMware Workstation, choose <strong>File → Open</strong> and select <code>ZenShield-0.3.1.ovf</code>. Keep the referenced <code>.vmdk.gz</code> file beside it; do not extract that file separately.</li><li>Choose a new VM directory, review resources and map the <code>nat</code> network to your intended management network.</li><li>Power on and open the VM console. Complete the network, reachability confirmation, hostname, timezone, GUI password, console password and SSH management CIDR prompts.</li><li>Wait for setup to complete, then open <code>https://&lt;appliance-address&gt;/system/</code> and sign in as <strong>admin</strong>.</li></ol>
+<p>The image contains no shared passwords, test accounts, SSH keys, TLS private keys, collected data or OTA registration. Each import creates its own identity. SSH is key-only; add your own authorized key through authenticated console maintenance if needed. The imported appliance is already installed, so continue with the command, device, storage and update sections below.</p>
+<p>This OVF is validated with VMware Workstation. KVM conversion and other hypervisors require separate validation. The native Ubuntu installer above is the recommended path for a new 0.4.3 deployment.</p>
+<h2>Troubleshooting and recovery</h2>
+<p>If an older password prompt repeats a generic message, press <strong>Ctrl+C</strong> and rerun the public installer command. It refreshes the wizard when setup is unfinished, preserving existing data. Use a unique password of at least 5 characters and repeat it at confirmation. Running <code>sudo zenshield-setup</code> alone uses the already installed wizard. Never include your password in support messages.</p>
+<p>Ubuntu package installation may restart network and DNS services. The OTA release download retries temporary DNS, connection, timeout and transient HTTP failures up to six attempts, waiting 5, 10, 20, 30 and 30 seconds. If DNS remains unavailable, run <code>getent hosts zentryc.com</code> and <code>resolvectl status</code>, verify DNS and outbound HTTPS, then rerun the same installer. Complete checksum-verified downloads are reused; partial downloads are discarded. Your configured DNS servers are preserved, and TLS, signatures and checksums remain enforced.</p>
+<pre><code>sudo systemctl status zenshield-agent zensheild
+sudo journalctl -u zensheild -u zenshield-agent --since "15 minutes ago"
+sudo zenshield-setup
+sudo zenshield-update check</code></pre>
+<p>If setup pauses, correct the reported problem and rerun it. Instance secrets are retained after initialization. For a failed update, inspect System → Updates and the service journal; the updater attempts verified rollback. Do not delete its backups while an installation or recovery is active.</p>
+<p>Back up the entire appliance, including every attached data disk. Test restoration before relying on it. Allow for a maintenance window: installation and updates briefly pause GUI access and log collection.</p>
+<p><a href="{% url 'core:contact' %}">Contact Zentryc for deployment support and registration tokens</a> · <a href="{% url 'core:zenshield' %}">Back to ZenShield</a></p>
+</div></section>
+{% endblock %}

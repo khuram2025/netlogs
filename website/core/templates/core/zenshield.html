@@ -1,0 +1,407 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://zentryc.com/zenshield/#software",
+  "name": "ZenShield",
+  "softwareVersion": "0.4.3",
+  "applicationCategory": "SecurityApplication",
+  "applicationSubCategory": "Firewall Log Management & Security Analytics",
+  "operatingSystem": "On-premises (Linux appliance)",
+  "url": "https://zentryc.com{% url 'core:zenshield' %}",
+  "description": "ZenShield is on-premises firewall log management and security analytics for Palo Alto, Fortinet, Cisco and more, with cross-vendor correlation, policy insight, and compliance reporting for SOC 2, HIPAA, PCI DSS, and GDPR.",
+  "publisher": {"@id": "https://zentryc.com/#organization"},
+  "isPartOf": {"@id": "https://zentryc.com/#website"},
+  "offers": {"@type": "Offer", "url": "https://zentryc.com{% url 'core:pricing' %}"}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://zentryc.com{% url 'core:home' %}"},
+    {"@type": "ListItem", "position": 2, "name": "Products", "item": "https://zentryc.com{% url 'core:products' %}"},
+    {"@type": "ListItem", "position": 3, "name": "ZenShield",
+  "softwareVersion": "0.4.3", "item": "https://zentryc.com{% url 'core:zenshield' %}"}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is a firewall log analyzer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A firewall log analyzer collects traffic, threat, system, VPN, and policy events from one or more firewalls; normalizes vendor-specific fields; and makes the data searchable for investigation, alerting, correlation, reporting, and policy review."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does ZenShield analyze firewall logs?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "ZenShield receives firewall and syslog events, parses them into consistent fields, enriches and indexes the records, correlates activity across sources, highlights threats and policy signals, and preserves the evidence for search and reporting."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which firewall and syslog sources does ZenShield support?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "ZenShield provides integrations for Palo Alto Networks, Fortinet FortiGate, Cisco ASA, Cisco Firepower, Meraki MX, Check Point, SonicWall, Linux iptables and nftables, plus extensible parsing for additional syslog sources."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can firewall log analytics run on premises?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. ZenShield is designed as an on-premises appliance so firewall logs, search indexes, correlation context, reports, and retention remain inside the customer-controlled environment."
+      }
+    }
+  ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<!-- Page hero -->
+<section class="page-hero ink-glow">
+    <div class="ink-grid"></div>
+    <div class="container">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="{% url 'core:home' %}">Home</a>
+            <span class="sep">/</span>
+            <a href="{% url 'core:products' %}">Products</a>
+            <span class="sep">/</span>
+            <span>ZenShield</span>
+        </nav>
+        <p class="eyebrow on-ink">ZenShield &middot; Security log analytics</p>
+        <h1>Firewall log management and security analytics, on your terms.</h1>
+        <p>ZenShield aggregates, parses, and correlates firewall logs across Palo Alto, Fortinet, Cisco and more &mdash; turning raw security data into structured evidence, policy insight, and audit-ready compliance reports, all inside your own environment.</p>
+        <div class="hero-actions" style="margin-top:30px;">
+            <a href="{% url 'core:zenshield_installation' %}" class="btn btn-on-ink btn-lg">Install &amp; command guide</a>
+            <a href="{% url 'core:contact' %}" class="btn btn-primary btn-lg btn-arrow">Request a demo
+                <svg viewBox="0 0 24 24" class="icon-stroke"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            <a href="{% url 'core:security' %}" class="btn btn-on-ink btn-lg">Security &amp; trust</a>
+        </div>
+        <div class="pill-row" style="margin-top:34px;">
+            <span class="pill"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg> Logs stay on-prem</span>
+            <span class="pill"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg> Cross-vendor correlation</span>
+            <span class="pill"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> SOC 2 / HIPAA / PCI DSS / GDPR reporting</span>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="section">
+    <div class="container">
+        <div class="section-head reveal">
+            <p class="eyebrow center">Capabilities</p>
+            <h2>From raw firewall logs to actionable security intelligence.</h2>
+            <p>ZenShield handles ingestion, parsing, correlation, and reporting in one on-premises platform &mdash; so security and network teams work from the same evidence.</p>
+        </div>
+        <div class="grid grid-3">
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.3L12 14.3 7.2 16.8l.9-5.3L4.2 7.7l5.4-.8z"/></svg></span>
+                <h3>Auto Policy Builder</h3>
+                <p>ZenShield analyzes observed traffic patterns and proposes optimized firewall policies with confidence scoring, reducing manual rule-writing and configuration drift.</p>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
+                <h3>Cross-Vendor Correlation</h3>
+                <p>Correlate logs across Palo Alto, Fortinet, Cisco, Check Point and more to surface attack patterns that span multiple security layers and vendors.</p>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                <h3>Threat Detection</h3>
+                <p>Behavioral models flag anomalies, lateral movement, and command-and-control patterns, classifying and prioritizing events so analysts focus on what matters.</p>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                <h3>Compliance Reporting</h3>
+                <p>Generate audit-ready reports for SOC 2, HIPAA, PCI DSS, and GDPR, backed by full log retention and consistent, exportable documentation.</p>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></span>
+                <h3>Log Aggregation</h3>
+                <p>Ingest high-volume log events from any supported source, with structured parsing, enrichment, and indexing applied automatically on collection.</p>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span>
+                <h3>Real-Time Processing</h3>
+                <p>A streaming engine takes ingestion to insight in near real time, so detections, correlations, and policy signals stay current with live traffic.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Search-led firewall log analysis explainer -->
+<section class="section section-soft section-line-top" id="firewall-log-analysis">
+    <div class="container">
+        <div class="section-head reveal">
+            <p class="eyebrow center">Firewall log analyzer</p>
+            <h2>What a firewall log analyzer does &mdash; and how ZenShield turns logs into answers.</h2>
+            <p>A firewall log analyzer collects traffic, threat, system, VPN, and policy events from one or more firewalls; normalizes vendor-specific fields; and makes the data searchable for investigation, alerting, correlation, reporting, and policy review.</p>
+        </div>
+        <div class="grid grid-3">
+            <div class="card reveal">
+                <span class="eyebrow">01</span>
+                <h3>Collect firewall and syslog events</h3>
+                <p>Receive high-volume events from supported firewalls and infrastructure sources without forcing operators to inspect each device separately.</p>
+            </div>
+            <div class="card reveal">
+                <span class="eyebrow">02</span>
+                <h3>Parse and normalize fields</h3>
+                <p>Translate vendor-specific records into consistent fields for source, destination, action, application, rule, user, severity, bytes, and session context.</p>
+            </div>
+            <div class="card reveal">
+                <span class="eyebrow">03</span>
+                <h3>Enrich and index the evidence</h3>
+                <p>Structure incoming data for fast filtering, natural-language search, time-based investigation, exports, and repeatable analyst workflows.</p>
+            </div>
+            <div class="card reveal">
+                <span class="eyebrow">04</span>
+                <h3>Correlate activity across vendors</h3>
+                <p>Link related activity across Palo Alto, Fortinet, Cisco, Check Point, SonicWall, Linux, and additional syslog sources instead of treating every event as isolated.</p>
+            </div>
+            <div class="card reveal">
+                <span class="eyebrow">05</span>
+                <h3>Surface threats and policy signals</h3>
+                <p>Use behavioral context, event priority, and observed traffic patterns to focus analysts on suspicious behavior, policy gaps, and proposed rule improvements.</p>
+            </div>
+            <div class="card reveal">
+                <span class="eyebrow">06</span>
+                <h3>Retain, report, and audit</h3>
+                <p>Keep the underlying record with consistent reports and exports so investigations, policy reviews, and audit responses remain traceable.</p>
+            </div>
+        </div>
+        <div class="split" style="margin-top:64px;align-items:start;">
+            <div class="reveal">
+                <p class="eyebrow">Questions the data should answer</p>
+                <h2>How do you analyze firewall logs?</h2>
+                <p>Start with a time window and a concrete question, then filter the normalized data instead of reading raw syslog line by line. ZenShield is designed to help an analyst move from a broad signal to the events and policy context behind it.</p>
+                <ul class="check-list">
+                    <li>Which sources, destinations, applications, and users generated the most traffic?</li>
+                    <li>Which denies, threats, VPN events, or configuration changes need investigation?</li>
+                    <li>Did the same source appear across multiple firewall vendors or network segments?</li>
+                    <li>Which rule allowed or blocked the session, and is that behavior expected?</li>
+                    <li>What evidence and timeline should be retained for the incident or audit?</li>
+                </ul>
+                <p style="margin-top:24px;"><a href="{% url 'core:firewall_log_analysis_guide' %}" class="text-link">Read the practical firewall log analysis workflow
+                    <svg viewBox="0 0 24 24" class="icon-stroke"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+            </div>
+            <div class="reveal">
+                <p class="eyebrow">Deployment choice</p>
+                <h2>On-premises log analytics keeps the evidence inside your boundary.</h2>
+                <p>Cloud logging can require continuous security-data egress and consumption-based retention. ZenShield is designed as an on-premises appliance, so firewall logs, search indexes, correlation context, reports, and retention remain inside the customer-controlled environment.</p>
+                <ul class="check-list">
+                    <li>Keep raw logs and enriched records under your infrastructure controls.</li>
+                    <li>Correlate multiple firewall estates without forwarding the evidence to a vendor cloud.</li>
+                    <li>Plan retention around operational and audit needs rather than external ingestion charges.</li>
+                    <li>Connect security analysis with Zentryc's wider on-premises operations model.</li>
+                </ul>
+                <p style="margin-top:24px;"><a href="{% url 'core:security' %}" class="text-link">Review Zentryc security and trust
+                    <svg viewBox="0 0 24 24" class="icon-stroke"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Supported platforms / integrations -->
+<section class="section section-soft section-line-top">
+    <div class="container">
+        <div class="section-head reveal">
+            <p class="eyebrow center">Firewall &amp; security integrations</p>
+            <h2>Native integration with the platforms your estate already runs.</h2>
+            <p>ZenShield ships with deep parsers for the leading firewall and security vendors, plus an extensible model for additional syslog sources.</p>
+        </div>
+        <div class="grid grid-2">
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></span>
+                <h3>Palo Alto Networks</h3>
+                <p>Complete PAN-OS integration for traffic, threat, URL filtering, WildFire, and GlobalProtect logs.</p>
+                <ul class="check-list" style="margin-top:16px;">
+                    <li>PA-Series, from PA-220 to PA-7000</li>
+                    <li>Panorama centralized management</li>
+                    <li>Threat Prevention log analysis</li>
+                    <li>Automated policy optimization</li>
+                </ul>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h8"/></svg></span>
+                <h3>Fortinet FortiGate</h3>
+                <p>Full FortiOS log parsing for traffic, event, security, and system logs across your Fortinet fabric.</p>
+                <ul class="check-list" style="margin-top:16px;">
+                    <li>FortiGate, from FG-40F to FG-7000E</li>
+                    <li>FortiManager integration</li>
+                    <li>Security Fabric visibility</li>
+                    <li>SSL-VPN session analytics</li>
+                </ul>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10v4M10 10v4M14 10v4M18 10v4"/></svg></span>
+                <h3>Cisco Security</h3>
+                <p>Unified visibility across Cisco ASA, Firepower, and Meraki security appliances.</p>
+                <ul class="check-list" style="margin-top:16px;">
+                    <li>ASA syslog parsing</li>
+                    <li>Firepower Threat Defense</li>
+                    <li>AnyConnect VPN analytics</li>
+                    <li>Meraki MX integration</li>
+                </ul>
+            </div>
+            <div class="card reveal">
+                <span class="card-icon"><svg viewBox="0 0 24 24" class="icon-stroke"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                <h3>Additional platforms</h3>
+                <p>An extensible architecture supports additional security and infrastructure log sources.</p>
+                <ul class="check-list" style="margin-top:16px;">
+                    <li>Check Point firewalls</li>
+                    <li>SonicWall appliances</li>
+                    <li>Linux iptables / nftables</li>
+                    <li>Custom syslog sources</li>
+                </ul>
+            </div>
+        </div>
+        <div class="center reveal" style="margin-top:36px;">
+            <a href="{% url 'core:integrations' %}" class="btn btn-secondary btn-arrow">See all integrations
+                <svg viewBox="0 0 24 24" class="icon-stroke"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+    </div>
+</section>
+
+<!-- AI engine split -->
+<section class="section section-ink ink-glow">
+    <div class="container" style="position:relative;z-index:2;">
+        <div class="split reverse">
+            <div class="reveal">
+                <p class="eyebrow on-ink">ZenShield AI engine</p>
+                <h2>Intelligence that keeps pace with your traffic.</h2>
+                <p class="lead">The ZenShield engine builds behavioral baselines from your own network traffic, then classifies, prioritizes, and links events so analysts spend their time on decisions instead of triage.</p>
+                <ul class="check-list">
+                    <li>Behavioral baseline modeling for every network segment</li>
+                    <li>Automated threat classification and prioritization</li>
+                    <li>Policy recommendation engine with confidence scoring</li>
+                    <li>Natural-language log search and querying</li>
+                    <li>Predictive security analytics and trending</li>
+                    <li>Automated incident-response playbooks</li>
+                </ul>
+                <p style="margin-top:24px;"><a href="{% url 'core:security' %}" class="text-link">How ZenShield keeps your data sovereign
+                    <svg viewBox="0 0 24 24" class="icon-stroke"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+            </div>
+            <div class="split-media reveal">
+                <figure class="shot">
+                    <div class="shot-bar"><span class="shot-dot r"></span><span class="shot-dot y"></span><span class="shot-dot g"></span><span class="shot-url">zenshield &middot; analyst stream</span></div>
+                    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.82rem;line-height:1.9;padding:20px 18px;color:#A9BCCE;background:#0B1726;">
+                        <div><span style="color:#5EE6D0;">14:22:01</span> <span style="color:#647387;">baseline</span> &middot; 847 traffic patterns modeled across 6 segments</div>
+                        <div><span style="color:#5EE6D0;">14:22:15</span> <span style="color:#D9870B;">detection</span> &middot; anomalous outbound beacon flagged: 10.0.5.22</div>
+                        <div><span style="color:#5EE6D0;">14:22:16</span> <span style="color:#2E6BFF;">correlate</span> &middot; linked to 3 prior events from the same source</div>
+                        <div><span style="color:#5EE6D0;">14:22:17</span> <span style="color:#0FAE96;">policy</span> &middot; deny rule recommended for 10.0.5.22 (confidence 0.94)</div>
+                        <div><span style="color:#5EE6D0;">14:22:18</span> <span style="color:#647387;">report</span> &middot; incident record prepared for analyst review</div>
+                    </div>
+                    <figcaption>Representative analyst stream. Detection, correlation, and policy steps stay reviewable, not automatic.</figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Compliance band -->
+<section class="section">
+    <div class="container">
+        <div class="section-head reveal">
+            <p class="eyebrow center">Compliance &amp; evidence</p>
+            <h2>Audit-ready reporting, backed by full log retention.</h2>
+            <p>ZenShield keeps the complete record and produces consistent documentation for the frameworks your auditors expect.</p>
+        </div>
+        <div class="chip-grid reveal" style="justify-content:center;">
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> SOC 2</span>
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> HIPAA</span>
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> PCI DSS</span>
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> GDPR</span>
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg> Full log retention</span>
+            <span class="chip"><svg viewBox="0 0 24 24" class="icon-stroke"><path d="M4 6h16M4 12h16M4 18h10"/></svg> One-click exports</span>
+        </div>
+    </div>
+</section>
+
+<!-- Visible answers for search and answer engines -->
+<section class="section section-line-top" id="firewall-log-analyzer-questions">
+    <div class="container">
+        <div class="section-head reveal">
+            <p class="eyebrow center">Common questions</p>
+            <h2>Firewall log analysis, answered clearly.</h2>
+        </div>
+        <div class="grid grid-2">
+            <article class="card reveal">
+                <h3>What is a firewall log analyzer?</h3>
+                <p>It is software that collects firewall events, parses each vendor's format, and makes the normalized records searchable for security investigation, alerting, reporting, and policy analysis.</p>
+            </article>
+            <article class="card reveal">
+                <h3>How does ZenShield analyze firewall logs?</h3>
+                <p>ZenShield receives events, parses them into consistent fields, enriches and indexes the records, correlates activity across sources, highlights threats and policy signals, and preserves the evidence for search and reporting.</p>
+            </article>
+            <article class="card reveal">
+                <h3>Which firewall and syslog sources does ZenShield support?</h3>
+                <p>ZenShield covers Palo Alto Networks, Fortinet FortiGate, Cisco ASA, Cisco Firepower, Meraki MX, Check Point, SonicWall, Linux iptables and nftables, plus extensible parsing for additional syslog sources.</p>
+            </article>
+            <article class="card reveal">
+                <h3>Can firewall log analytics run on premises?</h3>
+                <p>Yes. ZenShield is designed as an on-premises appliance so logs, indexes, correlation context, reports, and retention remain inside the customer-controlled environment.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm section-soft section-line-top" id="zenshield-comparisons">
+    <div class="container">
+        <div class="section-head reveal" style="margin-bottom:8px;">
+            <p class="eyebrow center">Compare</p>
+            <h2>ZenShield vs OEM consoles and SIEM firewall slices.</h2>
+            <p>When the estate is multi-vendor, see how ZenShield by Zentryc compares as an on-prem firewall log analyzer next to FortiAnalyzer, Panorama, SmartEvent, and Splunk (firewall scope).</p>
+        </div>
+        <div class="chip-grid reveal" style="justify-content:center;margin-top:22px;flex-wrap:wrap;gap:10px;">
+            <a href="{% url 'core:zenshield_module' 'fortianalyzer-alternative' %}" class="chip">FortiAnalyzer alternative</a>
+            <a href="{% url 'core:zenshield_module' 'splunk-alternative' %}" class="chip">Splunk firewall-log alternative</a>
+            <a href="{% url 'core:zenshield_module' 'panorama-alternative' %}" class="chip">Panorama alternative</a>
+            <a href="{% url 'core:zenshield_module' 'smartevent-alternative' %}" class="chip">SmartEvent alternative</a>
+            <a href="{% url 'core:firewall_log_analysis_guide' %}" class="chip">How to analyze firewall logs</a>
+            <a href="{% url 'core:pricing' %}" class="chip">Pricing (ZenShield quote)</a>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm section-soft section-line-top">
+    <div class="container">
+        <div class="section-head reveal" style="margin-bottom:8px;">
+            <p class="eyebrow center">Also in the Zentryc platform</p>
+            <h2>ZenPlus replacements for the NOC tools next to your firewalls.</h2>
+            <p>If you are comparing the monitoring stack as well as log analytics, these pages cover SolarWinds, ManageEngine OpManager, Zabbix, PRTG, Nagios, and WhatsUp Gold.</p>
+        </div>
+        {% include "core/_comparison_links.html" %}
+    </div>
+</section>
+
+<!-- CTA band -->
+<section class="section cta-band ink-glow">
+    <div class="container">
+        <div class="cta-inner reveal">
+            <p class="eyebrow center on-ink">Get started</p>
+            <h2>Turn firewall logs into security evidence with ZenShield.</h2>
+            <p>Install ZenShield 0.4.3 on Ubuntu Server 24.04 LTS with one command. Complete the guided setup and start your 30-day unrestricted trial.</p>
+            <div class="cta-actions">
+                <a href="{% url 'core:contact' %}" class="btn btn-primary btn-lg">Request a demo</a>
+                <a href="{% url 'core:zenshield_installation' %}" class="btn btn-on-ink btn-lg">Install ZenShield 0.4.3</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

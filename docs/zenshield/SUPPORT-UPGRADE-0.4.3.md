@@ -58,3 +58,8 @@ this support-command test used the disposable appliance's empty baseline.
 
 Helper SHA-256: `37d692be35e7f54eac7a28f06cc8bc281a48d67273237cd15bd85eec4f08e910`.
 The immutable 0.4.3 package and its signing key are unchanged.
+
+On 15 September 2026, the user also confirmed that the support upgrade worked
+on the affected remote appliance. This is user-reported confirmation; the
+workstation did not directly access that appliance. Fresh native installations
+now start on 0.4.3 and do not need this helper.
