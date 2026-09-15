@@ -1,5 +1,9 @@
 # ZenShield 0.4.3
 
+**Older-updater advisory:** a 0.3.4 appliance subsequently reported `du failed
+(exit 1)` before installation. Use the [signed legacy-updater bootstrap](SUPPORT-UPGRADE-0.4.3.md)
+for that failure; repeating the old GUI attempt cannot load the fix early enough.
+
 This release moves historical analytics processing out of application startup.
 It addresses an upgrade failure path on appliances with large existing log
 datasets, while preserving the original logs, live ingestion and recoverable
