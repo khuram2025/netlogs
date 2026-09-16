@@ -2779,7 +2779,7 @@ class ClickHouseClient:
             sum(data_compressed_bytes) as compressed_bytes,
             sum(data_uncompressed_bytes) as uncompressed_bytes
         FROM system.parts
-        WHERE table = 'syslogs' AND active = 1
+        WHERE database = currentDatabase() AND table = 'syslogs' AND active = 1
         """
 
         result = list(client.query(query).named_results())
@@ -2797,39 +2797,40 @@ class ClickHouseClient:
     @classmethod
     def get_per_device_storage(cls, hours: int = 24) -> List[Dict[str, Any]]:
         """
-        Get storage usage breakdown per device.
+        Estimate uncompressed bytes for records received within the window.
 
-        Uses a time window (default 24 hours) for performance with large tables.
-        Storage is estimated using overall compression ratio from system tables.
+        Device registration is keyed by sender IP, not virtual-domain labels.
+        Use receipt time so delayed events count toward the day they arrived.
         """
         client = cls.get_client()
 
-        # Get device counts and recent activity (fast with time filter)
-        # Group by (device_ip, vdom) to treat each VDOM as a separate device
-        query = f"""
+        query = """
         SELECT
-            {cls._DEVICE_DISPLAY_EXPR} as device_ip,
+            toString(device_ip) as source_ip,
             count() as log_count,
-            max(timestamp) as newest_log
+            max(ingest_time) as newest_log
         FROM syslogs
-        PREWHERE timestamp > now() - INTERVAL {hours} HOUR
-        GROUP BY device_ip, vdom
+        PREWHERE ingest_time > now64(3, 'UTC') - toIntervalHour({hours:UInt32})
+            AND ingest_time <= now64(3, 'UTC')
+        GROUP BY source_ip
         ORDER BY log_count DESC
         """
 
-        results = list(client.query(query).named_results())
+        results = list(client.query(query, parameters={'hours': max(1, min(int(hours), 168))},
+            settings={'max_execution_time': 10, 'max_memory_usage': 268435456,
+                      'max_threads': 2, 'timeout_overflow_mode': 'throw'}).named_results())
 
         # Get overall storage stats to estimate per-device storage
-        try:
-            storage = cls.get_storage_stats()
-            total_rows = storage.get('total_rows', 1) or 1
-            total_bytes = storage.get('uncompressed_bytes', 0) or 0
-            avg_bytes_per_row = total_bytes / total_rows if total_rows > 0 else 500
-        except Exception:
-            avg_bytes_per_row = 500  # Reasonable default
+        storage = cls.get_storage_stats()
+        total_rows = storage.get('total_rows', 0) or 0
+        total_bytes = storage.get('uncompressed_bytes', 0) or 0
+        if results and (not total_rows or not total_bytes):
+            raise RuntimeError('Syslog storage metadata unavailable')
+        avg_bytes_per_row = total_bytes / total_rows if total_rows else 0
 
         # Estimate storage per device based on log count
         for r in results:
+            r['device_ip'] = r.pop('source_ip')
             count = r.get('log_count', 0) or 0
             r['total_raw_size'] = int(avg_bytes_per_row * count)
             r['oldest_log'] = None  # Not fetched for speed

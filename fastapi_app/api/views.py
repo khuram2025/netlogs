@@ -2566,6 +2566,8 @@ async def device_list(
             storage_stats, device_storage_map = await run_in_threadpool(device_storage_summary)
         except Exception:
             storage_stats = {
+                'unavailable': True,
+                'unavailable_sources': ['syslog', 'Windows DNS'],
                 'total_rows': 0,
                 'compressed_size': '0 B',
                 'uncompressed_size': '0 B',

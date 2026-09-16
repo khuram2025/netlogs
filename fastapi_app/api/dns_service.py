@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import ipaddress
 import json
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -31,19 +32,45 @@ def device_storage_summary():
         FROM system.parts WHERE database=currentDatabase()
         AND table IN ('syslogs','windows_dns_events') AND active=1""",
         settings=QUERY_SETTINGS).named_results())[0]
-    by_ip = {r['device_ip']: r for r in ClickHouseClient.get_per_device_storage()}
+    by_ip = {}
+    unavailable = []
+    try:
+        by_ip = {r['device_ip']: r for r in ClickHouseClient.get_per_device_storage()}
+    except Exception:
+        logging.getLogger(__name__).warning('Device syslog storage estimate unavailable', exc_info=True)
+        unavailable.append('syslog')
+    try:
+        dns_storage = _dns_storage_summary(client)
+    except Exception:
+        logging.getLogger(__name__).warning('Device DNS storage estimate unavailable', exc_info=True)
+        unavailable.append('Windows DNS')
+        dns_storage = []
+    for row in dns_storage:
+        entry = by_ip.setdefault(row['device_ip'], {'device_ip':row['device_ip'],'log_count':0,'total_raw_size':0})
+        entry['log_count'] += row['log_count']
+        entry['total_raw_size'] += row['total_raw_size']
+        previous = entry.get('newest_log')
+        entry['newest_log'] = max(
+            (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value)
+            for value in (previous or row['newest_log'], row['newest_log']))
+    totals = dict(totals)
+    totals['unavailable_sources'] = unavailable
+    return totals, by_ip
+
+
+def _dns_storage_summary(client):
     average = client.query("""SELECT sum(data_uncompressed_bytes) / greatest(sum(rows),1)
         FROM system.parts WHERE database=currentDatabase()
         AND table='windows_dns_events' AND active=1""", settings=QUERY_SETTINGS).result_rows[0][0]
-    recent = client.query("""SELECT device_ip,count() AS log_count,max(timestamp) AS newest_log
-        FROM windows_dns_events FINAL WHERE timestamp > now() - INTERVAL 24 HOUR
-        GROUP BY device_ip""", settings=QUERY_SETTINGS).named_results()
+    recent = list(client.query("""SELECT device_ip,count() AS log_count,max(received_at) AS newest_log
+        FROM windows_dns_events FINAL WHERE received_at > now64(6, 'UTC') - INTERVAL 24 HOUR
+            AND received_at <= now64(6, 'UTC')
+        GROUP BY device_ip""", settings=QUERY_SETTINGS).named_results())
+    if recent and not average:
+        raise RuntimeError('DNS storage metadata unavailable')
     for row in recent:
-        entry = by_ip.setdefault(row['device_ip'], {'device_ip':row['device_ip'],'log_count':0,'total_raw_size':0})
-        entry['log_count'] += row['log_count']
-        entry['total_raw_size'] += int(average * row['log_count'])
-        entry['newest_log'] = max(entry.get('newest_log') or row['newest_log'], row['newest_log'])
-    return dict(totals), by_ip
+        row['total_raw_size'] = int(average * row['log_count'])
+    return recent
 
 UTC = timezone.utc
 MAX_BODY = 2 * 1024 * 1024

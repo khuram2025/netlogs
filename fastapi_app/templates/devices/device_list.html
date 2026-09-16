@@ -41,6 +41,9 @@
 <!-- Storage Dashboard -->
 <div class="card">
     <h3 style="margin-bottom: 1rem;">Storage Overview</h3>
+    {% if storage_stats.get('unavailable') %}
+    <p role="status" class="text-muted">Storage statistics are temporarily unavailable. Retrying on the next refresh.</p>
+    {% else %}
     <div class="storage-dashboard">
         <div class="stat-card">
             <div class="stat-label">Total Logs</div>
@@ -63,6 +66,10 @@
             <div class="stat-subtext">space savings</div>
         </div>
     </div>
+    {% endif %}
+    {% if storage_stats.get('unavailable_sources') and not storage_stats.get('unavailable') %}
+    <p role="status" class="text-muted">{{ storage_stats['unavailable_sources']|join(' and ') }} estimates are temporarily unavailable. Available figures may be partial; retrying on the next refresh.</p>
+    {% endif %}
 </div>
 
 <!-- Device Management -->
@@ -72,6 +79,7 @@
         <span class="text-muted text-sm">Auto-refresh: 30s</span>
     </div>
 
+    <p class="text-muted text-sm">24-hour storage estimates use logs received during the last 24 hours × average uncompressed bytes per event for each log type. All virtual domains from a device are included. These are estimates, not allocated disk space or a forecast.</p>
     <table>
         <thead>
             <tr>
@@ -82,7 +90,7 @@
                 <th>Retention</th>
                 <th>Last Log</th>
                 <th>Log Count</th>
-                <th title="Estimated uncompressed storage for events in the last 24 hours">Storage (24h estimate)</th>
+                <th title="Estimated uncompressed bytes for logs received in the last 24 hours">Storage (24h estimate)</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -117,8 +125,12 @@
                 <td>
                     {% if device_storage %}
                         {{ format_bytes(device_storage.get('total_raw_size', 0)|int) }}
+                        <div class="text-muted text-sm">{{ format_number(device_storage.get('log_count', 0)) }} logs / 24h{% if storage_stats.get('unavailable_sources') %} · partial{% endif %}</div>
+                    {% elif storage_stats.get('unavailable_sources') or storage_stats.get('unavailable') %}
+                        <span class="text-muted">Unavailable</span>
                     {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-muted">0 B</span>
+                        <div class="text-muted text-sm">No logs received in 24h</div>
                     {% endif %}
                 </td>
                 <td>
