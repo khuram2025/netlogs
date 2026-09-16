@@ -1,6 +1,6 @@
 # ZenShield installation and command manual
 
-Fresh-install baseline: **ZenShield 0.4.3** (15 September 2026). Online guide: https://zentryc.com/zenshield/installation/
+Fresh-install baseline: **ZenShield 0.4.4** (16 September 2026). Online guide: https://zentryc.com/zenshield/installation/
 
 ## Supported host
 
@@ -17,7 +17,7 @@ Other Ubuntu releases and ARM are not supported by this installation recipe.
 
 ## Install
 
-The public installer installs the signed 0.4.3 OTA release directly. A fresh
+The public installer installs the signed 0.4.4 OTA release directly. A fresh
 installation does not need an intermediate release or the legacy support helper.
 
 ```bash
@@ -77,10 +77,10 @@ show storage
 show updates
 ```
 
-Confirm version **0.4.3**, healthy services, the expected management address and
+Confirm version **0.4.4**, healthy services, the expected management address and
 storage capacity. Open **System > Licences** to confirm registration and trial
 status, then send a test event from an approved device and check **Logs**.
-The [0.4.3 release notes](https://zentryc.com/downloads/zenshield/0.4.3/Release-Notes.md)
+The [0.4.4 release notes](https://zentryc.com/downloads/zenshield/0.4.4/Release-Notes.md)
 describe the release and its validation.
 
 ## CLI commands
@@ -146,6 +146,10 @@ pool does not provide redundancy. Back up every appliance disk and test recovery
 
 ## Future updates
 
+The tested upgrade baseline for 0.4.4 is **0.4.3**. Older appliances receive
+0.4.3 as an intermediate release first; if that older updater fails, use the
+signed support instructions below. Fresh installs start directly on 0.4.4.
+
 Use System > Updates or these CLI commands:
 
 ```text
@@ -156,7 +160,7 @@ update install
 
 In the GUI, choose **Install update**, review the offered version, and choose
 **Install now** or **Cancel**. No typed confirmation phrase is required in the
-0.4.3 GUI. The CLI still requires the exact `INSTALL X.Y.Z` confirmation for the
+0.4.4 GUI. The CLI still requires the exact `INSTALL X.Y.Z` confirmation for the
 offered version. An older unregistered appliance can use `update register` with
 a dedicated token before upgrading. Updates verify
 compatibility, signatures and checksums, and back up datastores before switching
@@ -170,7 +174,7 @@ An existing 0.3.4 appliance that reports `du failed (exit 1)` before installing
 [signed support upgrade instructions](https://zentryc.com/downloads/zenshield/0.4.3/SUPPORT-UPGRADE-0.4.3.md).
 This is an upgrade with service downtime and retained backups; do not reinstall
 or delete existing data. The helper accepts versions 0.3.3, 0.3.4, 0.4.0, 0.4.1
-and 0.4.2. It is not needed on a fresh 0.4.3 installation.
+and 0.4.2. It is not needed on a fresh 0.4.4 installation.
 
 After upgrading a populated appliance, historical analytics may continue in
 the background. View **System > Storage Monitor > Historical analytics
@@ -245,9 +249,9 @@ accurate time and outbound HTTPS to zentryc.com to reconnect.
 
 ## Existing VMware OVF download
 
-The published **0.3.1 OVF is a legacy, unchanged image**, not the 0.4.3 baseline.
+The published **0.3.1 OVF is a legacy, unchanged image**, not the 0.4.4 baseline.
 For a new deployment, create an Ubuntu Server 24.04 LTS VM and use the native
-installer above to start directly on 0.4.3 with the current setup, storage,
+installer above to start directly on 0.4.4 with the current setup, storage,
 licensing and updater features. The legacy image retains its original 16-byte
 password minimum. The 0.4.3 support helper does not accept version 0.3.1.
 See the online installation guide for the legacy OVF download and checksum.

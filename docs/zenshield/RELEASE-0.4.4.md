@@ -44,4 +44,31 @@ domains, duplicate delivery, mixed sources, receipt windows, byte estimates,
 partial query failures and rendered empty/unavailable states. The local
 application hotfix passed authenticated HTTPS and Chromium verification,
 including comparison of the displayed estimate with received log counts.
-Signed release upgrade acceptance is recorded separately after rollout testing.
+
+Signed 0.4.3 to 0.4.4 upgrades passed on both the disposable appliance and the
+primary appliance. All six containers were healthy, and the disposable
+appliance also passed a reboot check. Registration identity, licence,
+persistent credential key, PostgreSQL revision and ClickHouse schema version
+8 were preserved. The primary retained all 80,231 DNS records and its syslog
+record; the received-window check displayed 21,056 receipts and 11.8 MB.
+No new source traffic was claimed by this check.
+
+Updater tests (22), native installer resource/download tests (31), password
+prompt tests (11), and compatible-release selection tests (6) passed.
+A package file permission problem caught during canary download was corrected
+before installation; both subsequent signed upgrades succeeded.
+
+The server selects the newest compatible release, so older supported clients
+are offered the 0.4.3 bridge before 0.4.4. This selection preserves the
+separate ZenPlus update flow. The release is published at 100% rollout;
+appliance automatic-update preferences and maintenance windows still apply.
+
+## Release identity
+
+- Runtime source commit: `a31abf81aa4d4809fae160bd5b0bcf9399a2144b`.
+- Signed package: `ZenShield-0.4.4.zup` (562,883,308 bytes).
+- Package SHA-256: `1ec126d45fd361790529700095f6d7ef6af34a10ef11a05cd0cf9d061e2f8f7d`.
+- Application image: `zenshield:0.4.4`.
+- Image SHA-256: `3d3f1cedad7840d8ca362c688112e71a060c9af76bfb241c473451a86a5233f7`.
+- Native bootstrap: `bootstrap-ebc98275f1253286.tar.gz`.
+- Bootstrap SHA-256: `ebc98275f1253286cdfede8cfc9fdb5cf593ef16b1c11568ef280ef1e5f63de3`.

@@ -38,3 +38,12 @@ The disposable VM's pre-existing failed startup recovery was restored after
 recreating its missing database/cache containers with their existing volumes.
 Its recovery and appliance units started successfully, and it was shut down
 after validation. The primary remains running.
+
+## Signed release follow-up
+
+The temporary application hotfix was superseded by signed ZenShield 0.4.4
+on both local appliances on 16 September 2026. Both upgrades passed, including
+a reboot of the disposable appliance. The public release is available at
+100% rollout and the native installer now uses 0.4.4. See
+[0.4.4 release notes](RELEASE-0.4.4.md) for release identity and acceptance.
+The immutable 0.4.3 package remains available as the upgrade bridge.
