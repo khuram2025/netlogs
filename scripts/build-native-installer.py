@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 import argparse
 parser=argparse.ArgumentParser(description='Build a signed native installer pinned to a verified appliance release')
 parser.add_argument('--release-package', required=True)
+parser.add_argument('--prior-version', default='0.2.0', help='Supported upgrade baseline used for package verification; fresh installs start directly on the candidate')
 parser.add_argument('--private-key', type=Path, default=ROOT/'private/zenshield-release.key')
 parser.add_argument('--output-dir', type=Path, default=ROOT/'private/native-installer')
 args=parser.parse_args()
@@ -18,7 +19,7 @@ if args.release_package:
     sys.path.insert(0,str(ROOT/'appliance'))
     from ota.package import verify,digest
     package=Path(args.release_package)
-    manifest=verify(package,ROOT/'appliance/ota-release.pub','zenai','0.2.0')
+    manifest=verify(package,ROOT/'appliance/ota-release.pub','zenai',args.prior_version)
     release.update(version=manifest['version'],min_version=manifest['min_version'],sha256=digest(package),
                    url=f"https://zentryc.com/downloads/zenshield/{manifest['version']}/ZenShield-{manifest['version']}.zup")
 with tempfile.TemporaryDirectory() as temp:
