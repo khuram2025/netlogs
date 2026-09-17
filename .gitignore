@@ -75,3 +75,9 @@ appliance/dns-agent-release/
 *.tar
 private/
 cred.md
+
+# Local appliance maintenance artifacts
+.ssh_known_hosts
+baseline/
+deployed-source/
+.env.*.local

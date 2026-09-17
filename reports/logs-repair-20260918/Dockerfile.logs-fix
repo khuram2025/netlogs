@@ -1,0 +1,15 @@
+FROM zenshield:0.4.3
+COPY --chown=zentryc:zentryc core/event_time.py /app/fastapi_app/core/event_time.py
+COPY --chown=zentryc:zentryc api/appliance.py /app/fastapi_app/api/appliance.py
+COPY --chown=zentryc:zentryc templates/system/appliance.html /app/fastapi_app/templates/system/appliance.html
+COPY --chown=zentryc:zentryc templates/system/_ntp_panel.html /app/fastapi_app/templates/system/_ntp_panel.html
+COPY --chown=zentryc:zentryc db/clickhouse.py /app/fastapi_app/db/clickhouse.py
+COPY --chown=zentryc:zentryc api/views.py /app/fastapi_app/api/views.py
+COPY --chown=zentryc:zentryc services/nql_schema.py /app/fastapi_app/services/nql_schema.py
+COPY --chown=zentryc:zentryc templates/logs/log_list.html /app/fastapi_app/templates/logs/log_list.html
+COPY --chown=zentryc:zentryc templates/logs/_detail_panel.html /app/fastapi_app/templates/logs/_detail_panel.html
+COPY --chown=zentryc:zentryc db/clickhouse_migrations/009_log_device_catalog.py /app/fastapi_app/db/clickhouse_migrations/009_log_device_catalog.py
+COPY --chown=zentryc:zentryc db/clickhouse_migrations/010_log_scope_indexes.py /app/fastapi_app/db/clickhouse_migrations/010_log_scope_indexes.py
+COPY --chown=zentryc:zentryc services/correlation_engine.py /app/fastapi_app/services/correlation_engine.py
+COPY --chown=zentryc:zentryc services/ioc_sweep.py /app/fastapi_app/services/ioc_sweep.py
+COPY --chown=zentryc:zentryc services/ioc_sightings.py /app/fastapi_app/services/ioc_sightings.py

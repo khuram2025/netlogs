@@ -1111,7 +1111,9 @@ async def evaluate_all_correlation_rules():
             for rule in rules:
                 try:
                     # Phase 2: a rule can match multiple entities in one pass.
-                    matches = evaluate_correlation_rule(rule)
+                    # ClickHouse is synchronous. Never stall the web worker's
+                    # event loop while a scheduled correlation scan is running.
+                    matches = await asyncio.to_thread(evaluate_correlation_rule, rule)
                     mode = getattr(rule, "match_mode", "discrete") or "discrete"
                     window = getattr(rule, "suppress_window", 3600) or 3600
 
@@ -1121,17 +1123,18 @@ async def evaluate_all_correlation_rules():
                         # most once per suppression window — so match counts
                         # measure distinct chains, not 60-second scheduler ticks.
                         # Recurring rules are intentional monitors: always record.
-                        if mode == "discrete" and _is_match_suppressed(
-                                match["match_fingerprint"], window):
+                        if mode == "discrete" and await asyncio.to_thread(
+                                _is_match_suppressed, match["match_fingerprint"], window):
                             suppressed_count += 1
                             continue
-                        record_correlation_match(match)
+                        await asyncio.to_thread(record_correlation_match, match)
                         await create_correlation_alert(match)
                         # Phase 5: contribute risk to the entity and group
                         # the match into an incident.
                         score = _rule_risk_contribution(rule)
-                        record_entity_risk(match, score)
-                        risk = compute_entity_risk(match["entity_value"]) + score
+                        await asyncio.to_thread(record_entity_risk, match, score)
+                        risk = await asyncio.to_thread(compute_entity_risk, match["entity_value"])
+                        risk += score
                         await group_into_incident(db, match, risk)
                         await fire_response_actions(rule, match)
                         recorded += 1

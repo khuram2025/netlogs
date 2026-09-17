@@ -684,13 +684,18 @@ def dispatch(operation, body):
     if isinstance(operation,str) and operation.startswith(('updates.','licences.')):
         from ota.api import dispatch as updates_dispatch
         return updates_dispatch(operation,body)
-    if operation not in {'status','storage','storage.metrics','diagnostic.ping'}:
+    if operation not in {'status','storage','storage.metrics','diagnostic.ping','time.status'}:
         from ota.common import locked
         with locked('/var/lib/zenshield-updater/update.lock'):
             return dispatch_control(operation,body)
     return dispatch_control(operation,body)
 
 def dispatch_control(operation,body):
+    if isinstance(operation, str) and operation.startswith('time.'):
+        import ntp
+        if operation == 'time.status': return ntp.status(run)
+        if operation == 'time.update': return ntp.update(body,run,atomic,record)
+        if operation == 'time.retry': return ntp.retry(run,record)
     if operation == 'status': return status()
     if operation == 'storage': return storage()
     if operation == 'storage.metrics': return storage_metrics()

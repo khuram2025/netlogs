@@ -6,7 +6,7 @@ cd /opt/zensheild
 apt-get install -y lvm2 rsync python3-yaml python3-pexpect
 install -d -m 0755 /usr/local/lib/zenshield /run/zenshield /etc/systemd/system/zensheild.service.d
 install -d -m 0700 /var/lib/zenshield
-install -m 0644 appliance/control/agent.py appliance/control/rpc.py appliance/control/cli.py /usr/local/lib/zenshield/
+install -m 0644 appliance/control/agent.py appliance/control/rpc.py appliance/control/cli.py appliance/control/ntp.py /usr/local/lib/zenshield/
 cat > /usr/local/bin/zenshield <<'EOF'
 #!/bin/sh
 exec /usr/bin/python3 /usr/local/lib/zenshield/cli.py "$@"

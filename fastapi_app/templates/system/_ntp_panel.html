@@ -1,0 +1,71 @@
+<section id="time" class="panel" hidden>
+ <div class="cards">
+  <div class="card"><small>NTP SYNCHRONIZATION</small><div class="metric" id="ntp-sync" role="status">Checking…</div><small id="ntp-service"></small></div>
+  <div class="card"><small>SELECTED SOURCE</small><div class="metric" id="ntp-source">—</div><small id="ntp-offset"></small></div>
+  <div class="card"><small>APPLIANCE TIME</small><div id="ntp-clock" style="margin:12px 0">—</div><small id="ntp-zone"></small></div>
+ </div>
+ <div id="ntp-notice" class="notice" role="status" hidden></div>
+ <div class="grid">
+  <form id="ntp-form" class="card"><h2>Additional NTP servers</h2>
+   <p>Add up to eight internal or external NTP servers. Existing system and DHCP time sources remain available.</p>
+   <label for="ntp-servers">Server IP addresses or hostnames</label>
+   <textarea id="ntp-servers" rows="5" spellcheck="false" placeholder="ntp.example.com&#10;10.10.192.10" style="width:100%;background:#0c1626;color:#edf5ff;border:1px solid #34445b;border-radius:7px;padding:9px 13px;font:inherit"></textarea>
+   <small>One per line, or separated by commas. Leave blank to remove additional servers.</small>
+   <div class="actions"><button id="ntp-save" class="primary" disabled>Save NTP servers</button></div>
+  </form>
+  <div class="card"><h2>Synchronization details</h2><p id="ntp-last">Last synchronized: —</p><p id="ntp-stratum">Stratum: —</p>
+   <p id="ntp-advice">Checking the appliance clock service…</p>
+   <div class="actions"><button id="ntp-refresh">Refresh status</button><button id="ntp-retry" disabled>Retry NTP sources</button></div>
+   <p><small>Status refreshes every 10 seconds. Retry resolves server names and requests fresh time samples.</small></p>
+  </div>
+ </div>
+ <div class="card" style="margin-top:20px"><h2>Time sources</h2><div class="scroll"><table><thead><tr><th>Address</th><th>Status</th><th>Stratum</th><th>Reach</th><th>Last sample</th><th>Offset</th></tr></thead><tbody id="ntp-peers"></tbody></table></div><small>Reach is an octal response history: 0 means no successful samples; 377 means the last eight requests received responses.</small></div>
+</section>
+<script>
+(() => {
+ const $=id=>document.getElementById(id);
+ let refreshing=false, dirty=false, saving=false;
+ function node(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;}
+ function message(text,error=false){const e=$('ntp-notice');e.textContent=text;e.className='notice '+(error?'error':'good');e.hidden=!text;}
+ async function api(op,body={}){
+  const csrf=document.cookie.match(/(?:^|; )zentryc_csrf=([^;]+)/);
+  const r=await fetch('/api/appliance/'+op,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf?decodeURIComponent(csrf[1]):''},body:JSON.stringify(body)});
+  const d=await r.json();if(!r.ok)throw Error(d.error||d.detail||'Request failed');return d;
+ }
+ function timeFormatter(zone){
+  const options={timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'longOffset'};
+  try{return {zone,formatter:new Intl.DateTimeFormat('en-GB',options)};}
+  catch{return {zone:'UTC',formatter:new Intl.DateTimeFormat('en-GB',{...options,timeZone:'UTC'})};}
+ }
+ function localTime(value,formatter){
+  if(!value)return 'Never / unavailable';
+  const date=new Date(value);if(Number.isNaN(date.getTime()))return 'Unavailable';
+  const p=Object.fromEntries(formatter.formatToParts(date).map(part=>[part.type,part.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} ${p.timeZoneName.replace('GMT','UTC').replace('UTC+00:00','UTC')}`;
+ }
+ function render(data){
+  $('ntp-sync').textContent=data.synchronized===true?'Synchronized':data.synchronized===false?'Not synchronized':'Status unavailable';
+  $('ntp-sync').style.color=data.synchronized===true?'#71e2c3':'#f3d798';
+  $('ntp-service').textContent='Clock service: '+data.service_state;
+  $('ntp-source').textContent=data.reference||'No source selected';
+  $('ntp-offset').textContent=data.offset_seconds===null?'':(data.offset_seconds*1000).toFixed(3)+' ms clock offset';
+  const display=timeFormatter(data.timezone||'UTC');
+  $('ntp-clock').textContent=localTime(data.now_utc,display.formatter);
+  $('ntp-zone').textContent=display.zone===data.timezone?'System timezone: '+display.zone:'System timezone unavailable; showing UTC';
+  $('ntp-last').textContent='Last synchronized ('+display.zone+'): '+localTime(data.last_sync,display.formatter);
+  $('ntp-stratum').textContent='Stratum: '+(data.stratum===null?'—':data.stratum);
+  $('ntp-advice').textContent=data.synchronized===true?'The appliance is receiving valid time from its selected source.':!data.service_active?'The clock service is not running. Check the appliance service before retrying.':'No valid time source is selected yet. Verify server addresses, DNS and UDP port 123 connectivity.';
+  if(!dirty&&!saving)$('ntp-servers').value=data.servers.join('\n');
+  $('ntp-save').disabled=saving;$('ntp-retry').disabled=saving||!data.service_active;
+  $('ntp-peers').replaceChildren(...data.peers.map(peer=>{const row=node('tr');row.append(node('td',peer.address),node('td',peer.status),node('td',peer.stratum),node('td',peer.reach),node('td',peer.last_sample_seconds===null?'Never':peer.last_sample_seconds+' s ago'),node('td',peer.last_sample_seconds===null?'—':(peer.offset_seconds*1000).toFixed(3)+' ms'));return row;}));
+  if(!data.peers.length){const row=node('tr'),cell=node('td','No time sources reported.');cell.colSpan=6;row.append(cell);$('ntp-peers').append(row);}
+  if(data.errors.length)message(data.errors.join(' '),true);
+ }
+ async function refresh(){if(refreshing||saving)return;refreshing=true;$('ntp-refresh').disabled=true;try{render(await api('time.status'));}catch(e){$('ntp-sync').textContent='Status unavailable';message(e.message,true);}finally{refreshing=false;$('ntp-refresh').disabled=false;}}
+ $('ntp-servers').oninput=()=>{dirty=true;};
+ $('ntp-refresh').onclick=refresh;
+ $('ntp-form').onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;$('ntp-save').disabled=true;$('ntp-retry').disabled=true;try{const servers=$('ntp-servers').value.split(/[\s,]+/).filter(Boolean);const result=await api('time.update',{servers});dirty=false;message(result.message);}catch(error){message(error.message,true);}finally{saving=false;$('ntp-save').disabled=false;await refresh();}};
+ $('ntp-retry').onclick=async()=>{if(saving)return;saving=true;$('ntp-retry').disabled=true;try{message((await api('time.retry')).message);}catch(error){message(error.message,true);}finally{saving=false;await refresh();}};
+ refresh();setInterval(refresh,10000);
+})();
+</script>

@@ -78,7 +78,7 @@ def scope_condition_sql(value: str) -> Optional[str]:
     src_priv = v4_non_public_sql('srcip_v4')
     dst_priv = v4_non_public_sql('dstip_v4')
     if v == 'internet':
-        return f"NOT {dst_priv}"
+        return "dst_is_public = 1"
     if v == 'internal':
         return f"({src_priv} AND {dst_priv} AND srcip != '' AND dstip != '')"
     if v == 'inbound':
@@ -381,9 +381,11 @@ def _refresh_dynamic_keys() -> List[str]:
                     f"  SELECT arrayJoin(mapKeys(parsed_data)) AS k, count() AS c"
                     f"  FROM (SELECT parsed_data FROM syslogs"
                     f"        PREWHERE timestamp > now() - INTERVAL {window}"
+                    f"        AND timestamp <= now()"
                     f"        LIMIT {DISCOVERY_SAMPLE_ROWS})"
                     f"  GROUP BY k ORDER BY c DESC LIMIT 400"
-                    f") SETTINGS max_execution_time = 8,"
+                    f") SETTINGS max_execution_time = 3, max_threads = 1,"
+                    f"          max_block_size = 4096, max_memory_usage = 134217728,"
                     f"          use_query_cache = 1, query_cache_ttl = {DYNAMIC_TTL},"
                     f"          query_cache_nondeterministic_function_handling = 'save'"
                 ).result_rows
@@ -488,6 +490,7 @@ def suggest_values(field_name: str, prefix: str = "", minutes: int = 60,
 
     # Map lookups cost several times what a native column does, so they get a
     # tighter sample — the dropdown wants a fast answer, not an exact ranking.
+    # Limit BEFORE prefix filtering: rare prefixes must not scan an entire week.
     scan_cap = MAP_SCAN_CAP if "parsed_data[" in expr else VALUE_SCAN_CAP
 
     sql = f"""
@@ -495,11 +498,14 @@ def suggest_values(field_name: str, prefix: str = "", minutes: int = 60,
             SELECT {expr} AS v
             FROM syslogs
             PREWHERE timestamp > now() - INTERVAL {int(minutes)} MINUTE
-            WHERE v != ''{prefix_clause}
+                     AND timestamp <= now()
             LIMIT {scan_cap}
         )
+        WHERE v != ''{prefix_clause}
         GROUP BY v ORDER BY c DESC LIMIT {int(limit)}
-        SETTINGS max_execution_time = 5, max_rows_to_read = 200000000,
+        SETTINGS max_execution_time = 2, max_rows_to_read = 2000000,
+                 max_threads = 1, max_block_size = 4096, max_memory_usage = 134217728,
+                 optimize_move_to_prewhere = 0, enable_optimize_predicate_expression = 0,
                  read_overflow_mode = 'break', timeout_overflow_mode = 'break'
     """
     try:
@@ -756,7 +762,7 @@ def _value_suggestions(field_name: str, fld: Optional[NQLField], prefix: str,
         if v in seen:
             continue
         seen.add(v)
-        detail = f"{_fmt_count(row['count'])} events"
+        detail = f"{_fmt_count(row['count'])} sampled events"
         if static.get(v):
             detail = f"{static[v]} — {detail}"
         out.append({"insert": _quote_if_needed(v) + " ", "label": v,

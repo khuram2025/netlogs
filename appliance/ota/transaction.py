@@ -12,7 +12,7 @@ from .common import BASE,STATE,CONTROL,run,compose,write,read,phase,current_vers
 from .package import digest
 
 HOST_FILES={'code/control/agent.py':CONTROL/'agent.py','code/control/cli.py':CONTROL/'cli.py',
-            'code/control/rpc.py':CONTROL/'rpc.py','code/initialize.py':BASE/'initialize.py'}
+            'code/control/rpc.py':CONTROL/'rpc.py','code/control/ntp.py':CONTROL/'ntp.py','code/initialize.py':BASE/'initialize.py'}
 HOST_FILES.update({'code/ota/'+name:CONTROL/'ota'/name for name in ('__init__.py','api.py','common.py','package.py','runner.py','schema.py','transaction.py','transport.py')})
 HOST_FILES['code/ota_entry.py']=CONTROL/'ota_entry.py'
 DATA={'clickhouse':('clickhouse','/var/lib/clickhouse'),'postgres':('postgres','/var/lib/postgresql/data'),

@@ -1,0 +1,1725 @@
+--- a/fastapi_app/templates/logs/_detail_panel.html
++++ b/fastapi_app/templates/logs/_detail_panel.html
+@@ -31,18 +31,18 @@
+     {% set hdr_serial = pd.get('serial', pd.get('devid', pd.get('serialno', ''))) %}
+     {% set hdr_logtime = pd.get('log_datetime', '') %}
+     {% if not hdr_logtime and pd.get('date') and pd.get('time') %}{% set hdr_logtime = pd.get('date') ~ ' ' ~ pd.get('time') %}{% endif %}
+-    {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial %}
++    {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial or hdr_logtime or log.get('timestamp') %}
+     <div class="log-header-bar">
+         {% if hdr_devname %}<div class="log-header-chip device"><span class="chip-label">Device</span><span class="chip-value">{{ hdr_devname }}</span></div><div class="log-header-sep"></div>{% endif %}
+         {% if hdr_type %}<div class="log-header-chip"><span class="chip-label">Type</span><span class="chip-value">{{ hdr_type }}{% if hdr_subtype %}/{{ hdr_subtype }}{% endif %}</span></div>{% endif %}
+         {% if hdr_level %}<div class="log-header-chip level-{{ hdr_level | lower }}"><span class="chip-label">Level</span><span class="chip-value">{{ hdr_level | upper }}</span></div>{% endif %}
+         {% if hdr_logid %}<div class="log-header-chip"><span class="chip-label">Log ID</span><span class="chip-value">{{ hdr_logid }}</span></div>{% endif %}
+         {% if hdr_serial %}<div class="log-header-sep"></div><div class="log-header-chip"><span class="chip-label">Serial</span><span class="chip-value">{{ hdr_serial }}</span></div>{% endif %}
+-        {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Device time</span><span class="chip-value">{{ hdr_logtime }}</span></div>{% endif %}
++        {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Device time</span><span class="chip-value">{{ hdr_logtime }}{% if pd.get('tz') %} {{ pd.get('tz') }}{% endif %}</span></div>{% endif %}
+         {% set ev_ts = log.get('timestamp') %}
+         {% set ing_ts = log.get('ingest_time') %}
+-        {% if ev_ts %}<div class="log-header-chip"><span class="chip-label">Event time</span><span class="chip-value">{{ ev_ts | localdt }}</span></div>{% endif %}
+-        {% if ing_ts and ing_ts != ev_ts %}<div class="log-header-chip" title="When ZenShield received this log"><span class="chip-label">Ingested</span><span class="chip-value">{{ ing_ts | localdt }}</span></div>{% endif %}
++        {% if ev_ts %}<div class="log-header-chip" title="Event time used by filters and sorting"><span class="chip-label">Normalized ({{ app_tz() }})</span><span class="chip-value">{{ ev_ts | localdt }}</span></div>{% endif %}
++        {% if ing_ts and ing_ts != ev_ts %}<div class="log-header-chip" title="When ZenShield received this log"><span class="chip-label">Ingested ({{ app_tz() }})</span><span class="chip-value">{{ ing_ts | localdt }}</span></div>{% endif %}
+     </div>
+     {% endif %}
+ 
+--- a/fastapi_app/api/appliance.py
++++ b/fastapi_app/api/appliance.py
+@@ -7,6 +7,7 @@
+ 
+ router = APIRouter(prefix='/api/appliance', tags=['appliance'], dependencies=[Depends(require_role('ADMIN'))])
+ OPERATIONS = {'status', 'storage', 'storage.plan', 'storage.commit', 'network.apply',
++              'time.status', 'time.update', 'time.retry',
+               'network.confirm', 'network.rollback', 'settings.update', 'password.gui',
+               'updates.status','updates.check','updates.apply','updates.policy','updates.register',
+               'licences.status','licences.refresh','licences.claim'}
+@@ -29,7 +30,7 @@
+     try:
+         async with httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds='/run/zenshield/agent.sock'), timeout=120) as client:
+             response = await client.post('http://localhost/rpc', json={'operation': operation, 'body': body})
+-        if operation not in {'status', 'storage'}:
++        if operation not in {'status', 'storage', 'time.status'}:
+             logger.info('Appliance operation=%s actor=%s result=%s', operation, request.state.current_user.username, response.status_code)
+         return JSONResponse(response.json(), status_code=response.status_code)
+     except httpx.HTTPError:
+--- a/fastapi_app/templates/system/appliance.html
++++ b/fastapi_app/templates/system/appliance.html
+@@ -11,13 +11,14 @@
+  <div class="head"><div><div class="eyebrow">ZENSHIELD / CONTROL PLANE</div><h1>Your security appliance.</h1><p>Manage the system that protects your network.</p></div><span class="pill" id="connection">Connecting…</span></div>
+  <div id="message" role="status" aria-live="polite" hidden></div>
+  <div id="pending" class="notice" hidden><strong>Network change awaiting confirmation</strong><p id="countdown"></p><div class="actions"><button id="keep">Keep this configuration</button><button id="revert">Revert now</button></div></div>
+- <nav class="tabs" aria-label="Appliance sections"><button class="active" data-tab="overview">Overview</button><button data-tab="network">Network</button><button data-tab="storage">Storage</button><button data-tab="licences">Licences</button><button data-tab="updates">Updates</button><button data-tab="settings">Settings & access</button><a class="link" href="/system/storage-monitor/" style="padding:9px 13px">Storage monitor &amp; time ↗</a></nav>
++ <nav class="tabs" aria-label="Appliance sections"><button class="active" data-tab="overview">Overview</button><button data-tab="network">Network</button><button data-tab="storage">Storage</button><button data-tab="licences">Licences</button><button data-tab="updates">Updates</button><button data-tab="time">Time &amp; NTP</button><button data-tab="settings">Settings & access</button><a class="link" href="/system/storage-monitor/" style="padding:9px 13px">Storage monitor &amp; time ↗</a></nav>
+  <section id="licences" class="panel" hidden>
+   <div class="cards"><div class="card"><small>LICENCE STATUS</small><div class="metric" id="licence-status">Checking…</div><small id="licence-verification"></small></div><div class="card"><small>SUBSCRIPTION</small><div class="metric" id="licence-plan">—</div><small id="licence-name"></small></div><div class="card"><small>TIME REMAINING</small><div class="metric" id="licence-days">—</div><small id="licence-expiry"></small></div></div>
+   <div id="licence-notice" class="notice" hidden></div>
+   <div class="grid"><div class="card"><h2>Your licence</h2><p id="licence-allowance"></p><dl><dt>Appliance registration ID</dt><dd id="licence-appliance"></dd><dt>Subscription ID</dt><dd id="licence-subscription"></dd><dt>Last synchronized</dt><dd id="licence-sync"></dd></dl><p>New appliances register automatically for a 30-day trial with all features and no device or event limits. Licence changes made by your administrator synchronize within five minutes.</p><div class="actions"><button id="licence-refresh" class="primary">Refresh licence</button></div></div>
+   <form id="licence-registration" class="card"><h2>Apply a subscription</h2><p>Already have a subscription? Enter its one-time registration code, or ask your ZenShield administrator to assign it to the registration ID shown here. Trial extensions and subscription changes keep your existing data.</p><label for="licence-code">Subscription registration code</label><input id="licence-code" type="password" autocomplete="off" maxlength="64" required><div class="actions"><button class="primary">Apply subscription</button></div><p><a class="link" href="https://zentryc.com/contact/" target="_blank" rel="noopener">Contact ZenShield for licensing support ↗</a></p></form></div>
+  </section>
++ {% include "system/_ntp_panel.html" %}
+  <section id="updates" class="panel" hidden>
+   <div class="cards"><div class="card"><small>INSTALLED VERSION</small><div class="metric" id="update-version">—</div><small>ZenShield appliance</small></div><div class="card"><small>UPDATE STATUS</small><div class="metric" id="update-phase">—</div><small id="update-note"></small></div><div class="card"><small>RELEASE CHANNEL</small><div class="metric">ZenShield</div><a class="link" href="https://zentryc.com/ota/zenai/releases/" target="_blank" rel="noopener">Open release portal ↗</a></div></div>
+   <div id="update-unconfigured" class="notice" hidden>The release service has not been connected yet. Your appliance administrator must provision the ZenShield release channel and verification key.</div>
+@@ -42,7 +43,7 @@
+   <div class="card" style="margin-top:20px"><h2>Attached disks</h2><div class="scroll"><table><thead><tr><th>Device / identity</th><th>Capacity</th><th>Status</th><th>Action</th></tr></thead><tbody id="disks"></tbody></table></div><small>Only blank whole disks can be added. System disks and existing filesystems are protected. Pool disks must remain attached; disk removal and shrinking are not supported.</small></div>
+   <div class="card" style="margin-top:20px"><h2>Storage operations</h2><div id="jobs">No operations yet.</div></div>
+  </section>
+- <section id="settings" class="panel" hidden><div class="grid"><form id="settings-form" class="card"><div class="step">02 / APPLIANCE IDENTITY</div><h2>Basic configuration</h2><label for="hostname">Hostname</label><input id="hostname" required pattern="[a-z][a-z0-9-]*" maxlength="63"><label for="timezone">Timezone</label><input id="timezone" required placeholder="Asia/Riyadh"><label for="ntp">Additional NTP server</label><input id="ntp" placeholder="time.example.com"><div class="actions"><button class="primary">Save settings</button></div></form><form id="password-form" class="card"><div class="step">03 / ADMINISTRATOR ACCESS</div><h2>Change GUI administrator password</h2><p>This changes the <strong>admin</strong> account and revokes its existing sessions. You will need to sign in again.</p><label for="current-password">Your current administrator password</label><input id="current-password" type="password" autocomplete="current-password" required><label for="new-password">New admin password</label><input id="new-password" type="password" autocomplete="new-password" minlength="5" required><label for="confirm-password">Confirm new password</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="5" required><small>Use at least 5 characters and at most 72 UTF-8 bytes. Console passwords are managed from the appliance console.</small><div class="actions"><button class="primary">Change password & sign out</button></div></form></div></section>
++ <section id="settings" class="panel" hidden><div class="grid"><form id="settings-form" class="card"><div class="step">02 / APPLIANCE IDENTITY</div><h2>Basic configuration</h2><label for="hostname">Hostname</label><input id="hostname" required pattern="[a-z][a-z0-9-]*" maxlength="63"><label for="timezone">Timezone</label><input id="timezone" required placeholder="Asia/Riyadh"><div class="actions"><button class="primary">Save settings</button></div></form><form id="password-form" class="card"><div class="step">03 / ADMINISTRATOR ACCESS</div><h2>Change GUI administrator password</h2><p>This changes the <strong>admin</strong> account and revokes its existing sessions. You will need to sign in again.</p><label for="current-password">Your current administrator password</label><input id="current-password" type="password" autocomplete="current-password" required><label for="new-password">New admin password</label><input id="new-password" type="password" autocomplete="new-password" minlength="5" required><label for="confirm-password">Confirm new password</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="5" required><small>Use at least 5 characters and at most 72 UTF-8 bytes. Console passwords are managed from the appliance console.</small><div class="actions"><button class="primary">Change password & sign out</button></div></form></div></section>
+  <dialog id="update-dialog" aria-labelledby="update-dialog-title"><h2 id="update-dialog-title">Install update</h2><p>The appliance will verify the release and back up its data. Log collection and the GUI pause during installation. Keep the appliance powered on.</p><div class="actions"><button id="confirm-update" class="primary">Install now</button><button id="cancel-update" autofocus>Cancel</button></div></dialog>
+  <dialog id="plan-dialog"><div class="step">REVIEW STORAGE OPERATION</div><h2 id="plan-title">Confirm storage change</h2><p id="plan-summary"></p><pre id="plan-detail"></pre><div class="notice">Keep all pool disks attached. Make sure you have a current backup before changing storage.</div><label for="confirmation">Type the confirmation phrase shown above</label><input id="confirmation" autocomplete="off"><div class="actions"><button id="commit-plan" class="primary">Start operation</button><button id="cancel-plan">Cancel</button></div></dialog>
+ </div>
+@@ -103,7 +104,7 @@
+  $('network-form').onsubmit=e=>{e.preventDefault();perform(async()=>{const data={interface:$('interface').value,dhcp:$('mode').value==='dhcp',address:$('ip').value,gateway:$('gateway').value,dns:$('dns').value.split(',').map(x=>x.trim()).filter(Boolean)};const r=await api('network.apply',data);state.network_pending=r;$('pending').hidden=false;message(r.message+' Reconnect at the new IP if it changed.');});};
+  $('keep').onclick=()=>perform(async()=>{await api('network.confirm',{token:state.network_pending.token});message('Network configuration committed.');await refresh();});
+  $('revert').onclick=()=>perform(async()=>{await api('network.rollback');message('Previous network configuration restored.');await refresh();});
+- $('settings-form').onsubmit=e=>{e.preventDefault();perform(async()=>{const data={hostname:$('hostname').value,timezone:$('timezone').value};if($('ntp').value)data.ntp=$('ntp').value;message((await api('settings.update',data)).message);await refresh();});};
++ $('settings-form').onsubmit=e=>{e.preventDefault();perform(async()=>{const data={hostname:$('hostname').value,timezone:$('timezone').value};message((await api('settings.update',data)).message);await refresh();});};
+  $('password-form').onsubmit=e=>{e.preventDefault();perform(async()=>{if($('new-password').value!==$('confirm-password').value)throw Error('Passwords do not match');await api('password.gui',{current_password:$('current-password').value,password:$('new-password').value});$('password-form').reset();location.href='/auth/login';});};
+  $('rescan').onclick=()=>prepare({action:'rescan'});$('grow-system').onclick=()=>prepare({action:'grow-system'});$('cancel-plan').onclick=()=>$('plan-dialog').close();
+  $('update-check').onclick=()=>perform(async()=>{message((await api('updates.check')).message);await refresh();});
+--- a/fastapi_app/core/event_time.py
++++ b/fastapi_app/core/event_time.py
+@@ -17,6 +17,7 @@
+ from __future__ import annotations
+ 
+ import logging
++import re
+ from datetime import datetime, timedelta, timezone
+ from typing import Optional, Tuple
+ 
+@@ -79,6 +80,28 @@
+     return None
+ 
+ 
++def _event_epoch(value) -> Optional[datetime]:
++    """FortiGate epoch values can be seconds, milliseconds, microseconds or ns."""
++    raw = str(value or '').strip()
++    if not raw.isdigit() or len(raw) not in (10, 13, 16, 19):
++        return None
++    divisor = 10 ** (len(raw) - 10)
++    seconds, fraction = divmod(int(raw), divisor)
++    try:
++        return datetime.fromtimestamp(seconds, timezone.utc).replace(
++            microsecond=fraction * 1_000_000 // divisor)
++    except (ValueError, OverflowError, OSError):
++        return None
++
++
++def _reported_offset(value):
++    match = re.fullmatch(r'([+-])(\d{2}):?(\d{2})', str(value or '').strip())
++    if not match or int(match[2]) > 23 or int(match[3]) > 59:
++        return None
++    minutes = (int(match[2]) * 60 + int(match[3])) * (1 if match[1] == '+' else -1)
++    return timezone(timedelta(minutes=minutes))
++
++
+ def parse_event_time(
+     parsed_data: Optional[dict],
+     device_tz: Optional[str],
+@@ -94,6 +117,12 @@
+     """
+     if not parsed_data:
+         return ingest_time, "fallback_ingest"
++
++    # An epoch already identifies an instant. Prefer it over a vendor-generated
++    # local date/time string; applying the configured source zone again shifts it.
++    epoch = _event_epoch(parsed_data.get('eventtime'))
++    if epoch is not None and abs(epoch - ingest_time) <= MAX_SKEW:
++        return epoch, 'parsed_tzaware'
+ 
+     raw: Optional[str] = None
+     for key in _CANDIDATE_FIELDS:
+@@ -116,8 +145,10 @@
+     # If the parser already attached a tz, trust it.
+     tzaware = dt.tzinfo is not None
+     if not tzaware:
+-        zi = _zoneinfo(device_tz) or _zoneinfo(default_tz) or timezone.utc
++        reported = _reported_offset(parsed_data.get('tz'))
++        zi = reported or _zoneinfo(device_tz) or _zoneinfo(default_tz) or timezone.utc
+         dt = dt.replace(tzinfo=zi)
++        tzaware = reported is not None
+         # RFC3164 has no year — fill from ingest year, fix Dec→Jan rollover.
+         if dt.year == 1900:
+             dt = dt.replace(year=ingest_time.year)
+--- a/fastapi_app/services/nql_schema.py
++++ b/fastapi_app/services/nql_schema.py
+@@ -78,7 +78,7 @@
+     src_priv = v4_non_public_sql('srcip_v4')
+     dst_priv = v4_non_public_sql('dstip_v4')
+     if v == 'internet':
+-        return f"NOT {dst_priv}"
++        return "dst_is_public = 1"
+     if v == 'internal':
+         return f"({src_priv} AND {dst_priv} AND srcip != '' AND dstip != '')"
+     if v == 'inbound':
+@@ -381,9 +381,11 @@
+                     f"  SELECT arrayJoin(mapKeys(parsed_data)) AS k, count() AS c"
+                     f"  FROM (SELECT parsed_data FROM syslogs"
+                     f"        PREWHERE timestamp > now() - INTERVAL {window}"
++                    f"        AND timestamp <= now()"
+                     f"        LIMIT {DISCOVERY_SAMPLE_ROWS})"
+                     f"  GROUP BY k ORDER BY c DESC LIMIT 400"
+-                    f") SETTINGS max_execution_time = 8,"
++                    f") SETTINGS max_execution_time = 3, max_threads = 1,"
++                    f"          max_block_size = 4096, max_memory_usage = 134217728,"
+                     f"          use_query_cache = 1, query_cache_ttl = {DYNAMIC_TTL},"
+                     f"          query_cache_nondeterministic_function_handling = 'save'"
+                 ).result_rows
+@@ -488,6 +490,7 @@
+ 
+     # Map lookups cost several times what a native column does, so they get a
+     # tighter sample — the dropdown wants a fast answer, not an exact ranking.
++    # Limit BEFORE prefix filtering: rare prefixes must not scan an entire week.
+     scan_cap = MAP_SCAN_CAP if "parsed_data[" in expr else VALUE_SCAN_CAP
+ 
+     sql = f"""
+@@ -495,11 +498,14 @@
+             SELECT {expr} AS v
+             FROM syslogs
+             PREWHERE timestamp > now() - INTERVAL {int(minutes)} MINUTE
+-            WHERE v != ''{prefix_clause}
++                     AND timestamp <= now()
+             LIMIT {scan_cap}
+         )
++        WHERE v != ''{prefix_clause}
+         GROUP BY v ORDER BY c DESC LIMIT {int(limit)}
+-        SETTINGS max_execution_time = 5, max_rows_to_read = 200000000,
++        SETTINGS max_execution_time = 2, max_rows_to_read = 2000000,
++                 max_threads = 1, max_block_size = 4096, max_memory_usage = 134217728,
++                 optimize_move_to_prewhere = 0, enable_optimize_predicate_expression = 0,
+                  read_overflow_mode = 'break', timeout_overflow_mode = 'break'
+     """
+     try:
+@@ -756,7 +762,7 @@
+         if v in seen:
+             continue
+         seen.add(v)
+-        detail = f"{_fmt_count(row['count'])} events"
++        detail = f"{_fmt_count(row['count'])} sampled events"
+         if static.get(v):
+             detail = f"{static[v]} — {detail}"
+         out.append({"insert": _quote_if_needed(v) + " ", "label": v,
+--- a/fastapi_app/services/correlation_engine.py
++++ b/fastapi_app/services/correlation_engine.py
+@@ -1111,7 +1111,9 @@
+             for rule in rules:
+                 try:
+                     # Phase 2: a rule can match multiple entities in one pass.
+-                    matches = evaluate_correlation_rule(rule)
++                    # ClickHouse is synchronous. Never stall the web worker's
++                    # event loop while a scheduled correlation scan is running.
++                    matches = await asyncio.to_thread(evaluate_correlation_rule, rule)
+                     mode = getattr(rule, "match_mode", "discrete") or "discrete"
+                     window = getattr(rule, "suppress_window", 3600) or 3600
+ 
+@@ -1121,17 +1123,18 @@
+                         # most once per suppression window — so match counts
+                         # measure distinct chains, not 60-second scheduler ticks.
+                         # Recurring rules are intentional monitors: always record.
+-                        if mode == "discrete" and _is_match_suppressed(
+-                                match["match_fingerprint"], window):
++                        if mode == "discrete" and await asyncio.to_thread(
++                                _is_match_suppressed, match["match_fingerprint"], window):
+                             suppressed_count += 1
+                             continue
+-                        record_correlation_match(match)
++                        await asyncio.to_thread(record_correlation_match, match)
+                         await create_correlation_alert(match)
+                         # Phase 5: contribute risk to the entity and group
+                         # the match into an incident.
+                         score = _rule_risk_contribution(rule)
+-                        record_entity_risk(match, score)
+-                        risk = compute_entity_risk(match["entity_value"]) + score
++                        await asyncio.to_thread(record_entity_risk, match, score)
++                        risk = await asyncio.to_thread(compute_entity_risk, match["entity_value"])
++                        risk += score
+                         await group_into_incident(db, match, risk)
+                         await fire_response_actions(rule, match)
+                         recorded += 1
+--- a/fastapi_app/services/ioc_sweep.py
++++ b/fastapi_app/services/ioc_sweep.py
+@@ -14,6 +14,7 @@
+ import ipaddress
+ import json
+ import logging
++import asyncio
+ from datetime import datetime, timedelta, timezone
+ 
+ from sqlalchemy import select
+@@ -167,11 +168,11 @@
+                 if not wm:
+                     wm = (datetime.now(timezone.utc)
+                           - timedelta(seconds=_FIRST_RUN_LOOKBACK)).strftime(_TS_FMT)
+-                scanned, match_rows, new_wm = _sweep_table(
+-                    table, cfg, matcher, wm, cutoff)
++                scanned, match_rows, new_wm = await asyncio.to_thread(
++                    _sweep_table, table, cfg, matcher, wm, cutoff)
+                 if match_rows:
+-                    ClickHouseClient.get_client().insert(
+-                        "ioc_matches", match_rows, column_names=_MATCH_COLUMNS)
++                    await asyncio.to_thread(lambda: ClickHouseClient.get_client().insert(
++                        "ioc_matches", match_rows, column_names=_MATCH_COLUMNS))
+                 await _set_setting(db, _WM_PREFIX + table, new_wm)
+                 total_scanned += scanned
+                 total_matched += len(match_rows)
+--- a/fastapi_app/services/ioc_sightings.py
++++ b/fastapi_app/services/ioc_sightings.py
+@@ -12,6 +12,7 @@
+ import hashlib
+ import ipaddress
+ import logging
++import asyncio
+ from datetime import datetime, timedelta, timezone
+ 
+ from sqlalchemy import select
+@@ -129,7 +130,7 @@
+             wm = (datetime.now(timezone.utc)
+                   - timedelta(seconds=_FIRST_RUN_LOOKBACK)).strftime(_TS_FMT)
+         try:
+-            rows = _fetch_new_matches(wm, cutoff_str)
++            rows = await asyncio.to_thread(_fetch_new_matches, wm, cutoff_str)
+         except Exception as e:
+             logger.error(f"sightings rollup: fetch failed: {e}")
+             return
+--- /dev/null
++++ b/fastapi_app/templates/system/_ntp_panel.html
+@@ -0,0 +1,71 @@
++<section id="time" class="panel" hidden>
++ <div class="cards">
++  <div class="card"><small>NTP SYNCHRONIZATION</small><div class="metric" id="ntp-sync" role="status">Checking…</div><small id="ntp-service"></small></div>
++  <div class="card"><small>SELECTED SOURCE</small><div class="metric" id="ntp-source">—</div><small id="ntp-offset"></small></div>
++  <div class="card"><small>APPLIANCE TIME</small><div id="ntp-clock" style="margin:12px 0">—</div><small id="ntp-zone"></small></div>
++ </div>
++ <div id="ntp-notice" class="notice" role="status" hidden></div>
++ <div class="grid">
++  <form id="ntp-form" class="card"><h2>Additional NTP servers</h2>
++   <p>Add up to eight internal or external NTP servers. Existing system and DHCP time sources remain available.</p>
++   <label for="ntp-servers">Server IP addresses or hostnames</label>
++   <textarea id="ntp-servers" rows="5" spellcheck="false" placeholder="ntp.example.com&#10;10.10.192.10" style="width:100%;background:#0c1626;color:#edf5ff;border:1px solid #34445b;border-radius:7px;padding:9px 13px;font:inherit"></textarea>
++   <small>One per line, or separated by commas. Leave blank to remove additional servers.</small>
++   <div class="actions"><button id="ntp-save" class="primary" disabled>Save NTP servers</button></div>
++  </form>
++  <div class="card"><h2>Synchronization details</h2><p id="ntp-last">Last synchronized: —</p><p id="ntp-stratum">Stratum: —</p>
++   <p id="ntp-advice">Checking the appliance clock service…</p>
++   <div class="actions"><button id="ntp-refresh">Refresh status</button><button id="ntp-retry" disabled>Retry NTP sources</button></div>
++   <p><small>Status refreshes every 10 seconds. Retry resolves server names and requests fresh time samples.</small></p>
++  </div>
++ </div>
++ <div class="card" style="margin-top:20px"><h2>Time sources</h2><div class="scroll"><table><thead><tr><th>Address</th><th>Status</th><th>Stratum</th><th>Reach</th><th>Last sample</th><th>Offset</th></tr></thead><tbody id="ntp-peers"></tbody></table></div><small>Reach is an octal response history: 0 means no successful samples; 377 means the last eight requests received responses.</small></div>
++</section>
++<script>
++(() => {
++ const $=id=>document.getElementById(id);
++ let refreshing=false, dirty=false, saving=false;
++ function node(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;}
++ function message(text,error=false){const e=$('ntp-notice');e.textContent=text;e.className='notice '+(error?'error':'good');e.hidden=!text;}
++ async function api(op,body={}){
++  const csrf=document.cookie.match(/(?:^|; )zentryc_csrf=([^;]+)/);
++  const r=await fetch('/api/appliance/'+op,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf?decodeURIComponent(csrf[1]):''},body:JSON.stringify(body)});
++  const d=await r.json();if(!r.ok)throw Error(d.error||d.detail||'Request failed');return d;
++ }
++ function timeFormatter(zone){
++  const options={timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'longOffset'};
++  try{return {zone,formatter:new Intl.DateTimeFormat('en-GB',options)};}
++  catch{return {zone:'UTC',formatter:new Intl.DateTimeFormat('en-GB',{...options,timeZone:'UTC'})};}
++ }
++ function localTime(value,formatter){
++  if(!value)return 'Never / unavailable';
++  const date=new Date(value);if(Number.isNaN(date.getTime()))return 'Unavailable';
++  const p=Object.fromEntries(formatter.formatToParts(date).map(part=>[part.type,part.value]));
++  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} ${p.timeZoneName.replace('GMT','UTC').replace('UTC+00:00','UTC')}`;
++ }
++ function render(data){
++  $('ntp-sync').textContent=data.synchronized===true?'Synchronized':data.synchronized===false?'Not synchronized':'Status unavailable';
++  $('ntp-sync').style.color=data.synchronized===true?'#71e2c3':'#f3d798';
++  $('ntp-service').textContent='Clock service: '+data.service_state;
++  $('ntp-source').textContent=data.reference||'No source selected';
++  $('ntp-offset').textContent=data.offset_seconds===null?'':(data.offset_seconds*1000).toFixed(3)+' ms clock offset';
++  const display=timeFormatter(data.timezone||'UTC');
++  $('ntp-clock').textContent=localTime(data.now_utc,display.formatter);
++  $('ntp-zone').textContent=display.zone===data.timezone?'System timezone: '+display.zone:'System timezone unavailable; showing UTC';
++  $('ntp-last').textContent='Last synchronized ('+display.zone+'): '+localTime(data.last_sync,display.formatter);
++  $('ntp-stratum').textContent='Stratum: '+(data.stratum===null?'—':data.stratum);
++  $('ntp-advice').textContent=data.synchronized===true?'The appliance is receiving valid time from its selected source.':!data.service_active?'The clock service is not running. Check the appliance service before retrying.':'No valid time source is selected yet. Verify server addresses, DNS and UDP port 123 connectivity.';
++  if(!dirty&&!saving)$('ntp-servers').value=data.servers.join('\n');
++  $('ntp-save').disabled=saving;$('ntp-retry').disabled=saving||!data.service_active;
++  $('ntp-peers').replaceChildren(...data.peers.map(peer=>{const row=node('tr');row.append(node('td',peer.address),node('td',peer.status),node('td',peer.stratum),node('td',peer.reach),node('td',peer.last_sample_seconds===null?'Never':peer.last_sample_seconds+' s ago'),node('td',peer.last_sample_seconds===null?'—':(peer.offset_seconds*1000).toFixed(3)+' ms'));return row;}));
++  if(!data.peers.length){const row=node('tr'),cell=node('td','No time sources reported.');cell.colSpan=6;row.append(cell);$('ntp-peers').append(row);}
++  if(data.errors.length)message(data.errors.join(' '),true);
++ }
++ async function refresh(){if(refreshing||saving)return;refreshing=true;$('ntp-refresh').disabled=true;try{render(await api('time.status'));}catch(e){$('ntp-sync').textContent='Status unavailable';message(e.message,true);}finally{refreshing=false;$('ntp-refresh').disabled=false;}}
++ $('ntp-servers').oninput=()=>{dirty=true;};
++ $('ntp-refresh').onclick=refresh;
++ $('ntp-form').onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;$('ntp-save').disabled=true;$('ntp-retry').disabled=true;try{const servers=$('ntp-servers').value.split(/[\s,]+/).filter(Boolean);const result=await api('time.update',{servers});dirty=false;message(result.message);}catch(error){message(error.message,true);}finally{saving=false;$('ntp-save').disabled=false;await refresh();}};
++ $('ntp-retry').onclick=async()=>{if(saving)return;saving=true;$('ntp-retry').disabled=true;try{message((await api('time.retry')).message);}catch(error){message(error.message,true);}finally{saving=false;await refresh();}};
++ refresh();setInterval(refresh,10000);
++})();
++</script>
+--- a/fastapi_app/db/clickhouse.py
++++ b/fastapi_app/db/clickhouse.py
+@@ -6,6 +6,7 @@
+ import re
+ import logging
+ import threading
++import time
+ from typing import List, Dict, Any, Optional, Tuple
+ from datetime import datetime, timedelta, timezone
+ 
+@@ -1204,9 +1205,37 @@
+     # identical for a minute, so repeats are served from memory. 'save' lets
+     # queries that mention now() be cached too.
+     EXPLORER_CACHE_SETTINGS = (
++        "max_threads = 2, max_block_size = 8192, max_memory_usage = 536870912, "
++        "max_bytes_before_external_group_by = 134217728, "
++        "max_bytes_before_external_sort = 134217728, "
+         "use_query_cache = 1, query_cache_ttl = 60, "
+         "query_cache_nondeterministic_function_handling = 'save'"
+     )
++
++    @staticmethod
++    def _execute_explorer_query(client, query):
++        """One smaller retry for transient server-wide memory contention.
++
++        Share the original time budget; never return a partial log/aggregate
++        result as if it were complete, and never retry syntax/data errors.
++        """
++        started = time.monotonic()
++        try:
++            return client.query(query)
++        except Exception as error:
++            if 'MEMORY_LIMIT_EXCEEDED' not in str(error) and 'Code: 241' not in str(error):
++                raise
++            match = re.search(r'max_execution_time\s*=\s*([\d.]+)', query)
++            if not match:
++                raise
++            remaining = float(match[1]) - (time.monotonic() - started)
++            if remaining <= 0.1:
++                raise
++            retry = re.sub(r'max_execution_time\s*=\s*[\d.]+', f'max_execution_time = {remaining:.3f}', query)
++            retry = re.sub(r'max_threads\s*=\s*\d+', 'max_threads = 1', retry)
++            retry = re.sub(r'max_block_size\s*=\s*\d+', 'max_block_size = 2048', retry)
++            retry = re.sub(r'max_memory_usage\s*=\s*\d+', 'max_memory_usage = 134217728', retry)
++            return client.query(retry)
+ 
+     # Vendor/legacy aliases for the two IP columns. Without this, a term such
+     # as `source_ip:10.1.1.1` falls through to the parsed_data Map and forces a
+@@ -1228,14 +1257,15 @@
+         return f"NOT {cond}" if negated else cond
+ 
+     @classmethod
+-    def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
++    def _build_indexed_prewhere(cls, query_text: Optional[str], device_ips=None) -> List[str]:
+         """
+         Extract conditions for indexed columns from query_text for PREWHERE.
+         Returns list of SQL conditions that use direct column references,
+         enabling ClickHouse bloom_filter / minmax indexes to skip granules.
+         """
++        device_conditions = ([cls._build_where_clause(device_ips=device_ips)] if device_ips else [])
+         if not query_text:
+-            return []
++            return device_conditions
+ 
+         # NQL first: pushes every top-level AND-ed condition that touches only
+         # native columns (so it can prune granules through the skip indexes
+@@ -1244,14 +1274,14 @@
+         try:
+             from ..services.nql_parser import compile_filter, NQLSyntaxError
+             _, prewhere = compile_filter(query_text)
+-            return list(prewhere)
++            return device_conditions + list(prewhere) + cls._scoped_ip_index_hint(query_text, device_ips)
+         except NQLSyntaxError:
+             pass
+         except Exception as e:  # pragma: no cover - defensive
+             logger.warning(f"NQL prewhere compile failed, using legacy parser: {e}")
+ 
+         terms = cls._parse_advanced_query(query_text)
+-        conditions = []
++        conditions = list(device_conditions)
+ 
+         for term in terms:
+             if term['type'] != 'field':
+@@ -1299,6 +1329,49 @@
+         return conditions
+ 
+     @classmethod
++    def _scoped_ip_index_hint(cls, query_text, device_ips=None):
++        """Add an implied hash predicate without changing NQL filter semantics.
++
++        Only positive top-level AND terms qualify. Never infer mandatory values
++        from OR/NOT branches. Original predicates remain to reject collisions.
++        """
++        from ..services.nql_parser import parse_nql, AndNode, FieldTermNode
++        from ipaddress import IPv4Address
++        terms = {}
++        def collect(node):
++            if isinstance(node, AndNode):
++                collect(node.left)
++                collect(node.right)
++            elif isinstance(node, FieldTermNode) and not node.negated and node.operator == '=':
++                name = cls._IP_FIELD_ALIASES.get(node.field.lower(), node.field.lower())
++                terms.setdefault(name, node.value)
++        collect(parse_nql(query_text).filter_ast)
++        if not all(k in terms for k in ('srcip', 'action', 'scope')):
++            return []
++        try:
++            IPv4Address(terms['srcip'])
++        except ValueError:
++            return []
++        scope = terms['scope'].lower()
++        if scope not in ('internet', 'internal', 'inbound'):
++            return []
++        public = 1 if scope == 'internet' else 0
++        actions = terms['action'].split('|')
++        def literal(value):
++            return "'" + value.replace('\\', '\\\\').replace("'", "''") + "'"
++        vdom = cls._parse_device_id(device_ips[0])[1] if device_ips and len(device_ips) == 1 else ''
++        cols = 'srcip, action, dst_is_public' + (', vdom' if vdom else '')
++        values = []
++        for action in actions:
++            args = f'{literal(terms["srcip"])}, {literal(action.strip())}, toUInt8({public})'
++            if vdom:
++                args += ', ' + literal(vdom)
++            values.append(f'cityHash64({args})')
++        # The original NQL remains the exact row filter. indexHint lets the
++        # skip index prune blocks without hashing every surviving row again.
++        return [f'indexHint(cityHash64({cols}) IN ({", ".join(values)}))']
++
++    @classmethod
+     def _is_multi_ip(cls, value: str) -> bool:
+         """Check if value contains multiple comma-separated IPs or ranges."""
+         return ',' in value
+@@ -1312,6 +1385,21 @@
+     def _is_ip_range(cls, value: str) -> bool:
+         """Check if value is an IP range (e.g., 192.168.1.1-192.168.1.50)."""
+         return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', value))
++
++    @classmethod
++    def _v4_interval(cls, col: str, value: str) -> str:
++        """Validated inclusive numeric bounds; never compare IPv4 text."""
++        from ipaddress import IPv4Address
++        from ..services.nql_parser import NQLSyntaxError
++        try:
++            first, last = (IPv4Address(part.strip()) for part in value.split('-'))
++        except (ValueError, TypeError):
++            raise NQLSyntaxError('Enter an IPv4 range as start-address-end-address.') from None
++        if first > last:
++            raise NQLSyntaxError('IP range start must not be greater than its end.')
++        valid = f"isIPv4String({col}) AND " if int(first) == 0 else ''
++        return (f"({valid}{col}_v4 >= toIPv4('{first}') "
++                f"AND {col}_v4 <= toIPv4('{last}'))")
+ 
+     @classmethod
+     def _is_wildcard_ip(cls, value: str) -> bool:
+@@ -1336,6 +1424,14 @@
+ 
+         # Resolve aliases onto the native, indexed columns before anything else.
+         field = cls._IP_FIELD_ALIASES.get(field.lower(), field)
++
++        # Protocol names and numbers must query the same promoted UInt8 field.
++        if field.lower() in ('proto', 'protocol') and operator == '=':
++            field = 'proto'
++            parts = [v.strip() for v in value.split('|')]
++            resolved = [str(cls._PROTO_NUMBERS.get(v.lower(), v)) for v in parts]
++            if all(v.isdigit() for v in resolved):
++                value = '|'.join(resolved)
+ 
+         # Virtual `scope` field — classifies a flow by where its endpoints sit
+         # (RFC1918/reserved vs public). Evaluated on the IPv4-typed companion
+@@ -1372,11 +1468,8 @@
+                     return cls._v4_prefix_range(col, ip_part, mask_int, negated)
+ 
+             # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
+-            if cls._is_ip_range(value):
+-                start_ip, end_ip = value.split('-')
+-                safe_start = start_ip.replace("'", "''")
+-                safe_end = end_ip.replace("'", "''")
+-                condition = f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{safe_start}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{safe_end}'))"
++            if '-' in value and ',' not in value:
++                condition = cls._v4_interval(col, value)
+                 if negated:
+                     return f"NOT ({condition})"
+                 return condition
+@@ -1397,9 +1490,8 @@
+                     if cls._is_cidr(part):
+                         ip_part, mask = part.rsplit('/', 1)
+                         conditions.append(cls._v4_prefix_range(col, ip_part, int(mask), False))
+-                    elif cls._is_ip_range(part):
+-                        start_ip, end_ip = part.split('-')
+-                        conditions.append(f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{start_ip}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{end_ip}'))")
++                    elif '-' in part:
++                        conditions.append(cls._v4_interval(col, part))
+                     elif cls._is_wildcard_ip(part):
+                         prefix = part.split('*')[0]
+                         conditions.append(f"{col} LIKE '{prefix}%'")
+@@ -1922,7 +2014,7 @@
+         client = cls.get_client()
+ 
+         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+-        indexed_prewhere = cls._build_indexed_prewhere(query_text)
++        indexed_prewhere = cls._build_indexed_prewhere(query_text, device_ips)
+ 
+         # Build additional WHERE conditions (without time filters)
+         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+@@ -1954,119 +2046,55 @@
+ 
+         required_rows = offset + limit
+ 
+-        # Progressive time narrowing: query expanding windows anchored at the
+-        # END of the requested range (most recent shown logs), so we can avoid
+-        # sorting hundreds of millions of rows.
+-        #
+-        # For "last 7d" (no end_time) we anchor at now(). For "yesterday"
+-        # (custom end_time) we anchor at end_time so we look in the right place.
+-        #
+-        # The newest 100 rows from any range are almost always within minutes
+-        # of that range's upper bound, so a tiny window usually suffices.
+-        narrow_window_seconds = [
+-            60,         # 1 minute
+-            300,        # 5 minutes
+-            1800,       # 30 minutes
+-            7200,       # 2 hours
+-            43200,      # 12 hours
+-            259200,     # 3 days
+-            1209600,    # 14 days
+-        ]
+-
+-        chosen_time_filter = user_time_filter  # fallback to full range
+-
+-        custom_order = bool(order_by) and order_by.strip().lower() not in ("timestamp desc",)
+-
+-        # For very deep offsets (>1M rows), narrow windows are too small.
+-        # Cursor pagination is the proper fix; for now, fall through.
+-        if required_rows < 1_000_000 and not custom_order:
+-            # Determine the anchor for narrow windows.
+-            # - If end_time is None or in the future, use now() (no probe needed).
+-            # - If end_time is in the past (custom historical range), probe for
+-            #   max(timestamp) so we land on actual data even if there's a gap
+-            #   right before end_time.
+-            now_utc = datetime.now(timezone.utc)
+-            need_probe = (
+-                user_end is not None and user_end < now_utc - timedelta(minutes=5)
+-            )
+-
+-            anchor_sql = "now()"
+-            if need_probe:
+-                probe_prewhere = [user_time_filter] + list(indexed_prewhere)
+-                probe_clause = " AND ".join(probe_prewhere)
+-                probe_q = (
+-                    f"SELECT max(timestamp) FROM syslogs "
+-                    f"PREWHERE {probe_clause} WHERE {where_sql}"
+-                )
+-                probe_result = list(client.query(probe_q).result_rows)
+-                max_ts = probe_result[0][0] if probe_result else None
+-                if max_ts is None:
+-                    # No data at all in this range — skip narrowing
+-                    pass
+-                else:
+-                    anchor_sql = (
+-                        f"parseDateTime64BestEffort("
+-                        f"'{max_ts.strftime('%Y-%m-%d %H:%M:%S.%f')}', 3)"
+-                    )
+-
+-            # A narrow window wider than the requested range can't prune
+-            # anything — every probe past that point re-scans the full range,
+-            # which for a filter with few matches multiplies the cost ~7x.
+-            range_seconds = None
+-            if user_start is not None:
+-                range_end = user_end if user_end is not None else now_utc
+-                range_seconds = max(0, (range_end - user_start).total_seconds())
+-            elif user_end is None:
+-                range_seconds = default_hours * 3600
+-
+-            # Progressive narrowing
+-            for secs in narrow_window_seconds:
+-                if range_seconds is not None and secs >= range_seconds:
+-                    break                      # fall back to the full range
+-                narrow_filter = (
+-                    f"timestamp > {anchor_sql} - INTERVAL {secs} SECOND "
+-                    f"AND timestamp <= {anchor_sql}"
+-                )
+-                combined = f"({narrow_filter}) AND ({user_time_filter})"
+-
+-                prewhere_parts = [combined] + list(indexed_prewhere)
+-                prewhere_clause = " AND ".join(prewhere_parts)
+-
+-                count_q = (f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql} "
+-                           f"SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}")
+-                try:
+-                    cnt = list(client.query(count_q).result_rows)
+-                except Exception as e:
+-                    # A probe that can't finish in 10 s (e.g. a parsed_data Map
+-                    # filter) won't finish faster on a wider window — give up on
+-                    # narrowing and run the bounded full-range query instead.
+-                    logger.warning(f"search_logs narrowing probe aborted ({secs}s window): {e}")
+-                    break
+-                cnt_val = cnt[0][0] if cnt else 0
+-
+-                if cnt_val >= required_rows:
+-                    chosen_time_filter = combined
+-                    break
+-
+-        # Build final query with the chosen time filter
+-        prewhere_parts = [chosen_time_filter] + list(indexed_prewhere)
+-        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+-
+-        order_sql = order_by.strip() if custom_order else "timestamp DESC"
+-        # Always bounded: an unbounded page query is what lets one runaway
+-        # filter monopolise the CPUs for every other user.
+-        settings = " SETTINGS max_execution_time = 30"
+-        query = f"""
+-        SELECT {columns}
+-        FROM syslogs
+-        PREWHERE {prewhere_clause}
+-        WHERE {where_sql}
+-        ORDER BY {order_sql}
+-        LIMIT {limit} OFFSET {offset}{settings}
+-        """
+-
+-        result = client.query(query).named_results()
+-        return list(result)
++        custom_order = bool(order_by) and order_by.strip().lower() != "timestamp desc"
++
++        def fetch_window(time_filter, rows_needed, row_offset=0, seconds=30):
++            prewhere = " AND ".join([time_filter] + list(indexed_prewhere))
++            order_sql = order_by.strip() if custom_order else "timestamp DESC"
++            query = f"""
++                SELECT {columns} FROM syslogs
++                WHERE ({prewhere}) AND ({where_sql})
++                ORDER BY {order_sql} LIMIT {rows_needed} OFFSET {row_offset}
++                SETTINGS max_execution_time = {seconds:.3f}, {cls.EXPLORER_CACHE_SETTINGS}
++            """
++            return list(cls._execute_explorer_query(client, query).named_results())
++
++        if custom_order or required_rows > 10000:
++            return fetch_window(user_time_filter, limit, offset)
++
++        # Read each time interval once, retaining its newest results. Previously
++        # every widening step counted all matches, then read the same rows again.
++        # Adjacent intervals use >= lower / < upper, including the requested end
++        # only in the first batch, so boundaries neither lose nor duplicate rows.
++        anchor = user_end or datetime.now(timezone.utc)
++        lower_bound = user_start
++        if lower_bound is None and user_end is None:
++            lower_bound = anchor - timedelta(hours=default_hours)
++        upper = anchor
++        rows = []
++        deadline = time.monotonic() + 30
++
++        def stamp(dt):
++            return dt.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
++
++        for seconds_back in (60, 300, 1800, 7200, 43200, 259200, 1209600, None):
++            lower = anchor - timedelta(seconds=seconds_back) if seconds_back else lower_bound
++            if lower_bound is not None and (lower is None or lower < lower_bound):
++                lower = lower_bound
++            final_window = lower == lower_bound
++            if lower is not None and lower > upper:
++                break
++            bounds = [f"timestamp {'<=' if not rows and upper == anchor else '<'} '{stamp(upper)}'"]
++            if lower is not None:
++                bounds.append(f"timestamp >= '{stamp(lower)}'")
++            remaining = deadline - time.monotonic()
++            if remaining <= 0:
++                raise TimeoutError("Log search exceeded its 30 second budget; narrow the time range or filters")
++            rows.extend(fetch_window(" AND ".join(bounds), required_rows - len(rows), seconds=remaining))
++            if len(rows) >= required_rows or final_window:
++                break
++            upper = lower
++        return rows[offset:required_rows]
+ 
+     # Upper bound on aggregate rows returned to the UI (the pipeline `limit`
+     # may ask for more, but a page can't usefully render more than this).
+@@ -2109,9 +2137,9 @@
+             f"SELECT {select_clause} FROM syslogs "
+             f"PREWHERE {prewhere_clause} WHERE {where_sql} "
+             f"{group_by} {having} {order_sql} LIMIT {limit_val} "
+-            f"SETTINGS max_execution_time = {int(max_execution_time)}"
++            f"SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}"
+         )
+-        result = cls.get_client().query(sql)
++        result = cls._execute_explorer_query(cls.get_client(), sql)
+         columns = list(result.column_names)
+         rows = [dict(zip(columns, r)) for r in result.result_rows]
+         return {"columns": columns, "rows": rows, "sql": sql}
+@@ -2126,7 +2154,8 @@
+         query_text: Optional[str] = None,
+         facilities: Optional[List[int]] = None,
+         default_hours: int = 1,
+-        max_count: int = 0
++        max_count: int = 0,
++        max_execution_time: int = 5,
+     ) -> int:
+         """
+         Count logs matching filters. Returns exact count.
+@@ -2148,7 +2177,7 @@
+                 prewhere_parts.append(f"timestamp <= '{end_str}'")
+ 
+         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+ 
+         # Build additional WHERE conditions (without time filters)
+         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+@@ -2173,7 +2202,7 @@
+         window_hours = default_hours
+         if start_time is not None:
+             window_hours = ((end_time or datetime.now(timezone.utc)) - start_time).total_seconds() / 3600
+-        has_filter = bool(prewhere_parts[1:]) or where_sql.strip() != "1=1"
++        has_filter = bool(cls._build_indexed_prewhere(query_text, device_ips)) or where_sql.strip() != "1=1"
+         heavy_filter = bool(re.search(r"parsed_data|\bmessage\b|\braw\b", where_sql))
+         early_stop = max_count > 0 and has_filter and (window_hours > 25 or heavy_filter)
+ 
+@@ -2185,7 +2214,7 @@
+                 WHERE {where_sql}
+                 LIMIT {int(max_count)}
+             )
+-            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
++            SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
+             """
+         else:
+             query = f"""
+@@ -2193,18 +2222,18 @@
+             FROM syslogs
+             PREWHERE {prewhere_clause}
+             WHERE {where_sql}
+-            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
++            SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
+             """
+ 
+         try:
+-            result = client.query(query).result_rows
++            result = cls._execute_explorer_query(client, query).result_rows
+             total = result[0][0] if result else 0
+             if early_stop and total >= max_count:
+                 return -1
+             return total
+         except Exception as e:
+-            logger.warning(f"count_logs exceeded time budget, returning approximate: {e}")
+-            return -1
++            logger.warning(f"count_logs unavailable: {e}")
++            return -2  # Unknown, unlike -1 which proves at least max_count matches.
+ 
+     @classmethod
+     def _count_prewhere_where(cls, device_ips, severities, start_time, end_time,
+@@ -2219,7 +2248,7 @@
+                 prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+             if end_time:
+                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+         return prewhere_clause, where_sql
+@@ -2256,10 +2285,10 @@
+             SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
+         """
+         try:
+-            rows = client.query(query).result_rows
++            rows = cls._execute_explorer_query(client, query).result_rows
+         except Exception as e:
+             logger.warning(f"get_field_facets({field}) failed: {e}")
+-            return {"field": field, "values": []}
++            return {"field": field, "values": [], "error": "Top values could not be loaded. Narrow the time range and retry."}
+         return {"field": field, "values": [{"value": str(v), "count": int(c)} for v, c in rows]}
+ 
+     # src/dst_country values that are NOT real countries (FortiGate puts these
+@@ -2424,7 +2453,7 @@
+                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+ 
+         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+ 
+         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+@@ -2450,7 +2479,7 @@
+         SETTINGS max_execution_time = 30, {cls.EXPLORER_CACHE_SETTINGS}
+         """
+ 
+-        result = client.query(query).named_results()
++        result = cls._execute_explorer_query(client, query).named_results()
+         return list(result)
+ 
+     @classmethod
+@@ -2466,6 +2495,7 @@
+         default_hours: int = 1,
+         max_count: int = 10000,
+         subnet_rollup: bool = False,
++        max_execution_time: int = 5,
+     ) -> int:
+         """
+         Count distinct groups for aggregate view.
+@@ -2489,7 +2519,7 @@
+                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
+ 
+         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+ 
+         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
+         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
+@@ -2510,14 +2540,14 @@
+         FROM syslogs
+         PREWHERE {prewhere_clause}
+         WHERE {where_sql}
+-        SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
++        SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
+         """
+ 
+         try:
+-            result = client.query(query).result_rows
++            result = cls._execute_explorer_query(client, query).result_rows
+         except Exception as e:
+             logger.warning(f"count_aggregate_groups exceeded time budget: {e}")
+-            return -1
++            return -2
+         count = result[0][0] if result else 0
+         if count > max_count:
+             return -1
+@@ -2568,7 +2598,7 @@
+             f"timestamp >= '{prior_start.strftime('%Y-%m-%d %H:%M:%S')}'",
+             f"timestamp < '{prior_end.strftime('%Y-%m-%d %H:%M:%S')}'",
+         ]
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+         where_sql = cls._build_where_clause(
+             device_ips, severities, None, None, query_text, facilities,
+         )
+@@ -2583,12 +2613,13 @@
+         GROUP BY {group_cols}
+         ORDER BY event_count DESC
+         LIMIT {int(limit)}
++        SETTINGS max_execution_time = 2, {cls.EXPLORER_CACHE_SETTINGS}
+         """
+         try:
+-            rows = client.query(query).result_rows
++            rows = cls._execute_explorer_query(client, query).result_rows
+         except Exception as e:
+             logger.warning(f"aggregate_prior_window failed: {e}")
+-            return {}
++            return None
+ 
+         # Normalise the key columns to (srcKey, dstKey, dstport) shape that
+         # callers can compare against the current window's rows.
+@@ -2647,7 +2678,7 @@
+                 prewhere_parts.append(f"timestamp <= '{end_str}'")
+ 
+         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
+-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
++        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
+ 
+         # Build additional WHERE conditions (without time filters)
+         where_sql = cls._build_where_clause(device_ips, None, None, None, query_text, None)
+@@ -2728,42 +2759,37 @@
+         return list(client.query(query).named_results())
+ 
+     @classmethod
+-    def get_distinct_devices(cls, hours: int = 1) -> List[str]:
+-        """
+-        Get list of distinct devices from recent logs.
+-        Returns VDOM-aware names: '192.168.47.1_WAN' for VDOM devices,
+-        '10.10.0.1' for non-VDOM devices.
+-
+-        Cached for 60 seconds to avoid repeated queries on every page load.
++    def get_distinct_devices(cls, hours: int = 24 * 90) -> List[str]:
++        """Bounded device discovery, with one refresh per process and stale fallback.
++
++        Read the incrementally maintained catalog before formatting names.
++        A concurrent summary request shares the same cached refresh.
++        Empty results are cached too; cache entries are keyed by window size.
+         """
+         import time
+-        now = time.time()
+-        if cls._device_list_cache and (now - cls._device_list_cache_time) < cls._DEVICE_LIST_CACHE_TTL:
+-            return cls._device_list_cache
+-
+-        client = cls.get_client()
+-        # Group by (device_ip, vdom) to treat each VDOM as a separate device
+-        query = f"""
+-        SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
+-        FROM syslogs
+-        WHERE timestamp > now() - INTERVAL {hours} HOUR
+-        ORDER BY device_name
+-        """
+-        result = [row[0] for row in client.query(query).result_rows]
+-
+-        # If no devices found in short window, expand to 24h
+-        if not result and hours < 24:
++        hours = max(1, min(int(hours), 24 * 90))
++        with cls._device_list_lock:
++            now = time.monotonic()
++            cached = cls._device_lists.get(hours)
++            if cached is not None and now - cached[0] < cls._DEVICE_LIST_CACHE_TTL:
++                return list(cached[1])
+             query = f"""
+-            SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
+-            FROM syslogs
+-            WHERE timestamp > now() - INTERVAL 24 HOUR
+-            ORDER BY device_name
++                SELECT device_ip, vdom FROM log_device_catalog
++                GROUP BY device_ip, vdom
++                HAVING max(last_seen) > now() - INTERVAL {hours} HOUR
++                SETTINGS max_execution_time = 10, max_threads = 2,
++                         max_block_size = 8192, max_memory_usage = 268435456
+             """
+-            result = [row[0] for row in client.query(query).result_rows]
+-
+-        cls._device_list_cache = result
+-        cls._device_list_cache_time = now
+-        return result
++            try:
++                rows = cls.get_client().query(query).result_rows
++                devices = sorted(f"{ip}_{vdom}" if vdom else str(ip) for ip, vdom in rows)
++            except Exception:
++                if cached is None:
++                    raise
++                logger.warning("Device discovery failed; using the previous device list")
++                devices = cached[1]
++            cls._device_lists[hours] = (now, devices)
++            return list(devices)
+ 
+     @classmethod
+     def get_storage_stats(cls) -> Dict[str, Any]:
+@@ -3093,8 +3119,8 @@
+         return result
+ 
+     # Device list cache for performance (used on every log page load)
+-    _device_list_cache: List[str] = []
+-    _device_list_cache_time: float = 0
++    _device_lists: dict = {}
++    _device_list_lock = threading.Lock()
+     _DEVICE_LIST_CACHE_TTL: int = 60  # 60 seconds - devices rarely change
+ 
+     # Dashboard cache for performance
+@@ -3918,7 +3944,7 @@
+         return 'unknown'
+ 
+     # IANA protocol numbers for the proto column (UInt8).
+-    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1}
++    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1, 'gre': 47, 'esp': 50, 'icmpv6': 58}
+ 
+     @classmethod
+     def policy_lookup(
+--- a/fastapi_app/api/views.py
++++ b/fastapi_app/api/views.py
+@@ -1114,36 +1114,9 @@
+                 severity_int = None
+         severities = [severity_int] if severity_int is not None else None
+ 
+-        # Parse datetime strings
+-        start_time = None
+-        end_time = None
++        effective_time_range = (time_range or '1h').strip().lower() or '1h'
+         now = datetime.now(timezone.utc)
+-
+-        # Default to 1 hour if no time range specified (for performance)
+-        default_time_range = '1h'
+-        effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
+-
+-        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d). The start is
+-        # rounded (see _round_window) so repeated loads share cached scans.
+-        _unit = {'m': 'minutes', 'h': 'hours', 'd': 'days'}.get(effective_time_range[-1:])
+-        if _unit:
+-            try:
+-                delta = timedelta(**{_unit: int(effective_time_range[:-1])})
+-                start_time = _round_window(now - delta, delta)
+-            except ValueError:
+-                pass
+-
+-        # Override with explicit start/end if provided
+-        if start:
+-            try:
+-                start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
+-            except ValueError:
+-                pass
+-        if end:
+-            try:
+-                end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
+-            except ValueError:
+-                pass
++        start_time, end_time = _explorer_time_window(effective_time_range, start, end)
+ 
+         # Build search query from direct filter parameters (srcip, dstip, dstport)
+         search_parts = []
+@@ -1234,6 +1207,9 @@
+             }
+             if action in action_terms:
+                 search_parts.append(action_terms[action])
++            else:
++                # Facets can select a concrete vendor action outside the pills.
++                search_parts.append(_fmt('action', action.strip()))
+ 
+         # The NQL bar (`q`) is the primary search. Toolbar/sidebar fields are
+         # AND-ed onto it with the user's expression parenthesised, so an OR in the
+@@ -1282,10 +1258,18 @@
+         query_started = time.perf_counter()
+         nql_columns: List[str] = []
+         nql_rows: List[dict] = []
++        async def load_devices():
++            try:
++                found = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
++            except Exception:
++                logger.warning("Log explorer device options unavailable", exc_info=True)
++                found = []
++            return sorted(set(found + (device_ips or [])))
++
+ 
+         if nql_error:
+             # Nothing to run — the page shows the syntax error where the query is.
+-            devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
++            devices = await load_devices()
+             logs_or_agg, total, stats = [], 0, {}
+             is_aggregate = False
+         elif nql_mode == 'aggregate':
+@@ -1302,14 +1286,8 @@
+                     default_limit=per_page_num,
+                 )
+             )
+-            stats_future = loop.run_in_executor(
+-                _executor,
+-                lambda: ClickHouseClient.get_log_stats_summary(
+-                    device_ips=device_ips, start_time=start_time, end_time=end_time,
+-                    query_text=search_query,
+-                )
+-            )
+-            devices_future = loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
++            stats_future = asyncio.sleep(0, result={})
++            devices_future = asyncio.create_task(load_devices())
+             try:
+                 agg_result, stats, devices = await asyncio.gather(agg_future, stats_future, devices_future)
+                 nql_columns = agg_result["columns"]
+@@ -1317,7 +1295,7 @@
+             except Exception as e:
+                 logger.error(f"NQL aggregate failed for {search_query!r}: {e}")
+                 nql_error = _friendly_ch_error(e)
+-                stats, devices = {}, await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
++                stats, devices = {}, await load_devices()
+             logs_or_agg, total = [], len(nql_rows)
+         elif is_aggregate:
+             logs_future = loop.run_in_executor(
+@@ -1345,6 +1323,8 @@
+                     end_time=end_time,
+                     query_text=search_query if search_query else None,
+                     subnet_rollup=is_subnet_rollup,
++                    max_count=COUNT_CAP,
++                    max_execution_time=1,
+                 )
+             )
+         else:
+@@ -1371,27 +1351,16 @@
+                     end_time=end_time,
+                     query_text=search_query if search_query else None,
+                     max_count=COUNT_CAP,
++                    max_execution_time=1,
+                 )
+             )
+ 
+         if not nql_error and nql_mode != 'aggregate':
+             # skip_total: the count future above already scans this exact
+             # filter set — running it twice doubled the CPU cost of every load.
+-            stats_future = loop.run_in_executor(
+-                _executor,
+-                lambda: ClickHouseClient.get_log_stats_summary(
+-                    device_ips=device_ips,
+-                    start_time=start_time,
+-                    end_time=end_time,
+-                    query_text=search_query if search_query else None,
+-                    skip_total=True,
+-                )
+-            )
+-
+-            devices_future = loop.run_in_executor(
+-                _executor,
+-                ClickHouseClient.get_distinct_devices
+-            )
++            stats_future = asyncio.sleep(0, result={})
++
++            devices_future = asyncio.create_task(load_devices())
+ 
+             # Wait for all queries to complete
+             try:
+@@ -1399,14 +1368,13 @@
+                     logs_future, total_future, stats_future, devices_future
+                 )
+             except Exception as e:
+-                if not search_query:
+-                    raise
+                 # A query that parsed but ClickHouse rejected (e.g. an aggregate
+                 # over a non-numeric field) is a user error, not a server fault.
+                 logger.error(f"NQL log query failed for {search_query!r}: {e}")
+                 nql_error = _friendly_ch_error(e)
+                 logs_or_agg, total, stats = [], 0, {}
+-                devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
++                is_aggregate = False
++                devices = await load_devices()
+ 
+             if nql_limit and total >= 0:
+                 total = min(total, nql_limit)
+@@ -1423,13 +1391,19 @@
+         # out (a non-indexed Map-column filter over a wide window). In that case
+         # show "100,000+" and cap the pager; otherwise show the true exact count.
+         is_approximate = total < 0
+-        if is_approximate:
++        count_unavailable = total == -2
++        if count_unavailable:
++            total = (page_num - 1) * per_page_num + len(logs_or_agg)
++            total_display = "Count unavailable"
++        elif is_approximate:
+             total = COUNT_CAP
+             total_display = f"{COUNT_CAP:,}+"
+         else:
+             total_display = f"{total:,}"
+ 
+         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
++        if count_unavailable:
++            total_pages = page_num + int(len(logs_or_agg) == per_page_num)
+ 
+         # Clean up filter values for template (handle empty strings)
+         current_device = device if device and device.strip() else None
+@@ -1442,6 +1416,7 @@
+             "total": total,
+             "total_display": total_display,
+             "is_approximate": is_approximate,
++            "count_unavailable": count_unavailable,
+             "stats": stats,
+             "page": page_num,
+             "per_page": per_page_num,
+@@ -1456,6 +1431,8 @@
+             "current_start": start,
+             "current_end": end,
+             "current_time_range": effective_time_range,
++            "effective_start": start_time,
++            "effective_end": end_time,
+             # Network filter values
+             "current_srcip": srcip_clean,
+             "current_dstip": dstip_clean,
+@@ -1510,6 +1487,7 @@
+             is_compare_mode = bool(compare and compare.strip().lower() in ('1', 'true', 'on'))
+ 
+             prior_map: Dict[Tuple, int] = {}
++            prior_available = False
+             # end_time is often None (the user gave a relative time_range);
+             # treat that as "now" so we can derive a comparable prior window.
+             effective_end_time = end_time or now
+@@ -1527,6 +1505,8 @@
+                             subnet_rollup=is_subnet_rollup,
+                         ),
+                     )
++                    prior_available = prior_map is not None
++                    prior_map = prior_map or {}
+                 except Exception as _e:
+                     logger.warning(f"prior-window enrichment skipped: {_e}")
+                     prior_map = {}
+@@ -1557,7 +1537,10 @@
+                 cur = int(r.get('event_count') or 0)
+                 prior = int(prior_map.get(_row_key(r), 0))
+                 r['prior_count'] = prior
+-                if prior == 0:
++                if not prior_available:
++                    r['anomaly_state'] = 'UNKNOWN'
++                    r['delta_pct'] = None
++                elif prior == 0:
+                     r['anomaly_state'] = 'NEW'
+                     r['delta_pct'] = None
+                 elif cur >= 5 * prior and cur >= max(10, 3 * (prior_median or 1)):
+@@ -1643,8 +1626,6 @@
+         return _render("logs/log_list.html", request, context)
+     except Exception as e:
+         import traceback
+-        import logging
+-        logger = logging.getLogger(__name__)
+         logger.error(f"Error in log_list view: {type(e).__name__}: {e}")
+         logger.error(traceback.format_exc())
+         print(f"ERROR in log_list: {type(e).__name__}: {e}")
+@@ -1662,10 +1643,10 @@
+             "total_pages": 1,
+             "has_prev": False,
+             "has_next": False,
+-            "current_device": None,
+-            "current_severity": None,
+-            "current_q": None,
+-            "current_action": None,
++            "current_device": device,
++            "current_severity": severity,
++            "current_q": q,
++            "current_action": action,
+             "current_start": start if start else None,
+             "current_end": end if end else None,
+             "current_time_range": time_range if time_range else '1h',
+@@ -1674,10 +1655,10 @@
+             "current_dstip": dstip if dstip else None,
+             "current_srcport": srcport if srcport else None,
+             "current_dstport": dstport if dstport else None,
+-            "current_srcip_not": False,
+-            "current_dstip_not": False,
+-            "current_srcport_not": False,
+-            "current_dstport_not": False,
++            "current_srcip_not": _is_not_flag(srcip_not),
++            "current_dstip_not": _is_not_flag(dstip_not),
++            "current_srcport_not": _is_not_flag(srcport_not),
++            "current_dstport_not": _is_not_flag(dstport_not),
+             "current_protocol": protocol if protocol else None,
+             # Policy & Security filter values
+             "current_policyname": policyname if policyname else None,
+@@ -1697,7 +1678,7 @@
+             "group_fields": ['srcip', 'dstip', 'dstport'],
+             "is_subnet_rollup": False,
+             "agg_rows": [],
+-            "error": str(e),
++            "error": str(e) if isinstance(e, ValueError) else _friendly_ch_error(e),
+             "nql_mode": "logs",
+             "nql_error": None,
+             "nql_columns": [],
+@@ -4740,25 +4721,35 @@
+ 
+ 
+ def _explorer_time_window(time_range, start, end):
+-    """Resolve (start_time, end_time) from a relative range (e.g. '1h','24h','7d')
+-    or explicit ISO start/end. Returns (None, None) to let the query layer apply
+-    its default 1h bound."""
+-    now = datetime.now(timezone.utc)
+-    start_time = end_time = None
+-    if start and start.strip():
+-        try: start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
+-        except ValueError: pass
+-    if end and end.strip():
+-        try: end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
+-        except ValueError: pass
+-    if start_time is None and end_time is None and time_range and time_range.strip():
+-        m = re.match(r'^(\d+)([mhd])$', time_range.strip().lower())
+-        if m:
+-            n, u = int(m.group(1)), m.group(2)
+-            delta = {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
+-                     'd': timedelta(days=n)}[u]
+-            start_time = _round_window(now - delta, delta)
+-    return start_time, end_time
++    """Use the configured display zone for datetime-local inputs; query in UTC."""
++    from zoneinfo import ZoneInfo
++    from ..core.app_settings import get_display_timezone
++    def parse(value):
++        if not value or not value.strip():
++            return None
++        try:
++            result = datetime.fromisoformat(value.replace('Z', '+00:00'))
++        except ValueError:
++            raise ValueError("Enter a valid start and end date/time.") from None
++        if result.tzinfo is None:
++            result = result.replace(tzinfo=ZoneInfo(get_display_timezone()))
++        return result.astimezone(timezone.utc)
++    start_time, end_time = parse(start), parse(end)
++    if start_time is not None or end_time is not None:
++        if start_time and end_time and start_time > end_time:
++            raise ValueError("Start must be before end.")
++        return start_time, end_time
++    value = (time_range or '1h').strip().lower()
++    match = re.fullmatch(r'(\d+)([mhd])', value)
++    if not match:
++        raise ValueError("Choose a time range or enter both custom dates.")
++    n, unit = int(match.group(1)), match.group(2)
++    seconds = n * {'m': 60, 'h': 3600, 'd': 86400}[unit]
++    if not 0 < seconds <= 90 * 86400:
++        raise ValueError("Time range must be greater than zero and no longer than 90 days.")
++    delta = timedelta(seconds=seconds)
++    now = datetime.now(timezone.utc).replace(microsecond=0)
++    return now - delta, now
+ 
+ 
+ def _explorer_severities(severity):
+@@ -4793,16 +4784,22 @@
+                            dst_zone=None, session_end_reason=None, dstport=None,
+                            srcport=None, src_country=None, dst_country=None, service=None,
+                            srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None,
+-                           scope=None):
++                           scope=None, protocol=None, threat_id=None):
+     """Compose an NQL query string (user query + toolbar field:value terms)
+     parsed by ClickHouseClient._build_where_clause, so facets, exports and
+     analytics honor exactly the filters the log table shows."""
+     from ..services.nql_parser import compose_nql
+     parts = []
++    action = {
++        'accept': 'accept|allow|pass|close|client-rst|server-rst',
++        'deny': 'deny|drop|block|reject', 'close': 'close|client-rst|server-rst',
++    }.get(action, action)
+     for field, val, negated in (
+         ("action", action, False),
+         ("log_type", log_type, False),
+         ("application", application, False),
++        ("proto", protocol, False),
++        ("threat_id", threat_id, False),
+         ("srcip", srcip, _is_not_flag(srcip_not)),
+         ("dstip", dstip, _is_not_flag(dstip_not)),
+         ("srcport", srcport, _is_not_flag(srcport_not)),
+@@ -4830,14 +4827,28 @@
+     q: Optional[str] = Query(None), action: Optional[str] = Query(None),
+     log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
+     scope: Optional[str] = Query(None),
++    srcip: Optional[str] = Query(None), dstip: Optional[str] = Query(None),
++    srcport: Optional[str] = Query(None), dstport: Optional[str] = Query(None),
++    srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
++    srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
++    policyname: Optional[str] = Query(None), protocol: Optional[str] = Query(None),
++    src_zone: Optional[str] = Query(None), dst_zone: Optional[str] = Query(None),
++    session_end_reason: Optional[str] = Query(None), threat_id: Optional[str] = Query(None),
+     limit: int = Query(10),
+ ):
+     """Top-N values (+counts) for a facetable field — the left-rail click-to-filter."""
+-    st, et = _explorer_time_window(time_range, start, end)
++    try:
++        st, et = _explorer_time_window(time_range, start, end)
++    except ValueError as exc:
++        return JSONResponse(status_code=400, content={"error": str(exc), "values": []})
+     device_ips = [device] if device and device.strip() else None
+     sev = _explorer_severities(severity)
+     sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+-                                scope=scope)
++                                scope=scope, srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
++                                srcip_not=srcip_not, dstip_not=dstip_not, srcport_not=srcport_not,
++                                dstport_not=dstport_not, policyname=policyname, protocol=protocol,
++                                src_zone=src_zone, dst_zone=dst_zone,
++                                session_end_reason=session_end_reason, threat_id=threat_id)
+     loop = asyncio.get_event_loop()
+     data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_field_facets(
+         field=field, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
+@@ -4857,17 +4868,24 @@
+     srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
+     srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
+     policyname: Optional[str] = Query(None), scope: Optional[str] = Query(None),
++    protocol: Optional[str] = Query(None), src_zone: Optional[str] = Query(None),
++    dst_zone: Optional[str] = Query(None), session_end_reason: Optional[str] = Query(None),
++    threat_id: Optional[str] = Query(None),
+     limit: int = Query(100000),
+ ):
+     """Stream the current filtered logs as CSV or JSON (capped at `limit` rows)."""
+-    st, et = _explorer_time_window(time_range, start, end)
++    try:
++        st, et = _explorer_time_window(time_range, start, end)
++    except ValueError as exc:
++        return JSONResponse(status_code=400, content={"detail": str(exc)})
+     device_ips = [device] if device and device.strip() else None
+     sev = _explorer_severities(severity)
+     sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
+                                 srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
+                                 srcip_not=srcip_not, dstip_not=dstip_not,
+                                 srcport_not=srcport_not, dstport_not=dstport_not,
+-                                policyname=policyname, scope=scope)
++                                policyname=policyname, scope=scope, protocol=protocol, src_zone=src_zone,
++                                dst_zone=dst_zone, session_end_reason=session_end_reason, threat_id=threat_id)
+     cap = min(max(int(limit), 1), 500000)
+     cols = ["timestamp", "device_ip", "vdom", "severity", "srcip", "dstip", "srcport",
+             "dstport", "proto", "action", "policyname", "log_type", "application",
+--- a/fastapi_app/templates/logs/log_list.html
++++ b/fastapi_app/templates/logs/log_list.html
+@@ -3249,8 +3249,15 @@
+                 <div class="nql-stats" role="status" aria-live="polite">
+                     <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate or nql_mode == 'aggregate' %}groups{% else %}logs{% endif %}</span>
+                     <span class="nql-stat-sep"></span>
+-                    <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
++                    <span class="nql-stat"><span class="nql-stat-val">{{ devices | length }}</span> available devices</span>
+                 </div>
++            </div>
++
++            <div class="logs-time-window" style="padding:6px 12px;color:var(--text-muted);font-size:12px">
++                Filter timezone: <strong>{{ app_tz() }}</strong>
++                {% if effective_start is defined and effective_start %} · {{ effective_start | localdt }}{% endif %}
++                {% if effective_end is defined and effective_end %} – {{ effective_end | localdt }}{% endif %}
++                {% if not is_aggregate and nql_mode != 'aggregate' %}<br>Timestamp shows the device-reported time. Hover for the normalized time used by filters and sorting.{% endif %}
+             </div>
+ 
+             {% if nql_error %}
+@@ -3610,11 +3617,11 @@
+                         </div>
+ 
+                         {% if not is_aggregate %}
+-                        {% if nql_error %}
++                        {% if error or nql_error %}
+                         <div class="empty-state nql-empty-error">
+                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                             <h3>The query could not be run</h3>
+-                            <p>{{ nql_error }}</p>
++                            <p>{{ error or nql_error }}</p>
+                             <p class="nql-empty-hint">Example: <code>srcip:10.0.0.0/8 action:deny | stats count by dstip</code> &middot; <a href="#" onclick="toggleNQLHelp();return false;">Field &amp; syntax reference</a></p>
+                         </div>
+                         {% elif nql_mode == 'aggregate' %}
+@@ -3677,7 +3684,7 @@
+                         <table class="log-table">
+                             <thead>
+                                 <tr>
+-                                    <th data-col="timestamp" class="sortable">Timestamp <span class="sort-icon">▼</span><span class="col-resize-handle"></span></th>
++                                    <th data-col="timestamp" class="sortable" title="Device-reported time; ordered by normalized event time">Timestamp (device) <span class="sort-icon">▼</span><span class="col-resize-handle"></span></th>
+                                     <th data-col="action">Status<span class="col-resize-handle"></span></th>
+                                     <th data-col="srcip" class="sortable">Source IP<span class="col-resize-handle"></span></th>
+                                     <th data-col="dstip" class="sortable">Dest IP<span class="col-resize-handle"></span></th>
+@@ -3712,12 +3719,8 @@
+                                 {% set action = log_action | lower %}
+                                 <tr class="log-row" data-index="{{ loop.index }}">
+                                     <td data-col="timestamp">
+-                                        <span class="timestamp">
+-                                            {# Show the platform's normalized timestamp, rendered in the app's
+-                                               display timezone — consistent with filtering, sorting and
+-                                               correlation windows. The device-reported log_time is in the
+-                                               device's own (often skewed) clock and stays in the raw detail. #}
+-                                            {% if log.get('timestamp') %}{{ log.timestamp | localdt }}{% else %}--{% endif %}
++                                        <span class="timestamp" title="{% if log.get('log_time') %}Device-reported time. {% else %}Device time unavailable. {% endif %}Normalized time ({{ app_tz() }}): {{ (log.timestamp | localdt) if log.get('timestamp') else '--' }}">
++                                            {% if log.get('log_time') %}{{ log.log_time }}{% elif log.get('timestamp') %}{{ log.timestamp | localdt }} {{ app_tz() }}{% else %}--{% endif %}
+                                         </span>
+                                     </td>
+                                     <td data-col="action">
+@@ -3889,7 +3892,9 @@
+                                 <tr class="agg-row anomaly-row-{{ _state | lower }}" data-agg-idx="{{ loop.index0 }}" data-anomaly="{{ _state }}">
+                                     <td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="{{ loop.index0 }}" onchange="updateAggSelection()"></td>
+                                     <td>
+-                                        {% if _state == 'NEW' %}
++                                        {% if _state == 'UNKNOWN' %}
++                                            <span title="Prior-window comparison unavailable">—</span>
++                                        {% elif _state == 'NEW' %}
+                                             <span class="anomaly-chip anomaly-new" title="Not seen in prior window">NEW</span>
+                                         {% elif _state == 'SPIKE' %}
+                                             <span class="anomaly-chip anomaly-spike" title="≥5× prior window count and well above baseline">SPIKE</span>
+@@ -3929,7 +3934,7 @@
+                                     {% endif %}
+                                     <td><span class="event-count-badge">{{ "{:,}".format(row.event_count) }}</span></td>
+                                     {% if is_compare_mode %}
+-                                    <td><span class="event-count-badge event-count-prior">{{ "{:,}".format(row.prior_count or 0) }}</span></td>
++                                    <td><span class="event-count-badge event-count-prior">{{ '—' if _state == 'UNKNOWN' else "{:,}".format(row.prior_count or 0) }}</span></td>
+                                     <td>
+                                         {% if row.delta_pct is none %}
+                                             <span class="delta-cell delta-na">—</span>
+@@ -4016,11 +4021,11 @@
+                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                             </button>
+                             <input type="text" id="pageInput" class="page-input" value="{{ page }}">
+-                            <span class="page-total">of {{ total_pages }}</span>
++                            <span class="page-total">{% if count_unavailable %}total not counted{% else %}of {{ total_pages }}{% endif %}</span>
+                             <button type="button" class="page-btn" onclick="goToPage({{ page + 1 }})" {% if page >= total_pages %}disabled{% endif %}>
+                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                             </button>
+-                            <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if page >= total_pages %}disabled{% endif %}>
++                            <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if page >= total_pages or count_unavailable %}disabled{% endif %}>
+                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 17 5-5-5-5M13 17l5-5-5-5"/></svg>
+                             </button>
+                         </div>
+@@ -4075,7 +4080,7 @@
+                             </button>
+                             <div class="sidebar-section-content compact-grid">
+                                 <div class="time-input-group">
+-                                    <label class="time-input-label" for="startDateTime">Start</label>
++                                    <label class="time-input-label" for="startDateTime">Start ({{ app_tz() }})</label>
+                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
+                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+@@ -4084,7 +4089,7 @@
+                                     </div>
+                                 </div>
+                                 <div class="time-input-group">
+-                                    <label class="time-input-label" for="endDateTime">End</label>
++                                    <label class="time-input-label" for="endDateTime">End ({{ app_tz() }})</label>
+                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
+                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+@@ -4856,7 +4861,8 @@
+             const startVal = document.getElementById('startDateTime').value;
+             const endVal = document.getElementById('endDateTime').value;
+             const applyBtn = document.getElementById('applyRangeBtn');
+-            applyBtn.disabled = !(startVal && endVal);
++            applyBtn.disabled = !(startVal && endVal && startVal <= endVal);
++            document.getElementById('endDateTime').setCustomValidity(startVal && endVal && startVal > endVal ? 'End must be after start.' : '');
+             if (startVal && endVal) {
+                 document.querySelectorAll('.time-pill').forEach(btn => btn.classList.remove('active'));
+             }
+@@ -4865,7 +4871,7 @@
+         function applyCustomRange() {
+             const startVal = document.getElementById('startDateTime').value;
+             const endVal = document.getElementById('endDateTime').value;
+-            if (startVal && endVal) {
++            if (startVal && endVal && startVal <= endVal) {
+                 document.getElementById('hiddenTimeRange').value = 'custom';
+                 document.getElementById('hiddenPageInput').value = 1;
+                 showLoading();
+@@ -5194,6 +5200,7 @@
+     let nqlValidateTimer = null;
+     let nqlSuggestTimer = null;
+     let nqlSelectedAC = -1;
++    let nqlSuggestController = null;
+     let nqlSuggestSeq = 0;          // drop responses that arrive out of order
+     let nqlItems = [];              // flat list matching the rendered rows
+     let nqlRange = { start: 0, end: 0 };
+@@ -5253,11 +5260,20 @@
+     nqlInput.addEventListener('blur', () => { setTimeout(hideAutocomplete, 180); });
+ 
+     function scheduleAutocomplete(delay) {
++        cancelAutocomplete();
++        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 300 : delay);
++    }
++
++    function cancelAutocomplete() {
+         clearTimeout(nqlSuggestTimer);
+-        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 130 : delay);
++        ++nqlSuggestSeq;
++        if (nqlSuggestController) nqlSuggestController.abort();
++        nqlSuggestController = null;
++        nqlAcLoading.classList.remove('on');
+     }
+ 
+     async function fetchAutocomplete() {
++        cancelAutocomplete();
+         const q = nqlInput.value;
+         const cursor = nqlInput.selectionStart ?? q.length;
+         const range = nqlTimeRange();
+@@ -5265,11 +5281,13 @@
+ 
+         if (nqlSuggestCache.has(key)) { renderAutocomplete(nqlSuggestCache.get(key)); return; }
+ 
+-        const seq = ++nqlSuggestSeq;
++        const seq = nqlSuggestSeq;
++        nqlSuggestController = new AbortController();
+         nqlAcLoading.classList.add('on');
+         try {
+             const res = await fetch(`/api/nql/suggest?q=${encodeURIComponent(q)}` +
+-                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`);
++                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`,
++                                    {signal: nqlSuggestController.signal});
+             if (seq !== nqlSuggestSeq) return;        // a newer keystroke won
+             if (!res.ok) { hideAutocomplete(); return; }
+             const data = await res.json();
+@@ -5278,7 +5296,7 @@
+             if (nqlSuggestCache.size > 200) nqlSuggestCache.delete(nqlSuggestCache.keys().next().value);
+             renderAutocomplete(data);
+         } catch (e) {
+-            hideAutocomplete();
++            if (seq === nqlSuggestSeq && e.name !== 'AbortError') hideAutocomplete();
+         } finally {
+             if (seq === nqlSuggestSeq) nqlAcLoading.classList.remove('on');
+         }
+@@ -5474,7 +5492,11 @@
+     (function () {
+         const form = document.getElementById('filterForm');
+         const prune = () => form.querySelectorAll('input, select').forEach(el => {
+-            if (el.name === 'csrf_token' || (el.name && el.value === '')) el.disabled = true;
++            if (el.name === 'csrf_token' || (el.name && el.value === '')) { el.disabled = true; el.dataset.pruned = '1'; }
++        });
++        window.addEventListener('pageshow', () => {
++            form.querySelectorAll('[data-pruned]').forEach(el => { el.disabled = false; delete el.dataset.pruned; });
++            document.getElementById('loadingOverlay')?.classList.remove('visible');
+         });
+         form.addEventListener('submit', prune);                 // Search / Apply buttons
+         const nativeSubmit = form.submit.bind(form);            // every script path
+@@ -5482,6 +5504,8 @@
+     })();
+ 
+     function runNQL() {
++        cancelAutocomplete();
++        clearTimeout(nqlValidateTimer);
+         const query = nqlInput.value.trim();
+         nqlInput.value = query;
+         hideAutocomplete();
+@@ -6321,7 +6345,8 @@
+     function _facetParams(field){
+         const u = new URLSearchParams(window.location.search);
+         const keep = ['time_range','start','end','device','severity','q','action','scope','log_type','application',
+-                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone'];
++                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone',
++                        'srcip_not','dstip_not','srcport_not','dstport_not','session_end_reason','threat_id'];
+         const p = new URLSearchParams();
+         keep.forEach(k => { const v = u.get(k); if (v) p.set(k, v); });
+         if (!p.get('time_range') && !p.get('start')) p.set('time_range', '{{ current_time_range }}');
+@@ -6330,33 +6355,44 @@
+     }
+     function applyFacet(field, value){
+         const p = new URLSearchParams(window.location.search);
++        p.delete(field + '_not');
+         p.set(field, value); p.set('page', '1');
+         try { showLoading(); } catch(e) {}
+         window.location.search = p.toString();
+     }
++    let facetRequest = 0;
+     function loadFacets(forcedField){
++        const requestId = ++facetRequest;
+         const list = document.getElementById('facetList');
+         if (!list) return;
+         const field = forcedField || getActiveFacetField();
+         list.innerHTML = '<div class="facet-loading">Loading…</div>';
+         fetch('/api/logs/facets?' + _facetParams(field), {headers:{'Accept':'application/json'}})
+-          .then(r => r.json())
++          .then(r => { if (!r.ok) throw new Error('Request failed'); return r.json(); })
+           .then(d => {
++            if (requestId !== facetRequest) return;
++            if (d.error) { list.textContent = d.error; return; }
+             const vals = (d && d.values) || [];
+             if (!vals.length){ list.innerHTML = '<div class="facet-empty">No values</div>'; return; }
+             const max = vals[0].count || 1;
+-            list.innerHTML = vals.map(v => {
++            list.replaceChildren();
++            vals.forEach(v => {
+                 const pct = Math.max(4, Math.round((v.count / max) * 100));
+                 const raw = v.value || '';
+-                const esc = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+-                const jsEsc = raw.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+-                return '<div class="facet-item" onclick="applyFacet(\'' + field + '\', \'' + jsEsc + '\')" title="' + esc + ' · ' + v.count.toLocaleString() + '">' +
+-                       '<span class="facet-bar" style="width:' + pct + '%"></span>' +
+-                       '<span class="facet-val">' + (esc || '(empty)') + '</span>' +
+-                       '<span class="facet-cnt">' + v.count.toLocaleString() + '</span></div>';
+-            }).join('');
++                const item = document.createElement('div');
++                item.className = 'facet-item';
++                item.title = raw + ' · ' + v.count.toLocaleString();
++                item.addEventListener('click', () => applyFacet(field, raw));
++                const bar = document.createElement('span');
++                bar.className = 'facet-bar'; bar.style.width = pct + '%';
++                const value = document.createElement('span');
++                value.className = 'facet-val'; value.textContent = raw || '(empty)';
++                const count = document.createElement('span');
++                count.className = 'facet-cnt'; count.textContent = v.count.toLocaleString();
++                item.append(bar, value, count); list.append(item);
++            });
+           })
+-          .catch(() => { list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
++          .catch(() => { if (requestId === facetRequest) list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
+     }
+     if (document.readyState !== 'loading') loadFacets();
+     else document.addEventListener('DOMContentLoaded', () => loadFacets());
+--- /dev/null
++++ b/fastapi_app/db/clickhouse_migrations/009_log_device_catalog.py
+@@ -0,0 +1,20 @@
++"""Migration 009: incrementally maintained device directory for the log explorer.
++
++Creation is idempotent. Backfill may be repeated because max is idempotent;
++installations should run it once in bounded historical time slices.
++"""
++
++STATEMENTS = [
++    """CREATE TABLE IF NOT EXISTS log_device_catalog (
++        device_ip IPv4, vdom String,
++        last_seen SimpleAggregateFunction(max, DateTime64(3))
++    ) ENGINE = AggregatingMergeTree ORDER BY (device_ip, vdom)""",
++    """CREATE MATERIALIZED VIEW IF NOT EXISTS log_device_catalog_mv
++    TO log_device_catalog AS
++    SELECT device_ip, vdom, max(timestamp) AS last_seen
++    FROM syslogs GROUP BY device_ip, vdom""",
++]
++
++def upgrade(client):
++    for statement in STATEMENTS:
++        client.command(statement)
+--- /dev/null
++++ b/fastapi_app/db/clickhouse_migrations/010_log_scope_indexes.py
+@@ -0,0 +1,19 @@
++"""Cheap Internet classification and combined indexes for scoped IP searches.
++
++The expression preserves the explorer's existing IPv4 scope definition.
++Index backfill is an explicit maintenance operation, not a blocking startup job.
++"""
++from fastapi_app.services.nql_schema import v4_non_public_sql
++
++STATEMENTS = [
++    'ALTER TABLE syslogs ADD COLUMN IF NOT EXISTS dst_is_public UInt8 '
++    f'MATERIALIZED NOT {v4_non_public_sql("dstip_v4")}',
++    '''ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_src_action_public
++       cityHash64(srcip, action, dst_is_public) TYPE bloom_filter(0.001) GRANULARITY 1''',
++    '''ALTER TABLE syslogs ADD INDEX IF NOT EXISTS idx_src_action_public_vdom
++       cityHash64(srcip, action, dst_is_public, vdom) TYPE bloom_filter(0.001) GRANULARITY 1''',
++]
++
++def upgrade(client):
++    for statement in STATEMENTS:
++        client.command(statement)

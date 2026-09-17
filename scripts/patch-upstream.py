@@ -99,6 +99,7 @@ import shutil
 control = Path(__file__).resolve().parent.parent / 'appliance' / 'control'
 shutil.copyfile(control / 'api.py', root / 'fastapi_app/api/appliance.py')
 shutil.copyfile(control / 'system.html', root / 'fastapi_app/templates/system/appliance.html')
+shutil.copyfile(control / '_ntp_panel.html', root / 'fastapi_app/templates/system/_ntp_panel.html')
 shutil.copyfile(control / 'reset_password.py', root / 'zenshield_reset_password.py')
 with (root / 'Dockerfile').open('a') as f:
     f.write('\nCOPY zenshield_reset_password.py /app/zenshield_reset_password.py\n')

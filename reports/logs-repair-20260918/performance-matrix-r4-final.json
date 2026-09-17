@@ -1,0 +1,492 @@
+[
+  {
+    "case": "reported/1m",
+    "seconds": 0.466,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235487,
+    "gzip_bytes": 41750
+  },
+  {
+    "case": "reported/5m",
+    "seconds": 0.248,
+    "rows": 30,
+    "total": "30",
+    "error": null,
+    "html_bytes": 435667,
+    "gzip_bytes": 46910
+  },
+  {
+    "case": "reported/1h",
+    "seconds": 0.695,
+    "rows": 100,
+    "total": "413",
+    "error": null,
+    "html_bytes": 894082,
+    "gzip_bytes": 56025
+  },
+  {
+    "case": "reported/24h",
+    "seconds": 1.048,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894135,
+    "gzip_bytes": 56050
+  },
+  {
+    "case": "reported/7d",
+    "seconds": 1.031,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894132,
+    "gzip_bytes": 56045
+  },
+  {
+    "case": "reported/30d",
+    "seconds": 1.032,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894135,
+    "gzip_bytes": 56046
+  },
+  {
+    "case": "reported/device-0",
+    "seconds": 0.97,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235898,
+    "gzip_bytes": 41785
+  },
+  {
+    "case": "reported/device-1",
+    "seconds": 1.205,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235907,
+    "gzip_bytes": 41792
+  },
+  {
+    "case": "reported/device-2",
+    "seconds": 2.854,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235907,
+    "gzip_bytes": 41790
+  },
+  {
+    "case": "reported/device-3",
+    "seconds": 7.859,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235907,
+    "gzip_bytes": 41794
+  },
+  {
+    "case": "reported/device-4",
+    "seconds": 30.046,
+    "rows": 0,
+    "total": "0",
+    "error": "Query timed out \u2014 narrow the time range or add a filter on an indexed field (srcip, dstip, action, policyname, dstport).",
+    "html_bytes": 236669,
+    "gzip_bytes": 41920
+  },
+  {
+    "case": "reported/device-5",
+    "seconds": 1.046,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894541,
+    "gzip_bytes": 56047
+  },
+  {
+    "case": "reported/device-6",
+    "seconds": 25.109,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235900,
+    "gzip_bytes": 41793
+  },
+  {
+    "case": "1m/tcp-allow-443",
+    "seconds": 0.202,
+    "rows": 100,
+    "total": "9,513",
+    "error": null,
+    "html_bytes": 903201,
+    "gzip_bytes": 62430
+  },
+  {
+    "case": "1m/udp-dns-device",
+    "seconds": 0.147,
+    "rows": 91,
+    "total": "91",
+    "error": null,
+    "html_bytes": 835605,
+    "gzip_bytes": 57523
+  },
+  {
+    "case": "1m/exclude-ip-port",
+    "seconds": 0.13,
+    "rows": 100,
+    "total": "87,940",
+    "error": null,
+    "html_bytes": 896977,
+    "gzip_bytes": 60255
+  },
+  {
+    "case": "1m/cidr-or-scope",
+    "seconds": 0.156,
+    "rows": 20,
+    "total": "20",
+    "error": null,
+    "html_bytes": 369442,
+    "gzip_bytes": 45761
+  },
+  {
+    "case": "1m/empty",
+    "seconds": 0.086,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235108,
+    "gzip_bytes": 41696
+  },
+  {
+    "case": "5m/tcp-allow-443",
+    "seconds": 0.136,
+    "rows": 100,
+    "total": "40,031",
+    "error": null,
+    "html_bytes": 902090,
+    "gzip_bytes": 62760
+  },
+  {
+    "case": "5m/udp-dns-device",
+    "seconds": 0.169,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235517,
+    "gzip_bytes": 41730
+  },
+  {
+    "case": "5m/exclude-ip-port",
+    "seconds": 0.17,
+    "rows": 100,
+    "total": "382,998",
+    "error": null,
+    "html_bytes": 895704,
+    "gzip_bytes": 58269
+  },
+  {
+    "case": "5m/cidr-or-scope",
+    "seconds": 0.415,
+    "rows": 60,
+    "total": "60",
+    "error": null,
+    "html_bytes": 631161,
+    "gzip_bytes": 50888
+  },
+  {
+    "case": "5m/empty",
+    "seconds": 0.1,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235108,
+    "gzip_bytes": 41700
+  },
+  {
+    "case": "1h/tcp-allow-443",
+    "seconds": 0.836,
+    "rows": 100,
+    "total": "431,414",
+    "error": null,
+    "html_bytes": 901769,
+    "gzip_bytes": 62578
+  },
+  {
+    "case": "1h/udp-dns-device",
+    "seconds": 0.141,
+    "rows": 100,
+    "total": "23,168",
+    "error": null,
+    "html_bytes": 894803,
+    "gzip_bytes": 58788
+  },
+  {
+    "case": "1h/exclude-ip-port",
+    "seconds": 0.673,
+    "rows": 100,
+    "total": "4,692,233",
+    "error": null,
+    "html_bytes": 895985,
+    "gzip_bytes": 59698
+  },
+  {
+    "case": "1h/cidr-or-scope",
+    "seconds": 1.797,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 893007,
+    "gzip_bytes": 56528
+  },
+  {
+    "case": "1h/empty",
+    "seconds": 0.201,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235108,
+    "gzip_bytes": 41699
+  },
+  {
+    "case": "24h/tcp-allow-443",
+    "seconds": 1.022,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 901617,
+    "gzip_bytes": 62162
+  },
+  {
+    "case": "24h/udp-dns-device",
+    "seconds": 1.033,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894439,
+    "gzip_bytes": 58502
+  },
+  {
+    "case": "24h/exclude-ip-port",
+    "seconds": 1.042,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 895455,
+    "gzip_bytes": 59519
+  },
+  {
+    "case": "24h/cidr-or-scope",
+    "seconds": 1.723,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 893010,
+    "gzip_bytes": 56534
+  },
+  {
+    "case": "24h/empty",
+    "seconds": 0.55,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235111,
+    "gzip_bytes": 41705
+  },
+  {
+    "case": "7d/tcp-allow-443",
+    "seconds": 0.482,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 902410,
+    "gzip_bytes": 62455
+  },
+  {
+    "case": "7d/udp-dns-device",
+    "seconds": 0.209,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 896136,
+    "gzip_bytes": 59366
+  },
+  {
+    "case": "7d/exclude-ip-port",
+    "seconds": 0.339,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 895459,
+    "gzip_bytes": 59178
+  },
+  {
+    "case": "7d/cidr-or-scope",
+    "seconds": 2.109,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 892963,
+    "gzip_bytes": 56555
+  },
+  {
+    "case": "7d/empty",
+    "seconds": 1.3,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235108,
+    "gzip_bytes": 41701
+  },
+  {
+    "case": "30d/tcp-allow-443",
+    "seconds": 0.475,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 902777,
+    "gzip_bytes": 62329
+  },
+  {
+    "case": "30d/udp-dns-device",
+    "seconds": 0.302,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 890649,
+    "gzip_bytes": 58320
+  },
+  {
+    "case": "30d/exclude-ip-port",
+    "seconds": 0.357,
+    "rows": 100,
+    "total": "100,000+",
+    "error": null,
+    "html_bytes": 895752,
+    "gzip_bytes": 58008
+  },
+  {
+    "case": "30d/cidr-or-scope",
+    "seconds": 2.256,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 892944,
+    "gzip_bytes": 56547
+  },
+  {
+    "case": "30d/empty",
+    "seconds": 1.389,
+    "rows": 0,
+    "total": "0",
+    "error": null,
+    "html_bytes": 235111,
+    "gzip_bytes": 41701
+  },
+  {
+    "case": "reported/page-two",
+    "seconds": 1.043,
+    "rows": 100,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 894114,
+    "gzip_bytes": 56295
+  },
+  {
+    "case": "reported/200-rows",
+    "seconds": 1.056,
+    "rows": 200,
+    "total": "Count unavailable",
+    "error": null,
+    "html_bytes": 1549402,
+    "gzip_bytes": 68084
+  },
+  {
+    "case": "reported/nql-stats",
+    "seconds": 30.026,
+    "rows": 0,
+    "total": "0",
+    "error": "Query timed out \u2014 narrow the time range or add a filter on an indexed field (srcip, dstip, action, policyname, dstport).",
+    "html_bytes": 236352,
+    "gzip_bytes": 41896
+  },
+  {
+    "case": "reported/aggregate",
+    "seconds": 16.436,
+    "rows": 7,
+    "total": "7",
+    "error": null,
+    "html_bytes": 300765,
+    "gzip_bytes": 51342
+  },
+  {
+    "case": "aggregate/1m",
+    "seconds": 0.155,
+    "rows": 100,
+    "total": "6,775",
+    "error": null,
+    "html_bytes": 723387,
+    "gzip_bytes": 67640
+  },
+  {
+    "case": "aggregate/24h-port",
+    "seconds": 11.927,
+    "rows": 0,
+    "total": "0",
+    "error": "Query needs too much memory \u2014 group by fewer fields or narrow the time range.",
+    "html_bytes": 234247,
+    "gzip_bytes": 41642
+  },
+  {
+    "case": "custom-history",
+    "seconds": 1.917,
+    "rows": 100,
+    "total": "1,293",
+    "error": null,
+    "html_bytes": 894179,
+    "gzip_bytes": 56013
+  },
+  {
+    "suggest_minutes": 1,
+    "prefix": "172.20.30",
+    "seconds": 0.087,
+    "values": 12
+  },
+  {
+    "suggest_minutes": 1,
+    "prefix": "172.20.30.46",
+    "seconds": 0.081,
+    "values": 1
+  },
+  {
+    "suggest_minutes": 1,
+    "prefix": "192.0.2.255",
+    "seconds": 0.065,
+    "values": 0
+  },
+  {
+    "suggest_minutes": 10080,
+    "prefix": "172.20.30",
+    "seconds": 0.514,
+    "values": 12
+  },
+  {
+    "suggest_minutes": 10080,
+    "prefix": "172.20.30.46",
+    "seconds": 0.631,
+    "values": 1
+  },
+  {
+    "suggest_minutes": 10080,
+    "prefix": "192.0.2.255",
+    "seconds": 0.567,
+    "values": 0
+  },
+  {
+    "cases": 50,
+    "failures": 3
+  }
+]

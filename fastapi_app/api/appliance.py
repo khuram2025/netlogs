@@ -7,6 +7,7 @@ from ..core.permissions import require_role
 
 router = APIRouter(prefix='/api/appliance', tags=['appliance'], dependencies=[Depends(require_role('ADMIN'))])
 OPERATIONS = {'status', 'storage', 'storage.plan', 'storage.commit', 'network.apply',
+              'time.status', 'time.update', 'time.retry',
               'network.confirm', 'network.rollback', 'settings.update', 'password.gui',
               'updates.status','updates.check','updates.apply','updates.policy','updates.register',
               'licences.status','licences.refresh','licences.claim'}
@@ -29,7 +30,7 @@ async def appliance_operation(operation: str, request: Request):
     try:
         async with httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds='/run/zenshield/agent.sock'), timeout=120) as client:
             response = await client.post('http://localhost/rpc', json={'operation': operation, 'body': body})
-        if operation not in {'status', 'storage'}:
+        if operation not in {'status', 'storage', 'time.status'}:
             logger.info('Appliance operation=%s actor=%s result=%s', operation, request.state.current_user.username, response.status_code)
         return JSONResponse(response.json(), status_code=response.status_code)
     except httpx.HTTPError:

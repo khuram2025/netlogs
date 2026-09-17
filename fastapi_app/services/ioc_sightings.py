@@ -12,6 +12,7 @@ The raw events stay in ClickHouse as the evidence trail behind each sighting.
 import hashlib
 import ipaddress
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -129,7 +130,7 @@ async def rollup_sightings():
             wm = (datetime.now(timezone.utc)
                   - timedelta(seconds=_FIRST_RUN_LOOKBACK)).strftime(_TS_FMT)
         try:
-            rows = _fetch_new_matches(wm, cutoff_str)
+            rows = await asyncio.to_thread(_fetch_new_matches, wm, cutoff_str)
         except Exception as e:
             logger.error(f"sightings rollup: fetch failed: {e}")
             return

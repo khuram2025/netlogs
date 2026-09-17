@@ -3249,8 +3249,15 @@
                 <div class="nql-stats" role="status" aria-live="polite">
                     <span class="nql-stat"><span class="nql-stat-val">{{ total_display if total_display is defined else (total | format_number) }}</span> {% if is_aggregate or nql_mode == 'aggregate' %}groups{% else %}logs{% endif %}</span>
                     <span class="nql-stat-sep"></span>
-                    <span class="nql-stat"><span class="nql-stat-val">{{ stats.get('unique_devices', devices | length) if stats else devices | length }}</span> devices</span>
+                    <span class="nql-stat"><span class="nql-stat-val">{{ devices | length }}</span> available devices</span>
                 </div>
+            </div>
+
+            <div class="logs-time-window" style="padding:6px 12px;color:var(--text-muted);font-size:12px">
+                Filter timezone: <strong>{{ app_tz() }}</strong>
+                {% if effective_start is defined and effective_start %} · {{ effective_start | localdt }}{% endif %}
+                {% if effective_end is defined and effective_end %} – {{ effective_end | localdt }}{% endif %}
+                {% if not is_aggregate and nql_mode != 'aggregate' %}<br>Timestamp shows the device-reported time. Hover for the normalized time used by filters and sorting.{% endif %}
             </div>
 
             {% if nql_error %}
@@ -3610,11 +3617,11 @@
                         </div>
 
                         {% if not is_aggregate %}
-                        {% if nql_error %}
+                        {% if error or nql_error %}
                         <div class="empty-state nql-empty-error">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
                             <h3>The query could not be run</h3>
-                            <p>{{ nql_error }}</p>
+                            <p>{{ error or nql_error }}</p>
                             <p class="nql-empty-hint">Example: <code>srcip:10.0.0.0/8 action:deny | stats count by dstip</code> &middot; <a href="#" onclick="toggleNQLHelp();return false;">Field &amp; syntax reference</a></p>
                         </div>
                         {% elif nql_mode == 'aggregate' %}
@@ -3677,7 +3684,7 @@
                         <table class="log-table">
                             <thead>
                                 <tr>
-                                    <th data-col="timestamp" class="sortable">Timestamp <span class="sort-icon">▼</span><span class="col-resize-handle"></span></th>
+                                    <th data-col="timestamp" class="sortable" title="Device-reported time; ordered by normalized event time">Timestamp (device) <span class="sort-icon">▼</span><span class="col-resize-handle"></span></th>
                                     <th data-col="action">Status<span class="col-resize-handle"></span></th>
                                     <th data-col="srcip" class="sortable">Source IP<span class="col-resize-handle"></span></th>
                                     <th data-col="dstip" class="sortable">Dest IP<span class="col-resize-handle"></span></th>
@@ -3712,12 +3719,8 @@
                                 {% set action = log_action | lower %}
                                 <tr class="log-row" data-index="{{ loop.index }}">
                                     <td data-col="timestamp">
-                                        <span class="timestamp">
-                                            {# Show the platform's normalized timestamp, rendered in the app's
-                                               display timezone — consistent with filtering, sorting and
-                                               correlation windows. The device-reported log_time is in the
-                                               device's own (often skewed) clock and stays in the raw detail. #}
-                                            {% if log.get('timestamp') %}{{ log.timestamp | localdt }}{% else %}--{% endif %}
+                                        <span class="timestamp" title="{% if log.get('log_time') %}Device-reported time. {% else %}Device time unavailable. {% endif %}Normalized time ({{ app_tz() }}): {{ (log.timestamp | localdt) if log.get('timestamp') else '--' }}">
+                                            {% if log.get('log_time') %}{{ log.log_time }}{% elif log.get('timestamp') %}{{ log.timestamp | localdt }} {{ app_tz() }}{% else %}--{% endif %}
                                         </span>
                                     </td>
                                     <td data-col="action">
@@ -3889,7 +3892,9 @@
                                 <tr class="agg-row anomaly-row-{{ _state | lower }}" data-agg-idx="{{ loop.index0 }}" data-anomaly="{{ _state }}">
                                     <td style="text-align:center;"><input type="checkbox" class="agg-check agg-row-check" data-idx="{{ loop.index0 }}" onchange="updateAggSelection()"></td>
                                     <td>
-                                        {% if _state == 'NEW' %}
+                                        {% if _state == 'UNKNOWN' %}
+                                            <span title="Prior-window comparison unavailable">—</span>
+                                        {% elif _state == 'NEW' %}
                                             <span class="anomaly-chip anomaly-new" title="Not seen in prior window">NEW</span>
                                         {% elif _state == 'SPIKE' %}
                                             <span class="anomaly-chip anomaly-spike" title="≥5× prior window count and well above baseline">SPIKE</span>
@@ -3929,7 +3934,7 @@
                                     {% endif %}
                                     <td><span class="event-count-badge">{{ "{:,}".format(row.event_count) }}</span></td>
                                     {% if is_compare_mode %}
-                                    <td><span class="event-count-badge event-count-prior">{{ "{:,}".format(row.prior_count or 0) }}</span></td>
+                                    <td><span class="event-count-badge event-count-prior">{{ '—' if _state == 'UNKNOWN' else "{:,}".format(row.prior_count or 0) }}</span></td>
                                     <td>
                                         {% if row.delta_pct is none %}
                                             <span class="delta-cell delta-na">—</span>
@@ -4016,11 +4021,11 @@
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
                             </button>
                             <input type="text" id="pageInput" class="page-input" value="{{ page }}">
-                            <span class="page-total">of {{ total_pages }}</span>
+                            <span class="page-total">{% if count_unavailable %}total not counted{% else %}of {{ total_pages }}{% endif %}</span>
                             <button type="button" class="page-btn" onclick="goToPage({{ page + 1 }})" {% if page >= total_pages %}disabled{% endif %}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                             </button>
-                            <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if page >= total_pages %}disabled{% endif %}>
+                            <button type="button" class="page-btn" onclick="goToPage({{ total_pages }})" {% if page >= total_pages or count_unavailable %}disabled{% endif %}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 17 5-5-5-5M13 17l5-5-5-5"/></svg>
                             </button>
                         </div>
@@ -4075,7 +4080,7 @@
                             </button>
                             <div class="sidebar-section-content compact-grid">
                                 <div class="time-input-group">
-                                    <label class="time-input-label" for="startDateTime">Start</label>
+                                    <label class="time-input-label" for="startDateTime">Start ({{ app_tz() }})</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -4084,7 +4089,7 @@
                                     </div>
                                 </div>
                                 <div class="time-input-group">
-                                    <label class="time-input-label" for="endDateTime">End</label>
+                                    <label class="time-input-label" for="endDateTime">End ({{ app_tz() }})</label>
                                     <div class="calendar-input-wrapper" onclick="this.querySelector('input').showPicker()">
                                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -4856,7 +4861,8 @@
             const startVal = document.getElementById('startDateTime').value;
             const endVal = document.getElementById('endDateTime').value;
             const applyBtn = document.getElementById('applyRangeBtn');
-            applyBtn.disabled = !(startVal && endVal);
+            applyBtn.disabled = !(startVal && endVal && startVal <= endVal);
+            document.getElementById('endDateTime').setCustomValidity(startVal && endVal && startVal > endVal ? 'End must be after start.' : '');
             if (startVal && endVal) {
                 document.querySelectorAll('.time-pill').forEach(btn => btn.classList.remove('active'));
             }
@@ -4865,7 +4871,7 @@
         function applyCustomRange() {
             const startVal = document.getElementById('startDateTime').value;
             const endVal = document.getElementById('endDateTime').value;
-            if (startVal && endVal) {
+            if (startVal && endVal && startVal <= endVal) {
                 document.getElementById('hiddenTimeRange').value = 'custom';
                 document.getElementById('hiddenPageInput').value = 1;
                 showLoading();
@@ -5194,6 +5200,7 @@
     let nqlValidateTimer = null;
     let nqlSuggestTimer = null;
     let nqlSelectedAC = -1;
+    let nqlSuggestController = null;
     let nqlSuggestSeq = 0;          // drop responses that arrive out of order
     let nqlItems = [];              // flat list matching the rendered rows
     let nqlRange = { start: 0, end: 0 };
@@ -5253,11 +5260,20 @@
     nqlInput.addEventListener('blur', () => { setTimeout(hideAutocomplete, 180); });
 
     function scheduleAutocomplete(delay) {
+        cancelAutocomplete();
+        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 300 : delay);
+    }
+
+    function cancelAutocomplete() {
         clearTimeout(nqlSuggestTimer);
-        nqlSuggestTimer = setTimeout(fetchAutocomplete, delay === undefined ? 130 : delay);
+        ++nqlSuggestSeq;
+        if (nqlSuggestController) nqlSuggestController.abort();
+        nqlSuggestController = null;
+        nqlAcLoading.classList.remove('on');
     }
 
     async function fetchAutocomplete() {
+        cancelAutocomplete();
         const q = nqlInput.value;
         const cursor = nqlInput.selectionStart ?? q.length;
         const range = nqlTimeRange();
@@ -5265,11 +5281,13 @@
 
         if (nqlSuggestCache.has(key)) { renderAutocomplete(nqlSuggestCache.get(key)); return; }
 
-        const seq = ++nqlSuggestSeq;
+        const seq = nqlSuggestSeq;
+        nqlSuggestController = new AbortController();
         nqlAcLoading.classList.add('on');
         try {
             const res = await fetch(`/api/nql/suggest?q=${encodeURIComponent(q)}` +
-                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`);
+                                    `&cursor=${cursor}&time_range=${encodeURIComponent(range)}`,
+                                    {signal: nqlSuggestController.signal});
             if (seq !== nqlSuggestSeq) return;        // a newer keystroke won
             if (!res.ok) { hideAutocomplete(); return; }
             const data = await res.json();
@@ -5278,7 +5296,7 @@
             if (nqlSuggestCache.size > 200) nqlSuggestCache.delete(nqlSuggestCache.keys().next().value);
             renderAutocomplete(data);
         } catch (e) {
-            hideAutocomplete();
+            if (seq === nqlSuggestSeq && e.name !== 'AbortError') hideAutocomplete();
         } finally {
             if (seq === nqlSuggestSeq) nqlAcLoading.classList.remove('on');
         }
@@ -5474,7 +5492,11 @@
     (function () {
         const form = document.getElementById('filterForm');
         const prune = () => form.querySelectorAll('input, select').forEach(el => {
-            if (el.name === 'csrf_token' || (el.name && el.value === '')) el.disabled = true;
+            if (el.name === 'csrf_token' || (el.name && el.value === '')) { el.disabled = true; el.dataset.pruned = '1'; }
+        });
+        window.addEventListener('pageshow', () => {
+            form.querySelectorAll('[data-pruned]').forEach(el => { el.disabled = false; delete el.dataset.pruned; });
+            document.getElementById('loadingOverlay')?.classList.remove('visible');
         });
         form.addEventListener('submit', prune);                 // Search / Apply buttons
         const nativeSubmit = form.submit.bind(form);            // every script path
@@ -5482,6 +5504,8 @@
     })();
 
     function runNQL() {
+        cancelAutocomplete();
+        clearTimeout(nqlValidateTimer);
         const query = nqlInput.value.trim();
         nqlInput.value = query;
         hideAutocomplete();
@@ -6321,7 +6345,8 @@
     function _facetParams(field){
         const u = new URLSearchParams(window.location.search);
         const keep = ['time_range','start','end','device','severity','q','action','scope','log_type','application',
-                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone'];
+                        'srcip','dstip','srcport','dstport','protocol','policyname','src_zone','dst_zone',
+                        'srcip_not','dstip_not','srcport_not','dstport_not','session_end_reason','threat_id'];
         const p = new URLSearchParams();
         keep.forEach(k => { const v = u.get(k); if (v) p.set(k, v); });
         if (!p.get('time_range') && !p.get('start')) p.set('time_range', '{{ current_time_range }}');
@@ -6330,33 +6355,44 @@
     }
     function applyFacet(field, value){
         const p = new URLSearchParams(window.location.search);
+        p.delete(field + '_not');
         p.set(field, value); p.set('page', '1');
         try { showLoading(); } catch(e) {}
         window.location.search = p.toString();
     }
+    let facetRequest = 0;
     function loadFacets(forcedField){
+        const requestId = ++facetRequest;
         const list = document.getElementById('facetList');
         if (!list) return;
         const field = forcedField || getActiveFacetField();
         list.innerHTML = '<div class="facet-loading">Loading…</div>';
         fetch('/api/logs/facets?' + _facetParams(field), {headers:{'Accept':'application/json'}})
-          .then(r => r.json())
+          .then(r => { if (!r.ok) throw new Error('Request failed'); return r.json(); })
           .then(d => {
+            if (requestId !== facetRequest) return;
+            if (d.error) { list.textContent = d.error; return; }
             const vals = (d && d.values) || [];
             if (!vals.length){ list.innerHTML = '<div class="facet-empty">No values</div>'; return; }
             const max = vals[0].count || 1;
-            list.innerHTML = vals.map(v => {
+            list.replaceChildren();
+            vals.forEach(v => {
                 const pct = Math.max(4, Math.round((v.count / max) * 100));
                 const raw = v.value || '';
-                const esc = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-                const jsEsc = raw.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                return '<div class="facet-item" onclick="applyFacet(\'' + field + '\', \'' + jsEsc + '\')" title="' + esc + ' · ' + v.count.toLocaleString() + '">' +
-                       '<span class="facet-bar" style="width:' + pct + '%"></span>' +
-                       '<span class="facet-val">' + (esc || '(empty)') + '</span>' +
-                       '<span class="facet-cnt">' + v.count.toLocaleString() + '</span></div>';
-            }).join('');
+                const item = document.createElement('div');
+                item.className = 'facet-item';
+                item.title = raw + ' · ' + v.count.toLocaleString();
+                item.addEventListener('click', () => applyFacet(field, raw));
+                const bar = document.createElement('span');
+                bar.className = 'facet-bar'; bar.style.width = pct + '%';
+                const value = document.createElement('span');
+                value.className = 'facet-val'; value.textContent = raw || '(empty)';
+                const count = document.createElement('span');
+                count.className = 'facet-cnt'; count.textContent = v.count.toLocaleString();
+                item.append(bar, value, count); list.append(item);
+            });
           })
-          .catch(() => { list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
+          .catch(() => { if (requestId === facetRequest) list.innerHTML = '<div class="facet-empty">Failed to load</div>'; });
     }
     if (document.readyState !== 'loading') loadFacets();
     else document.addEventListener('DOMContentLoaded', () => loadFacets());

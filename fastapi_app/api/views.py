@@ -1114,36 +1114,9 @@ async def log_list(
                 severity_int = None
         severities = [severity_int] if severity_int is not None else None
 
-        # Parse datetime strings
-        start_time = None
-        end_time = None
+        effective_time_range = (time_range or '1h').strip().lower() or '1h'
         now = datetime.now(timezone.utc)
-
-        # Default to 1 hour if no time range specified (for performance)
-        default_time_range = '1h'
-        effective_time_range = time_range.strip().lower() if time_range and time_range.strip() else default_time_range
-
-        # Handle time_range parameter (e.g., 15m, 1h, 24h, 7d). The start is
-        # rounded (see _round_window) so repeated loads share cached scans.
-        _unit = {'m': 'minutes', 'h': 'hours', 'd': 'days'}.get(effective_time_range[-1:])
-        if _unit:
-            try:
-                delta = timedelta(**{_unit: int(effective_time_range[:-1])})
-                start_time = _round_window(now - delta, delta)
-            except ValueError:
-                pass
-
-        # Override with explicit start/end if provided
-        if start:
-            try:
-                start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
-            except ValueError:
-                pass
-        if end:
-            try:
-                end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
-            except ValueError:
-                pass
+        start_time, end_time = _explorer_time_window(effective_time_range, start, end)
 
         # Build search query from direct filter parameters (srcip, dstip, dstport)
         search_parts = []
@@ -1234,6 +1207,9 @@ async def log_list(
             }
             if action in action_terms:
                 search_parts.append(action_terms[action])
+            else:
+                # Facets can select a concrete vendor action outside the pills.
+                search_parts.append(_fmt('action', action.strip()))
 
         # The NQL bar (`q`) is the primary search. Toolbar/sidebar fields are
         # AND-ed onto it with the user's expression parenthesised, so an OR in the
@@ -1282,10 +1258,18 @@ async def log_list(
         query_started = time.perf_counter()
         nql_columns: List[str] = []
         nql_rows: List[dict] = []
+        async def load_devices():
+            try:
+                found = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            except Exception:
+                logger.warning("Log explorer device options unavailable", exc_info=True)
+                found = []
+            return sorted(set(found + (device_ips or [])))
+
 
         if nql_error:
             # Nothing to run — the page shows the syntax error where the query is.
-            devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            devices = await load_devices()
             logs_or_agg, total, stats = [], 0, {}
             is_aggregate = False
         elif nql_mode == 'aggregate':
@@ -1302,14 +1286,8 @@ async def log_list(
                     default_limit=per_page_num,
                 )
             )
-            stats_future = loop.run_in_executor(
-                _executor,
-                lambda: ClickHouseClient.get_log_stats_summary(
-                    device_ips=device_ips, start_time=start_time, end_time=end_time,
-                    query_text=search_query,
-                )
-            )
-            devices_future = loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+            stats_future = asyncio.sleep(0, result={})
+            devices_future = asyncio.create_task(load_devices())
             try:
                 agg_result, stats, devices = await asyncio.gather(agg_future, stats_future, devices_future)
                 nql_columns = agg_result["columns"]
@@ -1317,7 +1295,7 @@ async def log_list(
             except Exception as e:
                 logger.error(f"NQL aggregate failed for {search_query!r}: {e}")
                 nql_error = _friendly_ch_error(e)
-                stats, devices = {}, await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+                stats, devices = {}, await load_devices()
             logs_or_agg, total = [], len(nql_rows)
         elif is_aggregate:
             logs_future = loop.run_in_executor(
@@ -1345,6 +1323,8 @@ async def log_list(
                     end_time=end_time,
                     query_text=search_query if search_query else None,
                     subnet_rollup=is_subnet_rollup,
+                    max_count=COUNT_CAP,
+                    max_execution_time=1,
                 )
             )
         else:
@@ -1371,27 +1351,16 @@ async def log_list(
                     end_time=end_time,
                     query_text=search_query if search_query else None,
                     max_count=COUNT_CAP,
+                    max_execution_time=1,
                 )
             )
 
         if not nql_error and nql_mode != 'aggregate':
             # skip_total: the count future above already scans this exact
             # filter set — running it twice doubled the CPU cost of every load.
-            stats_future = loop.run_in_executor(
-                _executor,
-                lambda: ClickHouseClient.get_log_stats_summary(
-                    device_ips=device_ips,
-                    start_time=start_time,
-                    end_time=end_time,
-                    query_text=search_query if search_query else None,
-                    skip_total=True,
-                )
-            )
+            stats_future = asyncio.sleep(0, result={})
 
-            devices_future = loop.run_in_executor(
-                _executor,
-                ClickHouseClient.get_distinct_devices
-            )
+            devices_future = asyncio.create_task(load_devices())
 
             # Wait for all queries to complete
             try:
@@ -1399,14 +1368,13 @@ async def log_list(
                     logs_future, total_future, stats_future, devices_future
                 )
             except Exception as e:
-                if not search_query:
-                    raise
                 # A query that parsed but ClickHouse rejected (e.g. an aggregate
                 # over a non-numeric field) is a user error, not a server fault.
                 logger.error(f"NQL log query failed for {search_query!r}: {e}")
                 nql_error = _friendly_ch_error(e)
                 logs_or_agg, total, stats = [], 0, {}
-                devices = await loop.run_in_executor(_executor, ClickHouseClient.get_distinct_devices)
+                is_aggregate = False
+                devices = await load_devices()
 
             if nql_limit and total >= 0:
                 total = min(total, nql_limit)
@@ -1423,13 +1391,19 @@ async def log_list(
         # out (a non-indexed Map-column filter over a wide window). In that case
         # show "100,000+" and cap the pager; otherwise show the true exact count.
         is_approximate = total < 0
-        if is_approximate:
+        count_unavailable = total == -2
+        if count_unavailable:
+            total = (page_num - 1) * per_page_num + len(logs_or_agg)
+            total_display = "Count unavailable"
+        elif is_approximate:
             total = COUNT_CAP
             total_display = f"{COUNT_CAP:,}+"
         else:
             total_display = f"{total:,}"
 
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 1
+        if count_unavailable:
+            total_pages = page_num + int(len(logs_or_agg) == per_page_num)
 
         # Clean up filter values for template (handle empty strings)
         current_device = device if device and device.strip() else None
@@ -1442,6 +1416,7 @@ async def log_list(
             "total": total,
             "total_display": total_display,
             "is_approximate": is_approximate,
+            "count_unavailable": count_unavailable,
             "stats": stats,
             "page": page_num,
             "per_page": per_page_num,
@@ -1456,6 +1431,8 @@ async def log_list(
             "current_start": start,
             "current_end": end,
             "current_time_range": effective_time_range,
+            "effective_start": start_time,
+            "effective_end": end_time,
             # Network filter values
             "current_srcip": srcip_clean,
             "current_dstip": dstip_clean,
@@ -1510,6 +1487,7 @@ async def log_list(
             is_compare_mode = bool(compare and compare.strip().lower() in ('1', 'true', 'on'))
 
             prior_map: Dict[Tuple, int] = {}
+            prior_available = False
             # end_time is often None (the user gave a relative time_range);
             # treat that as "now" so we can derive a comparable prior window.
             effective_end_time = end_time or now
@@ -1527,6 +1505,8 @@ async def log_list(
                             subnet_rollup=is_subnet_rollup,
                         ),
                     )
+                    prior_available = prior_map is not None
+                    prior_map = prior_map or {}
                 except Exception as _e:
                     logger.warning(f"prior-window enrichment skipped: {_e}")
                     prior_map = {}
@@ -1557,7 +1537,10 @@ async def log_list(
                 cur = int(r.get('event_count') or 0)
                 prior = int(prior_map.get(_row_key(r), 0))
                 r['prior_count'] = prior
-                if prior == 0:
+                if not prior_available:
+                    r['anomaly_state'] = 'UNKNOWN'
+                    r['delta_pct'] = None
+                elif prior == 0:
                     r['anomaly_state'] = 'NEW'
                     r['delta_pct'] = None
                 elif cur >= 5 * prior and cur >= max(10, 3 * (prior_median or 1)):
@@ -1643,8 +1626,6 @@ async def log_list(
         return _render("logs/log_list.html", request, context)
     except Exception as e:
         import traceback
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error in log_list view: {type(e).__name__}: {e}")
         logger.error(traceback.format_exc())
         print(f"ERROR in log_list: {type(e).__name__}: {e}")
@@ -1662,10 +1643,10 @@ async def log_list(
             "total_pages": 1,
             "has_prev": False,
             "has_next": False,
-            "current_device": None,
-            "current_severity": None,
-            "current_q": None,
-            "current_action": None,
+            "current_device": device,
+            "current_severity": severity,
+            "current_q": q,
+            "current_action": action,
             "current_start": start if start else None,
             "current_end": end if end else None,
             "current_time_range": time_range if time_range else '1h',
@@ -1674,10 +1655,10 @@ async def log_list(
             "current_dstip": dstip if dstip else None,
             "current_srcport": srcport if srcport else None,
             "current_dstport": dstport if dstport else None,
-            "current_srcip_not": False,
-            "current_dstip_not": False,
-            "current_srcport_not": False,
-            "current_dstport_not": False,
+            "current_srcip_not": _is_not_flag(srcip_not),
+            "current_dstip_not": _is_not_flag(dstip_not),
+            "current_srcport_not": _is_not_flag(srcport_not),
+            "current_dstport_not": _is_not_flag(dstport_not),
             "current_protocol": protocol if protocol else None,
             # Policy & Security filter values
             "current_policyname": policyname if policyname else None,
@@ -1697,7 +1678,7 @@ async def log_list(
             "group_fields": ['srcip', 'dstip', 'dstport'],
             "is_subnet_rollup": False,
             "agg_rows": [],
-            "error": str(e),
+            "error": str(e) if isinstance(e, ValueError) else _friendly_ch_error(e),
             "nql_mode": "logs",
             "nql_error": None,
             "nql_columns": [],
@@ -4742,25 +4723,35 @@ def _round_window(start_time, delta):
 
 
 def _explorer_time_window(time_range, start, end):
-    """Resolve (start_time, end_time) from a relative range (e.g. '1h','24h','7d')
-    or explicit ISO start/end. Returns (None, None) to let the query layer apply
-    its default 1h bound."""
-    now = datetime.now(timezone.utc)
-    start_time = end_time = None
-    if start and start.strip():
-        try: start_time = datetime.fromisoformat(start.replace('Z', '+00:00'))
-        except ValueError: pass
-    if end and end.strip():
-        try: end_time = datetime.fromisoformat(end.replace('Z', '+00:00'))
-        except ValueError: pass
-    if start_time is None and end_time is None and time_range and time_range.strip():
-        m = re.match(r'^(\d+)([mhd])$', time_range.strip().lower())
-        if m:
-            n, u = int(m.group(1)), m.group(2)
-            delta = {'m': timedelta(minutes=n), 'h': timedelta(hours=n),
-                     'd': timedelta(days=n)}[u]
-            start_time = _round_window(now - delta, delta)
-    return start_time, end_time
+    """Use the configured display zone for datetime-local inputs; query in UTC."""
+    from zoneinfo import ZoneInfo
+    from ..core.app_settings import get_display_timezone
+    def parse(value):
+        if not value or not value.strip():
+            return None
+        try:
+            result = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValueError("Enter a valid start and end date/time.") from None
+        if result.tzinfo is None:
+            result = result.replace(tzinfo=ZoneInfo(get_display_timezone()))
+        return result.astimezone(timezone.utc)
+    start_time, end_time = parse(start), parse(end)
+    if start_time is not None or end_time is not None:
+        if start_time and end_time and start_time > end_time:
+            raise ValueError("Start must be before end.")
+        return start_time, end_time
+    value = (time_range or '1h').strip().lower()
+    match = re.fullmatch(r'(\d+)([mhd])', value)
+    if not match:
+        raise ValueError("Choose a time range or enter both custom dates.")
+    n, unit = int(match.group(1)), match.group(2)
+    seconds = n * {'m': 60, 'h': 3600, 'd': 86400}[unit]
+    if not 0 < seconds <= 90 * 86400:
+        raise ValueError("Time range must be greater than zero and no longer than 90 days.")
+    delta = timedelta(seconds=seconds)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    return now - delta, now
 
 
 def _explorer_severities(severity):
@@ -4795,16 +4786,22 @@ def _explorer_search_query(q=None, action=None, log_type=None, application=None,
                            dst_zone=None, session_end_reason=None, dstport=None,
                            srcport=None, src_country=None, dst_country=None, service=None,
                            srcip_not=None, dstip_not=None, srcport_not=None, dstport_not=None,
-                           scope=None):
+                           scope=None, protocol=None, threat_id=None):
     """Compose an NQL query string (user query + toolbar field:value terms)
     parsed by ClickHouseClient._build_where_clause, so facets, exports and
     analytics honor exactly the filters the log table shows."""
     from ..services.nql_parser import compose_nql
     parts = []
+    action = {
+        'accept': 'accept|allow|pass|close|client-rst|server-rst',
+        'deny': 'deny|drop|block|reject', 'close': 'close|client-rst|server-rst',
+    }.get(action, action)
     for field, val, negated in (
         ("action", action, False),
         ("log_type", log_type, False),
         ("application", application, False),
+        ("proto", protocol, False),
+        ("threat_id", threat_id, False),
         ("srcip", srcip, _is_not_flag(srcip_not)),
         ("dstip", dstip, _is_not_flag(dstip_not)),
         ("srcport", srcport, _is_not_flag(srcport_not)),
@@ -4832,14 +4829,28 @@ async def logs_facets(
     q: Optional[str] = Query(None), action: Optional[str] = Query(None),
     log_type: Optional[str] = Query(None), application: Optional[str] = Query(None),
     scope: Optional[str] = Query(None),
+    srcip: Optional[str] = Query(None), dstip: Optional[str] = Query(None),
+    srcport: Optional[str] = Query(None), dstport: Optional[str] = Query(None),
+    srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
+    srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
+    policyname: Optional[str] = Query(None), protocol: Optional[str] = Query(None),
+    src_zone: Optional[str] = Query(None), dst_zone: Optional[str] = Query(None),
+    session_end_reason: Optional[str] = Query(None), threat_id: Optional[str] = Query(None),
     limit: int = Query(10),
 ):
     """Top-N values (+counts) for a facetable field — the left-rail click-to-filter."""
-    st, et = _explorer_time_window(time_range, start, end)
+    try:
+        st, et = _explorer_time_window(time_range, start, end)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc), "values": []})
     device_ips = [device] if device and device.strip() else None
     sev = _explorer_severities(severity)
     sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
-                                scope=scope)
+                                scope=scope, srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
+                                srcip_not=srcip_not, dstip_not=dstip_not, srcport_not=srcport_not,
+                                dstport_not=dstport_not, policyname=policyname, protocol=protocol,
+                                src_zone=src_zone, dst_zone=dst_zone,
+                                session_end_reason=session_end_reason, threat_id=threat_id)
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(_executor, lambda: ClickHouseClient.get_field_facets(
         field=field, device_ips=device_ips, severities=sev, start_time=st, end_time=et,
@@ -4859,17 +4870,24 @@ async def logs_export(
     srcip_not: Optional[str] = Query(None), dstip_not: Optional[str] = Query(None),
     srcport_not: Optional[str] = Query(None), dstport_not: Optional[str] = Query(None),
     policyname: Optional[str] = Query(None), scope: Optional[str] = Query(None),
+    protocol: Optional[str] = Query(None), src_zone: Optional[str] = Query(None),
+    dst_zone: Optional[str] = Query(None), session_end_reason: Optional[str] = Query(None),
+    threat_id: Optional[str] = Query(None),
     limit: int = Query(100000),
 ):
     """Stream the current filtered logs as CSV or JSON (capped at `limit` rows)."""
-    st, et = _explorer_time_window(time_range, start, end)
+    try:
+        st, et = _explorer_time_window(time_range, start, end)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     device_ips = [device] if device and device.strip() else None
     sev = _explorer_severities(severity)
     sq = _explorer_search_query(q=q, action=action, log_type=log_type, application=application,
                                 srcip=srcip, dstip=dstip, srcport=srcport, dstport=dstport,
                                 srcip_not=srcip_not, dstip_not=dstip_not,
                                 srcport_not=srcport_not, dstport_not=dstport_not,
-                                policyname=policyname, scope=scope)
+                                policyname=policyname, scope=scope, protocol=protocol, src_zone=src_zone,
+                                dst_zone=dst_zone, session_end_reason=session_end_reason, threat_id=threat_id)
     cap = min(max(int(limit), 1), 500000)
     cols = ["timestamp", "device_ip", "vdom", "severity", "srcip", "dstip", "srcport",
             "dstport", "proto", "action", "policyname", "log_type", "application",

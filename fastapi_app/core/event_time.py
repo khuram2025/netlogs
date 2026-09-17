@@ -17,6 +17,7 @@ fall back to ingest time and signal the caller so it can be counted.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -79,6 +80,28 @@ def _try_parse(s: str) -> Optional[datetime]:
     return None
 
 
+def _event_epoch(value) -> Optional[datetime]:
+    """FortiGate epoch values can be seconds, milliseconds, microseconds or ns."""
+    raw = str(value or '').strip()
+    if not raw.isdigit() or len(raw) not in (10, 13, 16, 19):
+        return None
+    divisor = 10 ** (len(raw) - 10)
+    seconds, fraction = divmod(int(raw), divisor)
+    try:
+        return datetime.fromtimestamp(seconds, timezone.utc).replace(
+            microsecond=fraction * 1_000_000 // divisor)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _reported_offset(value):
+    match = re.fullmatch(r'([+-])(\d{2}):?(\d{2})', str(value or '').strip())
+    if not match or int(match[2]) > 23 or int(match[3]) > 59:
+        return None
+    minutes = (int(match[2]) * 60 + int(match[3])) * (1 if match[1] == '+' else -1)
+    return timezone(timedelta(minutes=minutes))
+
+
 def parse_event_time(
     parsed_data: Optional[dict],
     device_tz: Optional[str],
@@ -94,6 +117,12 @@ def parse_event_time(
     """
     if not parsed_data:
         return ingest_time, "fallback_ingest"
+
+    # An epoch already identifies an instant. Prefer it over a vendor-generated
+    # local date/time string; applying the configured source zone again shifts it.
+    epoch = _event_epoch(parsed_data.get('eventtime'))
+    if epoch is not None and abs(epoch - ingest_time) <= MAX_SKEW:
+        return epoch, 'parsed_tzaware'
 
     raw: Optional[str] = None
     for key in _CANDIDATE_FIELDS:
@@ -116,8 +145,10 @@ def parse_event_time(
     # If the parser already attached a tz, trust it.
     tzaware = dt.tzinfo is not None
     if not tzaware:
-        zi = _zoneinfo(device_tz) or _zoneinfo(default_tz) or timezone.utc
+        reported = _reported_offset(parsed_data.get('tz'))
+        zi = reported or _zoneinfo(device_tz) or _zoneinfo(default_tz) or timezone.utc
         dt = dt.replace(tzinfo=zi)
+        tzaware = reported is not None
         # RFC3164 has no year — fill from ingest year, fix Dec→Jan rollover.
         if dt.year == 1900:
             dt = dt.replace(year=ingest_time.year)

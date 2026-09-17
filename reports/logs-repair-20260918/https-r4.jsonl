@@ -1,0 +1,3 @@
+{"case": "reported", "https_seconds": 0.493, "status": 200, "encoding": "gzip", "wire_bytes": 57588, "html_bytes": 904527, "query_status": "456 ms"}
+{"case": "one-minute", "https_seconds": 0.079, "status": 200, "encoding": "gzip", "wire_bytes": 60449, "html_bytes": 905321, "query_status": ""}
+{"case": "tcp-443", "https_seconds": 0.17, "status": 200, "encoding": "gzip", "wire_bytes": 63967, "html_bytes": 911051, "query_status": ""}

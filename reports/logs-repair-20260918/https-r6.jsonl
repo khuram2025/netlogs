@@ -1,0 +1,5 @@
+{"case": "range-https-correctness", "rows": 100, "all_ips_in_range": true, "timezone_label_present": true}
+{"case": "reported-range", "https_seconds": 3.245, "status": 200, "encoding": "gzip", "wire_bytes": 58130, "html_bytes": 904435, "query_status": ""}
+{"case": "reported", "https_seconds": 2.947, "status": 200, "encoding": "gzip", "wire_bytes": 57718, "html_bytes": 904817, "query_status": "2871 ms"}
+{"case": "one-minute", "https_seconds": 0.476, "status": 200, "encoding": "gzip", "wire_bytes": 61264, "html_bytes": 905437, "query_status": ""}
+{"case": "tcp-443", "https_seconds": 0.92, "status": 200, "encoding": "gzip", "wire_bytes": 63816, "html_bytes": 912601, "query_status": ""}

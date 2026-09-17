@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory(prefix='zenshield-storage-build-') as temporary
     (stage / 'appliance/control').mkdir(parents=True)
     for name in ('patch-dns.py', 'patch-storage.py'):
         shutil.copyfile(root / 'scripts' / name, stage / 'scripts' / name)
-    for name in ('api.py', 'system.html', 'storage_monitor.py'):
+    for name in ('api.py', 'system.html', '_ntp_panel.html', 'storage_monitor.py'):
         shutil.copyfile(root / 'appliance/control' / name, stage / 'appliance/control' / name)
     shutil.copytree(root / 'appliance/dns', stage / 'appliance/dns')
     shutil.copytree(root / 'appliance/dns-agent-release', stage / 'dns-agent')

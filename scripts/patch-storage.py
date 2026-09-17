@@ -8,6 +8,7 @@ root = Path(sys.argv[1])
 control = Path(__file__).resolve().parents[1] / 'appliance/control'
 shutil.copyfile(control / 'storage_monitor.py', root / 'fastapi_app/api/storage_monitor.py')
 shutil.copyfile(control / 'system.html', root / 'fastapi_app/templates/system/appliance.html')
+shutil.copyfile(control / '_ntp_panel.html', root / 'fastapi_app/templates/system/_ntp_panel.html')
 shutil.copyfile(control / 'api.py', root / 'fastapi_app/api/appliance.py')
 p = root / 'fastapi_app/api/views.py'
 s = p.read_text()

@@ -31,18 +31,18 @@
     {% set hdr_serial = pd.get('serial', pd.get('devid', pd.get('serialno', ''))) %}
     {% set hdr_logtime = pd.get('log_datetime', '') %}
     {% if not hdr_logtime and pd.get('date') and pd.get('time') %}{% set hdr_logtime = pd.get('date') ~ ' ' ~ pd.get('time') %}{% endif %}
-    {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial %}
+    {% if hdr_devname or hdr_type or hdr_level or hdr_logid or hdr_serial or hdr_logtime or log.get('timestamp') %}
     <div class="log-header-bar">
         {% if hdr_devname %}<div class="log-header-chip device"><span class="chip-label">Device</span><span class="chip-value">{{ hdr_devname }}</span></div><div class="log-header-sep"></div>{% endif %}
         {% if hdr_type %}<div class="log-header-chip"><span class="chip-label">Type</span><span class="chip-value">{{ hdr_type }}{% if hdr_subtype %}/{{ hdr_subtype }}{% endif %}</span></div>{% endif %}
         {% if hdr_level %}<div class="log-header-chip level-{{ hdr_level | lower }}"><span class="chip-label">Level</span><span class="chip-value">{{ hdr_level | upper }}</span></div>{% endif %}
         {% if hdr_logid %}<div class="log-header-chip"><span class="chip-label">Log ID</span><span class="chip-value">{{ hdr_logid }}</span></div>{% endif %}
         {% if hdr_serial %}<div class="log-header-sep"></div><div class="log-header-chip"><span class="chip-label">Serial</span><span class="chip-value">{{ hdr_serial }}</span></div>{% endif %}
-        {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Device time</span><span class="chip-value">{{ hdr_logtime }}</span></div>{% endif %}
+        {% if hdr_logtime %}<div class="log-header-chip"><span class="chip-label">Device time</span><span class="chip-value">{{ hdr_logtime }}{% if pd.get('tz') %} {{ pd.get('tz') }}{% endif %}</span></div>{% endif %}
         {% set ev_ts = log.get('timestamp') %}
         {% set ing_ts = log.get('ingest_time') %}
-        {% if ev_ts %}<div class="log-header-chip"><span class="chip-label">Event time</span><span class="chip-value">{{ ev_ts | localdt }}</span></div>{% endif %}
-        {% if ing_ts and ing_ts != ev_ts %}<div class="log-header-chip" title="When ZenShield received this log"><span class="chip-label">Ingested</span><span class="chip-value">{{ ing_ts | localdt }}</span></div>{% endif %}
+        {% if ev_ts %}<div class="log-header-chip" title="Event time used by filters and sorting"><span class="chip-label">Normalized ({{ app_tz() }})</span><span class="chip-value">{{ ev_ts | localdt }}</span></div>{% endif %}
+        {% if ing_ts and ing_ts != ev_ts %}<div class="log-header-chip" title="When ZenShield received this log"><span class="chip-label">Ingested ({{ app_tz() }})</span><span class="chip-value">{{ ing_ts | localdt }}</span></div>{% endif %}
     </div>
     {% endif %}
 

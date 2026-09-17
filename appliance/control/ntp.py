@@ -1,0 +1,115 @@
+"""Fixed host-side chrony operations; no shell commands or arbitrary paths."""
+import csv
+import ipaddress
+import re
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+SOURCES = Path('/etc/chrony/sources.d/zenshield.sources')
+LOCK = threading.RLock()
+
+
+def validate_servers(values):
+    if not isinstance(values, list) or len(values) > 8:
+        raise ValueError('Enter up to eight NTP servers.')
+    result = []
+    for value in values:
+        if not isinstance(value, str):
+            raise ValueError('Each NTP server must be a hostname or IP address.')
+        value = value.strip()
+        try:
+            host = str(ipaddress.ip_address(value))
+        except ValueError:
+            host = value.rstrip('.').lower()
+            labels = host.split('.')
+            if (not host or len(host) > 253 or re.fullmatch(r'[\d.]+', host)
+                    or any(not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', part) for part in labels)):
+                raise ValueError('Enter NTP hostnames or IPv4/IPv6 addresses, without ports or commands.') from None
+        if host not in result:
+            result.append(host)
+    return result
+
+
+def configured():
+    try:
+        lines = SOURCES.read_text().splitlines()
+    except FileNotFoundError:
+        return []
+    return [p[1] for line in lines if len(p := line.split()) >= 2 and p[0] == 'server']
+
+
+def status(run):
+    errors = []
+    def optional(*args):
+        try:
+            return run(*args, timeout=4)
+        except Exception:
+            errors.append('Unable to read '+args[0]+' status.')
+            return ''
+    td = dict(line.split('=', 1) for line in optional('timedatectl','show','-p','NTPSynchronized','-p','Timezone').splitlines() if '=' in line)
+    active = optional('systemctl','show','chrony','-p','ActiveState','--value').strip()
+    tracking = next(csv.reader(optional('chronyc','-c','-n','tracking').splitlines()), [])
+    peers = []
+    labels = {'*':'Selected', '+':'Candidate', '-':'Not selected', '?':'Unreachable or not ready', 'x':'Rejected', '~':'Too variable'}
+    for p in csv.reader(optional('chronyc','-c','-n','sources').splitlines()):
+        if len(p) < 10:
+            continue
+        try:
+            peers.append({'address':p[2], 'state':p[1], 'status':labels.get(p[1],p[1]),
+                          'stratum':int(p[3]), 'reach':p[5],
+                          'last_sample_seconds':None if int(p[6]) >= 4294967295 else int(p[6]),
+                          'offset_seconds':float(p[8])})
+        except (ValueError, IndexError):
+            continue
+    synced = None
+    reference = None
+    offset = None
+    stratum = None
+    last_sync = None
+    if len(tracking) >= 14:
+        try:
+            stratum = int(tracking[2])
+            synced = active == 'active' and 0 < stratum < 16 and tracking[13] in ('Normal','Insert second','Delete second')
+            reference = tracking[1] or tracking[0]
+            offset = float(tracking[4])
+            last_sync = datetime.fromtimestamp(float(tracking[3]),timezone.utc).isoformat() if float(tracking[3]) > 0 else None
+        except (ValueError, OverflowError):
+            errors.append('Unable to parse chrony tracking status.')
+    return {'synchronized':synced, 'service_active':active == 'active', 'service_state':active or 'unknown',
+            'kernel_synchronized':{'yes':True,'no':False}.get(td.get('NTPSynchronized')),
+            'timezone':td.get('Timezone','unknown'), 'now_utc':datetime.now(timezone.utc).isoformat(),
+            'reference':reference if synced else None, 'offset_seconds':offset if synced else None,
+            'stratum':stratum, 'last_sync':last_sync, 'servers':configured(), 'peers':peers,
+            'errors':errors}
+
+
+def update(data, run, atomic, record):
+    servers = validate_servers(data.get('servers'))
+    content = ''.join('server '+host+' iburst\n' for host in servers)
+    with LOCK:
+        old = SOURCES.read_text() if SOURCES.exists() else None
+        try:
+            atomic(SOURCES, content, 0o644)
+            run('chronyc','reload','sources',timeout=10)
+        except Exception:
+            if old is None:
+                SOURCES.unlink(missing_ok=True)
+            else:
+                atomic(SOURCES, old, 0o644)
+            try:
+                run('chronyc','reload','sources',timeout=10)
+            except Exception:
+                pass
+            raise
+        record('time.servers.update', {'servers':servers})
+    return {'message':'Additional NTP servers saved. Check synchronization status after the servers respond.', 'servers':servers}
+
+
+def retry(run, record):
+    with LOCK:
+        run('chronyc','refresh',timeout=10)
+        run('chronyc','online',timeout=10)
+        run('chronyc','burst','4/4',timeout=10)
+        record('time.sources.retry',{})
+    return {'message':'NTP sources are being checked. Status will refresh automatically.'}

@@ -6,6 +6,7 @@ Migrated from Django to FastAPI with async support.
 import re
 import logging
 import threading
+import time
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
@@ -1204,9 +1205,37 @@ class ClickHouseClient:
     # identical for a minute, so repeats are served from memory. 'save' lets
     # queries that mention now() be cached too.
     EXPLORER_CACHE_SETTINGS = (
+        "max_threads = 2, max_block_size = 8192, max_memory_usage = 536870912, "
+        "max_bytes_before_external_group_by = 134217728, "
+        "max_bytes_before_external_sort = 134217728, "
         "use_query_cache = 1, query_cache_ttl = 60, "
         "query_cache_nondeterministic_function_handling = 'save'"
     )
+
+    @staticmethod
+    def _execute_explorer_query(client, query):
+        """One smaller retry for transient server-wide memory contention.
+
+        Share the original time budget; never return a partial log/aggregate
+        result as if it were complete, and never retry syntax/data errors.
+        """
+        started = time.monotonic()
+        try:
+            return client.query(query)
+        except Exception as error:
+            if 'MEMORY_LIMIT_EXCEEDED' not in str(error) and 'Code: 241' not in str(error):
+                raise
+            match = re.search(r'max_execution_time\s*=\s*([\d.]+)', query)
+            if not match:
+                raise
+            remaining = float(match[1]) - (time.monotonic() - started)
+            if remaining <= 0.1:
+                raise
+            retry = re.sub(r'max_execution_time\s*=\s*[\d.]+', f'max_execution_time = {remaining:.3f}', query)
+            retry = re.sub(r'max_threads\s*=\s*\d+', 'max_threads = 1', retry)
+            retry = re.sub(r'max_block_size\s*=\s*\d+', 'max_block_size = 2048', retry)
+            retry = re.sub(r'max_memory_usage\s*=\s*\d+', 'max_memory_usage = 134217728', retry)
+            return client.query(retry)
 
     # Vendor/legacy aliases for the two IP columns. Without this, a term such
     # as `source_ip:10.1.1.1` falls through to the parsed_data Map and forces a
@@ -1228,14 +1257,15 @@ class ClickHouseClient:
         return f"NOT {cond}" if negated else cond
 
     @classmethod
-    def _build_indexed_prewhere(cls, query_text: Optional[str]) -> List[str]:
+    def _build_indexed_prewhere(cls, query_text: Optional[str], device_ips=None) -> List[str]:
         """
         Extract conditions for indexed columns from query_text for PREWHERE.
         Returns list of SQL conditions that use direct column references,
         enabling ClickHouse bloom_filter / minmax indexes to skip granules.
         """
+        device_conditions = ([cls._build_where_clause(device_ips=device_ips)] if device_ips else [])
         if not query_text:
-            return []
+            return device_conditions
 
         # NQL first: pushes every top-level AND-ed condition that touches only
         # native columns (so it can prune granules through the skip indexes
@@ -1244,14 +1274,14 @@ class ClickHouseClient:
         try:
             from ..services.nql_parser import compile_filter, NQLSyntaxError
             _, prewhere = compile_filter(query_text)
-            return list(prewhere)
+            return device_conditions + list(prewhere) + cls._scoped_ip_index_hint(query_text, device_ips)
         except NQLSyntaxError:
             pass
         except Exception as e:  # pragma: no cover - defensive
             logger.warning(f"NQL prewhere compile failed, using legacy parser: {e}")
 
         terms = cls._parse_advanced_query(query_text)
-        conditions = []
+        conditions = list(device_conditions)
 
         for term in terms:
             if term['type'] != 'field':
@@ -1299,6 +1329,49 @@ class ClickHouseClient:
         return conditions
 
     @classmethod
+    def _scoped_ip_index_hint(cls, query_text, device_ips=None):
+        """Add an implied hash predicate without changing NQL filter semantics.
+
+        Only positive top-level AND terms qualify. Never infer mandatory values
+        from OR/NOT branches. Original predicates remain to reject collisions.
+        """
+        from ..services.nql_parser import parse_nql, AndNode, FieldTermNode
+        from ipaddress import IPv4Address
+        terms = {}
+        def collect(node):
+            if isinstance(node, AndNode):
+                collect(node.left)
+                collect(node.right)
+            elif isinstance(node, FieldTermNode) and not node.negated and node.operator == '=':
+                name = cls._IP_FIELD_ALIASES.get(node.field.lower(), node.field.lower())
+                terms.setdefault(name, node.value)
+        collect(parse_nql(query_text).filter_ast)
+        if not all(k in terms for k in ('srcip', 'action', 'scope')):
+            return []
+        try:
+            IPv4Address(terms['srcip'])
+        except ValueError:
+            return []
+        scope = terms['scope'].lower()
+        if scope not in ('internet', 'internal', 'inbound'):
+            return []
+        public = 1 if scope == 'internet' else 0
+        actions = terms['action'].split('|')
+        def literal(value):
+            return "'" + value.replace('\\', '\\\\').replace("'", "''") + "'"
+        vdom = cls._parse_device_id(device_ips[0])[1] if device_ips and len(device_ips) == 1 else ''
+        cols = 'srcip, action, dst_is_public' + (', vdom' if vdom else '')
+        values = []
+        for action in actions:
+            args = f'{literal(terms["srcip"])}, {literal(action.strip())}, toUInt8({public})'
+            if vdom:
+                args += ', ' + literal(vdom)
+            values.append(f'cityHash64({args})')
+        # The original NQL remains the exact row filter. indexHint lets the
+        # skip index prune blocks without hashing every surviving row again.
+        return [f'indexHint(cityHash64({cols}) IN ({", ".join(values)}))']
+
+    @classmethod
     def _is_multi_ip(cls, value: str) -> bool:
         """Check if value contains multiple comma-separated IPs or ranges."""
         return ',' in value
@@ -1312,6 +1385,21 @@ class ClickHouseClient:
     def _is_ip_range(cls, value: str) -> bool:
         """Check if value is an IP range (e.g., 192.168.1.1-192.168.1.50)."""
         return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', value))
+
+    @classmethod
+    def _v4_interval(cls, col: str, value: str) -> str:
+        """Validated inclusive numeric bounds; never compare IPv4 text."""
+        from ipaddress import IPv4Address
+        from ..services.nql_parser import NQLSyntaxError
+        try:
+            first, last = (IPv4Address(part.strip()) for part in value.split('-'))
+        except (ValueError, TypeError):
+            raise NQLSyntaxError('Enter an IPv4 range as start-address-end-address.') from None
+        if first > last:
+            raise NQLSyntaxError('IP range start must not be greater than its end.')
+        valid = f"isIPv4String({col}) AND " if int(first) == 0 else ''
+        return (f"({valid}{col}_v4 >= toIPv4('{first}') "
+                f"AND {col}_v4 <= toIPv4('{last}'))")
 
     @classmethod
     def _is_wildcard_ip(cls, value: str) -> bool:
@@ -1336,6 +1424,14 @@ class ClickHouseClient:
 
         # Resolve aliases onto the native, indexed columns before anything else.
         field = cls._IP_FIELD_ALIASES.get(field.lower(), field)
+
+        # Protocol names and numbers must query the same promoted UInt8 field.
+        if field.lower() in ('proto', 'protocol') and operator == '=':
+            field = 'proto'
+            parts = [v.strip() for v in value.split('|')]
+            resolved = [str(cls._PROTO_NUMBERS.get(v.lower(), v)) for v in parts]
+            if all(v.isdigit() for v in resolved):
+                value = '|'.join(resolved)
 
         # Virtual `scope` field — classifies a flow by where its endpoints sit
         # (RFC1918/reserved vs public). Evaluated on the IPv4-typed companion
@@ -1372,11 +1468,8 @@ class ClickHouseClient:
                     return cls._v4_prefix_range(col, ip_part, mask_int, negated)
 
             # Handle IP range (e.g., 192.168.1.1-192.168.1.50)
-            if cls._is_ip_range(value):
-                start_ip, end_ip = value.split('-')
-                safe_start = start_ip.replace("'", "''")
-                safe_end = end_ip.replace("'", "''")
-                condition = f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{safe_start}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{safe_end}'))"
+            if '-' in value and ',' not in value:
+                condition = cls._v4_interval(col, value)
                 if negated:
                     return f"NOT ({condition})"
                 return condition
@@ -1397,9 +1490,8 @@ class ClickHouseClient:
                     if cls._is_cidr(part):
                         ip_part, mask = part.rsplit('/', 1)
                         conditions.append(cls._v4_prefix_range(col, ip_part, int(mask), False))
-                    elif cls._is_ip_range(part):
-                        start_ip, end_ip = part.split('-')
-                        conditions.append(f"({col} != '' AND IPv4StringToNumOrNull({col}) >= IPv4StringToNumOrNull('{start_ip}') AND IPv4StringToNumOrNull({col}) <= IPv4StringToNumOrNull('{end_ip}'))")
+                    elif '-' in part:
+                        conditions.append(cls._v4_interval(col, part))
                     elif cls._is_wildcard_ip(part):
                         prefix = part.split('*')[0]
                         conditions.append(f"{col} LIKE '{prefix}%'")
@@ -1922,7 +2014,7 @@ class ClickHouseClient:
         client = cls.get_client()
 
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        indexed_prewhere = cls._build_indexed_prewhere(query_text)
+        indexed_prewhere = cls._build_indexed_prewhere(query_text, device_ips)
 
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
@@ -1954,119 +2046,55 @@ class ClickHouseClient:
 
         required_rows = offset + limit
 
-        # Progressive time narrowing: query expanding windows anchored at the
-        # END of the requested range (most recent shown logs), so we can avoid
-        # sorting hundreds of millions of rows.
-        #
-        # For "last 7d" (no end_time) we anchor at now(). For "yesterday"
-        # (custom end_time) we anchor at end_time so we look in the right place.
-        #
-        # The newest 100 rows from any range are almost always within minutes
-        # of that range's upper bound, so a tiny window usually suffices.
-        narrow_window_seconds = [
-            60,         # 1 minute
-            300,        # 5 minutes
-            1800,       # 30 minutes
-            7200,       # 2 hours
-            43200,      # 12 hours
-            259200,     # 3 days
-            1209600,    # 14 days
-        ]
+        custom_order = bool(order_by) and order_by.strip().lower() != "timestamp desc"
 
-        chosen_time_filter = user_time_filter  # fallback to full range
+        def fetch_window(time_filter, rows_needed, row_offset=0, seconds=30):
+            prewhere = " AND ".join([time_filter] + list(indexed_prewhere))
+            order_sql = order_by.strip() if custom_order else "timestamp DESC"
+            query = f"""
+                SELECT {columns} FROM syslogs
+                WHERE ({prewhere}) AND ({where_sql})
+                ORDER BY {order_sql} LIMIT {rows_needed} OFFSET {row_offset}
+                SETTINGS max_execution_time = {seconds:.3f}, {cls.EXPLORER_CACHE_SETTINGS}
+            """
+            return list(cls._execute_explorer_query(client, query).named_results())
 
-        custom_order = bool(order_by) and order_by.strip().lower() not in ("timestamp desc",)
+        if custom_order or required_rows > 10000:
+            return fetch_window(user_time_filter, limit, offset)
 
-        # For very deep offsets (>1M rows), narrow windows are too small.
-        # Cursor pagination is the proper fix; for now, fall through.
-        if required_rows < 1_000_000 and not custom_order:
-            # Determine the anchor for narrow windows.
-            # - If end_time is None or in the future, use now() (no probe needed).
-            # - If end_time is in the past (custom historical range), probe for
-            #   max(timestamp) so we land on actual data even if there's a gap
-            #   right before end_time.
-            now_utc = datetime.now(timezone.utc)
-            need_probe = (
-                user_end is not None and user_end < now_utc - timedelta(minutes=5)
-            )
+        # Read each time interval once, retaining its newest results. Previously
+        # every widening step counted all matches, then read the same rows again.
+        # Adjacent intervals use >= lower / < upper, including the requested end
+        # only in the first batch, so boundaries neither lose nor duplicate rows.
+        anchor = user_end or datetime.now(timezone.utc)
+        lower_bound = user_start
+        if lower_bound is None and user_end is None:
+            lower_bound = anchor - timedelta(hours=default_hours)
+        upper = anchor
+        rows = []
+        deadline = time.monotonic() + 30
 
-            anchor_sql = "now()"
-            if need_probe:
-                probe_prewhere = [user_time_filter] + list(indexed_prewhere)
-                probe_clause = " AND ".join(probe_prewhere)
-                probe_q = (
-                    f"SELECT max(timestamp) FROM syslogs "
-                    f"PREWHERE {probe_clause} WHERE {where_sql}"
-                )
-                probe_result = list(client.query(probe_q).result_rows)
-                max_ts = probe_result[0][0] if probe_result else None
-                if max_ts is None:
-                    # No data at all in this range — skip narrowing
-                    pass
-                else:
-                    anchor_sql = (
-                        f"parseDateTime64BestEffort("
-                        f"'{max_ts.strftime('%Y-%m-%d %H:%M:%S.%f')}', 3)"
-                    )
+        def stamp(dt):
+            return dt.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
 
-            # A narrow window wider than the requested range can't prune
-            # anything — every probe past that point re-scans the full range,
-            # which for a filter with few matches multiplies the cost ~7x.
-            range_seconds = None
-            if user_start is not None:
-                range_end = user_end if user_end is not None else now_utc
-                range_seconds = max(0, (range_end - user_start).total_seconds())
-            elif user_end is None:
-                range_seconds = default_hours * 3600
-
-            # Progressive narrowing
-            for secs in narrow_window_seconds:
-                if range_seconds is not None and secs >= range_seconds:
-                    break                      # fall back to the full range
-                narrow_filter = (
-                    f"timestamp > {anchor_sql} - INTERVAL {secs} SECOND "
-                    f"AND timestamp <= {anchor_sql}"
-                )
-                combined = f"({narrow_filter}) AND ({user_time_filter})"
-
-                prewhere_parts = [combined] + list(indexed_prewhere)
-                prewhere_clause = " AND ".join(prewhere_parts)
-
-                count_q = (f"SELECT count() FROM syslogs PREWHERE {prewhere_clause} WHERE {where_sql} "
-                           f"SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}")
-                try:
-                    cnt = list(client.query(count_q).result_rows)
-                except Exception as e:
-                    # A probe that can't finish in 10 s (e.g. a parsed_data Map
-                    # filter) won't finish faster on a wider window — give up on
-                    # narrowing and run the bounded full-range query instead.
-                    logger.warning(f"search_logs narrowing probe aborted ({secs}s window): {e}")
-                    break
-                cnt_val = cnt[0][0] if cnt else 0
-
-                if cnt_val >= required_rows:
-                    chosen_time_filter = combined
-                    break
-
-        # Build final query with the chosen time filter
-        prewhere_parts = [chosen_time_filter] + list(indexed_prewhere)
-        prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
-
-        order_sql = order_by.strip() if custom_order else "timestamp DESC"
-        # Always bounded: an unbounded page query is what lets one runaway
-        # filter monopolise the CPUs for every other user.
-        settings = " SETTINGS max_execution_time = 30"
-        query = f"""
-        SELECT {columns}
-        FROM syslogs
-        PREWHERE {prewhere_clause}
-        WHERE {where_sql}
-        ORDER BY {order_sql}
-        LIMIT {limit} OFFSET {offset}{settings}
-        """
-
-        result = client.query(query).named_results()
-        return list(result)
+        for seconds_back in (60, 300, 1800, 7200, 43200, 259200, 1209600, None):
+            lower = anchor - timedelta(seconds=seconds_back) if seconds_back else lower_bound
+            if lower_bound is not None and (lower is None or lower < lower_bound):
+                lower = lower_bound
+            final_window = lower == lower_bound
+            if lower is not None and lower > upper:
+                break
+            bounds = [f"timestamp {'<=' if not rows and upper == anchor else '<'} '{stamp(upper)}'"]
+            if lower is not None:
+                bounds.append(f"timestamp >= '{stamp(lower)}'")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Log search exceeded its 30 second budget; narrow the time range or filters")
+            rows.extend(fetch_window(" AND ".join(bounds), required_rows - len(rows), seconds=remaining))
+            if len(rows) >= required_rows or final_window:
+                break
+            upper = lower
+        return rows[offset:required_rows]
 
     # Upper bound on aggregate rows returned to the UI (the pipeline `limit`
     # may ask for more, but a page can't usefully render more than this).
@@ -2109,9 +2137,9 @@ class ClickHouseClient:
             f"SELECT {select_clause} FROM syslogs "
             f"PREWHERE {prewhere_clause} WHERE {where_sql} "
             f"{group_by} {having} {order_sql} LIMIT {limit_val} "
-            f"SETTINGS max_execution_time = {int(max_execution_time)}"
+            f"SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}"
         )
-        result = cls.get_client().query(sql)
+        result = cls._execute_explorer_query(cls.get_client(), sql)
         columns = list(result.column_names)
         rows = [dict(zip(columns, r)) for r in result.result_rows]
         return {"columns": columns, "rows": rows, "sql": sql}
@@ -2126,7 +2154,8 @@ class ClickHouseClient:
         query_text: Optional[str] = None,
         facilities: Optional[List[int]] = None,
         default_hours: int = 1,
-        max_count: int = 0
+        max_count: int = 0,
+        max_execution_time: int = 5,
     ) -> int:
         """
         Count logs matching filters. Returns exact count.
@@ -2148,7 +2177,7 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp <= '{end_str}'")
 
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
 
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
@@ -2173,7 +2202,7 @@ class ClickHouseClient:
         window_hours = default_hours
         if start_time is not None:
             window_hours = ((end_time or datetime.now(timezone.utc)) - start_time).total_seconds() / 3600
-        has_filter = bool(prewhere_parts[1:]) or where_sql.strip() != "1=1"
+        has_filter = bool(cls._build_indexed_prewhere(query_text, device_ips)) or where_sql.strip() != "1=1"
         heavy_filter = bool(re.search(r"parsed_data|\bmessage\b|\braw\b", where_sql))
         early_stop = max_count > 0 and has_filter and (window_hours > 25 or heavy_filter)
 
@@ -2185,7 +2214,7 @@ class ClickHouseClient:
                 WHERE {where_sql}
                 LIMIT {int(max_count)}
             )
-            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
             """
         else:
             query = f"""
@@ -2193,18 +2222,18 @@ class ClickHouseClient:
             FROM syslogs
             PREWHERE {prewhere_clause}
             WHERE {where_sql}
-            SETTINGS max_execution_time = 5, {cls.EXPLORER_CACHE_SETTINGS}
+            SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
             """
 
         try:
-            result = client.query(query).result_rows
+            result = cls._execute_explorer_query(client, query).result_rows
             total = result[0][0] if result else 0
             if early_stop and total >= max_count:
                 return -1
             return total
         except Exception as e:
-            logger.warning(f"count_logs exceeded time budget, returning approximate: {e}")
-            return -1
+            logger.warning(f"count_logs unavailable: {e}")
+            return -2  # Unknown, unlike -1 which proves at least max_count matches.
 
     @classmethod
     def _count_prewhere_where(cls, device_ips, severities, start_time, end_time,
@@ -2219,7 +2248,7 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}'")
             if end_time:
                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
         return prewhere_clause, where_sql
@@ -2256,10 +2285,10 @@ class ClickHouseClient:
             SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
         """
         try:
-            rows = client.query(query).result_rows
+            rows = cls._execute_explorer_query(client, query).result_rows
         except Exception as e:
             logger.warning(f"get_field_facets({field}) failed: {e}")
-            return {"field": field, "values": []}
+            return {"field": field, "values": [], "error": "Top values could not be loaded. Narrow the time range and retry."}
         return {"field": field, "values": [{"value": str(v), "count": int(c)} for v, c in rows]}
 
     # src/dst_country values that are NOT real countries (FortiGate puts these
@@ -2424,7 +2453,7 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
 
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
 
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
@@ -2450,7 +2479,7 @@ class ClickHouseClient:
         SETTINGS max_execution_time = 30, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
-        result = client.query(query).named_results()
+        result = cls._execute_explorer_query(client, query).named_results()
         return list(result)
 
     @classmethod
@@ -2466,6 +2495,7 @@ class ClickHouseClient:
         default_hours: int = 1,
         max_count: int = 10000,
         subnet_rollup: bool = False,
+        max_execution_time: int = 5,
     ) -> int:
         """
         Count distinct groups for aggregate view.
@@ -2489,7 +2519,7 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}'")
 
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
 
         where_sql = cls._build_where_clause(device_ips, severities, None, None, query_text, facilities)
         prewhere_clause = " AND ".join(prewhere_parts) if prewhere_parts else "1=1"
@@ -2510,14 +2540,14 @@ class ClickHouseClient:
         FROM syslogs
         PREWHERE {prewhere_clause}
         WHERE {where_sql}
-        SETTINGS max_execution_time = 10, {cls.EXPLORER_CACHE_SETTINGS}
+        SETTINGS max_execution_time = {int(max_execution_time)}, {cls.EXPLORER_CACHE_SETTINGS}
         """
 
         try:
-            result = client.query(query).result_rows
+            result = cls._execute_explorer_query(client, query).result_rows
         except Exception as e:
             logger.warning(f"count_aggregate_groups exceeded time budget: {e}")
-            return -1
+            return -2
         count = result[0][0] if result else 0
         if count > max_count:
             return -1
@@ -2568,7 +2598,7 @@ class ClickHouseClient:
             f"timestamp >= '{prior_start.strftime('%Y-%m-%d %H:%M:%S')}'",
             f"timestamp < '{prior_end.strftime('%Y-%m-%d %H:%M:%S')}'",
         ]
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
         where_sql = cls._build_where_clause(
             device_ips, severities, None, None, query_text, facilities,
         )
@@ -2583,12 +2613,13 @@ class ClickHouseClient:
         GROUP BY {group_cols}
         ORDER BY event_count DESC
         LIMIT {int(limit)}
+        SETTINGS max_execution_time = 2, {cls.EXPLORER_CACHE_SETTINGS}
         """
         try:
-            rows = client.query(query).result_rows
+            rows = cls._execute_explorer_query(client, query).result_rows
         except Exception as e:
             logger.warning(f"aggregate_prior_window failed: {e}")
-            return {}
+            return None
 
         # Normalise the key columns to (srcKey, dstKey, dstport) shape that
         # callers can compare against the current window's rows.
@@ -2647,7 +2678,7 @@ class ClickHouseClient:
                 prewhere_parts.append(f"timestamp <= '{end_str}'")
 
         # Push indexed field filters to PREWHERE (bloom_filter/minmax index utilization)
-        prewhere_parts.extend(cls._build_indexed_prewhere(query_text))
+        prewhere_parts.extend(cls._build_indexed_prewhere(query_text, device_ips))
 
         # Build additional WHERE conditions (without time filters)
         where_sql = cls._build_where_clause(device_ips, None, None, None, query_text, None)
@@ -2728,42 +2759,37 @@ class ClickHouseClient:
         return list(client.query(query).named_results())
 
     @classmethod
-    def get_distinct_devices(cls, hours: int = 1) -> List[str]:
-        """
-        Get list of distinct devices from recent logs.
-        Returns VDOM-aware names: '192.168.47.1_WAN' for VDOM devices,
-        '10.10.0.1' for non-VDOM devices.
+    def get_distinct_devices(cls, hours: int = 24 * 90) -> List[str]:
+        """Bounded device discovery, with one refresh per process and stale fallback.
 
-        Cached for 60 seconds to avoid repeated queries on every page load.
+        Read the incrementally maintained catalog before formatting names.
+        A concurrent summary request shares the same cached refresh.
+        Empty results are cached too; cache entries are keyed by window size.
         """
         import time
-        now = time.time()
-        if cls._device_list_cache and (now - cls._device_list_cache_time) < cls._DEVICE_LIST_CACHE_TTL:
-            return cls._device_list_cache
-
-        client = cls.get_client()
-        # Group by (device_ip, vdom) to treat each VDOM as a separate device
-        query = f"""
-        SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
-        FROM syslogs
-        WHERE timestamp > now() - INTERVAL {hours} HOUR
-        ORDER BY device_name
-        """
-        result = [row[0] for row in client.query(query).result_rows]
-
-        # If no devices found in short window, expand to 24h
-        if not result and hours < 24:
+        hours = max(1, min(int(hours), 24 * 90))
+        with cls._device_list_lock:
+            now = time.monotonic()
+            cached = cls._device_lists.get(hours)
+            if cached is not None and now - cached[0] < cls._DEVICE_LIST_CACHE_TTL:
+                return list(cached[1])
             query = f"""
-            SELECT DISTINCT {cls._DEVICE_DISPLAY_EXPR} as device_name
-            FROM syslogs
-            WHERE timestamp > now() - INTERVAL 24 HOUR
-            ORDER BY device_name
+                SELECT device_ip, vdom FROM log_device_catalog
+                GROUP BY device_ip, vdom
+                HAVING max(last_seen) > now() - INTERVAL {hours} HOUR
+                SETTINGS max_execution_time = 10, max_threads = 2,
+                         max_block_size = 8192, max_memory_usage = 268435456
             """
-            result = [row[0] for row in client.query(query).result_rows]
-
-        cls._device_list_cache = result
-        cls._device_list_cache_time = now
-        return result
+            try:
+                rows = cls.get_client().query(query).result_rows
+                devices = sorted(f"{ip}_{vdom}" if vdom else str(ip) for ip, vdom in rows)
+            except Exception:
+                if cached is None:
+                    raise
+                logger.warning("Device discovery failed; using the previous device list")
+                devices = cached[1]
+            cls._device_lists[hours] = (now, devices)
+            return list(devices)
 
     @classmethod
     def get_storage_stats(cls) -> Dict[str, Any]:
@@ -3094,8 +3120,8 @@ class ClickHouseClient:
         return result
 
     # Device list cache for performance (used on every log page load)
-    _device_list_cache: List[str] = []
-    _device_list_cache_time: float = 0
+    _device_lists: dict = {}
+    _device_list_lock = threading.Lock()
     _DEVICE_LIST_CACHE_TTL: int = 60  # 60 seconds - devices rarely change
 
     # Dashboard cache for performance
@@ -3919,7 +3945,7 @@ class ClickHouseClient:
         return 'unknown'
 
     # IANA protocol numbers for the proto column (UInt8).
-    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1}
+    _PROTO_NUMBERS = {'tcp': 6, 'udp': 17, 'icmp': 1, 'gre': 47, 'esp': 50, 'icmpv6': 58}
 
     @classmethod
     def policy_lookup(

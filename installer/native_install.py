@@ -137,6 +137,7 @@ def install():
         shutil.copyfile(verified/'code/initialize.py',BASE/'initialize.py')
         control=BASE/'appliance/control';control.mkdir(parents=True,exist_ok=True)
         for name in ('agent.py','cli.py','rpc.py'):shutil.copyfile(verified/'code/control'/name,control/name)
+        if (verified/'code/control/ntp.py').exists():shutil.copyfile(verified/'code/control/ntp.py',control/'ntp.py')
         ota=BASE/'appliance/ota';ota.mkdir(parents=True,exist_ok=True)
         for path in (verified/'code/ota').glob('*.py'):shutil.copyfile(path,ota/path.name)
         shutil.copyfile(verified/'code/ota_entry.py',BASE/'appliance/ota_entry.py')

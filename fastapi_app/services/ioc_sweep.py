@@ -14,6 +14,7 @@ table has been swept; each run processes the ``(watermark, now - lag]`` window.
 import ipaddress
 import json
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -167,11 +168,11 @@ async def sweep_ioc_logs():
                 if not wm:
                     wm = (datetime.now(timezone.utc)
                           - timedelta(seconds=_FIRST_RUN_LOOKBACK)).strftime(_TS_FMT)
-                scanned, match_rows, new_wm = _sweep_table(
-                    table, cfg, matcher, wm, cutoff)
+                scanned, match_rows, new_wm = await asyncio.to_thread(
+                    _sweep_table, table, cfg, matcher, wm, cutoff)
                 if match_rows:
-                    ClickHouseClient.get_client().insert(
-                        "ioc_matches", match_rows, column_names=_MATCH_COLUMNS)
+                    await asyncio.to_thread(lambda: ClickHouseClient.get_client().insert(
+                        "ioc_matches", match_rows, column_names=_MATCH_COLUMNS))
                 await _set_setting(db, _WM_PREFIX + table, new_wm)
                 total_scanned += scanned
                 total_matched += len(match_rows)

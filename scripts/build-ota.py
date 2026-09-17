@@ -50,7 +50,7 @@ def main():
         (root/'code/migrations.json').write_text(json.dumps(ledger,indent=2))
         if a.include_control:
             app=Path(__file__).resolve().parents[1]/'appliance'
-            for name in ('agent.py','cli.py','rpc.py'):
+            for name in ('agent.py','cli.py','rpc.py','ntp.py'):
                 target=root/'code/control'/name;target.parent.mkdir(exist_ok=True);shutil.copyfile(app/'control'/name,target)
             shutil.copyfile(app/'initialize.py',root/'code/initialize.py')
             (root/'code/ota').mkdir()

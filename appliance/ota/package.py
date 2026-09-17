@@ -78,7 +78,7 @@ def verify(package,public_key,product,current,offer=None,destination=None,max_ag
         payload=set(members)-{'manifest.json','manifest.json.sig','checksums.sha256'}
         if payload!=set(inventory):raise InvalidPackage('Unexpected or missing payload content')
         fixed={'code/.version','code/migrations.json','images/application.tar'}
-        host={'code/control/agent.py','code/control/cli.py','code/control/rpc.py','code/initialize.py'}
+        host={'code/control/agent.py','code/control/cli.py','code/control/rpc.py','code/control/ntp.py','code/initialize.py'}
         host|={'code/ota/'+name for name in ('__init__.py','api.py','common.py','package.py','runner.py','schema.py','transaction.py','transport.py')}
         host.add('code/ota_entry.py')
         for name in payload-fixed-host:
